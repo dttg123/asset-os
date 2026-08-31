@@ -54,7 +54,7 @@
 .pension-future-chart-wrap,.pension-analysis-chart-wrap{overscroll-behavior:contain}.pension-future-track,.pension-analysis-hit{touch-action:none}
 .pension-future-x-title{opacity:.9}.pension-future-chart{height:226px}
 
-/* v1.9.10 graph QA hardening + UI diet */
+
 .pension-income-bar.zero i{height:0!important;min-height:0!important;outline:0!important;transform:none!important;filter:none!important;border-radius:0}
 .pension-income-bar.zero.active i{height:0!important;outline:0!important;transform:none!important}
 .pension-income-bar.zero.active span{color:var(--accent2);font-weight:900}
@@ -79,5 +79,5 @@
 
 
 
-/* v0.1 hero de-dup */
+/* v0.2 hero de-dup */
 .pension-asset-kpis.single{grid-template-columns:1fr}.pension-asset-kpis.single .pension-asset-kpi{max-width:100%}

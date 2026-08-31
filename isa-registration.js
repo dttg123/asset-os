@@ -1,6 +1,6 @@
 'use strict';
 let holdingRegistrationDraft=null;
-function emptyRegistrationItem(source='manual'){return{id:uid('draft'),source,matchHoldingId:'',name:'',assetClass:'해외주식 ETF',qty:'',avg:'',price:'',include:true}}
+function emptyRegistrationItem(){return{id:uid('draft'),matchHoldingId:'',name:'',assetClass:'해외주식 ETF',qty:'',avg:'',price:'',include:true}}
 function registrationDefaultMode(a){return 'cash'}
 function registrationExistingHolding(item,a=currentAccount()){
  if(item?.matchHoldingId){const matched=a.holdings.find(h=>h.id===item.matchHoldingId);if(matched)return matched}
@@ -8,7 +8,7 @@ function registrationExistingHolding(item,a=currentAccount()){
 }
 function openHoldingRegistration(options={}){
  const a=currentAccount();if(!isTradeableAccount(a))return toast(a.status==='maturity_pending'?'만기 처리 대기 중에는 보유내역을 변경할 수 없습니다.':'종료된 ISA에는 보유내역을 등록할 수 없습니다.');
- if(!holdingRegistrationDraft||options.fresh!==false)holdingRegistrationDraft={accountId:a.id,asOf:ymd(),mode:registrationDefaultMode(a),items:[],missing:[],fileName:'',capturedAt:'',openedMetrics:accountMetrics(a)};
+ if(!holdingRegistrationDraft||options.fresh!==false)holdingRegistrationDraft={accountId:a.id,asOf:ymd(),mode:registrationDefaultMode(a),items:[],openedMetrics:accountMetrics(a)};
  if(options.addEmpty)holdingRegistrationDraft.items.push(emptyRegistrationItem());
  renderHoldingRegistration();openSheet('#registerSheet',{mode:'input'});sheetDirty=holdingRegistrationDraft.items.length>0
 }
@@ -32,7 +32,7 @@ function bindHoldingRegistration(){
  const body=$('#registerBody');body.querySelector('[data-registration-add]')?.addEventListener('click',()=>{syncRegistrationDraft();holdingRegistrationDraft.items.push(emptyRegistrationItem());sheetDirty=true;renderHoldingRegistration();setTimeout(()=>$('#registerSheet').scrollTo({top:$('#registerSheet').scrollHeight,behavior:'smooth'}),20)});body.querySelectorAll('[data-registration-remove]').forEach(b=>b.onclick=()=>{syncRegistrationDraft();holdingRegistrationDraft.items=holdingRegistrationDraft.items.filter(x=>x.id!==b.dataset.registrationRemove);sheetDirty=true;renderHoldingRegistration()});body.oninput=()=>{$$('#registerBody .registration-item').forEach(card=>{card.classList.remove('has-error');card.querySelector('.registration-error')?.remove()});sheetDirty=true;syncRegistrationDraft();updateRegistrationSummaryUI()};body.querySelector('[data-registration-cancel]')?.addEventListener('click',()=>requestCloseSheets('cancel'));body.querySelector('[data-registration-save]')?.addEventListener('click',saveHoldingRegistration)
 }
 function applyHoldingRegistrationToAccount(account,draft){
- const working=clone(account),seenNames=new Map(),seenTargets=new Map(),summary={new:0,updated:0,matched:0,missing:draft.missing.length,valuationMissing:0,cashUsed:0};
+ const working=clone(account),seenNames=new Map(),seenTargets=new Map(),summary={new:0,updated:0,matched:0,valuationMissing:0,cashUsed:0};
  for(let rowIndex=0;rowIndex<draft.items.length;rowIndex++){
   const raw=draft.items[rowIndex],name=String(raw.name||'').trim();if(!name)continue;const key=normalizeName(name);if(seenNames.has(key)){const first=seenNames.get(key);return{ok:false,error:`${rowIndex+1}번째 ${name}이(가) ${first.index+1}번째 항목과 중복되어 있습니다.`,rowIds:[first.id,raw.id],rowIndex}}seenNames.set(key,{id:raw.id,index:rowIndex});
   const qty=Number(raw.qty),avg=Number(raw.avg);if(!Number.isFinite(qty)||qty<=0||!Number.isFinite(avg)||avg<0)return{ok:false,error:`${rowIndex+1}번째 ${name}의 수량은 0보다 커야 하고 평균단가는 0 이상이어야 합니다.`,rowIds:[raw.id],rowIndex};
@@ -47,7 +47,7 @@ function applyHoldingRegistrationToAccount(account,draft){
    const assetClass=String(raw.assetClass||existing.assetClass||'국내주식 ETF');if(existing.assetClass!==assetClass){existing.assetClass=assetClass;changed=true}
    if(priceText!==''){const price=Number(priceText);if(!Number.isFinite(price)||price<0)return{ok:false,error:`${rowIndex+1}번째 ${name}의 현재가를 확인해 주세요.`,rowIds:[raw.id],rowIndex};if(existing.currentPrice!==price||existing.valuationStatus!=='confirmed'){existing.currentPrice=price;existing.valuationStatus='confirmed';changed=true}}
    else if(!existing.currentPrice){existing.valuationStatus='missing';summary.valuationMissing++}
-   if(Math.abs(qty-current.qty)>1e-8||Math.abs(avg-current.avgPrice)>1e-8){const tx={id:uid('tx'),type:'adjustment',tradeDate:draft.asOf,date:draft.asOf,sequence:nextSequence(working,draft.asOf),createdAt:draft.capturedAt||new Date().toISOString(),holdingId:existing.id,setQty:qty,setAvg:avg,reason:'manual_balance_update',note:raw.source==='photo'?'잔고 대조':'보유내역 직접 갱신'};tx.idempotencyKey=stableTxKey(tx);working.transactions.push(tx);changed=true}
+   if(Math.abs(qty-current.qty)>1e-8||Math.abs(avg-current.avgPrice)>1e-8){const tx={id:uid('tx'),type:'adjustment',tradeDate:draft.asOf,date:draft.asOf,sequence:nextSequence(working,draft.asOf),createdAt:new Date().toISOString(),holdingId:existing.id,setQty:qty,setAvg:avg,reason:'manual_balance_update',note:'보유내역 직접 갱신'};tx.idempotencyKey=stableTxKey(tx);working.transactions.push(tx);changed=true}
    if(changed)summary.updated++
   }else{
    if(priceText==='')summary.valuationMissing++;
@@ -56,8 +56,8 @@ function applyHoldingRegistrationToAccount(account,draft){
   const check=replay(working);if(!check.valid)return{ok:false,error:`${rowIndex+1}번째 항목 반영 후 ${check.error}`,rowIds:[raw.id],rowIndex}
  }
  if(!summary.new&&!summary.matched)return{ok:false,error:'저장할 종목을 추가해 주세요.'};
- if(!summary.new&&!summary.updated&&!draft.fileName)return{ok:false,error:'변경된 보유내역이 없습니다.'};
- if(draft.fileName){const reconItems=draft.items.filter(x=>String(x.name||'').trim()),reconKey=[working.id,draft.asOf,reconItems.map(x=>`${normalizeName(x.name)}:${Number(x.qty)||0}:${Number(x.avg)||0}:${Number(x.price)||0}`).sort().join('|')].join('|');if(working.reconciliations.some(r=>r.idempotencyKey===reconKey))return{ok:false,error:'같은 기준일의 동일 사진 잔고가 이미 반영돼 있습니다.'};working.reconciliations.push({id:uid('recon'),asOf:draft.asOf,capturedAt:draft.capturedAt||new Date().toISOString(),idempotencyKey:reconKey,createdAt:new Date().toISOString(),cashVisible:false,summary:{updated:summary.updated,new:summary.new,missing:summary.missing,adjustments:summary.updated},tolerance:Number(working.reconciliationTolerance||10)})}
+ if(!summary.new&&!summary.updated)return{ok:false,error:'변경된 보유내역이 없습니다.'};
+
  rebuildLedgerIndexes(working);return{ok:true,account:working,summary}
 }
 function showRegistrationError(result){$$('#registerBody .registration-item').forEach(card=>{card.classList.remove('has-error');card.querySelector('.registration-error')?.remove()});const ids=result.rowIds||[];for(const id of ids){const card=$(`#registerBody [data-registration-item="${id}"]`);if(!card)continue;card.classList.add('has-error');if(!card.querySelector('.registration-error'))card.insertAdjacentHTML('beforeend',`<div class="registration-error">${escapeHtml(result.error)}</div>`)}const target=ids.length?$(`#registerBody [data-registration-item="${ids[0]}"]`):null;target?.scrollIntoView({behavior:'smooth',block:'center'});toast(result.error)}

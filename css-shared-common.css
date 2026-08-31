@@ -14,7 +14,7 @@
 
 
 /* 통합도 다른 루트와 같은 상단 상태줄/간격 사용 */
-body[data-root="integrated"] .sample{display:flex!important}
+
 body[data-root="integrated"] main{padding:15px 18px 30px!important}
 body[data-root="integrated"] .stack{gap:14px!important}
 

@@ -63,7 +63,7 @@ function applyRealFinanceBootstrap(target){
  ];
  for(const x of schedules)if(!next.financeSchedules.items.some(s=>s.id===x.id))next.financeSchedules.items.push(x)
  const currentMonth=localYmd().slice(0,7),preferred=String(next.settings.integratedMonth||'');if(!preferred)next.settings.integratedMonth=currentMonth;
- // bootstrap/QA로 방금 추가된 원본도 첫 저장 전부터 동일 스키마로 맞춘다. 저장→복원 시 형태가 한 번 더 변하면 안 된다.
+ // 첫 저장 전부터 동일 스키마로 정규화해 저장→복원 구조가 변하지 않게 한다.
  next.financialProducts=normalizeFinancialProducts(next.financialProducts);next.financeSchedules=normalizeFinanceSchedules(next.financeSchedules);next.integrated=normalizeIntegrated(next.integrated);syncFinancialProductStructures(next);clampEndedProductSchedules(next);
  return next
 }

@@ -1,5 +1,6 @@
 'use strict';
 function replay(account,candidateTxs=null){
+ if(!account)return {holdings:[],cash:0,valid:true,error:null,errorTxId:null,realized:0,income:0,fees:0,taxes:0,facts:new Map()};
  if(isPastAccount(account)){
   const holdings=account.holdings.map(h=>({...h,qty:h.snapshotQty??h.baselineQty??0,avgPrice:h.snapshotAvg??h.baselineAvg??0,marketValue:(h.snapshotQty??h.baselineQty??0)*(h.snapshotPrice??h.currentPrice??0),currentPrice:h.snapshotPrice??h.currentPrice??0,realized:0}));
   return {holdings,cash:account.cashSnapshot??account.baselineCash??0,valid:true,error:null,realized:0,income:0,fees:0,taxes:0,facts:new Map()};
@@ -60,7 +61,7 @@ function exemption(a){const p=policy('isa',a);return a.type==='서민형'?p.lowI
 function expectedTax(a){return Math.max(0,taxableNet(a)-exemption(a))*policy('isa',a).taxRate}
 function dividends(a){return (a.transactions||[]).filter(t=>['dividend','distribution'].includes(t.type)&&t.status!=='cancelled').sort((x,y)=>txDate(y).localeCompare(txDate(x))||txSequence(y)-txSequence(x))}
 function dividendNetAmount(t){return Math.max(0,(Number(t?.amount)||0)-(Number(t?.fee)||0)-(Number(t?.tax)||0))}
-function dividendAnalysisRecords(a){return dividends(a).sort((x,y)=>txDate(y).localeCompare(txDate(x))||txSequence(y)-txSequence(x))}
+function dividendAnalysisRecords(a){return dividends(a).filter(x=>!x.meta?.analysisOnly).sort((x,y)=>txDate(y).localeCompare(txDate(x))||txSequence(y)-txSequence(x))}
 function periodEndDate(key,period){if(period==='month'){const [y,m]=String(key).split('-').map(Number);if(!y||!m)return ymd();return localYmd(new Date(y,m,0))}return /^\d{4}$/.test(String(key))?`${key}-12-31`:ymd()}
 function investmentPrincipalAt(a,endDate){if(isPastAccount(a))return accountMetrics(a).cost;const txs=(a.transactions||[]).filter(t=>txDate(t)<=endDate),r=replay(a,txs);return r.valid?r.holdings.reduce((sum,h)=>sum+h.qty*h.avgPrice,0):0}
 function dividendYieldFor(a,key,period,amount){const end=periodEndDate(key,period),principal=investmentPrincipalAt(a,end),rate=principal>0?(Number(amount)||0)/principal*100:null;return{principal,rate}}
@@ -84,7 +85,7 @@ function consistencyIssues(a){
   if(t.sourceDividendId&&!a.transactions.some(x=>x.id===t.sourceDividendId))push('linked-dividend','연결된 배당 기록이 없습니다',`${formatDate(txDate(t))} 매수의 배당 연결을 확인해 주세요.`,'medium',t.id)
  }
  const holdingNames=new Map();for(const h of a.holdings||[]){const key=h.securityKey||normalizeName(h.name);if(holdingNames.has(key))push('holding-duplicate','중복 종목 등록이 의심됩니다',`${h.name}이(가) 두 개의 보유종목으로 등록돼 있습니다.`,'medium');else holdingNames.set(key,h.id)}
- const latest=[...(a.reconciliations||[])].sort((x,y)=>String(y.capturedAt||'').localeCompare(String(x.capturedAt||'')))[0];if(latest?.summary?.missing>0)push('reconcile-missing','사진에서 미검출된 종목이 있습니다',`${latest.summary.missing}개 종목은 자동 삭제하지 않았습니다. 원장과 실제 잔고를 확인해 주세요.`,'medium');
+ const latest=[...(a.reconciliations||[])].sort((x,y)=>String(y.capturedAt||'').localeCompare(String(x.capturedAt||'')))[0];if(latest?.summary?.missing>0)push('reconcile-missing','잔고 대조에서 누락된 종목이 있습니다',`${latest.summary.missing}개 종목은 자동 삭제하지 않았습니다. 원장과 실제 잔고를 확인해 주세요.`,'medium');
  return issues
 }
 function allIsaIssues(){return state.accounts.flatMap(a=>consistencyIssues(a))}
