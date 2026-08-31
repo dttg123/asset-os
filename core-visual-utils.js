@@ -1,0 +1,13 @@
+'use strict';
+function getHolding(a,id){return accountMetrics(a).holdings.find(h=>h.id===id)}
+function holdingName(a,id){return a.holdings.find(h=>h.id===id)?.name||'계좌 현금'}
+function formatDate(d){if(!d)return'-';const [y,m,day]=d.split('-');return `${y}.${m}.${day}`}
+function daysUntil(d){if(!d)return null;const [y,m,day]=d.split('-').map(Number),now=new Date(),today=new Date(now.getFullYear(),now.getMonth(),now.getDate()),target=new Date(y,m-1,day);return Math.ceil((target-today)/86400000)}
+function ddayLabel(d){const left=daysUntil(d);if(left===null)return'-';if(left>0)return`D-${left}`;if(left===0)return'D-DAY';return`D+${Math.abs(left)}`}
+function polarToCartesian(cx,cy,r,angleDeg){const rad=(angleDeg-90)*Math.PI/180;return{x:cx+r*Math.cos(rad),y:cy+r*Math.sin(rad)}}
+function describeArcPath(cx,cy,r,startPct,endPct){const startAngle=startPct/100*360,endAngle=endPct/100*360,span=endAngle-startAngle;if(span>=359.99){const p1=polarToCartesian(cx,cy,r,startAngle),p2=polarToCartesian(cx,cy,r,startAngle+180);return `M ${p1.x.toFixed(3)} ${p1.y.toFixed(3)} A ${r} ${r} 0 1 1 ${p2.x.toFixed(3)} ${p2.y.toFixed(3)} A ${r} ${r} 0 1 1 ${p1.x.toFixed(3)} ${p1.y.toFixed(3)}`}const start=polarToCartesian(cx,cy,r,endAngle),end=polarToCartesian(cx,cy,r,startAngle),largeArcFlag=span<=180?0:1;return `M ${start.x.toFixed(3)} ${start.y.toFixed(3)} A ${r} ${r} 0 ${largeArcFlag} 0 ${end.x.toFixed(3)} ${end.y.toFixed(3)}`}
+function assetDonutSvg(segments,selected='',dataset='data-donut-group',ariaLabel='자산군 구성'){return `<svg class="donut-svg" viewBox="0 0 100 100" role="img" aria-label="${escapeHtml(ariaLabel)}">${segments.map(x=>{const key=x.key||x.name,is=key===selected;return `<g class="donut-segment ${is?'selected':selected?'dimmed':''}" ${dataset}="${escapeHtml(key)}"><title>${escapeHtml(x.name)} ${x.pct.toFixed(1)}%</title><path d="${describeArcPath(50,50,38,x.start,x.end)}" fill="none" stroke="${x.color}" stroke-width="20" stroke-linecap="butt"/></g>`}).join('')}</svg>`}
+
+function annualContributionTotal(a){if(isPastAccount(a))return Number(a.annualContribution||0);const year=String(new Date().getFullYear()),baseline=String(a.contributionBaselineYear||'')===year?Math.max(0,Number(a.contributionBaseline)||0):0,central=centralIsaContributionRows(year).filter(t=>t.accountId===a.id&&!t.unresolved).reduce((sum,t)=>sum+(Number(t.amount)||0),0);return baseline+central}
+function addYears(dateString,years){const m=String(dateString||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!m)return dateString;const y=Number(m[1])+Math.trunc(Number(years)||0),mi=Number(m[2])-1,day=Math.min(Number(m[3]),new Date(y,mi+1,0).getDate());return `${y}-${String(mi+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`}
+

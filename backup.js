@@ -1,0 +1,41 @@
+'use strict';
+const BACKUP_FORMAT='asset-os-backup-v1',SUPPORTED_SCHEMAS=new Set([4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]);
+let crcTable=null;function crc32(bytes){if(!crcTable){crcTable=Array.from({length:256},(_,n)=>{let c=n;for(let k=0;k<8;k++)c=(c&1)?0xedb88320^(c>>>1):c>>>1;return c>>>0})}let c=0xffffffff;for(const b of bytes)c=crcTable[(c^b)&255]^(c>>>8);return(c^0xffffffff)>>>0}
+function zipDosStamp(d=new Date()){let year=Math.max(1980,d.getFullYear()),date=((year-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate(),time=(d.getHours()<<11)|(d.getMinutes()<<5)|Math.floor(d.getSeconds()/2);return{date,time}}
+function backupPayload(){return{format:BACKUP_FORMAT,schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,exportedAt:new Date().toISOString(),data:clone(state)}}
+function createBackupZipBytes(payload=backupPayload()){const enc=new TextEncoder(),json=enc.encode(JSON.stringify(payload)),name=enc.encode('asset-os-backup.json'),crc=crc32(json),stamp=zipDosStamp(),localSize=30+name.length+json.length,centralSize=46+name.length,total=localSize+centralSize+22,out=new Uint8Array(total),v=new DataView(out.buffer);let o=0;const u16=n=>{v.setUint16(o,n,true);o+=2},u32=n=>{v.setUint32(o,n>>>0,true);o+=4},put=b=>{out.set(b,o);o+=b.length};u32(0x04034b50);u16(20);u16(0);u16(0);u16(stamp.time);u16(stamp.date);u32(crc);u32(json.length);u32(json.length);u16(name.length);u16(0);put(name);put(json);const centralOffset=o;u32(0x02014b50);u16(20);u16(20);u16(0);u16(0);u16(stamp.time);u16(stamp.date);u32(crc);u32(json.length);u32(json.length);u16(name.length);u16(0);u16(0);u16(0);u16(0);u32(0);u32(0);put(name);const centralLength=o-centralOffset;u32(0x06054b50);u16(0);u16(0);u16(1);u16(1);u32(centralLength);u32(centralOffset);u16(0);return out}
+function parseBackupZipBytes(bytes){const src=bytes instanceof Uint8Array?bytes:new Uint8Array(bytes),v=new DataView(src.buffer,src.byteOffset,src.byteLength);if(src.length<30||v.getUint32(0,true)!==0x04034b50)throw new Error('Asset OS ZIP 형식이 아닙니다.');const method=v.getUint16(8,true),expected=v.getUint32(14,true),size=v.getUint32(18,true),nameLen=v.getUint16(26,true),extraLen=v.getUint16(28,true),start=30+nameLen+extraLen;if(method!==0)throw new Error('지원하지 않는 압축 방식입니다. Asset OS에서 만든 ZIP을 선택해 주세요.');if(start+size>src.length)throw new Error('ZIP 데이터가 잘렸습니다.');const data=src.slice(start,start+size);if(crc32(data)!==expected)throw new Error('ZIP CRC 검증에 실패했습니다.');return JSON.parse(new TextDecoder().decode(data))}
+function backupContainsQaFixtures(payload){const d=payload?.data||{},accounts=d.accounts||[],p=d.pension||{},ledger=d.integrated?.ledger||[];return /(?:^|\s)QA(?:\s|$)/i.test(String(payload?.appVersion||''))||ledger.some(x=>x?.meta?.qaFixture)||accounts.some(a=>(a.assetSnapshots||[]).some(x=>x?.meta?.qaFixture)||(a.transactions||[]).some(x=>x?.meta?.qaFixture)||a.qaDividendHistory)||(p.incomes||[]).some(x=>x?.meta?.qaFixture)||(p.assetSnapshots||[]).some(x=>x?.meta?.qaFixture)}
+function validateBackupPayload(payload){if(!payload||payload.format!==BACKUP_FORMAT)throw new Error('Asset OS 백업 파일이 아닙니다.');if(!SUPPORTED_SCHEMAS.has(Number(payload.schemaVersion)))throw new Error(`지원하지 않는 데이터 구조 ${payload.schemaVersion}`);if(!payload.data||typeof payload.data!=='object')throw new Error('백업 데이터가 없습니다.');const fromQa=backupContainsQaFixtures(payload),next=normalizeState(payload.data);if(fromQa)next.moduleVerification={isa:false,pension:false,irp:false};return next}
+function downloadBytes(bytes,name,type='application/zip'){const blob=new Blob([bytes],{type}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1200)}
+function backupFileName(){return `Asset_OS_backup_${localYmd().replaceAll('-','')}.zip`}
+async function saveZipBackup(){
+ const name=backupFileName();
+ try{
+  if(typeof window.showSaveFilePicker==='function'&&window.isSecureContext){
+   const handle=await window.showSaveFilePicker({suggestedName:name,types:[{description:'Asset OS ZIP 백업',accept:{'application/zip':['.zip']}}],excludeAcceptAllOption:false});
+   const bytes=createBackupZipBytes(),writable=await handle.createWritable();
+   await writable.write(new Blob([bytes],{type:'application/zip'}));
+   await writable.close();
+   toast(`ZIP 저장 완료: ${handle.name||name}`);
+   return true
+  }
+  const bytes=createBackupZipBytes();
+  downloadBytes(bytes,name);
+  showNotice('ZIP은 Downloads에 저장했습니다.','현재 실행 주소는 보안 컨텍스트가 아니어서 저장 위치 선택창을 강제로 열 수 없습니다. GitHub Pages HTTPS 배포판에서는 ZIP 백업을 누를 때마다 저장 위치 선택창을 먼저 엽니다.');
+  return true
+ }catch(e){
+  if(String(e?.name)==='AbortError'){toast('ZIP 저장을 취소했습니다.');return false}
+  try{
+   const bytes=createBackupZipBytes();downloadBytes(bytes,name);
+   showNotice('저장 위치 선택을 열지 못했습니다.',`브라우저가 저장 위치 선택을 거부해 Downloads에 백업했습니다. (${e.message||e})`);
+   return true
+  }catch(f){toast(`백업 실패: ${f.message||e.message}`);return false}
+ }
+}
+async function shareDriveBackup(){try{const bytes=createBackupZipBytes(),file=new File([bytes],backupFileName(),{type:'application/zip'});if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))){await navigator.share({title:'Asset OS 백업',text:'Google Drive를 선택해 백업 ZIP을 저장하세요.',files:[file]});toast('공유창으로 백업을 보냈습니다.');return true}showNotice('Google Drive 공유를 열 수 없습니다.','현재 브라우저/실행주소에서는 파일 공유가 허용되지 않습니다. HTTPS 배포판에서 다시 시도하거나 ZIP 저장 후 Drive 앱에서 업로드해 주세요.');return false}catch(e){if(String(e?.name)==='AbortError')return false;showNotice('Google Drive 공유 실패',`${e.message||e}
+HTTPS 배포판에서 다시 시도하거나 ZIP 저장 후 Drive 앱에서 업로드해 주세요.`);return false}}
+async function parseBackupFile(file){const bytes=new Uint8Array(await file.arrayBuffer());if(String(file.name||'').toLowerCase().endsWith('.json'))return JSON.parse(new TextDecoder().decode(bytes));return parseBackupZipBytes(bytes)}
+async function restoreBackupFile(file){let payload,next;try{payload=await parseBackupFile(file);next=validateBackupPayload(payload)}catch(e){showNotice('복원하지 않았습니다.',`백업 파일 검증 실패: ${e.message}`);return false}showDialog({title:'백업으로 복원할까요?',message:`백업 시각 ${formatDateTime(payload.exportedAt)}\n현재 데이터는 복구용 사본을 먼저 남긴 뒤 교체합니다.`,confirmText:'복원',cancelText:'취소'},()=>{try{const recovery=JSON.stringify({schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,savedAt:new Date().toISOString(),data:state});try{localStorage.setItem(`${KEY}-pre-restore-${Date.now()}`,recovery);pruneRecoveryKeys()}catch{}state=next;if(!persist(false))throw new Error(state.system.saveError||'저장 실패');applyTheme();closeSheets();render();toast('백업을 복원했습니다.')}catch(e){showNotice('복원 실패',e.message)}});return true}
+function openBackupHub(){const size=new Blob([JSON.stringify(backupPayload())]).size,securePicker=typeof window.showSaveFilePicker==='function'&&window.isSecureContext;$('#sheetEyebrow').textContent='데이터 보호';$('#sheetTitle').textContent='백업·복원';$('#sheetBody').innerHTML=`<div class="backup-grid"><button class="backup-action primary" data-backup-zip><strong>ZIP 백업 · 저장 위치 선택</strong><small>${securePicker?'누를 때마다 저장 위치 선택창을 먼저 엽니다.':'로컬 실행은 Downloads에 저장되며, HTTPS 배포판에서는 저장 위치 선택창을 엽니다.'}</small></button><button class="backup-action" data-backup-drive><strong>Google Drive로 보내기</strong><small>Android 공유창을 열고 Google Drive를 선택합니다. OAuth 계정연동은 사용하지 않습니다.</small></button><button class="backup-action" data-backup-restore><strong>ZIP / JSON 복원</strong><small>파일을 먼저 검증하고, 정상일 때만 현재 데이터를 교체합니다.</small></button></div><div class="backup-status-note">현재 백업 원본 약 ${Math.max(1,Math.round(size/1024))}KB · schema ${SCHEMA_VERSION}<br>${securePicker?'저장 위치 선택: 사용 가능':'저장 위치 선택: HTTPS 배포 후 사용'} · 깨진 파일은 현재 데이터를 덮어쓰지 않습니다.</div>`;openSheet('#detailSheet');setTimeout(()=>{$('[data-backup-zip]').onclick=saveZipBackup;$('[data-backup-drive]').onclick=shareDriveBackup;$('[data-backup-restore]').onclick=()=>$('#backupInput').click()},0)}
+function resetLiveData(){state=normalizeState(seed);if(!persist())return false;applyTheme();render();toast('초기 실사용 상태로 초기화했습니다.');return true}

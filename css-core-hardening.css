@@ -1,0 +1,23 @@
+/* v1.9.67 — 통합 무결성 오류를 요약 화면에 즉시 표시 */
+/* v1.9.66 — ISA 연간 납입한도: 사전 납입 baseline + 계좌별 중앙원장 분리 */
+/* v1.9.65 — 금융상품 시작/만기/금리적용일 + 지원금 이벤트 날짜 무결성 */
+/* v1.9.64 — 구버전 통합원장 sequence/createdAt 마이그레이션 + 수정 시 기존 순서 유지 */
+/* v1.9.63 — 동일일자 통합원장 ID 랜덤정렬 제거 · 입력/sequence/createdAt 순서 보존 */
+/* v1.9.62 — 일정 예정일 불일치 완료 차단 + 실패 시 라우팅 상태 무변경 */
+/* v1.9.61 — 31일·윤년 월 이동 오버플로 방지 + 다음달 일정 누락 방지 */
+/* v1.9.60 — 상품 종료 시 연결 일정 종료일 자동 고정 + 구버전 상태 자동 교정 */
+/* v1.9.59 — 종료상품 잔액 숨김 방지 + 무결성 경고 */
+/* 종료/완납 상태라도 원장 잔액이 남아 있으면 현재·과거 자산/부채에서 숨기지 않는다. */
+
+/* v1.9.53 — 고액 금액 무생략 + 극한 모바일 안정화 최종검증 */
+.amount-long{letter-spacing:-.055em!important}.amount-xlong{letter-spacing:-.065em!important}.amount-xxlong{letter-spacing:-.075em!important}
+.heroamount.amount-long,.isa-value.amount-long,.pension-asset-value.amount-long,.integrated-overview-value.amount-long{font-size:clamp(27px,7.8vw,36px)}
+.heroamount.amount-xlong,.isa-value.amount-xlong,.pension-asset-value.amount-xlong,.integrated-overview-value.amount-xlong{font-size:clamp(22px,6.3vw,31px)}
+.heroamount.amount-xxlong,.isa-value.amount-xxlong,.pension-asset-value.amount-xxlong,.integrated-overview-value.amount-xxlong{font-size:clamp(18px,5.2vw,26px)}
+.summary-card .amount.amount-long{font-size:17px}.summary-card .amount.amount-xlong{font-size:15px}.summary-card .amount.amount-xxlong{font-size:13px;white-space:normal;line-height:1.2}
+.isa-stat strong,.pension-asset-kpi strong,.dividend-metric strong,.pension-future-focus-values b,.integrated-net-item strong,.integrated-fixed-summary strong,.pension-earning-box strong,.pension-trade-summary strong,.finance-growth-box strong,.income-range-summary strong{overflow:visible;text-overflow:clip}
+.isa-stat strong.amount-long,.pension-asset-kpi strong.amount-long,.dividend-metric strong.amount-long,.integrated-net-item strong.amount-long,.integrated-fixed-summary strong.amount-long,.pension-earning-box strong.amount-long,.pension-trade-summary strong.amount-long,.finance-growth-box strong.amount-long,.income-range-summary strong.amount-long{font-size:11px}
+.isa-stat strong.amount-xlong,.pension-asset-kpi strong.amount-xlong,.dividend-metric strong.amount-xlong,.integrated-net-item strong.amount-xlong,.integrated-fixed-summary strong.amount-xlong,.pension-earning-box strong.amount-xlong,.pension-trade-summary strong.amount-xlong,.finance-growth-box strong.amount-xlong,.income-range-summary strong.amount-xlong{font-size:10px;white-space:normal;line-height:1.2}
+.future-primary .metric strong.xlong{font-size:clamp(12px,3.6vw,15.5px);white-space:normal;line-height:1.18}.future-primary .metric strong.xxlong{font-size:clamp(10.5px,3.1vw,13px);white-space:normal;line-height:1.18}
+.pension-future-focus-values b{white-space:normal;line-height:1.18;overflow-wrap:normal}.integrated-overview-sub strong{white-space:normal;line-height:1.18}
+@media(max-width:370px){.future-primary .metric strong.long{font-size:13px}.future-primary .metric strong.xlong{font-size:11.5px}.future-primary .metric strong.xxlong{font-size:10px}.pension-future-focus-values b{font-size:9px}}

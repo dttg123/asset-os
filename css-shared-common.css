@@ -1,0 +1,55 @@
+/* v1.9.31 — 홈·ISA·개인연금·통합 공통 화면 언어 */
+.tabs,.integrated-tabs{display:grid!important;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:5px!important;padding:5px!important;margin:0 0 12px!important;overflow:visible!important;background:var(--surface2)!important;border:1px solid var(--line)!important;border-radius:15px!important}
+.tabs .tab,.integrated-tabs button{min-width:0!important;border:0!important;background:transparent!important;color:var(--muted)!important;padding:10px 5px!important;border-radius:11px!important;font-size:10.5px!important;font-weight:900!important;box-shadow:none!important;white-space:nowrap}
+.tabs .tab.active,.integrated-tabs button.active{background:var(--surface)!important;color:var(--accent2)!important;box-shadow:var(--shadow2)!important}
+.hero,.isa-hero,.pension-credit-hero,.pension-asset-hero,.integrated-overview-hero{border:0!important;border-radius:var(--r1)!important;background:linear-gradient(135deg,var(--accent2),var(--accent) 58%,color-mix(in srgb,var(--accent) 73%,white))!important;color:#fff!important;box-shadow:0 17px 36px rgba(var(--accent-rgb),.23)!important;position:relative;overflow:hidden}
+.hero:after,.isa-hero:after,.pension-credit-hero:after,.pension-asset-hero:after,.integrated-overview-hero:after{content:"";position:absolute;width:150px;height:150px;border-radius:50%;right:-58px;top:-72px;background:rgba(255,255,255,.11);pointer-events:none}
+.pension-credit-hero{padding:20px!important}.pension-credit-hero .eyebrow,.pension-credit-year{color:rgba(255,255,255,.76)!important}.pension-credit-year{background:rgba(255,255,255,.13)!important}.pension-credit-title,.pension-inflow,.pension-kpis{position:relative;z-index:1}.pension-kpi{background:rgba(255,255,255,.12)!important}.pension-kpi span{color:rgba(255,255,255,.68)!important}.pension-kpi strong,.pension-kpi.accent strong{color:#fff!important}
+.integrated-overview-hero{padding:20px}.integrated-overview-kicker{font-size:10.5px;font-weight:900;color:rgba(255,255,255,.75);position:relative;z-index:1}.integrated-overview-label{display:block;margin-top:7px;font-size:11px;font-weight:850;color:rgba(255,255,255,.78);position:relative;z-index:1}.integrated-overview-value{font-size:36px;font-weight:950;letter-spacing:-.065em;margin-top:4px;position:relative;z-index:1}.integrated-overview-sub{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:15px;position:relative;z-index:1}.integrated-overview-sub span{padding:10px 11px;border-radius:13px;background:rgba(255,255,255,.12);font-size:9px;color:rgba(255,255,255,.68)}.integrated-overview-sub strong{display:block;color:#fff;font-size:12px;margin-top:4px}
+.inline-accordion{overflow:hidden}.inline-accordion-head{width:100%;border:0;background:transparent;color:inherit;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0;text-align:left;cursor:pointer}.inline-accordion-head span{display:block}.inline-accordion-head strong{display:block;font-size:15px}.inline-accordion-head small{display:block;color:var(--muted);font-size:9.5px;margin-top:4px}.inline-accordion-arrow{font-size:17px;color:var(--muted);transition:transform .2s ease}.inline-accordion.open .inline-accordion-arrow{transform:rotate(180deg)}.inline-accordion-body{margin-top:14px;border-top:1px solid var(--line);padding-top:4px;transform-origin:top;animation:inlineReveal .22s ease both}@keyframes inlineReveal{from{opacity:0;transform:translateY(-7px) scaleY(.985)}to{opacity:1;transform:none}}
+
+.monthly-card.compact .monthly-list{border-top:1px solid var(--line);margin-top:12px}.monthly-card.expanded .monthly-list{transform-origin:top;animation:inlineReveal .22s ease both}.monthly-toggle{border:0;background:var(--soft);color:var(--accent2);font-size:9.5px;font-weight:900;padding:7px 9px;border-radius:999px}.monthly-card:not(.expanded) .monthly-total,.monthly-card:not(.expanded) .monthly-transfer-total{display:none}
+.integrated-assets-card{padding:16px 17px}.integrated-assets-card .integrated-asset-list{margin-top:13px;border-top:1px solid var(--line)}
+.home-module-caption{margin-top:5px;color:var(--muted);font-size:9px;line-height:1.35}
+
+
+/* 통합도 다른 루트와 같은 상단 상태줄/간격 사용 */
+body[data-root="integrated"] .sample{display:flex!important}
+body[data-root="integrated"] main{padding:15px 18px 30px!important}
+body[data-root="integrated"] .stack{gap:14px!important}
+
+
+/* v1.9.33 — 인라인 펼침/접힘 실제 위치 보존 */
+.monthly-card:not(.expanded) .monthly-month:not(.current){display:none!important}
+.monthly-scroll-guard{height:0;pointer-events:none;visibility:hidden}
+.isa-inline-holdings,.pension-inline-holdings{margin-top:12px;border-top:1px solid var(--line)}
+.isa-inline-holdings .holding,.pension-inline-holdings .pension-selected-row{padding-top:12px;padding-bottom:12px}
+.composition-inline .composition-summary-note,.pension-asset-card .composition-summary-note{margin-top:10px}
+
+
+/* v1.9.37 — ISA/개인연금 자산·배당 구성 통일 + 보유종목 복구 */
+.portfolio-holdings-card{padding:15px 16px}.portfolio-holdings-list{display:grid;margin-top:7px}.portfolio-holding-row{width:100%;border:0;border-top:1px solid var(--line);background:transparent;padding:11px 0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;text-align:left;cursor:pointer}.portfolio-holding-row:first-child{border-top:0}.portfolio-holding-row .copy{min-width:0}.portfolio-holding-row .name{display:flex;align-items:center;gap:6px;min-width:0}.portfolio-holding-row .name strong{font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.portfolio-holding-row .meta{display:block;color:var(--muted);font-size:9px;margin-top:4px}.portfolio-holding-row .right{text-align:right}.portfolio-holding-row .right strong{display:block;font-size:11.5px}.portfolio-holding-row .right small{display:block;font-size:9px;margin-top:4px;color:var(--positive)}.portfolio-holding-row .right small.negative{color:var(--negative)}.portfolio-holdings-toggle{width:100%;border:0;border-top:1px solid var(--line);background:transparent;padding:11px 0 0;color:var(--accent2);font-size:10px;font-weight:900;cursor:pointer}.portfolio-holdings-card .count-pill{white-space:nowrap}.portfolio-holdings-extra{display:grid;overflow:hidden;transform-origin:top;animation:inlineReveal .18s ease both}.portfolio-holdings-extra[hidden]{display:none!important}
+.common-portfolio-card .pension-composition-main{margin-top:13px}.common-portfolio-card .pension-selected-panel{margin-top:11px}.common-portfolio-card .composition-summary-note{margin-top:9px}
+.dividend-dashboard.compact-analysis .inline-detail-panel{margin-top:12px;padding-top:12px}.compact-dividend-analysis .period-switch{margin-top:0}.compact-dividend-analysis .chart-panel{margin-top:11px}.compact-dividend-analysis .composition-holdings{margin-top:10px}.compact-dividend-analysis .dividend-list{margin-top:5px}.compact-dividend-analysis .period-yield-card{margin-top:10px}.compact-dividend-analysis .diagnostic-action{margin-top:8px}.compact-dividend-analysis .bar-chart{height:94px;padding-top:6px}.compact-dividend-analysis .pension-income-chart-shell{margin-top:9px}.compact-dividend-analysis .pension-income-chart,.compact-dividend-analysis .pension-income-yaxis{height:96px}.compact-dividend-analysis .pension-income-bar{min-height:96px}.compact-dividend-list .dividend-row:nth-child(n+3){display:none}.compact-income-detail{margin-top:7px}.compact-income-detail .pension-detail-row:nth-child(n+3){display:none}.compact-analysis-collapse{width:100%;border:0;border-top:1px solid var(--line);background:transparent;color:var(--accent2);font-size:10px;font-weight:900;padding:9px 0 0;margin-top:5px;cursor:pointer}.compact-dividend-analysis .period-yield-card{padding:10px 12px}.compact-dividend-analysis .period-yield-card strong{font-size:15px}.compact-dividend-analysis .period-yield-card .period-yield-rate{font-size:15px}.compact-dividend-analysis .period-yield-card small{margin-top:5px;font-size:8.8px}.compact-dividend-analysis .chart-caption{margin-top:4px;font-size:8.8px}
+.pension-income-card.dividend-dashboard{padding:17px}.pension-income-card.dividend-dashboard .dividend-metrics{margin-top:12px}
+@media(max-width:390px){.portfolio-holding-row .name strong{font-size:10.8px}.portfolio-holding-row .right strong{font-size:10.8px}}
+/* v1.9.36 — 사용자 재현조건 완결: 인라인 상세·스크롤 유지·구코드 제거 */
+main,.monthly-card,.monthly-scroll-guard,.inline-detail-panel,.inline-detail-guard,.integrated-assets-card{overflow-anchor:none}
+.inline-detail-panel{margin-top:14px;padding-top:14px;border-top:1px solid var(--line);transform-origin:top;animation:inlineReveal .20s ease both}
+.inline-detail-panel[hidden]{display:none!important}
+.inline-detail-guard{height:0;pointer-events:none;visibility:hidden;overflow-anchor:none}
+.inline-analysis-card{padding:15px 16px}.inline-analysis-card>.sectionhead{margin-bottom:11px}
+.inline-analysis-card .profitbox{margin-top:0}.inline-analysis-card .source-note{margin-top:10px}
+.analysis-toggle{border:0;background:var(--soft);color:var(--accent2);font-size:9.5px;font-weight:900;padding:7px 9px;border-radius:999px;cursor:pointer}
+.pension-asset-analysis-inline{padding:15px 16px}
+.pension-asset-analysis-inline .pension-analysis-scope{margin-top:0}
+.pension-income-card .inline-detail-panel{margin-top:13px}
+.dividend-dashboard .inline-detail-panel{margin-top:14px}
+/* 루트 메인 화면은 검토 배너 다음 대표카드가 같은 시작선에 오도록 hero를 항상 첫 요소로 유지 */
+body[data-root="home"] main>.review-preview-banner + .stack>.hero,
+body[data-root="isa"] main>.review-preview-banner + .stack>.isa-hero,
+body[data-root="pension"] main>.review-preview-banner + .stack>.pension-credit-hero,
+body[data-root="pension"] main>.review-preview-banner + .stack>.pension-asset-hero,
+body[data-root="integrated"] main>.review-preview-banner + .stack>.integrated-overview-hero{margin-top:0!important}
+
+
