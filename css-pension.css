@@ -78,3 +78,6 @@
 .pension-analysis-chart .pension-analysis-hit{touch-action:none}
 
 
+
+/* v0.1 hero de-dup */
+.pension-asset-kpis.single{grid-template-columns:1fr}.pension-asset-kpis.single .pension-asset-kpi{max-width:100%}
