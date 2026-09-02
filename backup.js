@@ -1,5 +1,5 @@
 'use strict';
-const BACKUP_FORMAT='asset-os-backup-v1',SUPPORTED_SCHEMAS=new Set([4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]);
+const BACKUP_FORMAT='asset-os-backup-v1',SUPPORTED_SCHEMAS=new Set([4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]);
 let crcTable=null;function crc32(bytes){if(!crcTable){crcTable=Array.from({length:256},(_,n)=>{let c=n;for(let k=0;k<8;k++)c=(c&1)?0xedb88320^(c>>>1):c>>>1;return c>>>0})}let c=0xffffffff;for(const b of bytes)c=crcTable[(c^b)&255]^(c>>>8);return(c^0xffffffff)>>>0}
 function zipDosStamp(d=new Date()){let year=Math.max(1980,d.getFullYear()),date=((year-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate(),time=(d.getHours()<<11)|(d.getMinutes()<<5)|Math.floor(d.getSeconds()/2);return{date,time}}
 function backupPayload(){return{format:BACKUP_FORMAT,schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,exportedAt:new Date().toISOString(),data:clone(state)}}

@@ -36,6 +36,7 @@
 <button class="menurow" data-profile-action="appearance"><span class="menuico">◐</span><span class="menucopy"><strong>화면 및 테마</strong><small>포인트색·다크모드·입력 버튼</small></span><span class="menugo">›</span></button>
 <button class="menurow" data-profile-action="accounts"><span class="menuico">▣</span><span class="menucopy"><strong>ISA 계좌 관리</strong><small id="accountMenuCount">3개 계좌·만기 이력·계좌 정보 수정</small></span><span class="menugo">›</span></button>
 <button class="menurow" data-profile-action="pension-settings"><span class="menuico">◎</span><span class="menucopy"><strong>개인연금 설정</strong><small>목표비중 · 미래연금 가정</small></span><span class="menugo">›</span></button><button class="menurow" data-profile-action="backup"><span class="menuico">↥</span><span class="menucopy"><strong>백업·복원</strong><small>ZIP 백업·복원 및 클라우드 상태</small></span><span class="menugo">›</span></button>
+<button class="menurow" data-profile-action="kis"><span class="menuico">K</span><span class="menucopy"><strong>한국투자 연결</strong><small>연금저축·IRP 잔고와 체결 조회</small></span><span class="menugo">›</span></button>
 <button class="menurow" data-profile-action="advanced"><span class="menuico">⋯</span><span class="menucopy"><strong>고급 설정</strong><small>제도·상품 관리 · 시스템 진단</small></span><span class="menugo">›</span></button>
 </div></section>
 <section id="cloudSheet" class="sheet" aria-hidden="true"><div class="sheet-drag-zone"><div class="handle"></div><div class="sheethead"><div><div class="eyebrow">계정 · 클라우드</div><h2>Google · Supabase</h2></div></div></div><div id="cloudBody"></div></section>
@@ -47,7 +48,7 @@
 </div></section>
 <section id="diagnosticsSheet" class="sheet" aria-hidden="true"><div class="sheet-drag-zone"><div class="handle"></div><div class="sheethead"><div><div class="eyebrow">고급 설정</div><h2>시스템 진단</h2></div></div></div><div class="diagnostic-list">
 <div class="diagnostic-row"><span class="diagnostic-copy"><strong>앱 버전</strong><small>현재 모듈화 실사용 최종</small></span><span class="diagnostic-value">v0.3 LIVE</span></div>
-<div class="diagnostic-row"><span class="diagnostic-copy"><strong>데이터 구조 버전</strong><small>ISA·개인연금·금융상품·통합 스키마</small></span><span class="diagnostic-value">schema 19</span></div>
+<div class="diagnostic-row"><span class="diagnostic-copy"><strong>데이터 구조 버전</strong><small>ISA·개인연금·금융상품·통합·KIS 스키마</small></span><span class="diagnostic-value">schema 20</span></div>
 <div class="diagnostic-row"><span class="diagnostic-copy"><strong>로컬 저장</strong><small>ISA 검토 데이터와 화면 설정 저장</small></span><span id="localStatus" class="diagnostic-value ok">정상</span></div>
 <div class="diagnostic-row"><span class="diagnostic-copy"><strong>Supabase 클라우드</strong><small>Google 로그인 · 자동 세션 · 원장 동기화</small></span><span id="cloudDiagStatus" class="diagnostic-value wait">로그인 필요</span></div>
 <div class="diagnostic-row"><span class="diagnostic-copy"><strong>Google Drive 백업</strong><small>Android 공유창에서 Drive를 선택해 ZIP 파일 저장</small></span><span class="diagnostic-value ok">공유 방식</span></div>
@@ -67,6 +68,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4"></script>
 <script src="./core-config.js"></script>
+<script src="./broker-kis.js"></script>
+<script src="./broker-kis-client.js"></script>
 <script src="./data-defaults.js"></script>
 <script src="./integrated-ledger-engine.js"></script>
 <script src="./integrated-schedule-engine.js"></script>
