@@ -4,6 +4,7 @@ const brokerKisClient=(()=>{
  let config={projectUrl:'',publishableKey:'',functionName:'kis-read',redirectUrl:''};
  let session={accessToken:'',expiresAt:0};
  let authClient=null;
+ let authSubscription=null;
  const cleanUrl=v=>String(v||'').trim().replace(/\/+$/,'');
  const cleanText=(v,max=200)=>String(v||'').trim().slice(0,max);
  function configure(input={}){
@@ -11,11 +12,16 @@ const brokerKisClient=(()=>{
   if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(projectUrl))return{ok:false,error:'BROKER_PROJECT_URL_INVALID'};
   if(!publishableKey)return{ok:false,error:'BROKER_PUBLISHABLE_KEY_REQUIRED'};
   if(redirectUrl&&!/^https:\/\/[a-z0-9.-]+(?:\/[^?#]*)?$/i.test(redirectUrl))return{ok:false,error:'BROKER_REDIRECT_URL_INVALID'};
-  config={projectUrl,publishableKey,functionName,redirectUrl};authClient=window.supabase?.createClient?window.supabase.createClient(projectUrl,publishableKey,{auth:{autoRefreshToken:false,persistSession:false,detectSessionInUrl:false}}):null;return{ok:true}
+  config={projectUrl,publishableKey,functionName,redirectUrl};
+  if(authSubscription?.unsubscribe)authSubscription.unsubscribe();
+  authClient=window.supabase?.createClient?window.supabase.createClient(projectUrl,publishableKey,{auth:{autoRefreshToken:true,persistSession:true,detectSessionInUrl:true,storageKey:'asset-os-kis-auth'}}):null;
+  if(authClient){const listener=authClient.auth.onAuthStateChange((_event,next)=>adoptSession(next));authSubscription=listener?.data?.subscription||null;authClient.auth.getSession().then(({data})=>adoptSession(data?.session)).catch(()=>{})}
+  return{ok:true}
  }
  function configured(){return !!config.projectUrl&&!!config.publishableKey}
  function authState(){return{configured:configured(),signedIn:!!session.accessToken&&session.expiresAt>Date.now(),expiresAt:session.expiresAt||0}}
- function signOut(){session={accessToken:'',expiresAt:0};return{ok:true}}
+ function adoptSession(input){const accessToken=cleanText(input?.access_token,6000),expiresAt=Math.max(0,Number(input?.expires_at)||0)*1000;if(!accessToken)return{ok:false,error:'AUTH_SESSION_MISSING'};session={accessToken,expiresAt:expiresAt||Date.now()+Math.max(0,Number(input?.expires_in)||0)*1000};return{ok:true,expiresAt:session.expiresAt}}
+ function signOut(){session={accessToken:'',expiresAt:0};authClient?.auth.signOut({scope:'local'}).catch(()=>{});return{ok:true}}
  async function jsonRequest(url,options={}){
   const response=await fetch(url,options),text=await response.text();let data={};try{data=text?JSON.parse(text):{}}catch{data={error:'BROKER_RESPONSE_INVALID'}}
   if(!response.ok)return{ok:false,status:response.status,error:cleanText(data?.message||data?.msg||data?.error||`HTTP_${response.status}`,240)};
@@ -51,5 +57,5 @@ const brokerKisClient=(()=>{
   if(action==='orders')return api.importOrders(data.orders||[],accountKind,localAccountId,fetchedAt);
   return api.importRights(data.rights||[],accountKind,localAccountId,fetchedAt)
  }
- return{configure,authState,signOut,requestOtp,verifyOtp,consumeRedirect,invoke,sync}
+ return{configure,authState,adoptSession,signOut,requestOtp,verifyOtp,consumeRedirect,invoke,sync}
 })();
