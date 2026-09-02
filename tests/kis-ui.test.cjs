@@ -27,8 +27,9 @@ const context=vm.createContext({
 vm.runInContext(fs.readFileSync(path.join(__dirname,'..','ui-settings.js'),'utf8'),context,{filename:'ui-settings.js'});
 
 vm.runInContext('openKisSettings()',context);
-assert.match(elements['#sheetBody'].innerHTML,/인증 링크 받기/);
-assert.doesNotMatch(elements['#sheetBody'].innerHTML,/이메일 인증번호/);
+assert.match(elements['#sheetBody'].innerHTML,/6자리 인증번호 받기/);
+assert.match(elements['#sheetBody'].innerHTML,/이메일 인증번호/);
+assert.match(elements['#sheetBody'].innerHTML,/이메일 링크는 누르지 않습니다/);
 assert.doesNotMatch(elements['#sheetBody'].innerHTML,/data-kis-sync/);
 assert.doesNotMatch(elements['#sheetBody'].innerHTML,/appkey|appsecret|계좌번호 입력/i);
 
