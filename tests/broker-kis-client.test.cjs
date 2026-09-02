@@ -8,21 +8,24 @@ const requests=[];
 const fakeFetch=async(url,options={})=>{
  requests.push({url,options});
  const body=JSON.parse(options.body||'{}');
- if(url.endsWith('/auth/v1/otp'))return{ok:true,status:200,text:async()=>JSON.stringify({})};
+ if(url.includes('/auth/v1/otp'))return{ok:true,status:200,text:async()=>JSON.stringify({})};
  if(url.endsWith('/auth/v1/verify'))return{ok:true,status:200,text:async()=>JSON.stringify({access_token:'USER_JWT_MEMORY_ONLY',expires_in:3600,refresh_token:'MUST_NOT_STORE'})};
  return{ok:true,status:200,text:async()=>JSON.stringify({ok:true,action:body.action,accountKind:body.accountKind,fetchedAt:'2026-09-02T00:00:00Z',balance:{totalValue:123},orders:[],rights:[]})}
 };
 const imports=[];
 const window={__assetOS:{brokerKis:{importBalance:(input,kind,id,at)=>{imports.push({input,kind,id,at});return{ok:true}},importOrders:()=>({ok:true}),importRights:()=>({ok:true})}}};
-const context=vm.createContext({console,Date,Set,JSON,String,Number,RegExp,fetch:fakeFetch,window});
+const location={hash:'',pathname:'/asset-os/',search:''};
+const history={replaceState:(_state,_title,url)=>{location.replacedUrl=url}};
+const context=vm.createContext({console,Date,Set,JSON,String,Number,RegExp,URLSearchParams,fetch:fakeFetch,window,location,history});
 vm.runInContext(fs.readFileSync(path.join(__dirname,'..','broker-kis-client.js'),'utf8'),context,{filename:'broker-kis-client.js'});
 const run=(code,args=[])=>vm.runInContext(code,Object.assign(context,{__args:args}));
 const plain=value=>JSON.parse(JSON.stringify(value));
 
-assert.deepEqual(plain(run('brokerKisClient.configure(__args[0])',[{projectUrl:'https://project.supabase.co',publishableKey:'PUBLIC_KEY'}])),{ok:true});
+assert.deepEqual(plain(run('brokerKisClient.configure(__args[0])',[{projectUrl:'https://project.supabase.co',publishableKey:'PUBLIC_KEY',redirectUrl:'https://example.com/asset-os/'}])),{ok:true});
 assert.deepEqual(plain(run('brokerKisClient.authState()')),{configured:true,signedIn:false,expiresAt:0});
 (async()=>{
  assert.deepEqual(plain(await run('brokerKisClient.requestOtp("owner@example.com")')),{ok:true});
+ assert.match(requests.at(-1).url,/redirect_to=https%3A%2F%2Fexample.com%2Fasset-os/);
  const verified=plain(await run('brokerKisClient.verifyOtp("owner@example.com","123456")'));assert.equal(verified.ok,true);
  assert.equal(run('brokerKisClient.authState().signedIn'),true);
  const synced=plain(await run('brokerKisClient.sync("balance","pension","ps-main")'));assert.equal(synced.ok,true);assert.equal(imports.length,1);assert.equal(imports[0].input.totalValue,123);

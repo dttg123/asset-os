@@ -23,4 +23,5 @@ window.__assetOS.brokerKis={
 };
 window.__assetOS.brokerKisClient=brokerKisClient;
 brokerKisClient.configure(BROKER_KIS_PUBLIC_CONFIG);
+brokerKisClient.consumeRedirect();
 if(!location.hash)location.hash='#/home';render();refreshCloudProfileUI();initSupabaseCloud().catch(()=>{});if(state.system?.loadWarning)setTimeout(()=>toast('저장 데이터 확인이 필요합니다.'),100);
