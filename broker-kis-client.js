@@ -3,14 +3,15 @@
 const brokerKisClient=(()=>{
  let config={projectUrl:'',publishableKey:'',functionName:'kis-read',redirectUrl:''};
  let session={accessToken:'',expiresAt:0};
+ let authClient=null;
  const cleanUrl=v=>String(v||'').trim().replace(/\/+$/,'');
  const cleanText=(v,max=200)=>String(v||'').trim().slice(0,max);
  function configure(input={}){
-  const projectUrl=cleanUrl(input.projectUrl),publishableKey=cleanText(input.publishableKey,300),functionName=cleanText(input.functionName||'kis-read',80),redirectUrl=cleanUrl(input.redirectUrl);
+  const projectUrl=cleanUrl(input.projectUrl),publishableKey=cleanText(input.publishableKey,300),functionName=cleanText(input.functionName||'kis-read',80),redirectUrl=cleanText(input.redirectUrl,500);
   if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(projectUrl))return{ok:false,error:'BROKER_PROJECT_URL_INVALID'};
   if(!publishableKey)return{ok:false,error:'BROKER_PUBLISHABLE_KEY_REQUIRED'};
   if(redirectUrl&&!/^https:\/\/[a-z0-9.-]+(?:\/[^?#]*)?$/i.test(redirectUrl))return{ok:false,error:'BROKER_REDIRECT_URL_INVALID'};
-  config={projectUrl,publishableKey,functionName,redirectUrl};return{ok:true}
+  config={projectUrl,publishableKey,functionName,redirectUrl};authClient=window.supabase?.createClient?window.supabase.createClient(projectUrl,publishableKey,{auth:{autoRefreshToken:false,persistSession:false,detectSessionInUrl:false}}):null;return{ok:true}
  }
  function configured(){return !!config.projectUrl&&!!config.publishableKey}
  function authState(){return{configured:configured(),signedIn:!!session.accessToken&&session.expiresAt>Date.now(),expiresAt:session.expiresAt||0}}
@@ -23,6 +24,7 @@ const brokerKisClient=(()=>{
  function publicHeaders(extra={}){return{'content-type':'application/json',apikey:config.publishableKey,...extra}}
  async function requestOtp(email){
   if(!configured())return{ok:false,error:'BROKER_NOT_CONFIGURED'};const value=cleanText(email,240);if(!/^\S+@\S+\.\S+$/.test(value))return{ok:false,error:'EMAIL_INVALID'};
+  if(authClient){const {error}=await authClient.auth.signInWithOtp({email:value,options:{shouldCreateUser:false,emailRedirectTo:config.redirectUrl||undefined}});return error?{ok:false,status:Number(error.status)||0,error:cleanText(error.message||error.code||'AUTH_LINK_FAILED',240)}:{ok:true}}
   const redirect=config.redirectUrl?`?redirect_to=${encodeURIComponent(config.redirectUrl)}`:'';
   const result=await jsonRequest(`${config.projectUrl}/auth/v1/otp${redirect}`,{method:'POST',headers:publicHeaders(),body:JSON.stringify({email:value,create_user:false})});return result.ok?{ok:true}:{ok:false,status:result.status,error:result.error}
  }
