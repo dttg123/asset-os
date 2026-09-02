@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#eef3fb">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%232f6fed'/%3E%3Cpath d='M18 43 29 18h7l11 25h-8l-2-6H27l-2 6h-7zm12-12h5l-2.5-7-2.5 7z' fill='white'/%3E%3C/svg%3E">
-<title>Asset OS v0.2</title>
+<title>Asset OS v0.3</title>
 <link rel="stylesheet" href="./css-core-base.css">
 <link rel="stylesheet" href="./css-isa.css">
 <link rel="stylesheet" href="./css-pension.css">
@@ -17,7 +17,7 @@
 <body>
 <div class="app">
 <header class="topbar">
-  <div><div class="brandrow"><span class="brand">ASSET OS</span><span class="appversion">v0.2</span></div><h1 id="title">홈</h1></div>
+  <div><div class="brandrow"><span class="brand">ASSET OS</span><span class="appversion">v0.3</span></div><h1 id="title">홈</h1></div>
   <button id="profile" class="profilebtn" aria-label="내 Asset OS 열기"><svg viewBox="0 0 24 24" aria-hidden="true" style="width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><circle cx="12" cy="8" r="3.2"></circle><path d="M5.5 19c.7-3.4 3-5.2 6.5-5.2s5.8 1.8 6.5 5.2"></path></svg></button>
 </header>
 <main id="main"></main>
@@ -31,12 +31,14 @@
 </div>
 <div id="scrim" class="scrim" hidden></div>
 <section id="detailSheet" class="sheet" aria-hidden="true"><div class="sheet-drag-zone"><div class="handle"></div><div class="sheethead"><div><div id="sheetEyebrow" class="eyebrow">상세</div><h2 id="sheetTitle">상세</h2></div></div></div><div id="sheetBody"></div></section>
-<section id="profileSheet" class="sheet" aria-hidden="true"><div class="sheet-drag-zone"><div class="handle"></div><div class="sheethead"><div><div class="eyebrow">계정 · 설정</div><h2>내 Asset OS</h2></div></div></div><div class="profilehero"><div class="profileavatar">A</div><div class="profilecopy"><strong>개인 자산 시스템</strong><small>공통 원장 엔진 + ISA + 개인연금·IRP 거래원장 + 통합 관리</small></div><span class="statuschip">v0.2 LIVE</span></div><div class="menulist">
+<section id="profileSheet" class="sheet" aria-hidden="true"><div class="sheet-drag-zone"><div class="handle"></div><div class="sheethead"><div><div class="eyebrow">계정 · 설정</div><h2>내 Asset OS</h2></div></div></div><div class="profilehero"><div id="profileAvatar" class="profileavatar">A</div><div class="profilecopy"><strong id="profileName">개인 자산 시스템</strong><small id="profileSub">공통 원장 엔진 + ISA + 개인연금·IRP 거래원장 + 통합 관리</small></div><span class="statuschip">v0.3 LIVE</span></div><div class="menulist">
+<button class="menurow" data-profile-action="cloud-auth"><span class="menuico">G</span><span class="menucopy"><strong>Google · 클라우드</strong><small id="cloudAuthMenuStatus">Google 로그인 · Supabase 자동 복원</small></span><span class="menugo">›</span></button>
 <button class="menurow" data-profile-action="appearance"><span class="menuico">◐</span><span class="menucopy"><strong>화면 및 테마</strong><small>포인트색·다크모드·입력 버튼</small></span><span class="menugo">›</span></button>
 <button class="menurow" data-profile-action="accounts"><span class="menuico">▣</span><span class="menucopy"><strong>ISA 계좌 관리</strong><small id="accountMenuCount">3개 계좌·만기 이력·계좌 정보 수정</small></span><span class="menugo">›</span></button>
 <button class="menurow" data-profile-action="pension-settings"><span class="menuico">◎</span><span class="menucopy"><strong>개인연금 설정</strong><small>목표비중 · 미래연금 가정</small></span><span class="menugo">›</span></button><button class="menurow" data-profile-action="backup"><span class="menuico">↥</span><span class="menucopy"><strong>백업·복원</strong><small>ZIP 백업·복원 및 클라우드 상태</small></span><span class="menugo">›</span></button>
 <button class="menurow" data-profile-action="advanced"><span class="menuico">⋯</span><span class="menucopy"><strong>고급 설정</strong><small>제도·상품 관리 · 시스템 진단</small></span><span class="menugo">›</span></button>
 </div></section>
+<section id="cloudSheet" class="sheet" aria-hidden="true"><div class="sheet-drag-zone"><div class="handle"></div><div class="sheethead"><div><div class="eyebrow">계정 · 클라우드</div><h2>Google · Supabase</h2></div></div></div><div id="cloudBody"></div></section>
 <section id="appearanceSheet" class="sheet" aria-hidden="true"><div class="sheet-drag-zone"><div class="handle"></div><div class="sheethead"><div><div class="eyebrow">개인화</div><h2>화면 및 테마</h2></div></div></div><div class="settings">
 <div class="setting"><div class="settinglabel">포인트 색</div><div class="settinghint">카드는 중립적으로 유지하고 핵심 버튼과 선택 상태만 바꿉니다.</div><div class="swatches" id="accentChoices"><button class="swatch" data-value="blue" aria-label="블루"></button><button class="swatch" data-value="mint" aria-label="민트"></button><button class="swatch" data-value="purple" aria-label="퍼플"></button><button class="swatch" data-value="orange" aria-label="오렌지"></button></div></div>
 <div class="setting toggle"><div><div class="settinglabel">다크모드</div><div class="settinghint">기기 설정과 별도로 저장</div></div><input id="themeToggle" class="switch" type="checkbox"></div>
@@ -44,9 +46,10 @@
 <div class="setting toggle"><div><div class="settinglabel">터치 진동</div><div class="settinghint">지원하는 Android 브라우저에서 중요한 동작에만 짧게 작동</div></div><input id="hapticToggle" class="switch" type="checkbox"></div>
 </div></section>
 <section id="diagnosticsSheet" class="sheet" aria-hidden="true"><div class="sheet-drag-zone"><div class="handle"></div><div class="sheethead"><div><div class="eyebrow">고급 설정</div><h2>시스템 진단</h2></div></div></div><div class="diagnostic-list">
-<div class="diagnostic-row"><span class="diagnostic-copy"><strong>앱 버전</strong><small>현재 모듈화 실사용 최종</small></span><span class="diagnostic-value">v0.2 LIVE</span></div>
+<div class="diagnostic-row"><span class="diagnostic-copy"><strong>앱 버전</strong><small>현재 모듈화 실사용 최종</small></span><span class="diagnostic-value">v0.3 LIVE</span></div>
 <div class="diagnostic-row"><span class="diagnostic-copy"><strong>데이터 구조 버전</strong><small>ISA·개인연금·금융상품·통합 스키마</small></span><span class="diagnostic-value">schema 19</span></div>
 <div class="diagnostic-row"><span class="diagnostic-copy"><strong>로컬 저장</strong><small>ISA 검토 데이터와 화면 설정 저장</small></span><span id="localStatus" class="diagnostic-value ok">정상</span></div>
+<div class="diagnostic-row"><span class="diagnostic-copy"><strong>Supabase 클라우드</strong><small>Google 로그인 · 자동 세션 · 원장 동기화</small></span><span id="cloudDiagStatus" class="diagnostic-value wait">로그인 필요</span></div>
 <div class="diagnostic-row"><span class="diagnostic-copy"><strong>Google Drive 백업</strong><small>Android 공유창에서 Drive를 선택해 ZIP 파일 저장</small></span><span class="diagnostic-value ok">공유 방식</span></div>
 <div class="diagnostic-row"><span class="diagnostic-copy"><strong>ZIP 백업·복원</strong><small>단일 ZIP 안의 JSON 원장으로 전체 상태 Round Trip</small></span><span id="backupStatus" class="diagnostic-value ok">준비됨</span></div>
 <div class="diagnostic-row"><span class="diagnostic-copy"><strong>데이터 구성</strong><small>ISA 계좌 / 보유종목 / 배당 내역</small></span><span id="dataCounts" class="diagnostic-value">0 / 0 / 0</span></div>
@@ -62,6 +65,7 @@
 <section id="confirmDialog" class="dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" hidden><h2 id="confirmTitle">확인</h2><p id="confirmMessage"></p><div id="confirmActions" class="dialog-actions"><button id="confirmCancel">취소</button><button id="confirmOk" class="primary">확인</button></div></section>
 <div id="toast" class="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4"></script>
 <script src="./core-config.js"></script>
 <script src="./data-defaults.js"></script>
 <script src="./integrated-ledger-engine.js"></script>
@@ -94,6 +98,7 @@
 <script src="./isa-maturity-policy.js"></script>
 <script src="./integrated-finance-ui.js"></script>
 <script src="./ui-settings.js"></script>
+<script src="./supabase-sync.js"></script>
 <script src="./boot.js"></script>
 
 </body>

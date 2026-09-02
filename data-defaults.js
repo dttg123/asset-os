@@ -9,13 +9,11 @@ const seed={
  },
  accounts:[],
  pension:{
-  goal:{pensionSavings:6000000,irp:3000000},
-  accounts:[
-   {id:'ps-main',kind:'pension',name:'연금저축 1',provider:'',status:'active',openedAt:'2025-01-01',policyId:'pension-policy-2026-official'},
-   {id:'irp-main',kind:'irp',name:'IRP 1',provider:'',status:'active',openedAt:'2025-01-01',policyId:'irp-policy-2026-official'}
-  ],
+  goal:{pensionSavings:0,irp:0},
+  accounts:[],
+
   contributions:[],transactions:[],holdings:[],incomes:[],assetSnapshots:[],
-  projection:{birthYear:1995,retirementAge:65,yearsToRetire:34,monthlyContribution:750000,annualReturn:.06,withdrawalRate:.03,inflationRate:.02}
+  projection:{birthYear:0,retirementAge:65,yearsToRetire:0,monthlyContribution:0,annualReturn:.06,withdrawalRate:.03,inflationRate:.02}
  },
  financialProducts:{items:[],events:[]},financeSchedules:{items:[]},moduleVerification:{isa:false,pension:false,irp:false},integrated:buildIntegratedSeed()
 };
