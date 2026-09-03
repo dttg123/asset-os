@@ -52,6 +52,8 @@ html.asset-auth-locked body{overflow:hidden}.asset-auth-locked .app,.asset-auth-
 <button class="menurow" data-profile-action="appearance"><span class="menuico">◐</span><span class="menucopy"><strong>화면 및 테마</strong><small>포인트색·다크모드·입력 버튼</small></span><span class="menugo">›</span></button>
 <button class="menurow" data-profile-action="accounts"><span class="menuico">▣</span><span class="menucopy"><strong>ISA 계좌 관리</strong><small id="accountMenuCount">3개 계좌·만기 이력·계좌 정보 수정</small></span><span class="menugo">›</span></button>
 <button class="menurow" data-profile-action="pension-settings"><span class="menuico">◎</span><span class="menucopy"><strong>개인연금 설정</strong><small>목표비중 · 미래연금 가정</small></span><span class="menugo">›</span></button><button class="menurow" data-profile-action="backup"><span class="menuico">↥</span><span class="menucopy"><strong>백업·복원</strong><small>ZIP 백업·복원 및 클라우드 상태</small></span><span class="menugo">›</span></button>
+<button class="menurow" data-profile-action="insurance"><span class="menuico">＋</span><span class="menucopy"><strong>내 보험</strong><small>계약·보험료·보장 항목 조회</small></span><span class="menugo">›</span></button>
+<button class="menurow" data-profile-action="source-archive"><span class="menuico">✓</span><span class="menucopy"><strong>초기자료 검산</strong><small>사진 원본과 월·연 합계 대조</small></span><span class="menugo">›</span></button>
 <button class="menurow" data-profile-action="install"><span class="menuico">⇩</span><span class="menucopy"><strong>Asset OS 앱 설치</strong><small>홈 화면에서 독립 앱처럼 실행</small></span><span class="menugo">›</span></button>
 <button class="menurow" data-profile-action="kis"><span class="menuico">K</span><span class="menucopy"><strong>한국투자 연결</strong><small>연금저축·IRP 잔고와 체결 조회</small></span><span class="menugo">›</span></button>
 <button class="menurow" data-profile-action="advanced"><span class="menuico">⋯</span><span class="menucopy"><strong>고급 설정</strong><small>제도·상품 관리 · 시스템 진단</small></span><span class="menugo">›</span></button>
@@ -79,6 +81,7 @@ html.asset-auth-locked body{overflow:hidden}.asset-auth-locked .app,.asset-auth-
 <section id="registerSheet" class="sheet" aria-hidden="true"><div class="sheet-drag-zone"><div class="handle"></div><div class="sheethead"><div><div class="eyebrow">공통 보유 입력</div><h2>보유내역 등록·검토</h2><div class="sheet-mode-note">직접 추가한 보유내역을 한 번에 검토합니다.</div></div></div></div><div id="registerBody"></div></section>
 
 <input id="backupInput" type="file" accept=".zip,.json,application/zip,application/json" hidden>
+<input id="initialImportInput" type="file" accept=".json,application/json" hidden>
 <div id="dialogScrim" class="dialog-scrim" hidden></div>
 <section id="confirmDialog" class="dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" hidden><h2 id="confirmTitle">확인</h2><p id="confirmMessage"></p><div id="confirmActions" class="dialog-actions"><button id="confirmCancel">취소</button><button id="confirmOk" class="primary">확인</button></div></section>
 <div id="toast" class="toast"></div>
@@ -94,7 +97,11 @@ html.asset-auth-locked body{overflow:hidden}.asset-auth-locked .app,.asset-auth-
 <script src="./store-migrations.js"></script>
 <script src="./store-state.js"></script>
 <script src="./backup.js"></script>
+<script src="./initial-import.js?v=0.4.5"></script>
+<script src="./initial-import-ui.js?v=0.4.5"></script>
 <script src="./backup-v04.js"></script>
+<script src="./insurance.js?v=0.4.5"></script>
+<script src="./source-archive.js?v=0.4.5"></script>
 <script src="./core-accessors.js"></script>
 <script src="./pension-contributions.js?v=0.4.4"></script>
 <script src="./pension-ledger.js"></script>

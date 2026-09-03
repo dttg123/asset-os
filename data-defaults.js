@@ -15,5 +15,5 @@ const seed={
   contributions:[],transactions:[],holdings:[],incomes:[],assetSnapshots:[],
   projection:{birthYear:0,retirementAge:65,yearsToRetire:0,monthlyContribution:0,annualReturn:.06,withdrawalRate:.03,inflationRate:.02}
  },
- financialProducts:{items:[],events:[]},financeSchedules:{items:[]},moduleVerification:{isa:false,pension:false,irp:false},brokerKis:brokerKisEmptyStore(),integrated:buildIntegratedSeed()
+ financialProducts:{items:[],events:[]},financeSchedules:{items:[]},insurance:{policies:[]},sourceArchives:{records:[]},moduleVerification:{isa:false,pension:false,irp:false},brokerKis:brokerKisEmptyStore(),integrated:buildIntegratedSeed()
 };
