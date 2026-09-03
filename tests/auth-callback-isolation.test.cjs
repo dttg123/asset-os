@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 const path=require('node:path');
-const token=(issuer,provider='email')=>{const encode=value=>Buffer.from(JSON.stringify(value)).toString('base64url');return `${encode({alg:'none'})}.${encode({iss:issuer,app_metadata:{provider}})}.signature`};
+const token=(issuer,provider='email',method='otp')=>{const encode=value=>Buffer.from(JSON.stringify(value)).toString('base64url');return `${encode({alg:'none'})}.${encode({iss:issuer,app_metadata:{provider},amr:[{method,timestamp:1}]})}.signature`};
 const location={hash:'',pathname:'/asset-os/',search:''};
 const history={replaceState:(_state,_title,url)=>{location.replacedUrl=url;location.hash=''}};
 let persistedSession=null;
@@ -22,6 +22,12 @@ location.hash=`#access_token=${token('https://kis-project.supabase.co/auth/v1','
 result=JSON.parse(vm.runInContext('JSON.stringify(brokerKisClient.consumeRedirect())',context));
 assert.equal(result.error,'BROKER_REDIRECT_FOREIGN');
 assert.ok(location.hash.includes('access_token='),'same-project Google callback must remain for the cloud client');
+assert.equal(vm.runInContext('brokerKisClient.authState().signedIn',context),false);
+
+location.hash=`#access_token=${token('https://kis-project.supabase.co/auth/v1','email','oauth')}&expires_in=3600`;
+result=JSON.parse(vm.runInContext('JSON.stringify(brokerKisClient.consumeRedirect())',context));
+assert.equal(result.error,'BROKER_REDIRECT_FOREIGN');
+assert.ok(location.hash.includes('access_token='),'linked Google identity can keep email as primary provider; oauth AMR must remain for the cloud client');
 assert.equal(vm.runInContext('brokerKisClient.authState().signedIn',context),false);
 
 location.hash=`#access_token=${token('https://kis-project.supabase.co/auth/v1')}&refresh_token=refresh-kis&expires_in=3600`;
