@@ -18,6 +18,11 @@
 body[data-root="integrated"] main{padding:15px 18px 30px!important}
 body[data-root="integrated"] .stack{gap:14px!important}
 
+/* v1.9.43 — 통합 탭 전환 시 대표 카드 시작선·외곽 크기 고정 */
+body[data-root="integrated"] .integrated-overview-hero,
+body[data-root="integrated"] .spending-hero{box-sizing:border-box;width:100%;height:177px;min-height:177px;padding:20px!important;border-radius:var(--r1)!important}
+body[data-root="integrated"] .spending-hero{box-shadow:0 17px 36px rgba(var(--accent-rgb),.23)!important}
+
 /* v1.9.42 — 모든 모듈의 1차 탭을 같은 위치·크기·터치 영역으로 고정 */
 .module-page-shell{display:grid;gap:14px}
 .module-page-shell>.module-primary-tabs{margin:0!important}
