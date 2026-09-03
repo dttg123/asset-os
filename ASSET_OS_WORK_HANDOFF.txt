@@ -1,133 +1,69 @@
 ASSET OS v0.4 작업 인수인계
 최종 갱신: 2026-09-03 UTC
 
-[현재 기준]
-- 작업 브랜치: work-v04 (origin/main 7837940에서 분기)
-- 배포 저장소: dttg123/asset-os
-- 데이터 스키마: 20 유지
-- 로컬 저장 KEY와 LEGACY_KEYS는 변경 금지
-- KIS 읽기 전용 연동, Supabase 인증, 중복 방지 키·원장·백업 호환성 보존
+[저장소와 고정 규칙]
+- 저장소: dttg123/asset-os
+- 작업 브랜치: work-v04, 운영 배포: main
+- 데이터 스키마 20, 로컬 KEY/LEGACY_KEYS, 기존 사용자 원장과 백업 호환성은 변경 금지
+- KIS는 조회 전용이다. 잔고·체결·권리 조회 결과를 납입·매매·배당 원장에 자동 추가하지 않는다.
+- 앱키·시크릿·계좌번호·토큰은 브라우저 저장소와 백업에 저장하지 않는다.
+- 작업마다 이 파일의 완료·QA·미해결 항목을 최신화하고 끝난 임시 항목은 제거한다.
 
-[이번 작업에서 완료]
-- 최신 main과 v0.4 초안(v0.4-backup-merge) 비교 완료
-- 초안은 v04-runtime.js, manifest.webmanifest, service-worker.js 3개 추가임을 확인
-- 제공 아이콘 2개를 정식 PNG 192x192 / 512x512로 변환 완료
-- v0.4 작업용 브랜치 생성 및 현재 main 기준 고정
-- APP_VERSION과 표시 문구를 v0.4로 변경, schema 20과 기존 저장 KEY 유지
-- 로그인 전 최초 화면부터 본문을 숨기는 Google 필수 로그인 게이트 구현
-- Google 세션 확인 → Supabase 원장 조정 성공 후에만 앱을 여는 부팅 순서 구현
-- 로컬이 비어 있고 클라우드에 기록이 있으면 클라우드를 우선하는 덮어쓰기 방지 구현
-- PWA 매니페스트, 서비스워커, 앱 아이콘, 설치 이벤트 기반 추가
-- KIS 인증 완료 후 내부 계좌가 0개면 한국투자 연금저축·IRP 연결용 계좌를 각 1개만 자동 생성하고 최초 동기화하도록 수정
-- 기존 계좌가 있거나 보관 계좌가 있으면 자동 추가하지 않는 중복 방지 구현
-- 휴대폰 폴더 자동 ZIP: 60초 지연, 당일 교체, 최근 30일 일별·이전 월별 1개, _pre/_keep 영구보관 구현
-- 고정 폴더 미지원 Android 브라우저는 일반 ZIP 다운로드·Drive 공유 경로 유지
-- 통합 > 소비 탭 추가: 이번 달 총소비, 고정/변동, 카테고리, 전월 증감, 6개월 추이, 실제 원장 상세 연결
-- Google 클라우드 OAuth와 KIS 이메일 인증의 같은 콜백 충돌 발견 및 차단
-- KIS 토큰은 JWT 발급 프로젝트가 일치하고 로그인 방식이 email일 때만 소비하며, 같은 프로젝트의 Google 토큰도 그대로 클라우드 인증에 전달
-- 정상 KIS magic link의 refresh token은 전용 Supabase 저장소에만 넘겨 재접속 유지
-- JS 문법·diff 검사와 총 12종 자동 테스트 PASS
-- 배포 직후 Google 로그인 버튼이 존재하지 않는 Supabase 주소로 이동하는 결함 발견 및 긴급 수정
-- 원인: supabase-sync.js의 프로젝트 주소에서 문자 v 1개 누락
-- Google 클라우드 주소와 KIS 프로젝트 주소가 다르면 실패하는 회귀 테스트 추가
-- supabase-sync.js에 v0.4.1 캐시 키를 붙이고 service worker 캐시를 갱신해 휴대폰의 이전 오류 파일 재사용 차단
-- 전체 JS/CSS 참조를 다시 대조해 루트 파일 46개가 모두 실제 로딩 또는 서비스워커 캐시에 연결됨을 확인
-- 호출 경로가 0개인 구형 함수 4개 제거: verifyOtp, scheduleTargetText, stripInvestmentQaFixtures, applyRealFinanceBootstrap
-- 매직링크와 중복이던 6자리 OTP 테스트를 메모리 세션 채택 방식으로 교체하고 refresh token 비저장 검증 유지
-- 거래원장 Hard QA 추가: 소수 수량, 추가매수, 부분·전량매도, 재매수, 배당, 수수료·세금, 0원 단가 거부, 계좌 독립성, NaN/Infinity 방지
-- 실제 Google 계정 선택 후 앱 첫 화면으로 되돌아오는 로그인 루프 재현
-- Supabase Auth Logs에서 원인 확정: invalid_client / The provided client secret is invalid
-- OAuth 오류를 숨기지 않고 만료 링크와 Google 서버 설정 오류를 구분해 로그인 게이트에 표시하도록 수정
-- 콜백 오류 파라미터 제거 및 오류 표시 회귀 테스트 추가, supabase-sync.js 캐시 키 v0.4.2로 갱신
+[완료된 핵심 작업]
+- v0.4 Google 필수 로그인 게이트와 Supabase 클라우드 복원·동기화 구현
+- Google OAuth와 KIS 이메일 콜백 충돌 및 로그인 루프 수정
+- 잘못된 Supabase 프로젝트 주소와 Google OAuth Client Secret 오류 표시 수정
+- Google/Supabase 세션을 KIS 조회 세션으로 안전하게 채택하도록 통합
+- KIS 인증 시 한국투자 연금저축·IRP 연결 계좌 자동 준비와 중복 생성 방지
+- KIS 잔고·최근 체결·권리 조회, 일별 잔고 교체, 체결 revision, 중복 키 구현
+- PWA manifest, 192/512 아이콘, 서비스워커 및 모바일 구형 캐시 차단 구현
+- 클라우드 빈 데이터 덮어쓰기 방지, schema 4~20 ZIP 백업 호환, 모바일 백업 보존 구현
+- 통합 소비 분석과 거래원장 Hard QA 구현
+- 호출 경로가 없던 구형 함수 4개 삭제: verifyOtp, scheduleTargetText, stripInvestmentQaFixtures, applyRealFinanceBootstrap
 
-[현재 진행]
-- 사용자가 Supabase Google Provider의 OAuth 설정을 다시 저장함
-- 실제 앱 재시도에서 Google 요청 Client ID가 이전 값에서 `170998043266-q11lifibbi477h7tmrv14slcv8co4b26.apps.googleusercontent.com`으로 변경되어 새 설정 반영은 확인됨
-- Cloud QA 브라우저에서는 accounts.google.com이 502 Bad Gateway로 차단되어 계정 선택 이후 E2E 판정은 보류
-- 사용자 휴대폰에서 로그인 성공 확인 후 앱 내부 주요 화면·저장·재진입 직접 QA 예정
-- Google 계정 선택 후 오류 없이 로그인 게이트로 돌아오는 루프의 코드 원인 재현: 같은 Supabase 사용자에 email·Google identity가 연결되면 Google OAuth JWT의 대표 provider가 email일 수 있고, KIS 콜백 소비기가 이를 이메일 magic link로 오인해 URL의 토큰을 먼저 제거함
-- KIS 콜백 판별에 JWT amr 인증방식을 추가하여 oauth 및 oauth_provider 세션은 클라우드 인증에 남기도록 수정
-- 연결된 identity의 provider=email + amr=oauth 재현 테스트를 추가하고 수정 전 FAIL → 수정 후 PASS 확인
-- 모바일 구형 broker-kis-client.js 재사용 방지를 위해 서비스워커 캐시 키 갱신
+[이번 원인 분석]
+- 증상: 홈에는 개인연금 40,920,217원이 보이지만 전체·연금저축·IRP의 포트폴리오가 0개로 비어 보임
+- 원인 1: 홈은 통합 원장 또는 KIS 현재 잔고를 사용하지만 개인연금 상세는 로컬 수기 보유종목만 사용해 데이터 원본이 분리됨
+- 원인 2: 공식 한국투자 퇴직연금 잔고 API는 주식·ETF·ETN만 종목 조회가 가능하며 펀드는 조회하지 못함
+- 원인 3: KIS가 0원·0종목을 반환했을 때 기존 납입·통합 원장 잔액까지 0원으로 덮을 수 있었음
+- 40,920,217원은 현재 화면과 이전 QA 기준으로 종목별 평가액이 확정된 값이 아니라 납입·통합 원장 연결액일 수 있음
 
-[현재 요청 R]
-- R1 실제 배포 화면을 로그인부터 직접 눌러 주요 흐름 확인
-- R2 코드의 호출·저장·이벤트 연결과 중복 구현 전수 확인
-- R3 참조되지 않는 쓸모없는 코드·파일만 삭제하고 최신 상태로 정리
-- R4 수정 후 Targeted·Regression·Hard QA, TXT 갱신, work-v04·main 재배포
-- MUST NOT CHANGE: schema 20, KEY/LEGACY_KEYS, 사용자 원장, 계좌 독립성, KIS 읽기 전용·중복 방지, 백업 호환성
+[이번 수정]
+- 개인연금 상세가 납입·통합 원장 연결액을 잃지 않고 포트폴리오 구성에 표시하도록 연결
+- KIS가 반환한 종목은 임시 조회 뷰로 변환해 종목명·수량·평가액·손익을 읽기 전용 표시
+- KIS 조회 종목을 state.pension.holdings나 거래원장에 복사하지 않아 중복합산 방지
+- KIS 총액과 종목 합계의 차이는 ‘한투 기타자산’으로 표시하고 종목명을 임의 생성하지 않음
+- KIS 0원 응답이 이미 존재하는 연결 원장 잔액을 지우지 않도록 우선순위 보정
+- 홈 문구를 금액 출처에 따라 ‘한국투자 조회 잔고’, ‘한국투자 조회 + 연결 원장’, ‘납입·통합 원장 연결액 · 종목 미연결’로 구분
+- 개인연금 상세에 KIS의 주식·ETF·ETN 조회 범위와 펀드 미지원 안내 추가
+- home.js와 pension-assets.js에 v0.4.1 캐시 버전을 붙이고 서비스워커 캐시 갱신
 
-[다음 작업]
-1. Google 인증 세션 확보 후 홈·ISA·개인연금·통합·프로필의 주요 버튼을 실제 조작
-2. 테스트 계정에서 저장 후 새로고침·재진입과 Supabase 원격 복원 확인
-3. 한국투자 연결에서 연금저축·IRP 카드 자동 생성과 최초 동기화 확인
-
-[주의/미해결]
-- 공식 확인 결과 Supabase는 Google provider token을 자동 갱신하지 않음. 장기 무인 Drive 백업은 provider_refresh_token과 신뢰 서버가 필요하며, 현재 클라이언트 access token만 저장하는 초안은 사용 금지.
-- Android 브라우저는 폴더 접근 API 지원 여부가 다르므로 파일 공유/다운로드 대체 경로가 필요함.
-- v0.4 초안 런타임은 본문 로딩 후 게이트, 함수 monkey patch, 불완전 캐시 목록 문제가 있어 그대로 사용하지 않음.
-- 현재 안전하게 제공하는 Drive 경로는 Android 공유 시트의 Drive 저장이며, 무인 장기 자동 Drive 업로드 완료로 표시하지 않음.
-
-[QA 상태]
-- JS 문법 검사: PASS
+[현재 QA]
+- 전체 자동 테스트: 15/15 PASS
+- 전체 생산 JS 문법 검사: PASS
 - git diff --check: PASS
-- KIS 회귀 테스트: 5/5 PASS
-- KIS 계좌 자동준비 테스트: PASS
-- 백업 파일명·30일/월별/_pre/_keep 보존 테스트: PASS
-- schema 4~20 ZIP round trip: PASS
-- 빈 로컬이 클라우드 기록을 덮지 않는 reconcile 테스트: PASS
-- 소비 분석 계산·필터 테스트: PASS
-- Google/KIS 콜백 격리·KIS 세션 재접속 저장 테스트: PASS
-- 동일 Supabase 프로젝트의 Google 토큰을 KIS가 소비하지 않는 테스트: PASS
-- GitHub work-v04와 main 반영: PASS (v0.4 배포 커밋 7a57f9a)
-- 실제 Pages 제목·필수 로그인 게이트: PASS
-- 공개 manifest·192/512 아이콘 선언·v0.4 service worker: PASS
-- 공개 페이지 앱 자체 콘솔 오류: PASS (브라우저 확장 자체 로그 1건은 앱과 무관)
-- 실제 Pages에서 Google 로그인 버튼 클릭 → accounts.google.com 로그인 화면 도달: PASS
-- 로그인 이동 Supabase 프로젝트 주소 일치: PASS (wjrzukoofscmvwicmoey)
-- 캐시 방지 스크립트 supabase-sync.js?v=0.4.1 제공: PASS
-- 로그인 긴급 수정 배포 커밋: bf5ac08
-- 전체 루트 JS/CSS 파일 참조: PASS (46개, 고아 파일 0개)
-- 미사용 함수 제거 및 잔존 여부 검사: PASS (4개 제거, 생산 JS 잔존 0개)
-- 거래원장 독립 계산 Hard QA: PASS
-- 전체 자동 테스트: PASS (13/13)
-- 전체 JS 문법·git diff 검사: PASS
-- 배포 페이지에서 Google 로그인 버튼 직접 클릭 → accounts.google.com 도달: PASS
-- 로그인 경유 Supabase 주소: PASS (wjrzukoofscmvwicmoey.supabase.co)
-- work-v04·main 코드 정리 배포: PASS (96aac710)
-- Pages 최신 broker-kis-client.js 반영 확인: PASS (verifyOtp 없음, requestOtp 유지)
-- 배포 후 앱 자체 콘솔 오류: PASS (0건, 브라우저 확장 자체 오류 제외)
-- 실제 Google 계정 선택 후 Supabase 세션 발급: FAIL (invalid_client: 저장된 Client Secret이 유효하지 않음)
-- 사용자 Secret 저장 후 12:36 재로그인·최신 Auth Log 대조: FAIL (invalid_client 재현; 당시 Client ID/Secret 불일치)
-- OAuth 콜백 오류 표시·주소 정리 자동 테스트: PASS
-- 전체 자동 테스트: PASS (14/14)
-- OAuth 오류 표시 수정 work-v04·main 배포: PASS (efb28101)
-- Pages 실제 오류 콜백 화면: PASS (첫 화면 루프 대신 Client Secret 설정 오류와 다시 확인 버튼 표시)
-- OAuth 설정 재저장 반영: PASS (실제 Google authorize 요청의 Client ID가 새 값으로 변경됨)
-- 새 OAuth 설정의 계정 선택 이후 E2E: UNVERIFIED (Cloud QA 브라우저의 accounts.google.com 502 제한)
-- 설정 재저장 후 전체 자동 테스트 재실행: PASS (14/14)
-- Google/KIS 동일 프로젝트·동일 이메일 연결계정 OAuth 토큰 격리 재현: PASS (수정 전 FAIL 확인 후 수정)
-- 로그인 루프 수정 후 전체 자동 테스트·전체 JS 문법·git diff 검사: PASS (14/14)
-- 실제 Google 인증 완료·앱 내부 전 화면 클릭·Supabase 원격 DB·KIS 실계좌 최초 동기화: UNVERIFIED (원격 인증 세션 미완료)
-- 2026-09-03 Cloud QA에서 배포 앱 Google 로그인 버튼 직접 클릭 후 `#/home` 진입 및 `dttg123@gmail.com · 동기화됨` 확인: PASS
-- Cloud QA에서 프로필 → 한국투자 연결 화면 직접 진입: PASS
-- 한국투자 연결 사용자 인증 상태: 미인증 확인
-- 보안 이메일 입력을 통해 인증 링크 발송 요청: PASS
-- 한국투자 연금저축·IRP 실계좌 조회: BLOCKED (단회용 이메일 링크를 동일 Cloud QA 브라우저에서 사용해야 하며 링크 내용은 모델이 열람·복사하지 않음)
-- 사용자 휴대폰에서 한투 인증 메일 링크 클릭 후 Google 로그인 게이트로 복귀하는 현상 재현: FAIL
-- 원인 확정: 동일 Supabase 프로젝트인데 클라우드 Google 세션과 KIS 이메일 세션을 별도로 운용하여, 이메일 콜백 뒤 앱 게이트가 다시 Google 로그인을 요구함
-- 수정: 로그인·갱신된 Google/Supabase 세션을 KIS 읽기 전용 클라이언트에도 자동 채택하고 Google 로그아웃 시 KIS 세션도 함께 정리
-- KIS 설정 화면은 Google 세션이 있으면 별도 이메일 인증 없이 연결됨으로 표시하며, 이메일 링크는 세션 미확인 시에만 보조 경로로 유지
-- 캐시 키 `asset-os-v0.4-20260903-unified-auth`, supabase-sync 참조 `v0.4.3`으로 갱신
-- Google→KIS 세션 브리지 신규 회귀 테스트 포함 전체 자동 테스트: PASS (15/15)
-- work-v04·main Google/KIS 통합 인증 배포: PASS (work-v04 d6b12f6, main e5eaf16)
-- 운영 Cloud QA에서 Google 세션으로 한투 `연결됨` 확인: PASS
-- 한국투자 연금저축·IRP 자동 계좌 생성 및 두 계좌 최초 읽기 동기화: PASS (각 마지막 동기화 2026-09-03 17:56~17:57 UTC)
-- 개인연금 계좌 관리에서 `한국투자 연금저축`, `한국투자 IRP` 운영 계좌 확인: PASS
-- 한투 응답 반영값: 두 계좌 평가 0원·현금 0원·전체 보유 0개 (조회 성공과 반환값 0을 구분해 기록)
-- 구형 ui-settings 캐시가 설명과 인증 해제 버튼을 한 차례 재표시하여 ui-settings 참조 `v0.4.1` 및 캐시 키 `unified-auth-ui`로 추가 갱신
-- 캐시 추가 수정 work-v04·main 배포: PASS (work-v04 2e93122, main 28f2be7)
-- Pages 최종 스크립트 참조 `ui-settings.js?v=0.4.1` 제공 확인: PASS
-- 최종 운영 화면 Google 클라우드 동기화·KIS 연결됨·통합 인증 문구·연금저축/IRP 동기화 시각 유지: PASS
-- 개인연금 홈 표시 40,920,217원은 `납입 현금 연결 · 평가액 미입력` 값이며 KIS 실계좌 평가액으로 확정하지 않음
-- 연금저축 범위: 평가 0원·보유 0개, IRP 범위: 평가 0원·보유 0개로 표시됨. KIS 호출 성공과 0원 반환은 확인했으나 실제 증권사 잔고와의 일치 여부는 별도 사용자 대조 필요
+- Google/KIS 콜백 격리와 통합 세션: PASS
+- 빈 로컬 클라우드 덮어쓰기 방지: PASS
+- schema 4~20 ZIP 백업·복원: PASS
+- 거래원장 소수수량·부분매도·전량매도·재매수·수수료·세금·계좌독립: PASS
+- KIS 종목 읽기 전용 표시 및 수기 원장 불변: PASS
+- KIS 종목 상세 미제공 총액 유지: PASS
+- KIS 0원 응답 시 기존 연결 잔액 보존: PASS
+- 생산 JS 39개 전역 함수 539개 중복 이름: 0개
+- 루트 JS/CSS/아이콘/manifest 미참조 파일: 0개
+
+[배포 전 남은 단계]
+1. 변경 diff 최종 검토와 불필요 코드·민감정보 검사
+2. work-v04 배포 후 main 배포
+3. GitHub Pages의 최신 캐시 파일·화면 문구·공개 로그인 게이트 확인
+4. 로그인된 운영 데이터의 전체·연금저축·IRP 실화면 대조
+
+[현재 제한과 사용자 확인 필요]
+- Cloud QA 브라우저가 로그인된 dttg123.github.io 앱 데이터 접근을 보안 정책으로 차단하여 인증 내부 화면 자동 판정은 현재 불가
+- 실제 한국투자 계좌가 펀드 중심이면 공식 API 제한으로 펀드 종목명·수량은 자동 표시할 수 없음
+- 이 경우 앱은 총액/연결액과 조회 제한을 표시하며 종목 상세를 거짓으로 만들지 않음
+- 사용자 휴대폰에서 배포 후 새로고침하여 전체·연금저축·IRP 금액과 ‘연결 원장 잔액/한투 기타자산/ETF 종목’ 표시를 최종 대조해야 함
+
+[장기 미해결]
+- Supabase는 Google provider token을 자동 갱신하지 않으므로 장기 무인 Drive 업로드는 신뢰 서버와 provider refresh token 설계 전까지 완료로 표시하지 않는다.
+- Android 브라우저별 폴더 접근 API 차이 때문에 ZIP 다운로드·공유 시트 대체 경로를 유지한다.

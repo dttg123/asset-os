@@ -21,6 +21,10 @@ const before=plain(run('({pension:state.pension,integrated:state.integrated,metr
 assert.equal(run('SCHEMA_VERSION'),20);
 assert.equal(run('typeof brokerKisClient.sync'),'function');
 assert.equal(run('state.brokerKis.orders.length'),0);
+const linkedDetail=plain(run('pensionAssetMetrics("pension")'));
+assert.equal(linkedDetail.value,500000,'통합 원장 연금 잔액이 상세 자산 화면에서도 보여야 한다');
+assert.equal(linkedDetail.source,'linked');
+assert.equal(linkedDetail.unallocatedRows[0].name,'연결 원장 잔액');
 
 const partial={orderDate:'2026-08-31',orderTime:'101500',branchNo:'001',orderNo:'12345',productCode:'ETF001',productName:'테스트 ETF',exchangeCode:'KRX',side:'buy',orderQty:100,filledQty:30,filledAmount:300000,remainingQty:70,cancelledQty:0,appKey:'NEVER_SAVE',appSecret:'NEVER_SAVE',token:'NEVER_SAVE',cano:'NEVER_SAVE'};
 const complete={...partial,filledQty:100,filledAmount:1020000,remainingQty:0};
@@ -32,11 +36,35 @@ assert.equal(run('centralPensionContributionRows().length'),before.pension.contr
 
 run('brokerKisImportBalanceSnapshot(state.brokerKis,{cash:500000,securitiesValue:1500000,totalValue:2000000,holdings:[{productCode:"ETF001",productName:"테스트 ETF",quantity:100,avgPrice:10200,currentPrice:15000,marketValue:1500000}]},"pension","ps-main","2026-09-01T08:00:00Z")');
 run('brokerKisImportRights(state.brokerKis,[{rightTypeCode:"32",baseDate:"2026-08-01",cashPaymentDate:"2026-08-20",productCode:"ETF001",productName:"테스트 ETF",amount:10000,tax:0}],"pension","ps-main","2026-09-01T08:00:00Z")');
+const kisDetail=plain(run('pensionAssetMetrics("pension")'));
+assert.equal(kisDetail.value,2000000,'KIS 잔고와 개인연금 상세 평가액이 같아야 한다');
+assert.equal(kisDetail.cash,500000);
+assert.equal(kisDetail.holdings.length,1);
+assert.equal(kisDetail.holdings[0].name,'테스트 ETF');
+assert.equal(kisDetail.holdings[0].readOnly,true,'KIS 종목은 조회 전용이어야 한다');
+assert.equal(run('state.pension.holdings.length'),before.pension.holdings.length,'KIS 종목을 수기 보유종목 원장에 복사하면 안 된다');
 const afterMetrics=plain(run('integratedFinancialModel()'));
 assert.equal(afterMetrics.pension,2000000,'KIS 현재 잔고가 연결 원장 현재값을 교체해야 한다');
 assert.equal(afterMetrics.totalAssets,before.metrics.totalAssets-before.metrics.pension+2000000,'KIS 잔고를 기존 Asset OS 자산에 단순 합산하면 안 된다');
 assert.equal(afterMetrics.currentSources.pension,'kis');
 assert.equal(plain(run('historicalFinancialModel("2026-08-31")')).pension,500000,'과거 자산 분석은 KIS 현재 잔고로 덮어쓰면 안 된다');
+
+run('state.pension.accounts.push({id:"ps-fund",kind:"pension",name:"연금저축 펀드",provider:"한국투자증권",status:"active",openedAt:"2026-01-01",closedAt:"",policyId:state.policies.pension.activePolicyId,policyHistory:[]})');
+run('brokerKisImportBalanceSnapshot(state.brokerKis,{cash:0,securitiesValue:4000000,totalValue:4000000,holdings:[]},"pension","ps-fund","2026-09-01T08:01:00Z")');
+const limitedFund=plain(run('pensionAssetMetrics("pension")'));
+assert.equal(limitedFund.value,6000000,'종목 상세가 없어도 한투 총평가액은 사라지면 안 된다');
+assert.equal(limitedFund.unallocated,4000000);
+assert.equal(limitedFund.unallocatedRows[0].name,'한투 기타자산');
+assert.equal(limitedFund.holdings.length,1,'API가 실제 반환한 ETF만 종목으로 표시해야 한다');
+
+run('state.pension.accounts.push({id:"irp-main",kind:"irp",name:"IRP",provider:"한국투자증권",status:"active",openedAt:"2026-01-01",closedAt:"",policyId:state.policies.irp.activePolicyId,policyHistory:[]});state.integrated.ledger.push({id:"opening-irp-test",date:"2026-08-01",type:"externalAssetIn",amount:3380000,toAccountId:"irp-link",sequence:2,createdAt:"2026-08-01T00:00:00.002",meta:{}});state.integrated=normalizeIntegrated(state.integrated)');
+run('brokerKisImportBalanceSnapshot(state.brokerKis,{cash:0,securitiesValue:0,totalValue:0,holdings:[]},"irp","irp-main","2026-09-01T08:02:00Z")');
+const zeroLimited=plain(run('({model:integratedFinancialModel(),detail:pensionAssetMetrics("irp")})'));
+assert.equal(zeroLimited.model.irp,3380000,'종목 제한 API의 0원이 기존 연결 원장 잔액을 지우면 안 된다');
+assert.equal(zeroLimited.model.currentSources.irp,'linked');
+assert.equal(zeroLimited.detail.value,3380000);
+assert.equal(zeroLimited.detail.cash,3380000,'상세 화면에는 연결 납입액이 현금 구성으로 남아야 한다');
+assert.equal(zeroLimited.detail.holdings.length,0,'API가 반환하지 않은 종목명을 임의 생성하면 안 된다');
 
 run('brokerKisLinkInstrument(state.brokerKis,{accountId:"ps-main",productCode:"ETF001",holdingId:"missing-local-holding",linkedAt:"2026-09-01T08:01:00Z"})');
 const draft=plain(run('brokerKisLedgerDraft(state.brokerKis,state.brokerKis.orders[0].orderKey)'));
