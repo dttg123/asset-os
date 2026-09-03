@@ -45,6 +45,10 @@ ASSET OS v0.4 작업 인수인계
 - 실제 앱 재시도에서 Google 요청 Client ID가 이전 값에서 `170998043266-q11lifibbi477h7tmrv14slcv8co4b26.apps.googleusercontent.com`으로 변경되어 새 설정 반영은 확인됨
 - Cloud QA 브라우저에서는 accounts.google.com이 502 Bad Gateway로 차단되어 계정 선택 이후 E2E 판정은 보류
 - 사용자 휴대폰에서 로그인 성공 확인 후 앱 내부 주요 화면·저장·재진입 직접 QA 예정
+- Google 계정 선택 후 오류 없이 로그인 게이트로 돌아오는 루프의 코드 원인 재현: 같은 Supabase 사용자에 email·Google identity가 연결되면 Google OAuth JWT의 대표 provider가 email일 수 있고, KIS 콜백 소비기가 이를 이메일 magic link로 오인해 URL의 토큰을 먼저 제거함
+- KIS 콜백 판별에 JWT amr 인증방식을 추가하여 oauth 및 oauth_provider 세션은 클라우드 인증에 남기도록 수정
+- 연결된 identity의 provider=email + amr=oauth 재현 테스트를 추가하고 수정 전 FAIL → 수정 후 PASS 확인
+- 모바일 구형 broker-kis-client.js 재사용 방지를 위해 서비스워커 캐시 키 갱신
 
 [현재 요청 R]
 - R1 실제 배포 화면을 로그인부터 직접 눌러 주요 흐름 확인
@@ -102,4 +106,6 @@ ASSET OS v0.4 작업 인수인계
 - OAuth 설정 재저장 반영: PASS (실제 Google authorize 요청의 Client ID가 새 값으로 변경됨)
 - 새 OAuth 설정의 계정 선택 이후 E2E: UNVERIFIED (Cloud QA 브라우저의 accounts.google.com 502 제한)
 - 설정 재저장 후 전체 자동 테스트 재실행: PASS (14/14)
+- Google/KIS 동일 프로젝트·동일 이메일 연결계정 OAuth 토큰 격리 재현: PASS (수정 전 FAIL 확인 후 수정)
+- 로그인 루프 수정 후 전체 자동 테스트·전체 JS 문법·git diff 검사: PASS (14/14)
 - 실제 Google 인증 완료·앱 내부 전 화면 클릭·Supabase 원격 DB·KIS 실계좌 최초 동기화: UNVERIFIED (원격 인증 세션 미완료)
