@@ -5,6 +5,16 @@ const SUPABASE_STATE_TABLE='asset_os_state';
 const SUPABASE_REDIRECT_URL='https://dttg123.github.io/asset-os/';
 let assetSupabaseClient=null,assetSupabaseSession=null,cloudSyncTimer=0,cloudSyncBusy=false,cloudSyncStatus='로그인 필요',cloudSyncTone='wait',cloudLastSyncAt='',assetAppUnlocked=false;
 
+function cloudAuthCallbackFailure(){
+ const sources=[new URLSearchParams(String(location.search||'').replace(/^\?/,'')),new URLSearchParams(String(location.hash||'').replace(/^#/,''))];
+ const get=key=>sources.map(x=>x.get(key)).find(Boolean)||'',code=get('error_code'),error=get('error');if(!code&&!error)return'';
+ const rawDescription=String(get('error_description')||'').replace(/\+/g,' ');let description=rawDescription;try{description=decodeURIComponent(rawDescription)}catch{}
+ try{history.replaceState(null,'',location.pathname||'/')}catch{}
+ if(code==='bad_oauth_state')return'Google 로그인 링크가 만료됐습니다. 다시 로그인해 주세요.';
+ if(code==='unexpected_failure'||/exchange external code|invalid_client/i.test(description))return'Google 인증 서버 설정 오류입니다. OAuth Client Secret을 확인해 주세요.';
+ return`Google 로그인 오류: ${description||code||error}`
+}
+
 function assetAuthGateState(mode,message=''){
  const gate=$('#assetAuthGate'),button=$('#assetAuthButton'),status=$('#assetAuthStatus');if(!gate||!button||!status)return;
  gate.hidden=false;document.documentElement.classList.add('asset-auth-locked');status.className=`asset-auth-status ${mode==='error'?'error':''}`;
@@ -13,7 +23,7 @@ function assetAuthGateState(mode,message=''){
  else{button.disabled=false;button.textContent='다시 확인';status.textContent=message||'연결을 확인하지 못했습니다.'}
 }
 function assetAuthGateUnlock(){if(assetAppUnlocked)return;assetAppUnlocked=true;const gate=$('#assetAuthGate');if(gate)gate.hidden=true;document.documentElement.classList.remove('asset-auth-locked');if(!location.hash)location.hash='#/home';render();refreshCloudProfileUI();if(state.system?.loadWarning)setTimeout(()=>toast('저장 데이터 확인이 필요합니다.'),100)}
-async function startAssetAuthenticatedApp(){assetAuthGateState('loading');const initialized=await initSupabaseCloud();if(!initialized)return assetAuthGateState('error','Supabase 연결을 확인한 뒤 다시 시도해 주세요.');if(!cloudUser())return assetAuthGateState('login');const ok=await cloudReconcileState();if(ok)assetAuthGateUnlock();else assetAuthGateState('error','클라우드 원장을 확인하지 못했습니다. 네트워크를 확인해 주세요.')}
+async function startAssetAuthenticatedApp(){const callbackFailure=cloudAuthCallbackFailure();if(callbackFailure)return assetAuthGateState('error',callbackFailure);assetAuthGateState('loading');const initialized=await initSupabaseCloud();if(!initialized)return assetAuthGateState('error','Supabase 연결을 확인한 뒤 다시 시도해 주세요.');if(!cloudUser())return assetAuthGateState('login');const ok=await cloudReconcileState();if(ok)assetAuthGateUnlock();else assetAuthGateState('error','클라우드 원장을 확인하지 못했습니다. 네트워크를 확인해 주세요.')}
 
 function cloudUser(){return assetSupabaseSession?.user||null}
 function cloudUserLabel(){const u=cloudUser();return String(u?.user_metadata?.full_name||u?.user_metadata?.name||u?.email||'Google 사용자')}

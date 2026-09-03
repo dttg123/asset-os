@@ -12,6 +12,8 @@ assert.match(boot,/startAssetAuthenticatedApp\(\)/);
 assert.match(html,/Asset OS v0\.4/);
 const brokerProjectUrl=core.match(/projectUrl:'([^']+)'/)?.[1],cloudProjectUrl=cloud.match(/SUPABASE_URL='([^']+)'/)?.[1];
 assert.equal(cloudProjectUrl,brokerProjectUrl,'Google cloud and KIS auth must use the configured Supabase project URL');
+assert.match(cloud,/function cloudAuthCallbackFailure/);
+assert.match(cloud,/OAuth Client Secret/);
 const productionCorpus=fs.readdirSync(root).filter(name=>name.endsWith('.js')).map(name=>fs.readFileSync(path.join(root,name),'utf8')).join('\n');
 for(const obsolete of ['verifyOtp','scheduleTargetText','stripInvestmentQaFixtures','applyRealFinanceBootstrap'])assert.doesNotMatch(productionCorpus,new RegExp(`\\b${obsolete}\\b`),`obsolete function remained: ${obsolete}`);
 assert.equal(manifest.start_url,'./');
