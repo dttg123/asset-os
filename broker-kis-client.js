@@ -40,12 +40,6 @@ const brokerKisClient=(()=>{
   const params=new URLSearchParams(raw.replace(/^#/,'')),accessToken=cleanText(params.get('access_token'),6000),refreshToken=cleanText(params.get('refresh_token'),6000),expiresIn=Math.max(0,Number(params.get('expires_in'))||0);if(!accessToken)return{ok:false,error:'AUTH_SESSION_MISSING'};if(!accessTokenMatchesProject(accessToken))return{ok:false,error:'BROKER_REDIRECT_FOREIGN'};
   session={accessToken,expiresAt:Date.now()+expiresIn*1000};if(authClient&&refreshToken)authClient.auth.setSession({access_token:accessToken,refresh_token:refreshToken}).catch(()=>{});history.replaceState(null,'',`${location.pathname}${location.search}#/home`);return{ok:true,expiresAt:session.expiresAt}
  }
- async function verifyOtp(email,token){
-  if(!configured())return{ok:false,error:'BROKER_NOT_CONFIGURED'};const value=cleanText(email,240),code=cleanText(token,12);if(!/^\S+@\S+\.\S+$/.test(value)||!/^\d{6,8}$/.test(code))return{ok:false,error:'OTP_INVALID'};
-  const result=await jsonRequest(`${config.projectUrl}/auth/v1/verify`,{method:'POST',headers:publicHeaders(),body:JSON.stringify({email:value,token:code,type:'email'})});
-  const accessToken=cleanText(result.data?.access_token,6000),expiresIn=Math.max(0,Number(result.data?.expires_in)||0);if(!result.ok||!accessToken)return{ok:false,status:result.status,error:result.error||'AUTH_SESSION_MISSING'};
-  session={accessToken,expiresAt:Date.now()+expiresIn*1000};return{ok:true,expiresAt:session.expiresAt}
- }
  async function invoke(action,body={}){
   if(!configured())return{ok:false,error:'BROKER_NOT_CONFIGURED'};if(!authState().signedIn)return{ok:false,error:'BROKER_AUTH_REQUIRED'};
   const allowed=new Set(['balance','orders','rights']),name=cleanText(action,30);if(!allowed.has(name))return{ok:false,error:'BROKER_ACTION_INVALID'};
@@ -58,5 +52,5 @@ const brokerKisClient=(()=>{
   if(action==='orders')return api.importOrders(data.orders||[],accountKind,localAccountId,fetchedAt);
   return api.importRights(data.rights||[],accountKind,localAccountId,fetchedAt)
  }
- return{configure,authState,adoptSession,signOut,requestOtp,verifyOtp,consumeRedirect,invoke,sync}
+ return{configure,authState,adoptSession,signOut,requestOtp,consumeRedirect,invoke,sync}
 })();

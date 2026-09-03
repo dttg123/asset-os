@@ -84,7 +84,7 @@ html[data-theme="dark"] .module-icon.module-isa,html[data-theme="dark"] .module-
 @media(min-width:620px){main{padding-left:24px;padding-right:24px}.grid{grid-template-columns:repeat(4,1fr)}.summary-card{min-height:176px}}
 
 
-/* v0.3 Google / Supabase account */
+/* Google / Supabase account */
 .cloud-account-card{display:flex;align-items:center;gap:14px;margin:16px 16px 12px;padding:16px;border:1px solid var(--line);border-radius:18px;background:var(--card)}
 .cloud-account-icon{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font-weight:800;background:var(--soft);color:var(--accent)}
 .cloud-account-card>div:last-child{min-width:0;display:flex;flex-direction:column;gap:4px}.cloud-account-card strong{font-size:15px}.cloud-account-card small{font-size:12px;color:var(--muted);word-break:break-all}

@@ -31,14 +31,26 @@ ASSET OS v0.4 작업 인수인계
 - 원인: supabase-sync.js의 프로젝트 주소에서 문자 v 1개 누락
 - Google 클라우드 주소와 KIS 프로젝트 주소가 다르면 실패하는 회귀 테스트 추가
 - supabase-sync.js에 v0.4.1 캐시 키를 붙이고 service worker 캐시를 갱신해 휴대폰의 이전 오류 파일 재사용 차단
+- 전체 JS/CSS 참조를 다시 대조해 루트 파일 46개가 모두 실제 로딩 또는 서비스워커 캐시에 연결됨을 확인
+- 호출 경로가 0개인 구형 함수 4개 제거: verifyOtp, scheduleTargetText, stripInvestmentQaFixtures, applyRealFinanceBootstrap
+- 매직링크와 중복이던 6자리 OTP 테스트를 메모리 세션 채택 방식으로 교체하고 refresh token 비저장 검증 유지
+- 거래원장 Hard QA 추가: 소수 수량, 추가매수, 부분·전량매도, 재매수, 배당, 수수료·세금, 0원 단가 거부, 계좌 독립성, NaN/Infinity 방지
 
 [현재 진행]
-- 사용자 휴대폰에서 수정된 Google 로그인 완료 후 KIS 계좌 자동준비·실데이터 최초 동기화 확인
+- 정리본 work-v04·main 배포 및 배포 후 동일 조건 최종 확인
+- Google 인증 완료 뒤 앱 내부 주요 화면·저장·재진입 직접 조작은 인증 세션 확보 전까지 UNVERIFIED 유지
+
+[현재 요청 R]
+- R1 실제 배포 화면을 로그인부터 직접 눌러 주요 흐름 확인
+- R2 코드의 호출·저장·이벤트 연결과 중복 구현 전수 확인
+- R3 참조되지 않는 쓸모없는 코드·파일만 삭제하고 최신 상태로 정리
+- R4 수정 후 Targeted·Regression·Hard QA, TXT 갱신, work-v04·main 재배포
+- MUST NOT CHANGE: schema 20, KEY/LEGACY_KEYS, 사용자 원장, 계좌 독립성, KIS 읽기 전용·중복 방지, 백업 호환성
 
 [다음 작업]
-1. 사용자 기기에서 페이지를 완전히 새로고침하거나 설치 앱을 다시 열기
-2. Google 로그인 후 한국투자 연결을 열어 연금저축·IRP 카드 자동 생성과 최초 동기화 확인
-3. 장기 무인 Drive 자동백업이 필요하면 Google OAuth refresh token과 서버 비밀키를 안전하게 보관할 Edge Function을 별도 구축
+1. Google 인증 세션 확보 후 홈·ISA·개인연금·통합·프로필의 주요 버튼을 실제 조작
+2. 테스트 계정에서 저장 후 새로고침·재진입과 Supabase 원격 복원 확인
+3. 한국투자 연결에서 연금저축·IRP 카드 자동 생성과 최초 동기화 확인
 
 [주의/미해결]
 - 공식 확인 결과 Supabase는 Google provider token을 자동 갱신하지 않음. 장기 무인 Drive 백업은 provider_refresh_token과 신뢰 서버가 필요하며, 현재 클라이언트 access token만 저장하는 초안은 사용 금지.
@@ -65,4 +77,11 @@ ASSET OS v0.4 작업 인수인계
 - 로그인 이동 Supabase 프로젝트 주소 일치: PASS (wjrzukoofscmvwicmoey)
 - 캐시 방지 스크립트 supabase-sync.js?v=0.4.1 제공: PASS
 - 로그인 긴급 수정 배포 커밋: bf5ac08
-- 실제 Google 로그인·Supabase 원격 DB·KIS 실계좌 최초 동기화: UNVERIFIED (사용자 기기 확인 필요)
+- 전체 루트 JS/CSS 파일 참조: PASS (46개, 고아 파일 0개)
+- 미사용 함수 제거 및 잔존 여부 검사: PASS (4개 제거, 생산 JS 잔존 0개)
+- 거래원장 독립 계산 Hard QA: PASS
+- 전체 자동 테스트: PASS (13/13)
+- 전체 JS 문법·git diff 검사: PASS
+- 배포 페이지에서 Google 로그인 버튼 직접 클릭 → accounts.google.com 도달: PASS
+- 로그인 경유 Supabase 주소: PASS (wjrzukoofscmvwicmoey.supabase.co)
+- 실제 Google 인증 완료·앱 내부 전 화면 클릭·Supabase 원격 DB·KIS 실계좌 최초 동기화: UNVERIFIED (원격 인증 세션 미완료)
