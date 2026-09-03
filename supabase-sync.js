@@ -26,6 +26,10 @@ function assetAuthGateUnlock(){if(assetAppUnlocked)return;assetAppUnlocked=true;
 async function startAssetAuthenticatedApp(){const callbackFailure=cloudAuthCallbackFailure();if(callbackFailure)return assetAuthGateState('error',callbackFailure);assetAuthGateState('loading');const initialized=await initSupabaseCloud();if(!initialized)return assetAuthGateState('error','Supabase 연결을 확인한 뒤 다시 시도해 주세요.');if(!cloudUser())return assetAuthGateState('login');const ok=await cloudReconcileState();if(ok)assetAuthGateUnlock();else assetAuthGateState('error','클라우드 원장을 확인하지 못했습니다. 네트워크를 확인해 주세요.')}
 
 function cloudUser(){return assetSupabaseSession?.user||null}
+function syncBrokerKisSessionFromCloud(session=assetSupabaseSession){
+ if(!session?.access_token||typeof brokerKisClient==='undefined'||typeof brokerKisClient.adoptSession!=='function')return false;
+ return brokerKisClient.adoptSession(session)?.ok===true
+}
 function cloudUserLabel(){const u=cloudUser();return String(u?.user_metadata?.full_name||u?.user_metadata?.name||u?.email||'Google 사용자')}
 function cloudUserEmail(){return String(cloudUser()?.email||'')}
 function cloudTimeLabel(v){return v?formatDateTime(v):'-'}
@@ -56,16 +60,16 @@ async function initSupabaseCloud(){
  if(!window.supabase?.createClient){cloudSetStatus('클라우드 모듈 로드 실패','wait');return false}
  try{
   assetSupabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{autoRefreshToken:true,persistSession:true,detectSessionInUrl:true}});
-  assetSupabaseClient.auth.onAuthStateChange((event,session)=>{assetSupabaseSession=session||null;if(event==='INITIAL_SESSION')return;setTimeout(()=>handleCloudAuthState(event,session).catch(()=>{}),0)});
+  assetSupabaseClient.auth.onAuthStateChange((event,session)=>{assetSupabaseSession=session||null;if(session)syncBrokerKisSessionFromCloud(session);if(event==='INITIAL_SESSION')return;setTimeout(()=>handleCloudAuthState(event,session).catch(()=>{}),0)});
   const {data,error}=await assetSupabaseClient.auth.getSession();
   if(error)throw error;
-  assetSupabaseSession=data?.session||null;
+  assetSupabaseSession=data?.session||null;if(assetSupabaseSession)syncBrokerKisSessionFromCloud(assetSupabaseSession);
   return true
  }catch(e){cloudSetStatus(`연결 확인 필요: ${e.message||'초기화 실패'}`,'wait');return false}
 }
 
 async function handleCloudAuthState(event,session){
- assetSupabaseSession=session||null;refreshCloudProfileUI();
+ assetSupabaseSession=session||null;if(session)syncBrokerKisSessionFromCloud(session);refreshCloudProfileUI();
  if(!session){cloudSetStatus('로그인 필요','wait');assetAppUnlocked=false;assetAuthGateState('login');return false}
  if(['INITIAL_SESSION','SIGNED_IN','TOKEN_REFRESHED','USER_UPDATED'].includes(String(event||''))){
   cloudSetStatus('동기화 확인 중','wait');
@@ -85,7 +89,7 @@ async function signOutAssetGoogle(){
  if(!assetSupabaseClient)return false;
  const {error}=await assetSupabaseClient.auth.signOut();
  if(error){toast('로그아웃에 실패했습니다.');return false}
- assetSupabaseSession=null;assetAppUnlocked=false;assetAuthGateState('login');cloudSetStatus('로그인 필요','wait');closeSheets();toast('Google 계정에서 로그아웃했습니다.');return true
+ brokerKisClient?.signOut();assetSupabaseSession=null;assetAppUnlocked=false;assetAuthGateState('login');cloudSetStatus('로그인 필요','wait');closeSheets();toast('Google 계정에서 로그아웃했습니다.');return true
 }
 
 async function cloudFetchStateRow(){

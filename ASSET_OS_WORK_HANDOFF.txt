@@ -109,3 +109,14 @@ ASSET OS v0.4 작업 인수인계
 - Google/KIS 동일 프로젝트·동일 이메일 연결계정 OAuth 토큰 격리 재현: PASS (수정 전 FAIL 확인 후 수정)
 - 로그인 루프 수정 후 전체 자동 테스트·전체 JS 문법·git diff 검사: PASS (14/14)
 - 실제 Google 인증 완료·앱 내부 전 화면 클릭·Supabase 원격 DB·KIS 실계좌 최초 동기화: UNVERIFIED (원격 인증 세션 미완료)
+- 2026-09-03 Cloud QA에서 배포 앱 Google 로그인 버튼 직접 클릭 후 `#/home` 진입 및 `dttg123@gmail.com · 동기화됨` 확인: PASS
+- Cloud QA에서 프로필 → 한국투자 연결 화면 직접 진입: PASS
+- 한국투자 연결 사용자 인증 상태: 미인증 확인
+- 보안 이메일 입력을 통해 인증 링크 발송 요청: PASS
+- 한국투자 연금저축·IRP 실계좌 조회: BLOCKED (단회용 이메일 링크를 동일 Cloud QA 브라우저에서 사용해야 하며 링크 내용은 모델이 열람·복사하지 않음)
+- 사용자 휴대폰에서 한투 인증 메일 링크 클릭 후 Google 로그인 게이트로 복귀하는 현상 재현: FAIL
+- 원인 확정: 동일 Supabase 프로젝트인데 클라우드 Google 세션과 KIS 이메일 세션을 별도로 운용하여, 이메일 콜백 뒤 앱 게이트가 다시 Google 로그인을 요구함
+- 수정: 로그인·갱신된 Google/Supabase 세션을 KIS 읽기 전용 클라이언트에도 자동 채택하고 Google 로그아웃 시 KIS 세션도 함께 정리
+- KIS 설정 화면은 Google 세션이 있으면 별도 이메일 인증 없이 연결됨으로 표시하며, 이메일 링크는 세션 미확인 시에만 보조 경로로 유지
+- 캐시 키 `asset-os-v0.4-20260903-unified-auth`, supabase-sync 참조 `v0.4.3`으로 갱신
+- Google→KIS 세션 브리지 신규 회귀 테스트 포함 전체 자동 테스트: PASS (15/15)
