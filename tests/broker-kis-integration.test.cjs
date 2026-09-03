@@ -71,10 +71,15 @@ const draft=plain(run('brokerKisLedgerDraft(state.brokerKis,state.brokerKis.orde
 assert.equal(draft.type,'buy');assert.equal(draft.qty,100);assert.equal(draft.price,10200);assert.equal('contribution' in draft,false);
 assert.equal(run('state.pension.transactions.length'),before.pension.transactions.length,'미리보기 draft가 원장을 수정하면 안 된다');
 
+run('brokerKisBeginHistory(state.brokerKis,{accountKind:"pension",accountId:"ps-main",startDate:"2020-01-01",targetDate:"2026-09-03",updatedAt:"2026-09-03T00:00:00Z"})');
+run('brokerKisUpdateHistory(state.brokerKis,{accountKind:"pension",orderThrough:"2026-09-03",rightsThrough:"2026-09-03",status:"complete",updatedAt:"2026-09-03T00:01:00Z"})');
+
 assert.equal(run('persist(false)'),true);
 const saved=JSON.parse(storage.get('asset-os-v1.9.45-live'));
 assert.equal(saved.schemaVersion,20);assert.equal(saved.data.brokerKis.orders.length,1);
 assert.equal(saved.data.brokerKis.rights[0].classification,'unclassified_cash_right');
+assert.equal(saved.data.brokerKis.history.pension.status,'complete');
+assert.equal(saved.data.brokerKis.history.pension.orderThrough,'2026-09-03');
 assert.equal(JSON.stringify(saved).includes('NEVER_SAVE'),false,'KIS 비밀값이 localStorage에 들어가면 안 된다');
 
 const savedBroker=plain(saved.data.brokerKis),savedPension=plain(saved.data.pension),savedIntegrated=plain(saved.data.integrated);

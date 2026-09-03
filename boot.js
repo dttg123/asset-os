@@ -19,7 +19,10 @@ window.__assetOS.brokerKis={
  ledgerDraft:orderKey=>clone(brokerKisLedgerDraft(state.brokerKis,orderKey)),
  matchOrder:(orderKey,transactionId)=>{if(!pensionStore().transactions.some(x=>x.id===transactionId))return{ok:false,error:'PENSION_TRANSACTION_NOT_FOUND'};const before=clone(state.brokerKis),result=brokerKisMatchOrder(state.brokerKis,orderKey,transactionId);if(!result.ok)return result;if(!persist(false)){state.brokerKis=before;return{ok:false,error:'PERSIST_FAILED'}}return clone(result)},
  importRights:(rows,kind,accountId,fetchedAt)=>{const a=pensionAccount(accountId);if(!a||a.kind!==brokerKisKind(kind))return{ok:false,error:'KIS_ACCOUNT_LINK_MISMATCH'};const before=clone(state.brokerKis),result=brokerKisImportRights(state.brokerKis,clone(rows||[]),kind,accountId,fetchedAt||new Date().toISOString());if(!persist(false)){state.brokerKis=before;return{ok:false,error:'PERSIST_FAILED'}}return{ok:true,...clone(result)}},
- latestBalance:(kind,accountId)=>clone(brokerKisLatestBalance(state.brokerKis,kind,accountId))
+ latestBalance:(kind,accountId)=>clone(brokerKisLatestBalance(state.brokerKis,kind,accountId)),
+ history:kind=>clone(state.brokerKis.history?.[brokerKisKind(kind)]||brokerKisEmptyHistory(kind)),
+ beginHistory:input=>{const before=clone(state.brokerKis),result=brokerKisBeginHistory(state.brokerKis,clone(input||{}));if(!result.ok)return result;if(!persist(false)){state.brokerKis=before;return{ok:false,error:'PERSIST_FAILED'}}return clone(result)},
+ updateHistory:input=>{const before=clone(state.brokerKis),result=brokerKisUpdateHistory(state.brokerKis,clone(input||{}));if(!result.ok)return result;if(!persist(false)){state.brokerKis=before;return{ok:false,error:'PERSIST_FAILED'}}return clone(result)}
 };
 window.__assetOS.brokerKisClient=brokerKisClient;
 brokerKisClient.configure(BROKER_KIS_PUBLIC_CONFIG);

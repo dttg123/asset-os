@@ -103,4 +103,33 @@ function sample(overrides={}){
  assert.deepEqual(plain(call('brokerKisIssues',normalized)),[]);
 }
 
+{
+ const store=call('brokerKisEmptyStore');
+ const begun=plain(call('brokerKisBeginHistory',store,{accountKind:'pension',accountId:'ps-main',startDate:'2020-01-01',targetDate:'2026-09-03',updatedAt:'2026-09-03T00:00:00Z'}));
+ assert.equal(begun.ok,true);assert.equal(store.history.pension.status,'running');assert.equal(store.history.pension.startDate,'2020-01-01');
+ call('brokerKisUpdateHistory',store,{accountKind:'pension',orderThrough:'2020-01-31',status:'paused',lastError:'NETWORK',updatedAt:'2026-09-03T00:01:00Z'});
+ const resumed=plain(call('brokerKisBeginHistory',store,{accountKind:'pension',accountId:'ps-main',startDate:'2020-01-01',targetDate:'2026-09-03',updatedAt:'2026-09-03T00:02:00Z'}));
+ assert.equal(resumed.history.orderThrough,'2020-01-31','같은 계좌·시작일 재시도는 완료 구간을 보존해야 한다');assert.equal(resumed.history.lastError,'');
+ call('brokerKisUpdateHistory',store,{accountKind:'pension',orderThrough:'2026-09-03',rightsThrough:'2026-09-03',status:'complete',updatedAt:'2026-09-03T00:03:00Z'});
+ const normalized=plain(call('normalizeBrokerKis',plain(store)));assert.equal(normalized.history.pension.status,'complete');assert.equal(normalized.history.pension.orderThrough,'2026-09-03');
+ const reset=plain(call('brokerKisBeginHistory',store,{accountKind:'pension',accountId:'ps-main',startDate:'2021-01-01',targetDate:'2026-09-03',updatedAt:'2026-09-03T00:04:00Z'}));
+ assert.equal(reset.history.orderThrough,'','시작일 변경은 이전 진행 커서를 재사용하면 안 된다');
+}
+
+{
+ const store=call('brokerKisEmptyStore');
+ for(let day=0;day<150;day++){const date=new Date(Date.UTC(2020,0,1+day)).toISOString().slice(0,10);call('brokerKisImportBalanceSnapshot',store,{cash:day,totalValue:day},'pension','ps-main',`${date}T00:00:00Z`)}
+ const normalized=plain(call('normalizeBrokerKis',plain(store)));
+ assert.equal(normalized.balanceSnapshots.length,150,'장기 잔고 이력을 120개에서 잘라내면 안 된다');
+}
+
+{
+ const store=call('brokerKisEmptyStore'),rows=[];
+ for(let i=0;i<1000;i++){const date=new Date(Date.UTC(2020,0,1+i)).toISOString().slice(0,10);rows.push(sample({orderDate:date,orderNo:String(100000+i),filledQty:1,filledAmount:10000,remainingQty:0}))}
+ const first=plain(call('brokerKisImportOrderSnapshots',store,rows,'pension','ps-main','2026-09-03T01:00:00Z'));
+ const second=plain(call('brokerKisImportOrderSnapshots',store,rows,'pension','ps-main','2026-09-03T02:00:00Z'));
+ assert.equal(first.inserted,1000);assert.equal(second.skipped,1000);assert.equal(store.orders.length,1000,'장기 체결 재조회에서 중복이 생기거나 과거 건이 잘리면 안 된다');
+ assert.equal(plain(call('normalizeBrokerKis',plain(store))).orders.length,1000);
+}
+
 console.log('broker-kis tests: PASS');
