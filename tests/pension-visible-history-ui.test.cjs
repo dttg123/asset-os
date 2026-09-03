@@ -9,6 +9,7 @@ const integratedCss=fs.readFileSync(path.join(root,'css-integrated.css'),'utf8')
 const pwa=fs.readFileSync(path.join(root,'pwa.js'),'utf8');
 const analysis=fs.readFileSync(path.join(root,'chart-asset-analysis.js'),'utf8');
 const settings=fs.readFileSync(path.join(root,'ui-settings.js'),'utf8');
+const initialImport=fs.readFileSync(path.join(root,'initial-import.js'),'utf8');
 assert.match(forms,/pensionArchiveTransactionRows/);
 assert.match(forms,/거래·과거 확정자료/);
 assert.match(forms,/data-pension-archive-tx/);
@@ -22,4 +23,6 @@ assert.match(analysis,/basis\+x\.cumulativeTotal/);
 assert.match(analysis,/당시 실제 계좌잔액이 아니라/);
 assert.match(settings,/name="monthlyContribution"/);
 assert.match(settings,/projection\.monthlyContribution=monthlyContribution/);
+assert.match(initialImport,/add\.pensionProjection/);
+assert.match(initialImport,/candidate\.pension\.projection/);
 console.log('pension visible history UI tests: PASS');

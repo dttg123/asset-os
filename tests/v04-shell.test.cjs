@@ -23,6 +23,7 @@ assert.match(html,/pension-forms\.js\?v=0\.4\.9/);
 assert.match(html,/source-archive\.js\?v=0\.4\.9/);
 assert.match(html,/css-integrated\.css\?v=0\.4\.9/);
 assert.match(html,/pwa\.js\?v=0\.4\.9/);
+assert.match(html,/initial-import\.js\?v=0\.4\.9/);
 assert.match(html,/chart-asset-analysis\.js\?v=0\.4\.9/);
 assert.match(html,/ui-settings\.js\?v=0\.4\.9/);
 assert.match(html,/home\.js\?v=0\.4\.1/);
