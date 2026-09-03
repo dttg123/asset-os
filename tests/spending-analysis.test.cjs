@@ -23,4 +23,15 @@ assert.equal(result.change,75);
 assert.equal(result.trend.length,6);
 assert.deepEqual(result.categories.map(row=>row.key),['보험','식비','대출 이자']);
 assert.ok(!result.rows.some(row=>row.id==='saving'));
+const summaryRows=[
+ {date:'2026-08-01',type:'externalIncome',amount:1000,toAccountId:'cash-main'},
+ {date:'2026-08-02',type:'internalTransfer',amount:200,fromAccountId:'cash-main',toAccountId:'pension-link'},
+ {date:'2026-08-03',type:'externalAssetIn',amount:500,toAccountId:'pension-link'}
+];
+context.__summaryRows=summaryRows;
+vm.runInContext("integratedLedger=()=>__summaryRows;integratedStore=()=>({accounts:[{id:'cash-main',kind:'cash'},{id:'pension-link',kind:'pension'}]});integratedProductSavingAmount=()=>0;integratedFinancialModel=()=>({replay:{}})",context);
+const summary=JSON.parse(vm.runInContext("JSON.stringify(integratedSummary('2026-08'))",context));
+assert.equal(summary.invest,700,'월 저축·투자에는 앱 밖 납입도 포함');
+assert.equal(summary.trackedInvest,200,'생활현금에서는 추적 계좌 이체만 차감');
+assert.equal(summary.operatingCashDelta,800,'앱 밖 납입은 생활현금을 줄이지 않음');
 console.log('spending analysis tests: PASS');
