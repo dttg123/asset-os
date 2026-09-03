@@ -51,12 +51,14 @@ ASSET OS v0.4 작업 인수인계
 - KIS 0원 응답 시 기존 연결 잔액 보존: PASS
 - 생산 JS 39개 전역 함수 539개 중복 이름: 0개
 - 루트 JS/CSS/아이콘/manifest 미참조 파일: 0개
+- work-v04 배포: PASS (`9a31b581d56167a79f492de3aae2eb7eeb52431f`)
+- main 배포: PASS (`46f07be54ca3e7cd9e9151b2392dca157e9f8d99`)
+- GitHub Pages 최신 index·pension-assets·pension-pages·service-worker 반영: PASS
 
-[배포 전 남은 단계]
-1. 변경 diff 최종 검토와 불필요 코드·민감정보 검사
-2. work-v04 배포 후 main 배포
-3. GitHub Pages의 최신 캐시 파일·화면 문구·공개 로그인 게이트 확인
-4. 로그인된 운영 데이터의 전체·연금저축·IRP 실화면 대조
+[남은 단계]
+1. 사용자 휴대폰에서 최신 캐시로 새로고침
+2. 로그인된 운영 데이터의 전체·연금저축·IRP 실화면 대조
+3. 실제 보유상품이 ETF인지 펀드인지에 따라 자동 종목 표시 가능 범위 확인
 
 [현재 제한과 사용자 확인 필요]
 - Cloud QA 브라우저가 로그인된 dttg123.github.io 앱 데이터 접근을 보안 정책으로 차단하여 인증 내부 화면 자동 판정은 현재 불가
