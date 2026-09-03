@@ -37,7 +37,7 @@ ASSET OS v0.4 작업 인수인계
 - 거래원장 Hard QA 추가: 소수 수량, 추가매수, 부분·전량매도, 재매수, 배당, 수수료·세금, 0원 단가 거부, 계좌 독립성, NaN/Infinity 방지
 
 [현재 진행]
-- 정리본 work-v04·main 배포 및 배포 후 동일 조건 최종 확인
+- 코드 정리·자동 QA·공개 로그인 경로 재배포까지 완료
 - Google 인증 완료 뒤 앱 내부 주요 화면·저장·재진입 직접 조작은 인증 세션 확보 전까지 UNVERIFIED 유지
 
 [현재 요청 R]
@@ -84,4 +84,7 @@ ASSET OS v0.4 작업 인수인계
 - 전체 JS 문법·git diff 검사: PASS
 - 배포 페이지에서 Google 로그인 버튼 직접 클릭 → accounts.google.com 도달: PASS
 - 로그인 경유 Supabase 주소: PASS (wjrzukoofscmvwicmoey.supabase.co)
+- work-v04·main 코드 정리 배포: PASS (96aac710)
+- Pages 최신 broker-kis-client.js 반영 확인: PASS (verifyOtp 없음, requestOtp 유지)
+- 배포 후 앱 자체 콘솔 오류: PASS (0건, 브라우저 확장 자체 오류 제외)
 - 실제 Google 인증 완료·앱 내부 전 화면 클릭·Supabase 원격 DB·KIS 실계좌 최초 동기화: UNVERIFIED (원격 인증 세션 미완료)
