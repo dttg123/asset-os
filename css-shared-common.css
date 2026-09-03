@@ -18,6 +18,14 @@
 body[data-root="integrated"] main{padding:15px 18px 30px!important}
 body[data-root="integrated"] .stack{gap:14px!important}
 
+/* v1.9.42 — 모든 모듈의 1차 탭을 같은 위치·크기·터치 영역으로 고정 */
+.module-page-shell{display:grid;gap:14px}
+.module-page-shell>.module-primary-tabs{margin:0!important}
+.module-primary-tabs .tab,.module-primary-tabs button{min-height:52px!important;padding:12px 6px!important;font-size:11px!important;touch-action:manipulation}
+.pension-module-shell>.stack .pension-step-tabs,.integrated-module-shell>.stack .integrated-tabs,.isa-module-shell .stack>.tabs{display:none!important}
+.pension-contribution-batch-open{display:none!important}
+body[data-root="isa"] .isa-module-shell>.stack>.account-selector{order:-2}
+
 
 /* v1.9.33 — 인라인 펼침/접힘 실제 위치 보존 */
 .monthly-card:not(.expanded) .monthly-month:not(.current){display:none!important}
@@ -51,5 +59,4 @@ body[data-root="isa"] main>.review-preview-banner + .stack>.isa-hero,
 body[data-root="pension"] main>.review-preview-banner + .stack>.pension-credit-hero,
 body[data-root="pension"] main>.review-preview-banner + .stack>.pension-asset-hero,
 body[data-root="integrated"] main>.review-preview-banner + .stack>.integrated-overview-hero{margin-top:0!important}
-
 
