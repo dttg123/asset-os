@@ -1,5 +1,5 @@
 'use strict';
-const SUPABASE_URL='https://wjrzukoofscmwicmoey.supabase.co';
+const SUPABASE_URL='https://wjrzukoofscmvwicmoey.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_mZa3v8Ekw08_5tHQMNSPWQ_uMcioPDM';
 const SUPABASE_STATE_TABLE='asset_os_state';
 const SUPABASE_REDIRECT_URL='https://dttg123.github.io/asset-os/';
