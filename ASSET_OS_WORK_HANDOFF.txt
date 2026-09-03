@@ -94,4 +94,6 @@ ASSET OS v0.4 작업 인수인계
 - 실제 Google 계정 선택 후 Supabase 세션 발급: FAIL (invalid_client: 저장된 Client Secret이 유효하지 않음)
 - OAuth 콜백 오류 표시·주소 정리 자동 테스트: PASS
 - 전체 자동 테스트: PASS (14/14)
+- OAuth 오류 표시 수정 work-v04·main 배포: PASS (efb28101)
+- Pages 실제 오류 콜백 화면: PASS (첫 화면 루프 대신 Client Secret 설정 오류와 다시 확인 버튼 표시)
 - 실제 Google 인증 완료·앱 내부 전 화면 클릭·Supabase 원격 DB·KIS 실계좌 최초 동기화: UNVERIFIED (원격 인증 세션 미완료)
