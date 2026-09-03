@@ -81,3 +81,10 @@
 
 /* v0.2 hero de-dup */
 .pension-asset-kpis.single{grid-template-columns:1fr}.pension-asset-kpis.single .pension-asset-kpi{max-width:100%}
+.pension-contribution-batch-open{width:100%;min-height:54px;border:1px solid rgba(39,101,205,.24);border-radius:18px;background:#eef4ff;color:#1d5ebf;font-weight:800;font-size:15px}
+.pension-batch-kind{margin-top:16px;padding:16px;border:1px solid var(--line);border-radius:18px;background:var(--soft)}
+.pension-batch-kind h3{margin:0 0 12px;font-size:17px}
+.pension-batch-months{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+.pension-batch-month{display:flex;align-items:center;justify-content:center;gap:5px;min-height:42px;border:1px solid var(--line);border-radius:12px;background:var(--card);font-size:14px;font-weight:700}
+.pension-batch-month input{width:18px;height:18px;margin:0;accent-color:var(--primary)}
+@media(max-width:480px){.pension-batch-months{grid-template-columns:repeat(4,1fr)}.pension-batch-kind input,.pension-batch-kind select{font-size:16px}}
