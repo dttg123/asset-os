@@ -14,13 +14,14 @@ const brokerKisClient=(()=>{
   if(redirectUrl&&!/^https:\/\/[a-z0-9.-]+(?:\/[^?#]*)?$/i.test(redirectUrl))return{ok:false,error:'BROKER_REDIRECT_URL_INVALID'};
   config={projectUrl,publishableKey,functionName,redirectUrl};
   if(authSubscription?.unsubscribe)authSubscription.unsubscribe();
-  authClient=window.supabase?.createClient?window.supabase.createClient(projectUrl,publishableKey,{auth:{autoRefreshToken:true,persistSession:true,detectSessionInUrl:true,storageKey:'asset-os-kis-auth'}}):null;
+  authClient=window.supabase?.createClient?window.supabase.createClient(projectUrl,publishableKey,{auth:{autoRefreshToken:true,persistSession:true,detectSessionInUrl:false,storageKey:'asset-os-kis-auth'}}):null;
   if(authClient){const listener=authClient.auth.onAuthStateChange((_event,next)=>adoptSession(next));authSubscription=listener?.data?.subscription||null;authClient.auth.getSession().then(({data})=>adoptSession(data?.session)).catch(()=>{})}
   return{ok:true}
  }
  function configured(){return !!config.projectUrl&&!!config.publishableKey}
  function authState(){return{configured:configured(),signedIn:!!session.accessToken&&session.expiresAt>Date.now(),expiresAt:session.expiresAt||0}}
  function adoptSession(input){const accessToken=cleanText(input?.access_token,6000),expiresAt=Math.max(0,Number(input?.expires_at)||0)*1000;if(!accessToken)return{ok:false,error:'AUTH_SESSION_MISSING'};session={accessToken,expiresAt:expiresAt||Date.now()+Math.max(0,Number(input?.expires_in)||0)*1000};return{ok:true,expiresAt:session.expiresAt}}
+ function accessTokenMatchesProject(token){try{const part=String(token||'').split('.')[1]||'',padded=part.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(part.length/4)*4,'='),payload=JSON.parse(atob(padded)),issuer=new URL(String(payload.iss||'')),provider=String(payload.app_metadata?.provider||'');return issuer.origin===config.projectUrl&&provider==='email'}catch{return false}}
  function signOut(){session={accessToken:'',expiresAt:0};authClient?.auth.signOut({scope:'local'}).catch(()=>{});return{ok:true}}
  async function jsonRequest(url,options={}){
   const response=await fetch(url,options),text=await response.text();let data={};try{data=text?JSON.parse(text):{}}catch{data={error:'BROKER_RESPONSE_INVALID'}}
@@ -36,8 +37,8 @@ const brokerKisClient=(()=>{
  }
  function consumeRedirect(){
   if(typeof location==='undefined')return{ok:false,error:'BROKER_REDIRECT_UNAVAILABLE'};const raw=String(location.hash||'');if(!raw.includes('access_token='))return{ok:false,error:'BROKER_REDIRECT_EMPTY'};
-  const params=new URLSearchParams(raw.replace(/^#/,'')),accessToken=cleanText(params.get('access_token'),6000),expiresIn=Math.max(0,Number(params.get('expires_in'))||0);if(!accessToken)return{ok:false,error:'AUTH_SESSION_MISSING'};
-  session={accessToken,expiresAt:Date.now()+expiresIn*1000};history.replaceState(null,'',`${location.pathname}${location.search}#/home`);return{ok:true,expiresAt:session.expiresAt}
+  const params=new URLSearchParams(raw.replace(/^#/,'')),accessToken=cleanText(params.get('access_token'),6000),refreshToken=cleanText(params.get('refresh_token'),6000),expiresIn=Math.max(0,Number(params.get('expires_in'))||0);if(!accessToken)return{ok:false,error:'AUTH_SESSION_MISSING'};if(!accessTokenMatchesProject(accessToken))return{ok:false,error:'BROKER_REDIRECT_FOREIGN'};
+  session={accessToken,expiresAt:Date.now()+expiresIn*1000};if(authClient&&refreshToken)authClient.auth.setSession({access_token:accessToken,refresh_token:refreshToken}).catch(()=>{});history.replaceState(null,'',`${location.pathname}${location.search}#/home`);return{ok:true,expiresAt:session.expiresAt}
  }
  async function verifyOtp(email,token){
   if(!configured())return{ok:false,error:'BROKER_NOT_CONFIGURED'};const value=cleanText(email,240),code=cleanText(token,12);if(!/^\S+@\S+\.\S+$/.test(value)||!/^\d{6,8}$/.test(code))return{ok:false,error:'OTP_INVALID'};

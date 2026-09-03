@@ -1,0 +1,17 @@
+'use strict';
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const root=path.join(__dirname,'..');
+const html=fs.readFileSync(path.join(root,'index.html'),'utf8'),boot=fs.readFileSync(path.join(root,'boot.js'),'utf8'),worker=fs.readFileSync(path.join(root,'service-worker.js'),'utf8'),manifest=JSON.parse(fs.readFileSync(path.join(root,'manifest.webmanifest'),'utf8'));
+assert.match(html,/<html[^>]+class="asset-auth-locked"/);
+assert.ok(html.indexOf('id="assetAuthGate"')<html.indexOf('<div class="app">'));
+assert.match(html,/\.asset-auth-locked \.app/);
+assert.doesNotMatch(boot,/location\.hash='#\/home';render\(\);refreshCloudProfileUI\(\);initSupabaseCloud/);
+assert.match(boot,/startAssetAuthenticatedApp\(\)/);
+assert.match(html,/Asset OS v0\.4/);
+assert.equal(manifest.start_url,'./');
+assert.equal(manifest.display,'standalone');
+for(const icon of manifest.icons){const file=path.join(root,icon.src.replace(/^\.\//,''));assert.ok(fs.existsSync(file),`missing ${icon.src}`)}
+for(const file of fs.readdirSync(root).filter(name=>/\.(?:js|css)$/.test(name)))assert.ok(worker.includes(`./${file}`),`service worker shell missing ${file}`);
+console.log('v0.4 auth gate and PWA shell tests: PASS');

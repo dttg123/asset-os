@@ -1,11 +1,18 @@
 <!doctype html>
-<html lang="ko" data-theme="light" data-accent="blue">
+<html lang="ko" data-theme="light" data-accent="blue" class="asset-auth-locked">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#eef3fb">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%232f6fed'/%3E%3Cpath d='M18 43 29 18h7l11 25h-8l-2-6H27l-2 6h-7zm12-12h5l-2.5-7-2.5 7z' fill='white'/%3E%3C/svg%3E">
-<title>Asset OS v0.3</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<title>Asset OS v0.4</title>
+<style>
+html.asset-auth-locked body{overflow:hidden}.asset-auth-locked .app,.asset-auth-locked body>section:not(.asset-auth-gate),.asset-auth-locked #scrim,.asset-auth-locked #dialogScrim,.asset-auth-locked #toast{visibility:hidden!important}.asset-auth-gate{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:24px;background:linear-gradient(160deg,#eef4ff,#f8fbff 55%,#e9f3ff);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#13233d}.asset-auth-gate[hidden]{display:none}.asset-auth-card{width:min(100%,420px);box-sizing:border-box;padding:30px 24px;border:1px solid rgba(47,111,237,.16);border-radius:28px;background:rgba(255,255,255,.94);box-shadow:0 24px 70px rgba(32,69,130,.16);text-align:center}.asset-auth-logo{display:grid;place-items:center;width:72px;height:72px;margin:0 auto 18px;border-radius:22px;background:#2f6fed;color:#fff;font-size:40px;font-weight:800}.asset-auth-card h1{margin:0;font-size:28px}.asset-auth-card p{margin:10px 0 24px;color:#60708a;line-height:1.55}.asset-auth-card button{width:100%;min-height:54px;border:0;border-radius:16px;background:#2f6fed;color:#fff;font-size:17px;font-weight:800}.asset-auth-card button:disabled{opacity:.55}.asset-auth-status{display:block;min-height:22px;margin-top:14px;color:#60708a;font-size:13px}.asset-auth-status.error{color:#b42318}
+</style>
 <link rel="stylesheet" href="./css-core-base.css">
 <link rel="stylesheet" href="./css-isa.css">
 <link rel="stylesheet" href="./css-pension.css">
@@ -15,9 +22,18 @@
 <link rel="stylesheet" href="./css-core-hardening.css">
 </head>
 <body>
+<section id="assetAuthGate" class="asset-auth-gate" aria-live="polite">
+  <div class="asset-auth-card">
+    <div class="asset-auth-logo" aria-hidden="true">A</div>
+    <h1>Asset OS</h1>
+    <p>내 자산 원장을 열려면 Google 계정으로 먼저 확인해 주세요.</p>
+    <button id="assetAuthButton" type="button" disabled>연결 확인 중</button>
+    <span id="assetAuthStatus" class="asset-auth-status">Supabase 세션을 확인하고 있습니다.</span>
+  </div>
+</section>
 <div class="app">
 <header class="topbar">
-  <div><div class="brandrow"><span class="brand">ASSET OS</span><span class="appversion">v0.3</span></div><h1 id="title">홈</h1></div>
+  <div><div class="brandrow"><span class="brand">ASSET OS</span><span class="appversion">v0.4</span></div><h1 id="title">홈</h1></div>
   <button id="profile" class="profilebtn" aria-label="내 Asset OS 열기"><svg viewBox="0 0 24 24" aria-hidden="true" style="width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><circle cx="12" cy="8" r="3.2"></circle><path d="M5.5 19c.7-3.4 3-5.2 6.5-5.2s5.8 1.8 6.5 5.2"></path></svg></button>
 </header>
 <main id="main"></main>
@@ -31,11 +47,12 @@
 </div>
 <div id="scrim" class="scrim" hidden></div>
 <section id="detailSheet" class="sheet" aria-hidden="true"><div class="sheet-drag-zone"><div class="handle"></div><div class="sheethead"><div><div id="sheetEyebrow" class="eyebrow">상세</div><h2 id="sheetTitle">상세</h2></div></div></div><div id="sheetBody"></div></section>
-<section id="profileSheet" class="sheet" aria-hidden="true"><div class="sheet-drag-zone"><div class="handle"></div><div class="sheethead"><div><div class="eyebrow">계정 · 설정</div><h2>내 Asset OS</h2></div></div></div><div class="profilehero"><div id="profileAvatar" class="profileavatar">A</div><div class="profilecopy"><strong id="profileName">개인 자산 시스템</strong><small id="profileSub">공통 원장 엔진 + ISA + 개인연금·IRP 거래원장 + 통합 관리</small></div><span class="statuschip">v0.3 LIVE</span></div><div class="menulist">
+<section id="profileSheet" class="sheet" aria-hidden="true"><div class="sheet-drag-zone"><div class="handle"></div><div class="sheethead"><div><div class="eyebrow">계정 · 설정</div><h2>내 Asset OS</h2></div></div></div><div class="profilehero"><div id="profileAvatar" class="profileavatar">A</div><div class="profilecopy"><strong id="profileName">개인 자산 시스템</strong><small id="profileSub">공통 원장 엔진 + ISA + 개인연금·IRP 거래원장 + 통합 관리</small></div><span class="statuschip">v0.4 LIVE</span></div><div class="menulist">
 <button class="menurow" data-profile-action="cloud-auth"><span class="menuico">G</span><span class="menucopy"><strong>Google · 클라우드</strong><small id="cloudAuthMenuStatus">Google 로그인 · Supabase 자동 복원</small></span><span class="menugo">›</span></button>
 <button class="menurow" data-profile-action="appearance"><span class="menuico">◐</span><span class="menucopy"><strong>화면 및 테마</strong><small>포인트색·다크모드·입력 버튼</small></span><span class="menugo">›</span></button>
 <button class="menurow" data-profile-action="accounts"><span class="menuico">▣</span><span class="menucopy"><strong>ISA 계좌 관리</strong><small id="accountMenuCount">3개 계좌·만기 이력·계좌 정보 수정</small></span><span class="menugo">›</span></button>
 <button class="menurow" data-profile-action="pension-settings"><span class="menuico">◎</span><span class="menucopy"><strong>개인연금 설정</strong><small>목표비중 · 미래연금 가정</small></span><span class="menugo">›</span></button><button class="menurow" data-profile-action="backup"><span class="menuico">↥</span><span class="menucopy"><strong>백업·복원</strong><small>ZIP 백업·복원 및 클라우드 상태</small></span><span class="menugo">›</span></button>
+<button class="menurow" data-profile-action="install"><span class="menuico">⇩</span><span class="menucopy"><strong>Asset OS 앱 설치</strong><small>홈 화면에서 독립 앱처럼 실행</small></span><span class="menugo">›</span></button>
 <button class="menurow" data-profile-action="kis"><span class="menuico">K</span><span class="menucopy"><strong>한국투자 연결</strong><small>연금저축·IRP 잔고와 체결 조회</small></span><span class="menugo">›</span></button>
 <button class="menurow" data-profile-action="advanced"><span class="menuico">⋯</span><span class="menucopy"><strong>고급 설정</strong><small>제도·상품 관리 · 시스템 진단</small></span><span class="menugo">›</span></button>
 </div></section>
@@ -47,7 +64,7 @@
 <div class="setting toggle"><div><div class="settinglabel">터치 진동</div><div class="settinghint">지원하는 Android 브라우저에서 중요한 동작에만 짧게 작동</div></div><input id="hapticToggle" class="switch" type="checkbox"></div>
 </div></section>
 <section id="diagnosticsSheet" class="sheet" aria-hidden="true"><div class="sheet-drag-zone"><div class="handle"></div><div class="sheethead"><div><div class="eyebrow">고급 설정</div><h2>시스템 진단</h2></div></div></div><div class="diagnostic-list">
-<div class="diagnostic-row"><span class="diagnostic-copy"><strong>앱 버전</strong><small>현재 모듈화 실사용 최종</small></span><span class="diagnostic-value">v0.3 LIVE</span></div>
+<div class="diagnostic-row"><span class="diagnostic-copy"><strong>앱 버전</strong><small>현재 모듈화 실사용 최종</small></span><span class="diagnostic-value">v0.4 LIVE</span></div>
 <div class="diagnostic-row"><span class="diagnostic-copy"><strong>데이터 구조 버전</strong><small>ISA·개인연금·금융상품·통합·KIS 스키마</small></span><span class="diagnostic-value">schema 20</span></div>
 <div class="diagnostic-row"><span class="diagnostic-copy"><strong>로컬 저장</strong><small>ISA 검토 데이터와 화면 설정 저장</small></span><span id="localStatus" class="diagnostic-value ok">정상</span></div>
 <div class="diagnostic-row"><span class="diagnostic-copy"><strong>Supabase 클라우드</strong><small>Google 로그인 · 자동 세션 · 원장 동기화</small></span><span id="cloudDiagStatus" class="diagnostic-value wait">로그인 필요</span></div>
@@ -77,6 +94,7 @@
 <script src="./store-migrations.js"></script>
 <script src="./store-state.js"></script>
 <script src="./backup.js"></script>
+<script src="./backup-v04.js"></script>
 <script src="./core-accessors.js"></script>
 <script src="./pension-contributions.js"></script>
 <script src="./pension-ledger.js"></script>
@@ -102,6 +120,7 @@
 <script src="./integrated-finance-ui.js"></script>
 <script src="./ui-settings.js"></script>
 <script src="./supabase-sync.js"></script>
+<script src="./pwa.js"></script>
 <script src="./boot.js"></script>
 
 </body>
