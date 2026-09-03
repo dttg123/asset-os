@@ -22,7 +22,7 @@ body[data-root="integrated"] .stack{gap:14px!important}
 .module-page-shell{display:grid;gap:14px}
 .module-page-shell>.module-primary-tabs{margin:0!important}
 .module-primary-tabs .tab,.module-primary-tabs button{min-height:52px!important;padding:12px 6px!important;font-size:11px!important;touch-action:manipulation}
-.pension-module-shell>.stack .pension-step-tabs,.integrated-module-shell>.stack .integrated-tabs,.isa-module-shell .stack>.tabs{display:none!important}
+.pension-module-shell>.stack .pension-step-tabs,.integrated-module-shell>.stack>.integrated-tabs,.integrated-module-shell>.stack>.integrated-monthbar,.integrated-module-shell .schedule-monthbar,.isa-module-shell .stack>.tabs{display:none!important}
 .pension-contribution-batch-open{display:none!important}
 body[data-root="isa"] .isa-module-shell>.stack>.account-selector{order:-2}
 
@@ -59,4 +59,3 @@ body[data-root="isa"] main>.review-preview-banner + .stack>.isa-hero,
 body[data-root="pension"] main>.review-preview-banner + .stack>.pension-credit-hero,
 body[data-root="pension"] main>.review-preview-banner + .stack>.pension-asset-hero,
 body[data-root="integrated"] main>.review-preview-banner + .stack>.integrated-overview-hero{margin-top:0!important}
-
