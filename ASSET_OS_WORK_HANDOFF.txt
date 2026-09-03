@@ -1,5 +1,5 @@
 ASSET OS v0.4 작업 인수인계
-최종 갱신: 2026-09-02 UTC
+최종 갱신: 2026-09-03 UTC
 
 [현재 기준]
 - 작업 브랜치: work-v04 (origin/main 7837940에서 분기)
@@ -27,9 +27,13 @@ ASSET OS v0.4 작업 인수인계
 - KIS 토큰은 JWT 발급 프로젝트가 일치하고 로그인 방식이 email일 때만 소비하며, 같은 프로젝트의 Google 토큰도 그대로 클라우드 인증에 전달
 - 정상 KIS magic link의 refresh token은 전용 Supabase 저장소에만 넘겨 재접속 유지
 - JS 문법·diff 검사와 총 12종 자동 테스트 PASS
+- 배포 직후 Google 로그인 버튼이 존재하지 않는 Supabase 주소로 이동하는 결함 발견 및 긴급 수정
+- 원인: supabase-sync.js의 프로젝트 주소에서 문자 v 1개 누락
+- Google 클라우드 주소와 KIS 프로젝트 주소가 다르면 실패하는 회귀 테스트 추가
+- supabase-sync.js에 v0.4.1 캐시 키를 붙이고 service worker 캐시를 갱신해 휴대폰의 이전 오류 파일 재사용 차단
 
 [현재 진행]
-- 사용자 휴대폰에서 로그인 후 KIS 계좌 자동준비·실데이터 최초 동기화 확인
+- 사용자 휴대폰에서 수정된 Google 로그인 완료 후 KIS 계좌 자동준비·실데이터 최초 동기화 확인
 
 [다음 작업]
 1. 사용자 기기에서 페이지를 완전히 새로고침하거나 설치 앱을 다시 열기
@@ -57,4 +61,8 @@ ASSET OS v0.4 작업 인수인계
 - 실제 Pages 제목·필수 로그인 게이트: PASS
 - 공개 manifest·192/512 아이콘 선언·v0.4 service worker: PASS
 - 공개 페이지 앱 자체 콘솔 오류: PASS (브라우저 확장 자체 로그 1건은 앱과 무관)
+- 실제 Pages에서 Google 로그인 버튼 클릭 → accounts.google.com 로그인 화면 도달: PASS
+- 로그인 이동 Supabase 프로젝트 주소 일치: PASS (wjrzukoofscmvwicmoey)
+- 캐시 방지 스크립트 supabase-sync.js?v=0.4.1 제공: PASS
+- 로그인 긴급 수정 배포 커밋: bf5ac08
 - 실제 Google 로그인·Supabase 원격 DB·KIS 실계좌 최초 동기화: UNVERIFIED (사용자 기기 확인 필요)
