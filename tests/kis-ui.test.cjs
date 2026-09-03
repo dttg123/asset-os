@@ -42,7 +42,10 @@ assert.match(html,/한국투자 IRP/);
 assert.match(html,/Google 로그인 세션으로 안전하게 연결됩니다/);
 assert.doesNotMatch(html,/연결 인증 해제/);
 assert.equal((html.match(/data-kis-sync=/g)||[]).length,2);
-assert.match(html,/납입·매매·배당 원장에는 자동으로 더하지 않습니다/);
-assert.match(html,/최근 체결은 31일만 조회합니다/);
+assert.equal((html.match(/data-kis-history=/g)||[]).length,2);
+assert.equal((html.match(/data-kis-history-start=/g)||[]).length,2);
+assert.match(html,/납입·매매·배당 원장에 자동으로 더하지 않습니다/);
+assert.match(html,/31일 단위 체결/);
+assert.match(html,/실패해도 완료 구간 다음부터 이어받습니다/);
 
 console.log('kis settings ui tests: PASS');
