@@ -9,5 +9,5 @@ vm.runInContext(fs.readFileSync('isa-quotes.js','utf8'),context);
 const before=JSON.stringify({cash:account.baselineCash,transactions:account.transactions,positions:account.holdings.map(h=>[h.baselineQty,h.baselineAvg])});
 const result=vm.runInContext(`applyIsaQuoteResults(currentAccount(),[{type:'stock',code:'035720',price:40000},{type:'bond',code:'KR6055553E12',price:10100}],'2026-09-04T01:02:03Z')`,context);
 assert.equal(result.ok,true);assert.equal(result.updated,2);assert.equal(account.holdings[0].currentPrice,40000);assert.equal(account.holdings[1].currentPrice,10100);assert.equal(JSON.stringify({cash:account.baselineCash,transactions:account.transactions,positions:account.holdings.map(h=>[h.baselineQty,h.baselineAvg])}),before,'quote refresh must not mutate fixed data');
-assert.equal(vm.runInContext('isaQuoteRefreshDue(currentAccount(),Date.parse("2026-09-04T01:05:00Z"))',context),false);assert.equal(vm.runInContext('isaQuoteRefreshDue(currentAccount(),Date.parse("2026-09-04T01:12:04Z"))',context),true);
+assert.doesNotMatch(fs.readFileSync('isa-quotes.js','utf8'),/maybeAutoRefresh|REFRESH_MS/);
 console.log('isa quote isolation tests: PASS');

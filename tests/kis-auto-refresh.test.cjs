@@ -18,13 +18,17 @@ const context=vm.createContext({
 });
 vm.runInContext(fs.readFileSync('ui-settings.js','utf8'),context,{filename:'ui-settings.js'});
 
-assert.equal(vm.runInContext('KIS_AUTO_REFRESH_MS',context),600000);
-assert.equal(vm.runInContext('kisAutoRefreshDue("pension",Date.parse("2026-09-04T00:10:00Z"))',context),true);
-assert.equal(vm.runInContext('kisAutoRefreshDue("irp",Date.parse("2026-09-04T00:14:59Z"))',context),false);
-assert.equal(vm.runInContext('kisAutoRefreshDue("irp",Date.parse("2026-09-04T00:15:00Z"))',context),true);
+const settingsSource=fs.readFileSync('ui-settings.js','utf8');
+const bootSource=fs.readFileSync('boot.js','utf8');
+const renderSource=fs.readFileSync('ui-render.js','utf8');
+const isaQuoteSource=fs.readFileSync('isa-quotes.js','utf8');
+assert.doesNotMatch(settingsSource,/KIS_AUTO_REFRESH_MS|kisAutoRefreshDue|maybeAutoRefreshBrokerKis/);
+assert.doesNotMatch(bootSource,/visibilitychange[^\n]*Refresh/);
+assert.doesNotMatch(renderSource,/maybeAutoRefresh/);
+assert.doesNotMatch(isaQuoteSource,/maybeAutoRefreshIsaQuotes|ISA_QUOTE_REFRESH_MS/);
 
 (async()=>{
- const result=await vm.runInContext('maybeAutoRefreshBrokerKis(false,["pension"])',context);
+ const result=await vm.runInContext('refreshBrokerKisManually(["pension"])',context);
  assert.equal(result.ok,true);assert.equal(result.updated,1);assert.equal(calls.length,3);
  assert.deepEqual(calls.map(x=>x.action),['balance','orders','rights']);assert.equal(renders,1);
  calls.length=0;state.brokerKis.connections.pension.orderSyncThrough='2026-06-01';
@@ -32,5 +36,5 @@ assert.equal(vm.runInContext('kisAutoRefreshDue("irp",Date.parse("2026-09-04T00:
  assert.equal(catchup.ok,true);assert.deepEqual(calls.map(x=>x.action),['balance','orders','orders','orders','orders','rights']);
  const ranges=JSON.parse(JSON.stringify(calls.filter(x=>x.action==='orders').map(x=>x.range)));
  assert.deepEqual(ranges,[{from:'2026-05-30',to:'2026-06-29'},{from:'2026-06-30',to:'2026-07-30'},{from:'2026-07-31',to:'2026-08-30'},{from:'2026-08-31',to:'2026-09-04'}]);
- console.log('kis auto refresh tests: PASS');
+ console.log('kis manual refresh tests: PASS');
 })().catch(error=>{console.error(error);process.exitCode=1});

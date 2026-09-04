@@ -8,7 +8,6 @@ $('#runDiagnostics').onclick=()=>{let ok=true;try{localStorage.setItem('__asset_
 $('#fab').onclick=actions;
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#confirmDialog').hidden)hideDialog(true);else requestCloseSheets('escape')}});
 document.addEventListener('click',e=>{const row=e.target.closest?.('[data-pension-archive-tx]');if(row)openPensionArchiveRecord(row.dataset.pensionArchiveTx)});
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='visible')return;if(typeof maybeAutoRefreshIsaQuotes==='function')maybeAutoRefreshIsaQuotes();if(typeof maybeAutoRefreshBrokerKis==='function')maybeAutoRefreshBrokerKis()});
 document.addEventListener('click',e=>{const refresh=e.target.closest?.('[data-pension-kis-refresh]');if(refresh)refreshPensionKisScope();const order=e.target.closest?.('[data-pension-kis-order]');if(order)openPensionKisOrderDetail(order.dataset.pensionKisOrder)});
 
 
