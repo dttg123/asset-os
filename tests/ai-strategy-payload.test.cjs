@@ -41,13 +41,12 @@ vm.runInContext(`${source}\nthis.__buildAiStrategyPayload=buildAiStrategyPayload
 const payload=context.__buildAiStrategyPayload('buy',3000000);
 
 assert.equal(payload.request.additionalInvestmentWon,3000000);
-assert.equal(payload.isa.combined.value,3388142);
-assert.equal(payload.isa.combined.cost,4556261);
-assert.equal(payload.isa.combined.profit,-1194936);
+assert.equal(payload.isa,undefined);
 assert.equal(payload.pension.combined.value,41533833);
 assert.equal(payload.pension.projection.expectedAssetsAtRetirement,1311070000);
 assert.match(payload.request.prompt,/추가매수, 분할매수, 대기/);
-assert.match(payload.request.prompt,/ISA·연금저축·IRP별 투입금액/);
+assert.match(payload.request.prompt,/연금저축·IRP별 투입금액/);
+assert.doesNotMatch(payload.request.prompt,/ISA/);
 const json=JSON.stringify(payload);
 for(const forbidden of ['accountNo','accessToken','refreshToken','appSecret','dttg123@gmail.com'])assert.doesNotMatch(json,new RegExp(forbidden,'i'));
 
