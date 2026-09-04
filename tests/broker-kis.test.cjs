@@ -77,7 +77,7 @@ function sample(overrides={}){
 {
  const dirty={connections:{pension:{accountId:'ps-main',lastSyncAt:'2026-09-01T07:00:00Z',lastError:'',appKey:'LEAK',appSecret:'LEAK',token:'LEAK',cano:'LEAK'}}};
  const normalized=plain(call('normalizeBrokerKis',dirty));
- assert.deepEqual(normalized.connections.pension,{accountId:'ps-main',lastSyncAt:'2026-09-01T07:00:00.000Z',lastError:''});
+ assert.deepEqual(normalized.connections.pension,{accountId:'ps-main',lastSyncAt:'2026-09-01T07:00:00.000Z',orderSyncThrough:'',lastError:''});
  const serialized=JSON.stringify(normalized);
  for(const secret of ['LEAK','appSecret','appKey','token','cano'])assert.equal(serialized.includes(secret),false,`연결 메타데이터에 ${secret} 값을 저장하면 안 된다`);
 }
