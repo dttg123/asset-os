@@ -93,9 +93,19 @@ export function normalizeBalance(body, fetchedAt = new Date().toISOString()) {
   })).filter((row) => row.productCode)
 
   const holdingsValue = holdings.reduce((sum, row) => sum + row.marketValue, 0)
-  const cash = nonNegative(pick(summary, [
-    'dnca_tot_amt', 'prvs_rcdl_excc_amt', 'nxdy_excc_amt', 'd2_auto_rdpt_amt', 'cash_amt',
-  ]))
+  const optionalNumber = (keys) => {
+    for (const key of keys) if (summary[key] !== undefined && summary[key] !== null && summary[key] !== '') return nonNegative(summary[key])
+    return null
+  }
+  const depositCash = optionalNumber(['dnca_tot_amt', 'cash_amt'])
+  const settledCash = optionalNumber(['prvs_rcdl_excc_amt'])
+  const nextDayCash = optionalNumber(['nxdy_excc_amt'])
+  const d2Cash = optionalNumber(['d2_auto_rdpt_amt'])
+  const todayBuyAmount = optionalNumber(['thdt_buy_amt'])
+  const todaySellAmount = optionalNumber(['thdt_sll_amt'])
+  const projectedCash = [depositCash, settledCash, nextDayCash].filter((value) => value !== null)
+  const availableCash = projectedCash.length ? Math.min(...projectedCash) : 0
+  const cash = depositCash ?? settledCash ?? nextDayCash ?? d2Cash ?? 0
   const securitiesValue = nonNegative(pick(summary, [
     'scts_evlu_amt', 'evlu_amt_smtl_amt',
   ])) || holdingsValue
@@ -106,6 +116,7 @@ export function normalizeBalance(body, fetchedAt = new Date().toISOString()) {
   return {
     date: cleanText(fetchedAt, 10),
     cash,
+    cashDetail: { depositCash, settledCash, nextDayCash, d2Cash, todayBuyAmount, todaySellAmount, availableCash },
     securitiesValue,
     totalValue,
     holdings,

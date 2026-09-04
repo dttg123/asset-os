@@ -1,11 +1,11 @@
 'use strict';
 
-const KIS_BROKER_STORE_VERSION=3;
+const KIS_BROKER_STORE_VERSION=4;
 const KIS_ORDER_STATUSES=new Set(['unfilled','partial','filled','cancelled','partial_cancelled']);
 const KIS_HISTORY_STATUSES=new Set(['idle','running','paused','complete']);
 
 function brokerKisEmptyStore(){
- return{version:KIS_BROKER_STORE_VERSION,connections:{pension:{accountId:'',lastSyncAt:'',orderSyncThrough:'',lastError:''},irp:{accountId:'',lastSyncAt:'',orderSyncThrough:'',lastError:''}},history:{pension:brokerKisEmptyHistory('pension'),irp:brokerKisEmptyHistory('irp')},orders:[],balanceSnapshots:[],rights:[],instrumentLinks:[],matches:[]}
+ return{version:KIS_BROKER_STORE_VERSION,connections:{pension:{accountId:'',lastSyncAt:'',lastCompleteSyncAt:'',lastBalanceAt:'',lastOrdersAt:'',lastRightsAt:'',orderSyncThrough:'',lastError:''},irp:{accountId:'',lastSyncAt:'',lastCompleteSyncAt:'',lastBalanceAt:'',lastOrdersAt:'',lastRightsAt:'',orderSyncThrough:'',lastError:''}},history:{pension:brokerKisEmptyHistory('pension'),irp:brokerKisEmptyHistory('irp')},orders:[],balanceSnapshots:[],rights:[],instrumentLinks:[],matches:[]}
 }
 function brokerKisText(v,max=160){return String(v??'').trim().slice(0,max)}
 function brokerKisNumber(v){const n=Number(String(v??'').replaceAll(',',''));return Number.isFinite(n)?n:0}
@@ -14,7 +14,7 @@ function brokerKisDate(v){const s=brokerKisText(v,10);return /^\d{4}-\d{2}-\d{2}
 function brokerKisTimestamp(v){const s=brokerKisText(v,40),d=new Date(s);return s&&!Number.isNaN(d.getTime())?d.toISOString():new Date().toISOString()}
 function brokerKisOptionalTimestamp(v){const s=brokerKisText(v,40),d=new Date(s);return s&&!Number.isNaN(d.getTime())?d.toISOString():''}
 function brokerKisKind(v){return v==='irp'?'irp':'pension'}
-function brokerKisNormalizeConnection(input){return{accountId:brokerKisText(input?.accountId,100),lastSyncAt:brokerKisOptionalTimestamp(input?.lastSyncAt),orderSyncThrough:brokerKisDate(input?.orderSyncThrough),lastError:brokerKisText(input?.lastError,240)}}
+function brokerKisNormalizeConnection(input,migrateLegacy=false){const legacy=brokerKisOptionalTimestamp(input?.lastSyncAt);return{accountId:brokerKisText(input?.accountId,100),lastSyncAt:legacy,lastCompleteSyncAt:brokerKisOptionalTimestamp(input?.lastCompleteSyncAt)||(migrateLegacy?legacy:''),lastBalanceAt:brokerKisOptionalTimestamp(input?.lastBalanceAt),lastOrdersAt:brokerKisOptionalTimestamp(input?.lastOrdersAt),lastRightsAt:brokerKisOptionalTimestamp(input?.lastRightsAt),orderSyncThrough:brokerKisDate(input?.orderSyncThrough),lastError:brokerKisText(input?.lastError,240)}}
 function brokerKisEmptyHistory(accountKind='pension'){return{accountKind:brokerKisKind(accountKind),accountId:'',startDate:'',targetDate:'',orderThrough:'',rightsThrough:'',status:'idle',lastError:'',updatedAt:'',completedAt:''}}
 function brokerKisNormalizeHistory(input,accountKind='pension'){
  const kind=brokerKisKind(accountKind||input?.accountKind),status=KIS_HISTORY_STATUSES.has(input?.status)?input.status:'idle';
@@ -34,7 +34,9 @@ function brokerKisUpdateHistory(store,input={}){
  for(const key of ['orderThrough','rightsThrough'])if(input[key]!==undefined){const value=brokerKisDate(input[key]);if(input[key]&&(!value||value<current.startDate||value>current.targetDate))return{ok:false,error:'KIS_HISTORY_RANGE_INVALID'};next[key]=value}
  if(status==='complete')next.completedAt=brokerKisTimestamp(input.completedAt||input.updatedAt);else if(input.completedAt==='')next.completedAt='';target.history[kind]=next;return{ok:true,history:next}
 }
-function brokerKisMarkSync(store,accountKind,accountId,fetchedAt){const target=store||brokerKisEmptyStore(),kind=brokerKisKind(accountKind);target.connections=target.connections||brokerKisEmptyStore().connections;const current=brokerKisNormalizeConnection(target.connections[kind]);target.connections[kind]={...current,accountId:brokerKisText(accountId,100),lastSyncAt:brokerKisTimestamp(fetchedAt),lastError:''};return target.connections[kind]}
+function brokerKisMarkSync(store,accountKind,accountId,fetchedAt,part=''){const target=store||brokerKisEmptyStore(),kind=brokerKisKind(accountKind),timestamp=brokerKisTimestamp(fetchedAt);target.connections=target.connections||brokerKisEmptyStore().connections;const current=brokerKisNormalizeConnection(target.connections[kind]),partKey=part==='balance'?'lastBalanceAt':part==='orders'?'lastOrdersAt':part==='rights'?'lastRightsAt':'';target.connections[kind]={...current,accountId:brokerKisText(accountId,100),lastSyncAt:timestamp,lastError:'',...(partKey?{[partKey]:timestamp}:{})};return target.connections[kind]}
+function brokerKisCompleteSync(store,accountKind,accountId,completedAt=new Date().toISOString()){const connection=brokerKisMarkSync(store,accountKind,accountId,completedAt);connection.lastCompleteSyncAt=brokerKisTimestamp(completedAt);connection.lastError='';return connection}
+function brokerKisFailSync(store,accountKind,accountId,error,failedAt=new Date().toISOString()){const target=store||brokerKisEmptyStore(),kind=brokerKisKind(accountKind);target.connections=target.connections||brokerKisEmptyStore().connections;const current=brokerKisNormalizeConnection(target.connections[kind]);target.connections[kind]={...current,accountId:brokerKisText(accountId,100),lastError:brokerKisText(error||'SYNC_FAILED',240),lastSyncAt:current.lastSyncAt||brokerKisTimestamp(failedAt)};return target.connections[kind]}
 function brokerKisSide(v){const s=brokerKisText(v,12).toLowerCase();return s==='sell'||s==='01'?'sell':s==='buy'||s==='02'?'buy':''}
 function brokerKisKeyPart(v){return encodeURIComponent(brokerKisText(v,180))}
 function brokerKisOrderKey(row){
@@ -73,7 +75,7 @@ function brokerKisImportOrderSnapshots(store,rows,accountKind,accountId,fetchedA
   Object.assign(current,next,{revisions});updated++
  }
  list.sort((a,b)=>a.orderDate.localeCompare(b.orderDate)||a.orderTime.localeCompare(b.orderTime)||a.orderKey.localeCompare(b.orderKey));
- const connection=brokerKisMarkSync(target,accountKind,accountId,fetchedAt),through=brokerKisDate(orderSyncThrough);if(through&&(!connection.orderSyncThrough||through>connection.orderSyncThrough))connection.orderSyncThrough=through;
+ const connection=brokerKisMarkSync(target,accountKind,accountId,fetchedAt,'orders'),through=brokerKisDate(orderSyncThrough);if(through&&(!connection.orderSyncThrough||through>connection.orderSyncThrough))connection.orderSyncThrough=through;
  return{inserted,updated,skipped,rejected,total:list.length}
 }
 function brokerKisNormalizeHolding(row){
@@ -86,15 +88,16 @@ function brokerKisNormalizeRight(row,accountKind='',accountId='',fetchedAt=''){
 function brokerKisImportRights(store,rows,accountKind,accountId,fetchedAt=new Date().toISOString()){
  const target=store||brokerKisEmptyStore(),list=Array.isArray(target.rights)?target.rights:(target.rights=[]),byKey=new Map(list.map(x=>[x.rightKey,x]));let inserted=0,updated=0,skipped=0,rejected=0;
  for(const raw of Array.isArray(rows)?rows:[]){const next=brokerKisNormalizeRight(raw,accountKind,accountId,fetchedAt);if(!next.accountId||!next.rightTypeCode||!next.productCode||(!next.baseDate&&!next.cashPaymentDate)){rejected++;continue}const current=byKey.get(next.rightKey);if(!current){list.push(next);byKey.set(next.rightKey,next);inserted++;continue}if(current.amount===next.amount&&current.tax===next.tax){current.fetchedAt=next.fetchedAt;skipped++;continue}const revisions=Array.isArray(current.revisions)?current.revisions:[];revisions.push({changedAt:next.fetchedAt,before:{amount:current.amount,tax:current.tax,netAmount:current.netAmount},after:{amount:next.amount,tax:next.tax,netAmount:next.netAmount}});Object.assign(current,next,{revisions});updated++}
- list.sort((a,b)=>(a.cashPaymentDate||a.baseDate).localeCompare(b.cashPaymentDate||b.baseDate)||a.rightKey.localeCompare(b.rightKey));brokerKisMarkSync(target,accountKind,accountId,fetchedAt);return{inserted,updated,skipped,rejected,total:list.length}
+ list.sort((a,b)=>(a.cashPaymentDate||a.baseDate).localeCompare(b.cashPaymentDate||b.baseDate)||a.rightKey.localeCompare(b.rightKey));brokerKisMarkSync(target,accountKind,accountId,fetchedAt,'rights');return{inserted,updated,skipped,rejected,total:list.length}
 }
+function brokerKisNormalizeCashDetail(input){const src=input&&typeof input==='object'?input:{},optional=key=>src[key]===null||src[key]===undefined||src[key]===''?null:brokerKisNonNegative(src[key]);return{depositCash:optional('depositCash'),settledCash:optional('settledCash'),nextDayCash:optional('nextDayCash'),d2Cash:optional('d2Cash'),todayBuyAmount:optional('todayBuyAmount'),todaySellAmount:optional('todaySellAmount'),availableCash:optional('availableCash')}}
 function brokerKisNormalizeBalanceSnapshot(input,accountKind='',accountId='',fetchedAt=''){
  const holdings=(Array.isArray(input?.holdings)?input.holdings:[]).map(brokerKisNormalizeHolding).filter(x=>x.productCode&&x.quantity>=0),kind=brokerKisKind(accountKind||input?.accountKind),date=brokerKisDate(input?.date)||brokerKisTimestamp(fetchedAt||input?.fetchedAt).slice(0,10);
- return{id:['kis-balance',kind,accountId,date].map(brokerKisKeyPart).join('|'),source:'kis',accountKind:kind,accountId:brokerKisText(accountId||input?.accountId,100),date,fetchedAt:brokerKisTimestamp(fetchedAt||input?.fetchedAt),cash:brokerKisNonNegative(input?.cash),securitiesValue:brokerKisNonNegative(input?.securitiesValue),totalValue:brokerKisNonNegative(input?.totalValue),holdings}
+ return{id:['kis-balance',kind,accountId,date].map(brokerKisKeyPart).join('|'),source:'kis',accountKind:kind,accountId:brokerKisText(accountId||input?.accountId,100),date,fetchedAt:brokerKisTimestamp(fetchedAt||input?.fetchedAt),cash:brokerKisNonNegative(input?.cash),cashDetail:brokerKisNormalizeCashDetail(input?.cashDetail),securitiesValue:brokerKisNonNegative(input?.securitiesValue),totalValue:brokerKisNonNegative(input?.totalValue),holdings}
 }
 function brokerKisImportBalanceSnapshot(store,input,accountKind,accountId,fetchedAt=new Date().toISOString()){
  const target=store||brokerKisEmptyStore(),snapshot=brokerKisNormalizeBalanceSnapshot(input,accountKind,accountId,fetchedAt);if(!snapshot.accountId)return{ok:false,error:'LOCAL_ACCOUNT_REQUIRED'};
- const list=Array.isArray(target.balanceSnapshots)?target.balanceSnapshots:(target.balanceSnapshots=[]),index=list.findIndex(x=>x.id===snapshot.id);if(index>=0)list[index]=snapshot;else list.push(snapshot);list.sort((a,b)=>a.date.localeCompare(b.date)||a.fetchedAt.localeCompare(b.fetchedAt));brokerKisMarkSync(target,accountKind,accountId,fetchedAt);return{ok:true,replaced:index>=0,snapshot}
+ const list=Array.isArray(target.balanceSnapshots)?target.balanceSnapshots:(target.balanceSnapshots=[]),index=list.findIndex(x=>x.id===snapshot.id);if(index>=0)list[index]=snapshot;else list.push(snapshot);list.sort((a,b)=>a.date.localeCompare(b.date)||a.fetchedAt.localeCompare(b.fetchedAt));brokerKisMarkSync(target,accountKind,accountId,fetchedAt,'balance');return{ok:true,replaced:index>=0,snapshot}
 }
 function brokerKisLatestBalance(store,accountKind,accountId=''){
  return[...(store?.balanceSnapshots||[])].filter(x=>x.accountKind===brokerKisKind(accountKind)&&(!accountId||x.accountId===accountId)).sort((a,b)=>a.fetchedAt.localeCompare(b.fetchedAt)).at(-1)||null
@@ -126,7 +129,7 @@ function brokerKisIssues(store){
  const issues=[],keys=new Set(),rightKeys=new Set(),matches=new Set();for(const x of store?.orders||[]){if(!x.orderKey||keys.has(x.orderKey))issues.push(`KIS 주문키 중복/누락: ${x.orderKey||'-'}`);keys.add(x.orderKey);if(!brokerKisOrderValid(x))issues.push(`KIS 주문 필수값 오류: ${x.orderKey||'-'}`);if(!KIS_ORDER_STATUSES.has(x.status))issues.push(`KIS 주문상태 오류: ${x.orderKey||'-'}`)}for(const x of store?.rights||[]){if(!x.rightKey||rightKeys.has(x.rightKey))issues.push(`KIS 권리키 중복/누락: ${x.rightKey||'-'}`);rightKeys.add(x.rightKey);if(x.classification!=='unclassified_cash_right')issues.push(`KIS 권리 자동분류 금지 위반: ${x.rightKey||'-'}`)}for(const x of store?.matches||[]){if(matches.has(x.orderKey))issues.push(`KIS 원장매칭 중복: ${x.orderKey}`);matches.add(x.orderKey);if(!keys.has(x.orderKey))issues.push(`KIS 원장매칭 주문 없음: ${x.orderKey}`)}return issues
 }
 function normalizeBrokerKis(input){
- const base=brokerKisEmptyStore(),src=input&&typeof input==='object'?input:{};const out={...base,version:KIS_BROKER_STORE_VERSION,connections:{pension:brokerKisNormalizeConnection(src.connections?.pension),irp:brokerKisNormalizeConnection(src.connections?.irp)},history:{pension:brokerKisNormalizeHistory(src.history?.pension,'pension'),irp:brokerKisNormalizeHistory(src.history?.irp,'irp')},orders:[],balanceSnapshots:[],rights:[],instrumentLinks:[],matches:[]};
+ const base=brokerKisEmptyStore(),src=input&&typeof input==='object'?input:{},migrateLegacy=Number(src.version||0)<KIS_BROKER_STORE_VERSION;const out={...base,version:KIS_BROKER_STORE_VERSION,connections:{pension:brokerKisNormalizeConnection(src.connections?.pension,migrateLegacy),irp:brokerKisNormalizeConnection(src.connections?.irp,migrateLegacy)},history:{pension:brokerKisNormalizeHistory(src.history?.pension,'pension'),irp:brokerKisNormalizeHistory(src.history?.irp,'irp')},orders:[],balanceSnapshots:[],rights:[],instrumentLinks:[],matches:[]};
  for(const x of Array.isArray(src.orders)?src.orders:[]){const row=brokerKisNormalizeOrder(x,x.accountKind,x.accountId,x.fetchedAt);row.revisions=Array.isArray(x.revisions)?x.revisions.slice(-50):[];if(brokerKisOrderValid(row)&&!out.orders.some(y=>y.orderKey===row.orderKey))out.orders.push(row)}
  out.balanceSnapshots=(Array.isArray(src.balanceSnapshots)?src.balanceSnapshots:[]).map(x=>brokerKisNormalizeBalanceSnapshot(x,x.accountKind,x.accountId,x.fetchedAt)).filter(x=>x.accountId);
  for(const x of Array.isArray(src.rights)?src.rights:[]){const row=brokerKisNormalizeRight(x,x.accountKind,x.accountId,x.fetchedAt);row.revisions=Array.isArray(x.revisions)?x.revisions.slice(-50):[];if(row.accountId&&row.rightTypeCode&&row.productCode&&!out.rights.some(y=>y.rightKey===row.rightKey))out.rights.push(row)}

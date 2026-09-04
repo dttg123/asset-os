@@ -66,19 +66,25 @@ async function readValidToken(db: ReturnType<typeof serverClient>, accountKind: 
   return data.access_token as string
 }
 
+function tokenCacheKind(accountKind: AccountKind, cfg: AccountConfig): AccountKind {
+  if (accountKind === 'irp' && cfg.appkey === Deno.env.get('KIS_PENSION_APP_KEY') && cfg.appsecret === Deno.env.get('KIS_PENSION_APP_SECRET')) return 'pension'
+  return accountKind
+}
+
 async function accessToken(accountKind: AccountKind, cfg: AccountConfig) {
   const db = serverClient()
-  const cached = await readValidToken(db, accountKind)
+  const cacheKind = tokenCacheKind(accountKind, cfg)
+  const cached = await readValidToken(db, cacheKind)
   if (cached) return cached
 
   const { data: claimed, error: claimError } = await db.rpc('claim_kis_token_refresh', {
-    p_account_type: accountKind,
+    p_account_type: cacheKind,
   })
   if (claimError) throw new Error('TOKEN_REFRESH_LOCK_FAILED')
   if (!claimed) {
     for (let attempt = 0; attempt < 10; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 500))
-      const waiting = await readValidToken(db, accountKind)
+      const waiting = await readValidToken(db, cacheKind)
       if (waiting) return waiting
     }
     throw new Error('TOKEN_REFRESH_BUSY')
@@ -95,7 +101,7 @@ async function accessToken(accountKind: AccountKind, cfg: AccountConfig) {
     if (!tokenResponse.ok || !token) throw new Error('TOKEN_FAILED')
     const expiresIn = Math.max(Number(body?.expires_in) || 86400, 300)
     const { error } = await db.from('kis_token_cache').upsert({
-      account_type: accountKind,
+      account_type: cacheKind,
       access_token: token,
       expires_at: new Date(Date.now() + expiresIn * 1000).toISOString(),
       refreshing_until: null,
@@ -107,7 +113,7 @@ async function accessToken(accountKind: AccountKind, cfg: AccountConfig) {
     await db.from('kis_token_cache').update({
       refreshing_until: null,
       updated_at: new Date().toISOString(),
-    }).eq('account_type', accountKind)
+    }).eq('account_type', cacheKind)
     throw error
   }
 }
@@ -122,6 +128,7 @@ async function kisPages(
 ) {
   const collected: Record<string, unknown>[] = []
   let body: Record<string, any> = {}
+  let firstBody: Record<string, any> = {}
   let trCont = ''
   for (let page = 0; page < MAX_PAGES; page += 1) {
     const query = new URLSearchParams(params)
@@ -136,6 +143,7 @@ async function kisPages(
       },
     })
     body = await upstream.json().catch(() => ({}))
+    if (page === 0) firstBody = body
     if (!upstream.ok || body?.rt_cd !== '0') throw new Error('KIS_UPSTREAM_FAILED')
     const nextRows = Array.isArray(body?.[outputKey]) ? body[outputKey] : []
     collected.push(...nextRows.filter((row: unknown) => row && typeof row === 'object'))
@@ -147,7 +155,7 @@ async function kisPages(
     params = { ...params, CTX_AREA_FK100: fk100, CTX_AREA_NK100: nk100 }
     await new Promise((resolve) => setTimeout(resolve, 1100))
   }
-  return { body, rows: collected }
+  return { body, firstBody, rows: collected }
 }
 
 async function balance(accountKind: AccountKind, cfg: AccountConfig, token: string, fetchedAt: string) {
@@ -167,7 +175,7 @@ async function balance(accountKind: AccountKind, cfg: AccountConfig, token: stri
     },
     'output1',
   )
-  return normalizeBalance({ output1: result.rows, output2: result.body?.output2 }, fetchedAt)
+  return normalizeBalance({ output1: result.rows, output2: result.firstBody?.output2 ?? result.body?.output2 }, fetchedAt)
 }
 
 async function orders(accountKind: AccountKind, cfg: AccountConfig, token: string, from?: string, to?: string) {

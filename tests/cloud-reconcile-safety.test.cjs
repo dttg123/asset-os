@@ -21,5 +21,9 @@ assert.equal(vm.runInContext("cloudDataHasMeaningfulRecords({accounts:[{id:'isa'
  const ok=await vm.runInContext("cloudReconcileState()",context);
  assert.equal(ok,true);
  assert.equal(context.__applied,'remote');
+ vm.runInContext(`cloudSyncBusy=false;cloudLocalEnvelope=()=>({stored:true,envelope:{savedAt:'2026-09-02T03:00:00.000Z',data:{accounts:[{id:'local'}],pension:{},integrated:{ledger:[]}}}});cloudFetchStateRow=async()=>({row:{updated_at:'2026-09-02T03:00:00.000Z',payload:{savedAt:'2026-09-02T03:00:00.000Z',data:{accounts:[{id:'remote'}],pension:{},integrated:{ledger:[]}}}},error:null});__applied='';`,context);
+ const conflict=await vm.runInContext("cloudReconcileState()",context);
+ assert.equal(conflict,false,'같은 시각에 내용이 다른 저장본을 정상 동기화로 처리하면 안 된다');
+ assert.equal(context.__applied,'','충돌 상태에서 어느 쪽도 자동으로 덮어쓰면 안 된다');
  console.log('cloud reconcile safety tests: PASS');
 })().catch(error=>{console.error(error);process.exitCode=1});

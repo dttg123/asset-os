@@ -75,11 +75,22 @@ function sample(overrides={}){
 }
 
 {
- const dirty={connections:{pension:{accountId:'ps-main',lastSyncAt:'2026-09-01T07:00:00Z',lastError:'',appKey:'LEAK',appSecret:'LEAK',token:'LEAK',cano:'LEAK'}}};
+ const dirty={version:3,connections:{pension:{accountId:'ps-main',lastSyncAt:'2026-09-01T07:00:00Z',lastError:'',appKey:'LEAK',appSecret:'LEAK',token:'LEAK',cano:'LEAK'}}};
  const normalized=plain(call('normalizeBrokerKis',dirty));
- assert.deepEqual(normalized.connections.pension,{accountId:'ps-main',lastSyncAt:'2026-09-01T07:00:00.000Z',orderSyncThrough:'',lastError:''});
+ assert.deepEqual(normalized.connections.pension,{accountId:'ps-main',lastSyncAt:'2026-09-01T07:00:00.000Z',lastCompleteSyncAt:'2026-09-01T07:00:00.000Z',lastBalanceAt:'',lastOrdersAt:'',lastRightsAt:'',orderSyncThrough:'',lastError:''});
  const serialized=JSON.stringify(normalized);
  for(const secret of ['LEAK','appSecret','appKey','token','cano'])assert.equal(serialized.includes(secret),false,`연결 메타데이터에 ${secret} 값을 저장하면 안 된다`);
+}
+
+{
+ const store=call('brokerKisEmptyStore');
+ call('brokerKisImportBalanceSnapshot',store,{cash:260574,cashDetail:{depositCash:260574,settledCash:20574,nextDayCash:20574,todayBuyAmount:240000,availableCash:20574},totalValue:7138074},'irp','irp-main','2026-09-04T09:20:00Z');
+ assert.equal(store.connections.irp.lastCompleteSyncAt,'','잔고 한 단계만 성공했는데 전체 갱신 완료로 표시하면 안 된다');
+ call('brokerKisCompleteSync',store,'irp','irp-main','2026-09-04T09:21:00Z');
+ assert.equal(store.connections.irp.lastCompleteSyncAt,'2026-09-04T09:21:00.000Z');
+ const latest=plain(call('brokerKisLatestBalance',store,'irp','irp-main'));
+ assert.equal(latest.cash,260574);
+ assert.equal(latest.cashDetail.availableCash,20574,'당일 매수 후 실제 사용 가능 현금을 별도로 보존해야 한다');
 }
 
 {

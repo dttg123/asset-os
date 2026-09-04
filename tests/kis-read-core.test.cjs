@@ -15,11 +15,14 @@ assert.equal(orders[0].filledQty,3);
 assert.equal(orders[0].filledAmount,3000);
 assert.equal(orders[0].remainingQty,7);
 
-const balance=normalizeBalance({output1:[{pdno:'A',prdt_name:'ETF',hldg_qty:'2',pchs_avg_pric:'100',prpr:'120',evlu_amt:'240',evlu_pfls_amt:'40'}],output2:[{dnca_tot_amt:'60',scts_evlu_amt:'240',tot_evlu_amt:'300'}]},'2026-09-02T00:00:00Z');
+const balance=normalizeBalance({output1:[{pdno:'A',prdt_name:'ETF',hldg_qty:'2',pchs_avg_pric:'100',prpr:'120',evlu_amt:'240',evlu_pfls_amt:'40'}],output2:[{dnca_tot_amt:'60',prvs_rcdl_excc_amt:'20',nxdy_excc_amt:'20',thdt_buy_amt:'40',scts_evlu_amt:'240',tot_evlu_amt:'300'}]},'2026-09-02T00:00:00Z');
 assert.equal(balance.cash,60);
 assert.equal(balance.securitiesValue,240);
 assert.equal(balance.totalValue,300);
 assert.equal(balance.holdings.length,1);
+assert.equal(balance.cashDetail.depositCash,60);
+assert.equal(balance.cashDetail.todayBuyAmount,40);
+assert.equal(balance.cashDetail.availableCash,20);
 
 const rights=normalizeRights([{rght_type_cd:'32',bass_dt:'20260801',cash_dfrm_dt:'20260815',pdno:'A',prdt_name:'ETF',last_alct_amt:'50',tax_amt:'5'}]);
 assert.equal(rights.length,1);
@@ -44,5 +47,7 @@ assert.ok(!edge.includes('accessToken:'),'token must not be returned to caller')
 assert.ok(!edge.includes('CANO: input'),'client account number must never be accepted');
 assert.match(edge,/FHKBJ773400C0/,'official KIS domestic bond quote TR id required');
 assert.match(edge,/FHKST01010100/,'official KIS domestic stock quote TR id required');
+assert.match(edge,/firstBody/,'다중 페이지 잔고 조회에서 첫 페이지 합계 정보를 보존해야 한다');
+assert.match(edge,/tokenCacheKind/,'같은 앱키를 쓰는 연금저축·IRP는 한투 접근토큰을 재사용해야 한다');
 
 console.log('kis-read core tests: PASS');

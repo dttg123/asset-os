@@ -23,6 +23,10 @@ vm.runInContext('state.accounts[0].testValue=120;syncCurrentIsaSnapshots()',cont
 rows=vm.runInContext('JSON.parse(JSON.stringify(state.accounts[0].assetSnapshots))',context);
 assert.equal(rows.length,2,'날짜가 바뀌면 ISA 일별 스냅샷을 추가해야 한다');
 
+vm.runInContext(`state={moduleVerification:{isa:false},accounts:[{id:'isa-unverified',status:'active',testCost:200,testValue:230,assetSnapshots:[]}]}`,context);
+vm.runInContext('syncCurrentIsaSnapshots()',context);
+assert.equal(vm.runInContext('state.accounts[0].assetSnapshots.length',context),1,'실제 현재자산이 있으면 과거 검산 플래그와 무관하게 스냅샷을 저장해야 한다');
+
 vm.runInContext(fs.readFileSync('chart-asset-analysis.js','utf8'),context,{filename:'chart-asset-analysis.js'});
 const account={assetSnapshots:[
  {date:'2026-08-01',cost:100,value:101},{date:'2026-08-20',cost:100,value:105},
