@@ -1,8 +1,13 @@
 'use strict';
+function holdingPriceScale(h){const value=Number(h?.priceScale);return Number.isFinite(value)&&value>0?value:1}
+function holdingPositionValue(h,qty=h?.qty,price=h?.currentPrice){return (Number(qty)||0)*(Number(price)||0)/holdingPriceScale(h)}
+function holdingCostValue(h,qty=h?.qty,price=h?.avgPrice){return holdingPositionValue(h,qty,price)}
+function holdingQuantityText(h,qty=h?.qty){return h?.quantityUnit==='face'?`${num(qty)}원 액면`:`${num(qty)}주`}
+function transactionPositionValue(h,qty,price){return holdingPositionValue(h,qty,price)}
 function replay(account,candidateTxs=null){
  if(!account)return {holdings:[],cash:0,valid:true,error:null,errorTxId:null,realized:0,income:0,fees:0,taxes:0,facts:new Map()};
  if(isPastAccount(account)){
-  const holdings=account.holdings.map(h=>({...h,qty:h.snapshotQty??h.baselineQty??0,avgPrice:h.snapshotAvg??h.baselineAvg??0,marketValue:(h.snapshotQty??h.baselineQty??0)*(h.snapshotPrice??h.currentPrice??0),currentPrice:h.snapshotPrice??h.currentPrice??0,realized:0}));
+  const holdings=account.holdings.map(h=>{const row={...h,qty:h.snapshotQty??h.baselineQty??0,avgPrice:h.snapshotAvg??h.baselineAvg??0,currentPrice:h.snapshotPrice??h.currentPrice??0,realized:0};return{...row,marketValue:holdingPositionValue(row)}});
   return {holdings,cash:account.cashSnapshot??account.baselineCash??0,valid:true,error:null,realized:0,income:0,fees:0,taxes:0,facts:new Map()};
  }
  const baseDate=account.baseline?.date||account.baselineDate||account.openedAt||'0000-01-01';
@@ -31,27 +36,27 @@ function replay(account,candidateTxs=null){
   if(['dividend','distribution','interest'].includes(tx.type)){const net=amount-f-tax;cash+=net;income+=net;fees+=f;taxes+=tax;facts.set(tx.id,{tradeAmount:net,grossAmount:amount})}
   if(['buy','openingAllocation'].includes(tx.type)){
    if(!h){error='등록되지 않은 종목의 매수 기록이 있습니다.';errorTxId=tx.id;break}
-   const cost=q*p+f+tax,totalCost=h.qty*h.avgPrice+cost;h.qty+=q;h.avgPrice=h.qty?totalCost/h.qty:0;cash-=cost;fees+=f;taxes+=tax;facts.set(tx.id,{tradeAmount:cost});
+   const scale=holdingPriceScale(h),cost=transactionPositionValue(h,q,p)+f+tax,totalCost=holdingCostValue(h)+cost;h.qty+=q;h.avgPrice=h.qty?(totalCost*scale/h.qty):0;cash-=cost;fees+=f;taxes+=tax;facts.set(tx.id,{tradeAmount:cost});
   }
   if(tx.type==='sell'){
    if(!h){error='등록되지 않은 종목의 매도 기록이 있습니다.';errorTxId=tx.id;break}
    if(q>h.qty+1e-8){error=`${h.name} 매도수량이 당시 보유수량을 초과합니다.`;errorTxId=tx.id;break}
-   const gain=(p-h.avgPrice)*q-f-tax,proceeds=q*p-f-tax;h.realized+=gain;realized+=gain;h.qty-=q;cash+=proceeds;fees+=f;taxes+=tax;facts.set(tx.id,{tradeAmount:proceeds,realized:gain});
+   const gain=transactionPositionValue(h,q,p-h.avgPrice)-f-tax,proceeds=transactionPositionValue(h,q,p)-f-tax;h.realized+=gain;realized+=gain;h.qty-=q;cash+=proceeds;fees+=f;taxes+=tax;facts.set(tx.id,{tradeAmount:proceeds,realized:gain});
   }
   if(tx.type==='adjustment'){if(h&&Number.isFinite(Number(tx.setQty)))h.qty=Number(tx.setQty);if(h&&Number.isFinite(Number(tx.setAvg)))h.avgPrice=Number(tx.setAvg);if(Number.isFinite(Number(tx.cashDelta)))cash+=Number(tx.cashDelta);facts.set(tx.id,{tradeAmount:Number(tx.cashDelta)||0})}
   if(['split','reverseSplit'].includes(tx.type)&&h){const ratio=Number(tx.ratio)||1;if(ratio<=0){error='분할·병합 비율이 올바르지 않습니다.';errorTxId=tx.id;break}h.qty*=ratio;h.avgPrice/=ratio;facts.set(tx.id,{tradeAmount:0,corporateAction:true})}
-  if(tx.type==='securityTransferIn'&&h){const total=h.qty*h.avgPrice+q*p;h.qty+=q;h.avgPrice=h.qty?total/h.qty:0;facts.set(tx.id,{tradeAmount:0})}
+  if(tx.type==='securityTransferIn'&&h){const scale=holdingPriceScale(h),total=holdingCostValue(h)+transactionPositionValue(h,q,p);h.qty+=q;h.avgPrice=h.qty?total*scale/h.qty:0;facts.set(tx.id,{tradeAmount:0})}
   if(tx.type==='securityTransferOut'&&h){if(q>h.qty+1e-8){error=`${h.name} 이전수량이 당시 보유수량을 초과합니다.`;errorTxId=tx.id;break}h.qty-=q;facts.set(tx.id,{tradeAmount:0})}
   if(h&&h.qty<-.0000001){error=`${h.name} 보유수량이 음수가 됩니다.`;errorTxId=tx.id;break}
   if(cash<-.0000001){error='거래 시점의 ISA 계좌 현금이 음수가 됩니다.';errorTxId=tx.id;break}
   if(!Number.isFinite(cash)){error='계좌 현금 계산값이 올바르지 않습니다.';errorTxId=tx.id;break}
   processed.add(tx.id)
  }
- const holdings=[...map.values()].map(h=>({...h,lifecycleStatus:h.qty>0?'active':'archived',marketValue:h.qty*h.currentPrice}));
+ const holdings=[...map.values()].map(h=>({...h,lifecycleStatus:h.qty>0?'active':'archived',marketValue:holdingPositionValue(h)}));
  return {holdings,cash,valid:!error,error,errorTxId,realized,income,fees,taxes,facts}
 }
 function accountMetrics(account){
- const r=replay(account),holdingsValue=r.holdings.reduce((sum,h)=>sum+h.marketValue,0),cost=r.holdings.reduce((sum,h)=>sum+h.qty*h.avgPrice,0),unrealized=holdingsValue-cost;
+ const r=replay(account),holdingsValue=r.holdings.reduce((sum,h)=>sum+h.marketValue,0),cost=r.holdings.reduce((sum,h)=>sum+holdingCostValue(h),0),unrealized=holdingsValue-cost;
  if(isPastAccount(account)){const value=account.maturity?.actualSettlement||holdingsValue+r.cash;return {...r,value,holdingsValue,cost,unrealized,profit:unrealized+r.realized,rate:cost?(unrealized+r.realized)/cost*100:0,totalReturn:unrealized+r.realized+r.income}}
  const value=holdingsValue+r.cash,profit=unrealized+r.realized;return {...r,value,holdingsValue,cost,unrealized,profit,rate:cost?profit/cost*100:0,totalReturn:profit+r.income}
 }
@@ -63,7 +68,7 @@ function dividends(a){return (a.transactions||[]).filter(t=>['dividend','distrib
 function dividendNetAmount(t){return Math.max(0,(Number(t?.amount)||0)-(Number(t?.fee)||0)-(Number(t?.tax)||0))}
 function dividendAnalysisRecords(a){return dividends(a).filter(x=>!x.meta?.analysisOnly).sort((x,y)=>txDate(y).localeCompare(txDate(x))||txSequence(y)-txSequence(x))}
 function periodEndDate(key,period){if(period==='month'){const [y,m]=String(key).split('-').map(Number);if(!y||!m)return ymd();return localYmd(new Date(y,m,0))}return /^\d{4}$/.test(String(key))?`${key}-12-31`:ymd()}
-function investmentPrincipalAt(a,endDate){if(isPastAccount(a))return accountMetrics(a).cost;const txs=(a.transactions||[]).filter(t=>txDate(t)<=endDate),r=replay(a,txs);return r.valid?r.holdings.reduce((sum,h)=>sum+h.qty*h.avgPrice,0):0}
+function investmentPrincipalAt(a,endDate){if(isPastAccount(a))return accountMetrics(a).cost;const txs=(a.transactions||[]).filter(t=>txDate(t)<=endDate),r=replay(a,txs);return r.valid?r.holdings.reduce((sum,h)=>sum+holdingCostValue(h),0):0}
 function dividendYieldFor(a,key,period,amount){const end=periodEndDate(key,period),principal=investmentPrincipalAt(a,end),rate=principal>0?(Number(amount)||0)/principal*100:null;return{principal,rate}}
 function consistencyIssues(a){
  const issues=[],tol=Number(a.reconciliationTolerance||10),r=replay(a);
@@ -89,4 +94,3 @@ function consistencyIssues(a){
  return issues
 }
 function allIsaIssues(){return state.accounts.flatMap(a=>consistencyIssues(a))}
-

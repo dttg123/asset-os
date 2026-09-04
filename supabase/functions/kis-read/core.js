@@ -32,6 +32,16 @@ function rows(value) {
   return value && typeof value === 'object' ? [value] : []
 }
 
+export function normalizeQuote(row, type, requestedCode = '') {
+  const kind = cleanText(type, 10).toLowerCase()
+  const code = cleanText(pick(row, kind === 'bond' ? ['stnd_iscd', 'pdno'] : ['stck_shrn_iscd', 'mksc_shrn_iscd', 'pdno']), 20) || cleanText(requestedCode, 20)
+  const name = cleanText(pick(row, kind === 'bond' ? ['hts_kor_isnm', 'prdt_name'] : ['hts_kor_isnm', 'bstp_kor_isnm', 'prdt_name']), 160)
+  const price = nonNegative(pick(row, kind === 'bond' ? ['bond_prpr'] : ['stck_prpr']))
+  const previousClose = nonNegative(pick(row, kind === 'bond' ? ['bond_prdy_clpr'] : ['stck_sdpr']))
+  if (!['stock', 'bond'].includes(kind) || !code || !(price > 0)) return null
+  return { type: kind, code, name, price, previousClose }
+}
+
 function side(value) {
   const code = cleanText(value, 20).toLowerCase()
   if (code === '01' || code === 'sell' || code.includes('매도')) return 'sell'

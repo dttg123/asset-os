@@ -9,7 +9,7 @@ const fakeFetch=async(url,options={})=>{
  requests.push({url,options});
  const body=JSON.parse(options.body||'{}');
  if(url.includes('/auth/v1/otp'))return{ok:true,status:200,text:async()=>JSON.stringify({})};
- return{ok:true,status:200,text:async()=>JSON.stringify({ok:true,action:body.action,accountKind:body.accountKind,fetchedAt:'2026-09-02T00:00:00Z',balance:{totalValue:123},orders:[],rights:[]})}
+ return{ok:true,status:200,text:async()=>JSON.stringify(body.action==='quote'?{ok:true,action:'quote',fetchedAt:'2026-09-02T00:00:00Z',quotes:[{type:'stock',code:'035720',price:40000}]}:{ok:true,action:body.action,accountKind:body.accountKind,fetchedAt:'2026-09-02T00:00:00Z',balance:{totalValue:123},orders:[],rights:[]})}
 };
 const imports=[];
 const window={__assetOS:{brokerKis:{importBalance:(input,kind,id,at)=>{imports.push({input,kind,id,at});return{ok:true}},importOrders:()=>({ok:true}),importRights:()=>({ok:true})}}};
@@ -29,6 +29,7 @@ assert.deepEqual(plain(run('brokerKisClient.authState()')),{configured:true,sign
  assert.equal(run('brokerKisClient.authState().signedIn'),true);
  const synced=plain(await run('brokerKisClient.sync("balance","pension","ps-main")'));assert.equal(synced.ok,true);assert.equal(imports.length,1);assert.equal(imports[0].input.totalValue,123);
  const invokeRequest=requests.at(-1);assert.equal(invokeRequest.options.headers.authorization,'Bearer USER_JWT_MEMORY_ONLY');assert.equal(JSON.parse(invokeRequest.options.body).accountNumber,undefined,'계좌번호를 브라우저에서 보내면 안 된다');
+ const quoted=plain(await run('brokerKisClient.quotes([{type:"stock",code:"035720"}])'));assert.equal(quoted.ok,true);assert.equal(quoted.data.quotes[0].price,40000);const quoteBody=JSON.parse(requests.at(-1).options.body);assert.deepEqual(quoteBody,{action:'quote',quotes:[{type:'stock',code:'035720'}]});assert.equal(quoteBody.accountKind,undefined,'quote must not transmit an account kind or account number');
  const all=JSON.stringify({requests,window});assert.equal(all.includes('refresh_token'),false,'refresh token을 앱 상태나 요청 기록에 보관하면 안 된다');
  run('brokerKisClient.signOut()');assert.equal(run('brokerKisClient.authState().signedIn'),false);
  console.log('broker-kis client tests: PASS');

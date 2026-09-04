@@ -1,0 +1,13 @@
+'use strict';
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const vm=require('node:vm');
+const account={baselineCash:26817,transactions:[{id:'keep'}],holdings:[{id:'stock',baselineQty:65,baselineAvg:54301.53846153846,currentPrice:35900,quoteSource:'kis',quoteType:'stock',instrumentCode:'035720',lifecycleStatus:'active'},{id:'bond',baselineQty:980000,baselineAvg:10476.1326530612,currentPrice:10222.7040816327,priceScale:10000,quantityUnit:'face',quoteSource:'kis',quoteType:'bond',instrumentCode:'KR6055553E12',lifecycleStatus:'active'}]};
+const document={addEventListener:()=>{}};
+const context=vm.createContext({Date,Math,Number,String,Array,Map,JSON,Promise,document,currentAccount:()=>account,route:()=>({root:'isa'}),brokerKisClient:{authState:()=>({signedIn:true})}});
+vm.runInContext(fs.readFileSync('isa-quotes.js','utf8'),context);
+const before=JSON.stringify({cash:account.baselineCash,transactions:account.transactions,positions:account.holdings.map(h=>[h.baselineQty,h.baselineAvg])});
+const result=vm.runInContext(`applyIsaQuoteResults(currentAccount(),[{type:'stock',code:'035720',price:40000},{type:'bond',code:'KR6055553E12',price:10100}],'2026-09-04T01:02:03Z')`,context);
+assert.equal(result.ok,true);assert.equal(result.updated,2);assert.equal(account.holdings[0].currentPrice,40000);assert.equal(account.holdings[1].currentPrice,10100);assert.equal(JSON.stringify({cash:account.baselineCash,transactions:account.transactions,positions:account.holdings.map(h=>[h.baselineQty,h.baselineAvg])}),before,'quote refresh must not mutate fixed data');
+assert.equal(vm.runInContext('isaQuoteRefreshDue(currentAccount(),Date.parse("2026-09-04T01:05:00Z"))',context),false);assert.equal(vm.runInContext('isaQuoteRefreshDue(currentAccount(),Date.parse("2026-09-04T01:12:04Z"))',context),true);
+console.log('isa quote isolation tests: PASS');

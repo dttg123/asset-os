@@ -42,9 +42,10 @@ const brokerKisClient=(()=>{
  }
  async function invoke(action,body={}){
   if(!configured())return{ok:false,error:'BROKER_NOT_CONFIGURED'};if(!authState().signedIn)return{ok:false,error:'BROKER_AUTH_REQUIRED'};
-  const allowed=new Set(['balance','orders','rights']),name=cleanText(action,30);if(!allowed.has(name))return{ok:false,error:'BROKER_ACTION_INVALID'};
-  const result=await jsonRequest(`${config.projectUrl}/functions/v1/${config.functionName}`,{method:'POST',headers:publicHeaders({authorization:`Bearer ${session.accessToken}`}),body:JSON.stringify({action:name,accountKind:body.accountKind,from:body.from,to:body.to})});
-  if(!result.ok)return result;const data=result.data;if(!data||data.ok!==true||data.action!==name||!['pension','irp'].includes(data.accountKind))return{ok:false,error:'BROKER_RESPONSE_CONTRACT_INVALID'};return{ok:true,data}
+  const allowed=new Set(['balance','orders','rights','quote']),name=cleanText(action,30);if(!allowed.has(name))return{ok:false,error:'BROKER_ACTION_INVALID'};
+  const payload=name==='quote'?{action:name,quotes:Array.isArray(body.quotes)?body.quotes:[]}:{action:name,accountKind:body.accountKind,from:body.from,to:body.to};
+  const result=await jsonRequest(`${config.projectUrl}/functions/v1/${config.functionName}`,{method:'POST',headers:publicHeaders({authorization:`Bearer ${session.accessToken}`}),body:JSON.stringify(payload)});
+  if(!result.ok)return result;const data=result.data;if(!data||data.ok!==true||data.action!==name||(name!=='quote'&&!['pension','irp'].includes(data.accountKind))||(name==='quote'&&!Array.isArray(data.quotes)))return{ok:false,error:'BROKER_RESPONSE_CONTRACT_INVALID'};return{ok:true,data}
  }
  async function sync(action,accountKind,localAccountId,range={}){
   const result=await invoke(action,{accountKind,from:range.from,to:range.to});if(!result.ok)return result;const data=result.data,fetchedAt=data.fetchedAt||new Date().toISOString(),api=window.__assetOS?.brokerKis;if(!api)return{ok:false,error:'BROKER_STORE_UNAVAILABLE'};
@@ -52,5 +53,6 @@ const brokerKisClient=(()=>{
   if(action==='orders')return api.importOrders(data.orders||[],accountKind,localAccountId,fetchedAt);
   return api.importRights(data.rights||[],accountKind,localAccountId,fetchedAt)
  }
- return{configure,authState,adoptSession,signOut,requestOtp,consumeRedirect,invoke,sync}
+ async function quotes(items){return invoke('quote',{quotes:items})}
+ return{configure,authState,adoptSession,signOut,requestOtp,consumeRedirect,invoke,sync,quotes}
 })();

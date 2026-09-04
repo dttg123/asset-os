@@ -1,13 +1,13 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { normalizeBalance, normalizeOrders, normalizeRights, safeRange } from './core.js'
+import { normalizeBalance, normalizeOrders, normalizeQuote, normalizeRights, safeRange } from './core.js'
 
 const KIS_BASE = 'https://openapi.koreainvestment.com:9443'
 const REFRESH_MARGIN_MS = 5 * 60 * 1000
 const MAX_PAGES = 10
 
 type AccountKind = 'pension' | 'irp'
-type Action = 'balance' | 'orders' | 'rights'
+type Action = 'balance' | 'orders' | 'rights' | 'quote'
 type AccountConfig = { appkey: string; appsecret: string; cano: string; productCode: string }
 
 function env(name: string) {
@@ -193,11 +193,43 @@ async function rights(cfg: AccountConfig, token: string, from?: string, to?: str
   return normalizeRights(result.rows)
 }
 
+async function quoteOne(cfg: AccountConfig, token: string, item: Record<string, unknown>) {
+  const type = String(item?.type || '').trim().toLowerCase()
+  const code = String(item?.code || '').trim().toUpperCase()
+  if (!['stock', 'bond'].includes(type)) throw new Error('QUOTE_TYPE_INVALID')
+  if (type === 'stock' ? !/^\d{6}$/.test(code) : !/^[A-Z0-9]{12}$/.test(code)) throw new Error('QUOTE_CODE_INVALID')
+  const bond = type === 'bond'
+  const path = bond ? '/uapi/domestic-bond/v1/quotations/inquire-price' : '/uapi/domestic-stock/v1/quotations/inquire-price'
+  const trId = bond ? 'FHKBJ773400C0' : 'FHKST01010100'
+  const params = new URLSearchParams({ FID_COND_MRKT_DIV_CODE: bond ? 'B' : 'J', FID_INPUT_ISCD: code })
+  const upstream = await fetch(`${KIS_BASE}${path}?${params.toString()}`, { headers: {
+    authorization: `Bearer ${token}`, appkey: cfg.appkey, appsecret: cfg.appsecret,
+    tr_id: trId, custtype: 'P',
+  } })
+  const body = await upstream.json().catch(() => ({}))
+  if (!upstream.ok || body?.rt_cd !== '0') throw new Error('KIS_UPSTREAM_FAILED')
+  const row = Array.isArray(body?.output) ? body.output[0] : body?.output
+  const normalized = normalizeQuote(row, type, code)
+  if (!normalized) throw new Error('QUOTE_EMPTY')
+  return normalized
+}
+
+async function quotes(cfg: AccountConfig, token: string, input: unknown) {
+  if (!Array.isArray(input) || input.length < 1 || input.length > 10) throw new Error('QUOTE_LIST_INVALID')
+  const result = []
+  for (let index = 0; index < input.length; index += 1) {
+    if (index) await new Promise((resolve) => setTimeout(resolve, 1100))
+    result.push(await quoteOne(cfg, token, input[index] as Record<string, unknown>))
+  }
+  return result
+}
+
 const safeErrors = new Set([
   'AUTH_REQUIRED', 'AUTH_INVALID', 'AUTH_FORBIDDEN', 'ACTION_INVALID', 'ACCOUNT_KIND_INVALID',
   'DATE_RANGE_INVALID', 'SERVER_CONFIG_MISSING',
   'TOKEN_CACHE_READ_FAILED', 'TOKEN_REFRESH_LOCK_FAILED', 'TOKEN_REFRESH_BUSY', 'TOKEN_FAILED',
   'TOKEN_CACHE_SAVE_FAILED', 'KIS_UPSTREAM_FAILED', 'KIS_RESULT_TRUNCATED',
+  'QUOTE_TYPE_INVALID', 'QUOTE_CODE_INVALID', 'QUOTE_LIST_INVALID', 'QUOTE_EMPTY',
 ])
 
 Deno.serve(async (req) => {
@@ -224,17 +256,20 @@ Deno.serve(async (req) => {
     const input = await req.json()
     const action = input?.action as Action
     const accountKind = input?.accountKind as AccountKind
-    if (!['balance', 'orders', 'rights'].includes(action)) throw new Error('ACTION_INVALID')
-    if (!['pension', 'irp'].includes(accountKind)) throw new Error('ACCOUNT_KIND_INVALID')
-    const cfg = accountConfig(accountKind)
-    const token = await accessToken(accountKind, cfg)
+    if (!['balance', 'orders', 'rights', 'quote'].includes(action)) throw new Error('ACTION_INVALID')
+    if (action !== 'quote' && !['pension', 'irp'].includes(accountKind)) throw new Error('ACCOUNT_KIND_INVALID')
+    const tokenKind: AccountKind = action === 'quote' ? 'pension' : accountKind
+    const cfg = accountConfig(tokenKind)
+    const token = await accessToken(tokenKind, cfg)
     const fetchedAt = new Date().toISOString()
-    const payload = action === 'balance'
+    const payload = action === 'quote'
+      ? { quotes: await quotes(cfg, token, input?.quotes) }
+      : action === 'balance'
       ? { balance: await balance(accountKind, cfg, token, fetchedAt) }
       : action === 'orders'
         ? { orders: await orders(accountKind, cfg, token, input?.from, input?.to) }
         : { rights: await rights(cfg, token, input?.from, input?.to) }
-    return response({ ok: true, action, accountKind, fetchedAt, ...payload }, 200, origin)
+    return response({ ok: true, action, ...(action === 'quote' ? {} : { accountKind }), fetchedAt, ...payload }, 200, origin)
   } catch (error) {
     const code = error instanceof Error ? error.message : 'INTERNAL_ERROR'
     const status = code === 'AUTH_FORBIDDEN' ? 403

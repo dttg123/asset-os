@@ -3,10 +3,10 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 
 let source=fs.readFileSync('supabase/functions/kis-read/core.js','utf8').replaceAll('export function ','function ');
-source+='\nthis.api={normalizeOrders,normalizeBalance,normalizeRights,safeRange};';
+source+='\nthis.api={normalizeOrders,normalizeBalance,normalizeQuote,normalizeRights,safeRange};';
 const context=vm.createContext({Date,Number,String,Math,RegExp,Array,Object,Error});
 new vm.Script(source).runInContext(context);
-const {normalizeOrders,normalizeBalance,normalizeRights,safeRange}=context.api;
+const {normalizeOrders,normalizeBalance,normalizeQuote,normalizeRights,safeRange}=context.api;
 
 const orders=normalizeOrders([{ord_dt:'20260902',ord_tmd:'101500',ord_gno_brno:'1',odno:'2',pdno:'A',prdt_name:'ETF',sll_buy_dvsn_cd:'02',ord_qty:'10',tot_ccld_qty:'3',tot_ccld_amt:'3000',nccs_qty:'7'}]);
 assert.equal(orders.length,1);
@@ -27,6 +27,10 @@ assert.equal(rights[0].amount,50);
 assert.equal(rights[0].tax,5);
 assert.equal(rights[0].classification,undefined);
 
+assert.deepEqual(JSON.parse(JSON.stringify(normalizeQuote({stck_shrn_iscd:'035720',hts_kor_isnm:'카카오',stck_prpr:'35900',stck_sdpr:'35500'},'stock','035720'))),{type:'stock',code:'035720',name:'카카오',price:35900,previousClose:35500});
+assert.deepEqual(JSON.parse(JSON.stringify(normalizeQuote({stnd_iscd:'KR6055553E12',hts_kor_isnm:'신한금융조건부(상)15',bond_prpr:'10222.7',bond_prdy_clpr:'10220'},'bond','KR6055553E12'))),{type:'bond',code:'KR6055553E12',name:'신한금융조건부(상)15',price:10222.7,previousClose:10220});
+assert.equal(normalizeQuote({stck_prpr:'0'},'stock','035720'),null);
+
 assert.deepEqual(JSON.parse(JSON.stringify(safeRange('2026-08-01','2026-08-31',31,31,new Date('2026-09-02T00:00:00Z')))),{from:'20260801',to:'20260831'});
 assert.throws(()=>safeRange('2026-01-01','2026-09-01',31,31),/DATE_RANGE_INVALID/);
 
@@ -38,5 +42,7 @@ assert.ok(!/KIS_(?:PENSION|IRP)_APP_(?:KEY|SECRET)\s*=/.test(edge),'KIS secret l
 assert.ok(!edge.includes('tokenSource'),'token source must not be returned to caller');
 assert.ok(!edge.includes('accessToken:'),'token must not be returned to caller');
 assert.ok(!edge.includes('CANO: input'),'client account number must never be accepted');
+assert.match(edge,/FHKBJ773400C0/,'official KIS domestic bond quote TR id required');
+assert.match(edge,/FHKST01010100/,'official KIS domestic stock quote TR id required');
 
 console.log('kis-read core tests: PASS');
