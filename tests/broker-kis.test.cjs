@@ -51,6 +51,16 @@ function sample(overrides={}){
 
 {
  const store=call('brokerKisEmptyStore');
+ call('brokerKisImportOrderSnapshots',store,[sample({filledQty:10,filledAmount:105000,remainingQty:0})],'pension','ps-main','2026-09-01T07:00:00Z');
+ call('brokerKisImportOrderSnapshots',store,[sample({orderNo:'54321',filledQty:2,filledAmount:22000,remainingQty:0})],'irp','irp-main','2026-09-01T07:01:00Z');
+ const all=plain(call('brokerKisVisibleOrders',store,'all')),irp=plain(call('brokerKisVisibleOrders',store,'irp'));
+ assert.equal(all.length,2);assert.equal(irp.length,1);assert.equal(irp[0].amount,22000);assert.equal(irp[0].brokerOrder,true);
+ call('brokerKisMatchOrder',store,store.orders[1].orderKey,'ptx-existing','2026-09-01T08:00:00Z');
+ assert.equal(plain(call('brokerKisVisibleOrders',store,'all')).length,1,'원장과 매칭된 체결은 거래 화면에서 중복 표시하면 안 된다');
+}
+
+{
+ const store=call('brokerKisEmptyStore');
  call('brokerKisImportOrderSnapshots',store,[sample({filledQty:100,filledAmount:1000000,remainingQty:0,appKey:'DO_NOT_STORE',appSecret:'DO_NOT_STORE',token:'DO_NOT_STORE',cano:'DO_NOT_STORE'})],'pension','ps-main','2026-09-01T07:00:00Z');
  call('brokerKisLinkInstrument',store,{accountId:'ps-main',productCode:'ETF001',holdingId:'holding-1',linkedAt:'2026-09-01T07:01:00Z'});
  const draft=plain(call('brokerKisLedgerDraft',store,store.orders[0].orderKey));

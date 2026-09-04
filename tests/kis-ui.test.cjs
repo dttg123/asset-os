@@ -44,7 +44,8 @@ assert.doesNotMatch(html,/연결 인증 해제/);
 assert.equal((html.match(/data-kis-sync=/g)||[]).length,2);
 assert.equal((html.match(/data-kis-history=/g)||[]).length,2);
 assert.equal((html.match(/data-kis-history-start=/g)||[]).length,2);
-assert.match(html,/납입·매매·배당 원장에 자동으로 더하지 않습니다/);
+assert.match(html,/체결은 거래 화면의 읽기 전용 과거자료로 저장됩니다/);
+assert.match(html,/현재 잔고에 매매금액을 다시 더하지 않습니다/);
 assert.match(html,/31일 단위 체결/);
 assert.match(html,/실패해도 완료 구간 다음부터 이어받습니다/);
 

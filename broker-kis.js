@@ -112,6 +112,13 @@ function brokerKisLedgerDraft(store,orderKey){
  const order=(store?.orders||[]).find(x=>x.orderKey===orderKey);if(!order||!['buy','sell'].includes(order.side)||order.filledQty<=0)return null;const link=(store?.instrumentLinks||[]).find(x=>x.accountId===order.accountId&&x.productCode===order.productCode);if(!link)return null;
  return{type:order.side,accountId:order.accountId,holdingId:link.holdingId,date:order.orderDate,qty:order.filledQty,price:order.avgPrice,amount:0,fee:order.fee,tax:order.tax,setQty:0,setAvg:0,note:'KIS 체결 가져오기',source:'kis',externalId:order.orderKey,brokerOrderKey:order.orderKey}
 }
+function brokerKisVisibleOrders(store,scope='all'){
+ const matched=new Set((store?.matches||[]).map(x=>x.orderKey)),safeScope=['all','pension','irp'].includes(scope)?scope:'all';
+ return(store?.orders||[]).filter(x=>x.filledQty>0&&!matched.has(x.orderKey)&&(safeScope==='all'||x.accountKind===safeScope)).map(x=>({
+  id:x.orderKey,brokerOrder:true,accountKind:x.accountKind,accountId:x.accountId,date:x.orderDate,time:x.orderTime,type:x.side,status:x.status,
+  productCode:x.productCode,productName:x.productName||x.productCode,qty:x.filledQty,price:x.avgPrice,amount:x.filledAmount,fee:x.fee,tax:x.tax,fetchedAt:x.fetchedAt
+ })).sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.time).localeCompare(String(a.time))||String(b.id).localeCompare(String(a.id)))
+}
 function brokerKisMatchOrder(store,orderKey,transactionId,matchedAt=new Date().toISOString()){
  const target=store||brokerKisEmptyStore();if(!(target.orders||[]).some(x=>x.orderKey===orderKey))return{ok:false,error:'ORDER_NOT_FOUND'};const list=Array.isArray(target.matches)?target.matches:(target.matches=[]),row={orderKey:brokerKisText(orderKey,900),transactionId:brokerKisText(transactionId,120),matchedAt:brokerKisTimestamp(matchedAt)};if(!row.transactionId)return{ok:false,error:'TRANSACTION_REQUIRED'};const index=list.findIndex(x=>x.orderKey===row.orderKey);if(index>=0)list[index]=row;else list.push(row);return{ok:true,replaced:index>=0,match:row}
 }
