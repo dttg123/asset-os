@@ -129,11 +129,11 @@ function queueCloudStatePush(){
 function cloudApplyRemoteEnvelope(payload){
  if(!cloudPayloadValid(payload))throw new Error('클라우드 데이터 형식 오류');
  const local=cloudLocalEnvelope();
- try{if(local.raw)localStorage.setItem(`${KEY}-pre-cloud-${Date.now()}`,local.raw)}catch{}
+ if(local.raw)storeRecoveryCopy(`${KEY}-pre-cloud-${Date.now()}`,local.raw);
  const normalized=normalizeState(clone(payload.data));
  state=normalized;lastPersistedState=clone(normalized);
  const savedAt=String(payload.savedAt||new Date().toISOString());
- localStorage.setItem(KEY,JSON.stringify({schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,savedAt,data:normalized}));
+ localStorage.setItem(KEY,JSON.stringify({schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,environment:APP_ENV,savedAt,data:normalized}));
  pruneRecoveryKeys();if(assetAppUnlocked)render();
 }
 
@@ -150,6 +150,7 @@ async function cloudReconcileState(force='auto'){
   const lt=local.stored?cloudEnvelopeTime(local.envelope):0,rt=cloudEnvelopeTime(remote);
   const localMeaningful=local.stored&&cloudDataHasMeaningfulRecords(local.envelope?.data),remoteMeaningful=cloudDataHasMeaningfulRecords(remote.data);
   if(!localMeaningful&&remoteMeaningful){cloudApplyRemoteEnvelope(remote);cloudSetStatus('클라우드에서 복원됨','ok',row.updated_at||remote.savedAt);return true}
+  if(localMeaningful&&!remoteMeaningful&&force!=='push'){cloudSetStatus('빈 클라우드 자료 보호됨','wait');return false}
   if(force==='pull'||!local.stored||rt>lt){cloudApplyRemoteEnvelope(remote);cloudSetStatus('클라우드에서 복원됨','ok',row.updated_at||remote.savedAt);toast('Supabase에서 최신 데이터를 복원했습니다.');return true}
   if(force==='push'||lt>rt){cloudSyncBusy=false;return await cloudPushState(local.envelope,true)}
   if(cloudEnvelopeFingerprint(local.envelope)!==cloudEnvelopeFingerprint(remote)){cloudSetStatus('동기화 충돌 확인 필요','wait');return false}

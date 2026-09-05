@@ -41,12 +41,12 @@ function qaBuildThirtyFiveYearState(){
    const amount=qaMonthlyContribution(target,i,count,year,month,skip),price=qaMarketPrice(year,month,100000);
    if(amount>0){
     account.transactions.push({id:`${id}-dep-${year}-${md}`,type:'deposit',date,tradeDate:date,sequence:++txSequence,amount,fee:0,tax:0,meta:{qaGenerated:true}});cash+=amount;paid+=amount;
-    const qty=Math.floor(cash/price*10000)/10000,cost=Math.round(qty*price);if(qty>0){account.transactions.push({id:`${id}-buy-${year}-${md}`,type:'buy',holdingId,date,tradeDate:date,sequence:++txSequence,qty,price,fee:0,tax:0,meta:{qaGenerated:true}});totalQty=Number((totalQty+qty).toFixed(4));cash-=cost}
+    const qty=Math.max(0,Math.floor((cash/price-0.0001)*10000)/10000),cost=qty*price;if(qty>0){account.transactions.push({id:`${id}-buy-${year}-${md}`,type:'buy',holdingId,date,tradeDate:date,sequence:++txSequence,qty,price,fee:0,tax:0,meta:{qaGenerated:true}});totalQty=Number((totalQty+qty).toFixed(4));cash-=cost}
    }
    if(month===12){const dividend=Math.round(totalQty*120),tax=Math.round(dividend*.154);account.transactions.push({id:`${id}-div-${year}`,type:'dividend',holdingId,date:`${year}-12-26`,tradeDate:`${year}-12-26`,sequence:++txSequence,amount:dividend,fee:0,tax,meta:{qaGenerated:true}});cash+=dividend-tax}
    if(month%3===0){const value=Math.round(totalQty*price);account.assetSnapshots.push({date:`${year}-${md}-28`,cost:paid,value,cash:Math.max(0,Math.round(cash)),totalValue:Math.max(0,Math.round(value+cash)),meta:{qaFixture:true,valueBasis:'securities',totalValueBasis:'securities_plus_cash',grain:'month'}})}
   }
-  if(end<=QA_END_YEAR){const price=qaMarketPrice(end,12,112000);account.transactions.push({id:`${id}-close-sell`,type:'sell',holdingId,date:`${end}-12-28`,tradeDate:`${end}-12-28`,sequence:++txSequence,qty:totalQty,price,fee:0,tax:0,meta:{qaGenerated:true}});cash+=Math.round(totalQty*price);account.assetSnapshots.push({date:`${end}-12-31`,cost:paid,value:0,cash:Math.round(cash),totalValue:Math.round(cash),meta:{qaFixture:true,valueBasis:'securities',totalValueBasis:'securities_plus_cash',grain:'month'}})}
+  if(end<=QA_END_YEAR){const price=qaMarketPrice(end,12,112000);account.transactions.push({id:`${id}-close-sell`,type:'sell',holdingId,date:`${end}-12-28`,tradeDate:`${end}-12-28`,sequence:++txSequence,qty:totalQty,price,fee:0,tax:0,meta:{qaGenerated:true}});cash+=totalQty*price;const settlement=Math.round(cash);account.cashSnapshot=settlement;account.holdings[0].snapshotQty=0;account.holdings[0].snapshotAvg=0;account.holdings[0].snapshotPrice=price;account.maturity={decision:'close',actualSettlement:settlement,actualReceived:settlement,actualTax:0};account.assetSnapshots.push({date:`${end}-12-31`,cost:paid,value:0,cash:settlement,totalValue:settlement,meta:{qaFixture:true,valueBasis:'securities',totalValueBasis:'securities_plus_cash',grain:'month'}})}
   isaAccounts.push(account)
  }
 
@@ -92,7 +92,7 @@ function qaBuildThirtyFiveYearState(){
  return normalized
 }
 
-function qaDatasetStats(){const model=integratedFinancialModel(),isa=state.accounts.reduce((n,a)=>n+(a.transactions||[]).length,0),pension=(state.pension.transactions||[]).length,integrated=(state.integrated.ledger||[]).length;return{isa,pension,integrated,total:isa+pension+integrated,totalAssets:model.totalAssets,totalDebt:model.totalDebt,netAssets:model.netAssets,cash:model.cash,isaAccounts:state.accounts.length,months:state.system.qaDataset?.months||0}}
+function qaDatasetStats(){const model=integratedFinancialModel(),isa=state.accounts.reduce((n,a)=>n+(a.transactions||[]).length,0),pension=(state.pension.transactions||[]).length,integrated=(state.integrated.ledger||[]).length,round=n=>Math.round(Number(n)*100)/100;return{isa,pension,integrated,total:isa+pension+integrated,totalAssets:round(model.totalAssets),totalDebt:round(model.totalDebt),netAssets:round(model.netAssets),cash:round(model.cash),isaAccounts:state.accounts.length,months:state.system.qaDataset?.months||0}}
 function qaRenderStats(){const box=$('#qaStats');if(!box)return;const s=qaDatasetStats();box.textContent=`2026–2060 · ${nf.format(s.total)}건 · 순자산 ${displayWon(s.netAssets)} · 대출 ${displayWon(s.totalDebt)}`}
 function qaGenerateThirtyFiveYears(){if(!QA_MODE)return false;state=qaBuildThirtyFiveYearState();lastPersistedState=clone(state);const ok=persist(false);render();qaRenderStats();toast(ok?'QA 35년 실사용 데이터를 만들었습니다.':'QA 데이터 저장에 실패했습니다.');return ok}
 function qaResetData(){if(!QA_MODE)return false;localStorage.removeItem(QA_STORAGE_KEY);state=normalizeState(seed);lastPersistedState=clone(state);persist(false);render();qaRenderStats();toast('QA 데이터만 초기화했습니다.');return true}

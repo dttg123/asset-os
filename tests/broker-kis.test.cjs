@@ -153,4 +153,17 @@ function sample(overrides={}){
  assert.equal(plain(call('normalizeBrokerKis',plain(store))).orders.length,1000);
 }
 
+{
+ const store=call('brokerKisEmptyStore');
+ call('brokerKisImportOrderSnapshots',store,[sample({filledQty:100,filledAmount:1000000,remainingQty:0})],'pension','ps-main','2026-09-02T09:00:00Z');
+ const stale=plain(call('brokerKisImportOrderSnapshots',store,[sample({filledQty:30,filledAmount:300000,remainingQty:70})],'pension','ps-main','2026-09-02T08:00:00Z'));
+ assert.equal(stale.skipped,1);assert.equal(store.orders[0].filledQty,100,'늦게 도착한 과거 응답이 최신 체결을 되돌리면 안 된다');
+ call('brokerKisLinkInstrument',store,{accountId:'ps-main',productCode:'ETF001',holdingId:'holding-1',linkedAt:'2026-09-02T09:01:00Z'});
+ call('brokerKisMatchOrder',store,store.orders[0].orderKey,'ptx-partial','2026-09-02T09:02:00Z',30);
+ const visible=plain(call('brokerKisVisibleOrders',store,'pension')),draft=plain(call('brokerKisLedgerDraft',store,store.orders[0].orderKey));
+ assert.equal(visible[0].qty,70);assert.equal(draft.qty,70,'부분만 원장 반영한 주문은 남은 체결수량을 계속 보여야 한다');
+ const bad=plain(call('brokerKisImportOrderSnapshots',store,[sample()],'unknown','ps-main','not-a-time'));
+ assert.equal(bad.error,'KIS_RESPONSE_METADATA_INVALID');assert.equal(store.orders.length,1);
+}
+
 console.log('broker-kis tests: PASS');

@@ -4,7 +4,7 @@ function holdingPositionValue(h,qty=h?.qty,price=h?.currentPrice){return (Number
 function holdingCostValue(h,qty=h?.qty,price=h?.avgPrice){return holdingPositionValue(h,qty,price)}
 function holdingQuantityText(h,qty=h?.qty){return h?.quantityUnit==='face'?`${num(qty)}원 액면`:`${num(qty)}주`}
 function transactionPositionValue(h,qty,price){return holdingPositionValue(h,qty,price)}
-function replay(account,candidateTxs=null){
+function replay(account,candidateTxs=null,includeCentral=true){
  if(!account)return {holdings:[],cash:0,valid:true,error:null,errorTxId:null,realized:0,income:0,fees:0,taxes:0,facts:new Map()};
  if(isPastAccount(account)){
   const holdings=account.holdings.map(h=>{const row={...h,qty:h.snapshotQty??h.baselineQty??0,avgPrice:h.snapshotAvg??h.baselineAvg??0,currentPrice:h.snapshotPrice??h.currentPrice??0,realized:0};return{...row,marketValue:holdingPositionValue(row)}});
@@ -13,7 +13,7 @@ function replay(account,candidateTxs=null){
  const baseDate=account.baseline?.date||account.baselineDate||account.openedAt||'0000-01-01';
  const map=new Map(account.holdings.map(h=>[h.id,{...h,qty:Number(h.baselineQty)||0,avgPrice:Number(h.baselineAvg)||0,currentPrice:Number(h.currentPrice)||0,realized:0}]));
  let cash=Number(account.baseline?.cash??account.baselineCash??account.cashOpening)||0,error=null,errorTxId=null,realized=0,income=0,fees=0,taxes=0;const facts=new Map();
- const baseTxs=candidateTxs||account.transactions,centralRows=centralIsaReplayRows(account);const txs=sortTxs([...baseTxs,...centralRows]).filter(t=>t.status!=='cancelled');
+ const baseTxs=candidateTxs||account.transactions,centralRows=includeCentral?centralIsaReplayRows(account):[];const txs=sortTxs([...baseTxs,...centralRows]).filter(t=>t.status!=='cancelled');
  const byId=new Map(txs.map(t=>[t.id,t])),processed=new Set(),reversedBySource=new Map(),tolerance=Number(account.reconciliationTolerance||10);
  for(const tx of txs){
   const dateError=isaTransactionDateError(account,txDate(tx));if(dateError){error=dateError;errorTxId=tx.id;break}
@@ -55,9 +55,10 @@ function replay(account,candidateTxs=null){
  const holdings=[...map.values()].map(h=>({...h,lifecycleStatus:h.qty>0?'active':'archived',marketValue:holdingPositionValue(h)}));
  return {holdings,cash,valid:!error,error,errorTxId,realized,income,fees,taxes,facts}
 }
+function auditReplay(account,candidateTxs=null){return isPastAccount(account)?replay({...account,status:'active'},candidateTxs||account.transactions,false):replay(account,candidateTxs)}
 function accountMetrics(account){
  const r=replay(account),holdingsValue=r.holdings.reduce((sum,h)=>sum+h.marketValue,0),cost=r.holdings.reduce((sum,h)=>sum+holdingCostValue(h),0),unrealized=holdingsValue-cost;
- if(isPastAccount(account)){const value=account.maturity?.actualSettlement||holdingsValue+r.cash;return {...r,value,holdingsValue,cost,unrealized,profit:unrealized+r.realized,rate:cost?(unrealized+r.realized)/cost*100:0,totalReturn:unrealized+r.realized+r.income}}
+ if(isPastAccount(account)){const value=account.maturity?.actualSettlement??holdingsValue+r.cash;return {...r,value,holdingsValue,cost,unrealized,profit:unrealized+r.realized,rate:cost?(unrealized+r.realized)/cost*100:0,totalReturn:unrealized+r.realized+r.income}}
  const value=holdingsValue+r.cash,profit=unrealized+r.realized;return {...r,value,holdingsValue,cost,unrealized,profit,rate:cost?profit/cost*100:0,totalReturn:profit+r.income}
 }
 function taxableBreakdown(a){const b={gains:Number(a.taxBreakdown?.gains)||0,losses:Number(a.taxBreakdown?.losses)||0,dividends:Number(a.taxBreakdown?.dividends)||0,expenses:Number(a.taxBreakdown?.expenses)||0};const r=replay(a);for(const t of sortTxs(a.transactions||[])){if(t.status==='cancelled'||txDate(t)<(a.baselineDate||a.openedAt||''))continue;const f=r.facts.get(t.id)||{};if(t.type==='sell'&&Number.isFinite(f.realized)){if(f.realized>=0)b.gains+=f.realized;else b.losses+=f.realized}if(['dividend','distribution','interest'].includes(t.type)){b.dividends+=Number(f.grossAmount??t.amount)||0;b.expenses-=Number(t.fee||0)+Number(t.tax||0)}}return b}
@@ -71,7 +72,7 @@ function periodEndDate(key,period){if(period==='month'){const [y,m]=String(key).
 function investmentPrincipalAt(a,endDate){if(isPastAccount(a))return accountMetrics(a).cost;const txs=(a.transactions||[]).filter(t=>txDate(t)<=endDate),r=replay(a,txs);return r.valid?r.holdings.reduce((sum,h)=>sum+holdingCostValue(h),0):0}
 function dividendYieldFor(a,key,period,amount){const end=periodEndDate(key,period),principal=investmentPrincipalAt(a,end),rate=principal>0?(Number(amount)||0)/principal*100:null;return{principal,rate}}
 function consistencyIssues(a){
- const issues=[],tol=Number(a.reconciliationTolerance||10),r=replay(a);
+ const issues=[],tol=Number(a.reconciliationTolerance||10),r=auditReplay(a);
  const push=(code,title,detail,severity='medium',transactionId='')=>issues.push({id:`${a.id}-${code}-${transactionId||issues.length}`,accountId:a.id,transactionId,title,detail,severity});
  if(!r.valid)push('ledger',r.error||'거래원장 계산 오류','해당 거래와 그 이후 계산을 확인해 주세요.','high',r.errorTxId||'');
  else if(r.cash<-tol)push('cash-negative','계좌 현금이 음수입니다',`${won(Math.abs(r.cash))} 부족합니다. 누락된 입금 또는 매수 기록을 확인해 주세요.`,'high');

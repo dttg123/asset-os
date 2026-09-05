@@ -3,10 +3,10 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 
 let source=fs.readFileSync('supabase/functions/kis-read/core.js','utf8').replaceAll('export function ','function ');
-source+='\nthis.api={normalizeOrders,normalizeBalance,normalizeQuote,normalizeRights,safeRange};';
+source+='\nthis.api={normalizeOrders,normalizeBalance,normalizeQuote,normalizeRights,safeRange,koreaDate};';
 const context=vm.createContext({Date,Number,String,Math,RegExp,Array,Object,Error});
 new vm.Script(source).runInContext(context);
-const {normalizeOrders,normalizeBalance,normalizeQuote,normalizeRights,safeRange}=context.api;
+const {normalizeOrders,normalizeBalance,normalizeQuote,normalizeRights,safeRange,koreaDate}=context.api;
 
 const orders=normalizeOrders([{ord_dt:'20260902',ord_tmd:'101500',ord_gno_brno:'1',odno:'2',pdno:'A',prdt_name:'ETF',sll_buy_dvsn_cd:'02',ord_qty:'10',tot_ccld_qty:'3',tot_ccld_amt:'3000',nccs_qty:'7'}]);
 assert.equal(orders.length,1);
@@ -23,6 +23,7 @@ assert.equal(balance.holdings.length,1);
 assert.equal(balance.cashDetail.depositCash,60);
 assert.equal(balance.cashDetail.todayBuyAmount,40);
 assert.equal(balance.cashDetail.availableCash,20);
+assert.equal(koreaDate('2026-09-01T16:00:00Z'),'2026-09-02','한국 자정 전후 응답은 UTC 날짜가 아니라 한국 영업일로 저장해야 한다');
 
 const rights=normalizeRights([{rght_type_cd:'32',bass_dt:'20260801',cash_dfrm_dt:'20260815',pdno:'A',prdt_name:'ETF',last_alct_amt:'50',tax_amt:'5'}]);
 assert.equal(rights.length,1);

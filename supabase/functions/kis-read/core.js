@@ -18,6 +18,11 @@ export function compactDate(value) {
     : ''
 }
 
+export function koreaDate(value) {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '' : new Date(date.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+}
+
 function pick(row, names) {
   for (const name of names) {
     if (row?.[name] !== undefined && row?.[name] !== null && String(row[name]).trim() !== '') {
@@ -114,7 +119,7 @@ export function normalizeBalance(body, fetchedAt = new Date().toISOString()) {
   ])) || cash + securitiesValue
 
   return {
-    date: cleanText(fetchedAt, 10),
+    date: koreaDate(fetchedAt),
     cash,
     cashDetail: { depositCash, settledCash, nextDayCash, d2Cash, todayBuyAmount, todaySellAmount, availableCash },
     securitiesValue,

@@ -60,10 +60,10 @@ assert.equal(limitedFund.holdings.length,1,'API가 실제 반환한 ETF만 종�
 run('state.pension.accounts.push({id:"irp-main",kind:"irp",name:"IRP",provider:"한국투자증권",status:"active",openedAt:"2026-01-01",closedAt:"",policyId:state.policies.irp.activePolicyId,policyHistory:[]});state.integrated.ledger.push({id:"opening-irp-test",date:"2026-08-01",type:"externalAssetIn",amount:3380000,toAccountId:"irp-link",sequence:2,createdAt:"2026-08-01T00:00:00.002",meta:{}});state.integrated=normalizeIntegrated(state.integrated)');
 run('brokerKisImportBalanceSnapshot(state.brokerKis,{cash:0,securitiesValue:0,totalValue:0,holdings:[]},"irp","irp-main","2026-09-01T08:02:00Z")');
 const zeroLimited=plain(run('({model:integratedFinancialModel(),detail:pensionAssetMetrics("irp")})'));
-assert.equal(zeroLimited.model.irp,3380000,'종목 제한 API의 0원이 기존 연결 원장 잔액을 지우면 안 된다');
-assert.equal(zeroLimited.model.currentSources.irp,'linked');
-assert.equal(zeroLimited.detail.value,3380000);
-assert.equal(zeroLimited.detail.cash,3380000,'상세 화면에는 연결 납입액이 현금 구성으로 남아야 한다');
+assert.equal(zeroLimited.model.irp,0,'성공한 권위 잔고 응답의 0원은 실제 빈 계좌로 반영해야 한다');
+assert.equal(zeroLimited.model.currentSources.irp,'kis');
+assert.equal(zeroLimited.detail.value,0);
+assert.equal(zeroLimited.detail.cash,0,'권위 응답이 0원이면 과거 연결 잔액을 계속 표시하면 안 된다');
 assert.equal(zeroLimited.detail.holdings.length,0,'API가 반환하지 않은 종목명을 임의 생성하면 안 된다');
 
 run('brokerKisImportBalanceSnapshot(state.brokerKis,{cash:260574,cashDetail:{depositCash:260574,settledCash:20574,nextDayCash:20574,todayBuyAmount:240000,availableCash:20574},securitiesValue:6877500,totalValue:7138074,holdings:[{productCode:"A483290",productName:"KODEX 미국AI테크TOP10",quantity:321,avgPrice:16633,currentPrice:15025,marketValue:4823025,profitLoss:-516545},{productCode:"A483280",productName:"IBK 미국AI TOP10국채혼합50",quantity:207,avgPrice:10305,currentPrice:9925,marketValue:2054475,profitLoss:-78546}]} ,"irp","irp-main","2026-09-04T09:20:00Z")');

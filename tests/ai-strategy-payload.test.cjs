@@ -32,6 +32,7 @@ const context={
   URL:{},
   document:{},
   localYmd:()=>'',
+  businessYear:()=>2026,
   settingPersisted:{},
   persist:()=>true,
   toast:()=>{},

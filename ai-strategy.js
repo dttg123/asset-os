@@ -25,7 +25,7 @@ function aiPurposeLabel(value){return value==='rebalance'?'리밸런싱':value==
 function aiFundingLabel(value){return value==='account_cash'?'계좌 안 현금':value==='next_contribution'?'다음 납입금':'새로 넣을 돈'}
 
 function aiIsaAccountExport(account,index){
- const metrics=accountMetrics(account),holdingRefs=new Map(),currentPolicy=policy('isa',account),year=String(new Date().getFullYear()),paidThisYear=annualContributionTotal(account);
+ const metrics=accountMetrics(account),holdingRefs=new Map(),currentPolicy=policy('isa',account),year=String(businessYear()),paidThisYear=annualContributionTotal(account);
  const holdings=(metrics.holdings||[]).map((holding,holdingIndex)=>{
   const source=(account.holdings||[]).find(row=>row.id===holding.id)||holding,ref=`ISA${index+1}-H${holdingIndex+1}`;
   holdingRefs.set(String(holding.id||''),ref);
@@ -48,7 +48,7 @@ function aiPensionSection(kind){
  const contributions=aiRecentRows(centralPensionContributionRows().filter(row=>row.kind===kind),120).map(row=>({date:row.date,amount:Number(row.amount)||0,type:row.type||'contribution'}));
  const brokerOrders=aiRecentRows(brokerKisVisibleOrders(state.brokerKis,kind),240).map(order=>({date:order.date||order.orderDate,time:order.time||order.orderTime||'',type:order.type||order.side,productCode:order.productCode||'',productName:order.productName||'',quantity:Number(order.qty??order.quantity)||0,price:Number(order.price)||0,amount:Number(order.amount)||0,status:order.status||''}));
  const income=aiRecentRows(pensionIncomeRecords(kind),240).map(row=>({date:row.date,type:row.type,amount:Number(row.amount)||0,label:row.label||''}));
- const assetSnapshots=aiRecentRows((pensionStore().assetSnapshots||[]).map(row=>({date:row.date,values:kind==='irp'?(row.irp||{}):(row.pension||{}),grain:row.meta?.grain||'month',source:row.meta?.source?.[kind]||'unknown'})),120),year=String(new Date().getFullYear()),yearPaid=contributions.filter(row=>String(row.date).startsWith(year)).reduce((sum,row)=>sum+(Number(row.amount)||0),0),currentPolicy=policy(kind==='irp'?'irp':'pension');
+ const assetSnapshots=aiRecentRows((pensionStore().assetSnapshots||[]).map(row=>({date:row.date,values:kind==='irp'?(row.irp||{}):(row.pension||{}),grain:row.meta?.grain||'month',source:row.meta?.source?.[kind]||'unknown'})),120),year=String(businessYear()),yearPaid=contributions.filter(row=>String(row.date).startsWith(year)).reduce((sum,row)=>sum+(Number(row.amount)||0),0),currentPolicy=policy(kind==='irp'?'irp':'pension');
  return{accounts,combined:{value:Math.round(metrics.value),cost:Math.round(metrics.cost),cash:Math.round(metrics.cash),profit:Math.round(metrics.profit),returnRate:Number(metrics.rate)||0},contribution:{year,paid:Math.round(yearPaid)},policy:{name:currentPolicy.name||'',verifiedAt:currentPolicy.verifiedAt||'',annualContributionLimit:Number(currentPolicy.annualContributionLimit)||0,annualTaxCreditLimit:Number(currentPolicy.annualTaxCreditLimit)||0,combinedTaxCreditLimit:Number(currentPolicy.combinedTaxCreditLimit)||0,taxCreditRate:Number(currentPolicy.taxCreditRate)||0,riskyAssetLimit:Number(currentPolicy.riskyAssetLimit)||0},contributions,transactions,brokerOrders,income,assetSnapshots}
 }
 

@@ -14,7 +14,7 @@ assert.equal(run('QA_MODE'),true);assert.equal(run('KEY'),'asset-os-qa-v1');asse
 assert.equal(run('daysUntil("2061-12-31")'),365,'QA D-day must use the simulated app date');
 run('state=qaBuildThirtyFiveYearState();lastPersistedState=clone(state)');
 const stats=plain(run('qaDatasetStats()'));
-assert.deepEqual(stats,{isa:872,pension:907,integrated:5977,total:7756,totalAssets:1375710850.87,totalDebt:87400124,netAssets:1288310726.87,cash:529654229,isaAccounts:12,months:420});
+assert.deepEqual(stats,{isa:872,pension:907,integrated:5977,total:7756,totalAssets:1375710853.59,totalDebt:87400124,netAssets:1288310729.59,cash:529654229,isaAccounts:12,months:420});
 assert.deepEqual(plain(run('integratedIssues()')),[]);assert.deepEqual(plain(run('pensionTransactionIssues()')),[]);assert.deepEqual(plain(run('allIsaIssues()')),[]);assert.deepEqual(plain(run('brokerKisIssues(state.brokerKis)')),[]);assert.deepEqual(plain(run('systemIntegrityIssues()')),[]);
 
 // ISA: 3년 주기 12계좌, 지정 7개년 5월 스킵과 6월 보충, 계좌별 목표 납입액 보존.
