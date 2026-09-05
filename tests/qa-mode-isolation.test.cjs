@@ -6,7 +6,7 @@ let networkClients=0,fetches=0;
 const document={querySelector:()=>null,querySelectorAll:()=>[],documentElement:{dataset:{},classList:{add(){},remove(){}},scrollHeight:0},body:{dataset:{}}};
 const window={addEventListener(){},removeEventListener(){},scrollTo(){},isSecureContext:false,supabase:{createClient(){networkClients++;throw new Error('QA must not initialize Supabase')}}};
 const context=vm.createContext({console,Date,Set,Map,URL,Blob,File:global.File,TextEncoder,TextDecoder,Uint8Array,DataView,ArrayBuffer,Intl,Math,JSON,Number,String,Boolean,Object,RegExp,Promise,encodeURIComponent,decodeURIComponent,localStorage,document,window,navigator:{},location:{search:'?qa=1',hash:'',pathname:'/asset-os/'},history:{replaceState(){}},fetch:async()=>{fetches++;throw new Error('QA network blocked')},requestAnimationFrame:fn=>fn(),setTimeout:()=>0,clearTimeout(){},toast(){} });
-const files=['core-config.js','broker-kis.js','broker-kis-client.js','data-defaults.js','integrated-ledger-engine.js','integrated-schedule-engine.js','integrated-finance-engine.js','store-migrations.js','store-state.js','core-accessors.js','core-visual-utils.js','pension-contributions.js','pension-ledger.js','pension-assets.js','isa-validation.js','isa-ledger.js','integrated-forms.js','qa-mode.js','supabase-sync.js'];
+const files=['core-config.js','broker-kis.js','broker-kis-client.js','data-defaults.js','integrated-ledger-engine.js','integrated-schedule-engine.js','integrated-finance-engine.js','store-migrations.js','store-state.js','core-accessors.js','core-visual-utils.js','pension-contributions.js','pension-ledger.js','chart-asset-analysis.js','pension-assets.js','isa-validation.js','isa-ledger.js','integrated-forms.js','qa-mode.js','supabase-sync.js'];
 for(const file of files)vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),context,{filename:file});
 const run=(code,args=[])=>vm.runInContext(code,Object.assign(context,{__args:args})),plain=x=>JSON.parse(JSON.stringify(x)),close=(actual,expected,tolerance=.01)=>assert.ok(Math.abs(actual-expected)<=tolerance,`${actual} != ${expected}`);
 
@@ -34,6 +34,9 @@ assert.equal(run('state.pension.transactions.filter(t=>t.accountId==="qa-pension
 assert.equal(run('state.pension.transactions.filter(t=>t.accountId==="qa-irp"&&t.type==="buy").length'),420);
 assert.equal(run('state.pension.transactions.filter(t=>t.accountId==="qa-pension"&&t.type==="buy"&&/-07-25$/.test(t.date)&&QA_PENSION_SKIP_YEARS.has(Number(t.date.slice(0,4)))).length'),0);
 assert.equal(run('state.pension.transactions.filter(t=>t.accountId==="qa-pension"&&t.type==="buy"&&t.note==="전월 미납 보충매수").length'),3);
+assert.deepEqual(plain(run('(({year,ordinaryPs,ordinaryIrp,total})=>({year,ordinaryPs,ordinaryIrp,total}))(pensionSummary())')),{year:'2060',ordinaryPs:6000000,ordinaryIrp:3000000,total:9000000});
+assert.deepEqual(plain(run('(({currentAge,years})=>({currentAge,years}))(pensionProjection())')),{currentAge:65,years:0});
+assert.equal(run('pensionIncomeSummary().year'),'2060');
 
 // 생활 원장: 월급 2회 휴직, 카드/보험/소비, 대출 원리금. 전 기간 현금·부채 음수 없음.
 assert.equal(run('state.integrated.ledger.filter(t=>t.category==="월급").length'),418);
