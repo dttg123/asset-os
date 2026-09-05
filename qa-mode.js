@@ -12,9 +12,9 @@ function qaMarketPrice(year,month,base=100000){
  return qaRound(base*trend*wave*shock,100)
 }
 function qaMonthlyContribution(total,index,count,year,month,skip){
- const base=Math.floor(total/count);if(skip)return 0;
+ const years=Math.ceil(count/12),yearIndex=Math.floor(index/12),monthsInYear=Math.min(12,count-yearIndex*12),yearBase=Math.floor(total/years),yearTarget=yearBase+(yearIndex===years-1?total-yearBase*years:0),base=Math.floor(yearTarget/monthsInYear);if(skip)return 0;
  let amount=base;if(QA_ISA_SKIP_YEARS.has(year)&&month===6)amount+=base;
- if(index===count-1)amount+=total-(base*count);
+ if(month===12||index===count-1)amount+=yearTarget-(base*monthsInYear);
  return amount
 }
 
