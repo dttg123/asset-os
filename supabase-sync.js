@@ -4,6 +4,7 @@ const SUPABASE_PUBLISHABLE_KEY='sb_publishable_mZa3v8Ekw08_5tHQMNSPWQ_uMcioPDM';
 const SUPABASE_STATE_TABLE='asset_os_state';
 const SUPABASE_REDIRECT_URL='https://dttg123.github.io/asset-os/';
 let assetSupabaseClient=null,assetSupabaseSession=null,cloudSyncTimer=0,cloudSyncBusy=false,cloudPushPending=false,cloudSyncStatus='로그인 필요',cloudSyncTone='wait',cloudLastSyncAt='',assetAppUnlocked=false;
+const qaCloudBlocked=()=>typeof QA_MODE!=='undefined'&&QA_MODE;
 
 function cloudAuthCallbackFailure(){
  const sources=[new URLSearchParams(String(location.search||'').replace(/^\?/,'')),new URLSearchParams(String(location.hash||'').replace(/^#/,''))];
@@ -23,10 +24,11 @@ function assetAuthGateState(mode,message=''){
  else{button.disabled=false;button.textContent='다시 확인';status.textContent=message||'연결을 확인하지 못했습니다.'}
 }
 function assetAuthGateUnlock(){if(assetAppUnlocked)return;assetAppUnlocked=true;const gate=$('#assetAuthGate');if(gate)gate.hidden=true;document.documentElement.classList.remove('asset-auth-locked');if(!location.hash)location.hash='#/home';render();refreshCloudProfileUI();if(state.system?.loadWarning)setTimeout(()=>toast('저장 데이터 확인이 필요합니다.'),100)}
-async function startAssetAuthenticatedApp(){const callbackFailure=cloudAuthCallbackFailure();if(callbackFailure)return assetAuthGateState('error',callbackFailure);assetAuthGateState('loading');const initialized=await initSupabaseCloud();if(!initialized)return assetAuthGateState('error','Supabase 연결을 확인한 뒤 다시 시도해 주세요.');if(!cloudUser())return assetAuthGateState('login');const ok=await cloudReconcileState();if(ok)assetAuthGateUnlock();else assetAuthGateState('error','클라우드 원장을 확인하지 못했습니다. 네트워크를 확인해 주세요.')}
+async function startAssetAuthenticatedApp(){if(qaCloudBlocked()){cloudSetStatus('QA 로컬 전용','ok');assetAuthGateUnlock();return true}const callbackFailure=cloudAuthCallbackFailure();if(callbackFailure)return assetAuthGateState('error',callbackFailure);assetAuthGateState('loading');const initialized=await initSupabaseCloud();if(!initialized)return assetAuthGateState('error','Supabase 연결을 확인한 뒤 다시 시도해 주세요.');if(!cloudUser())return assetAuthGateState('login');const ok=await cloudReconcileState();if(ok)assetAuthGateUnlock();else assetAuthGateState('error','클라우드 원장을 확인하지 못했습니다. 네트워크를 확인해 주세요.')}
 
 function cloudUser(){return assetSupabaseSession?.user||null}
 function syncBrokerKisSessionFromCloud(session=assetSupabaseSession){
+ if(qaCloudBlocked())return false;
  if(!session?.access_token||typeof brokerKisClient==='undefined'||typeof brokerKisClient.adoptSession!=='function')return false;
  return brokerKisClient.adoptSession(session)?.ok===true
 }
@@ -48,6 +50,7 @@ function cloudTableMissing(error){const msg=String(error?.message||'');return er
 
 function refreshCloudProfileUI(){
  const u=cloudUser(),menu=$('#cloudAuthMenuStatus'),avatar=$('#profileAvatar'),name=$('#profileName'),sub=$('#profileSub'),diag=$('#cloudDiagStatus');
+ if(qaCloudBlocked()){if(menu)menu.textContent='QA 로컬 전용 · 동기화 차단';if(avatar)avatar.textContent='Q';if(name)name.textContent='QA 테스트 사용자';if(sub)sub.textContent='운영 데이터와 완전히 분리된 브라우저 저장소';if(diag){diag.textContent='차단됨';diag.className='diagnostic-value ok'}if($('#cloudSheet')?.classList.contains('open'))renderCloudAccountSheet();return}
  if(menu)menu.textContent=u?`${cloudUserEmail()||cloudUserLabel()} · ${cloudSyncStatus}`:'Google 로그인 · Supabase 자동 복원';
  if(avatar)avatar.textContent=u?(cloudUserLabel().trim().charAt(0)||'G').toUpperCase():'A';
  if(name)name.textContent=u?cloudUserLabel():'개인 자산 시스템';
@@ -57,6 +60,7 @@ function refreshCloudProfileUI(){
 }
 
 async function initSupabaseCloud(){
+ if(qaCloudBlocked())return false;
  if(assetSupabaseClient)return true;
  if(!window.supabase?.createClient){cloudSetStatus('클라우드 모듈 로드 실패','wait');return false}
  try{
@@ -70,6 +74,7 @@ async function initSupabaseCloud(){
 }
 
 async function handleCloudAuthState(event,session){
+ if(qaCloudBlocked())return false;
  assetSupabaseSession=session||null;if(session)syncBrokerKisSessionFromCloud(session);refreshCloudProfileUI();
  if(!session){cloudSetStatus('로그인 필요','wait');assetAppUnlocked=false;assetAuthGateState('login');return false}
  if(['INITIAL_SESSION','SIGNED_IN','TOKEN_REFRESHED','USER_UPDATED'].includes(String(event||''))){
@@ -80,6 +85,7 @@ async function handleCloudAuthState(event,session){
 }
 
 async function signInAssetGoogle(){
+ if(qaCloudBlocked()){toast('QA 모드에서는 Google 로그인이 차단됩니다.');return false}
  if(!assetSupabaseClient&&!(await initSupabaseCloud()))return false;
  cloudSetStatus('Google 로그인 이동 중','wait');
  const {error}=await assetSupabaseClient.auth.signInWithOAuth({provider:'google',options:{redirectTo:SUPABASE_REDIRECT_URL}});
@@ -87,6 +93,7 @@ async function signInAssetGoogle(){
  return true
 }
 async function signOutAssetGoogle(){
+ if(qaCloudBlocked())return false;
  if(!assetSupabaseClient)return false;
  const {error}=await assetSupabaseClient.auth.signOut();
  if(error){toast('로그아웃에 실패했습니다.');return false}
@@ -94,11 +101,13 @@ async function signOutAssetGoogle(){
 }
 
 async function cloudFetchStateRow(){
+ if(qaCloudBlocked())return{row:null,error:{message:'QA_CLOUD_BLOCKED'}};
  const u=cloudUser();if(!u)return{row:null,error:null};
  const {data,error}=await assetSupabaseClient.from(SUPABASE_STATE_TABLE).select('payload,updated_at').eq('user_id',u.id).maybeSingle();
  return{row:data||null,error:error||null}
 }
 async function cloudPushState(envelope=cloudCurrentEnvelope(),quiet=false){
+ if(qaCloudBlocked())return false;
  if(!cloudUser()||!assetSupabaseClient)return false;if(cloudSyncBusy){cloudPushPending=true;return false}
  cloudPushPending=false;
  cloudSyncBusy=true;
@@ -111,6 +120,7 @@ async function cloudPushState(envelope=cloudCurrentEnvelope(),quiet=false){
  }finally{cloudSyncBusy=false;if(cloudPushPending){clearTimeout(cloudSyncTimer);cloudSyncTimer=setTimeout(()=>cloudPushState(cloudCurrentEnvelope(),true).catch(()=>{}),250)}}
 }
 function queueCloudStatePush(){
+ if(qaCloudBlocked())return;
  if(!cloudUser()||!assetSupabaseClient)return;
  if(cloudSyncBusy){cloudPushPending=true;return}
  clearTimeout(cloudSyncTimer);cloudSyncTimer=setTimeout(()=>cloudPushState(cloudCurrentEnvelope(),true).catch(()=>{}),1200)
@@ -128,6 +138,7 @@ function cloudApplyRemoteEnvelope(payload){
 }
 
 async function cloudReconcileState(force='auto'){
+ if(qaCloudBlocked())return false;
  if(!cloudUser()||!assetSupabaseClient||cloudSyncBusy)return false;
  cloudSyncBusy=true;
  try{
@@ -149,6 +160,7 @@ async function cloudReconcileState(force='auto'){
 
 function renderCloudAccountSheet(){
  const body=$('#cloudBody');if(!body)return;
+ if(qaCloudBlocked()){body.innerHTML='<div class="cloud-account-card"><div class="cloud-account-icon">Q</div><div><strong>QA 로컬 전용</strong><small>Supabase 로그인·복원·업로드가 모두 차단되어 있습니다.</small></div></div><div class="cloud-note">이 화면의 데이터는 운영 원장과 다른 localStorage 키에만 저장됩니다.</div>';return}
  const u=cloudUser();
  if(!u){body.innerHTML=`<div class="cloud-account-card"><div class="cloud-account-icon">G</div><div><strong>Google 계정으로 연결</strong><small>로그인하면 Supabase에 원장을 보관하고 새 기기에서도 복원할 수 있습니다.</small></div></div><button id="cloudGoogleLogin" class="diagnostic-action cloud-primary">Google로 로그인</button><div class="cloud-note">로그인과 클라우드 원장 확인이 끝나야 Asset OS를 사용할 수 있습니다.</div>`;$('#cloudGoogleLogin').onclick=()=>signInAssetGoogle();return}
  body.innerHTML=`<div class="cloud-account-card"><div class="cloud-account-icon">${escapeHtml((cloudUserLabel().charAt(0)||'G').toUpperCase())}</div><div><strong>${escapeHtml(cloudUserLabel())}</strong><small>${escapeHtml(cloudUserEmail())}</small></div></div><div class="diagnostic-list cloud-diagnostics"><div class="diagnostic-row"><span class="diagnostic-copy"><strong>Supabase</strong><small>자동 로그인 · 기기간 원장 복원</small></span><span class="diagnostic-value ${cloudSyncTone==='ok'?'ok':'wait'}">${escapeHtml(cloudSyncStatus)}</span></div><div class="diagnostic-row"><span class="diagnostic-copy"><strong>최근 동기화</strong><small>localStorage와 클라우드 중 최신본 사용</small></span><span class="diagnostic-value">${escapeHtml(cloudTimeLabel(cloudLastSyncAt))}</span></div></div><div class="cloud-actions"><button id="cloudSyncNow" class="diagnostic-action cloud-primary">지금 동기화</button><button id="cloudLogout" class="diagnostic-action cloud-secondary">로그아웃</button></div><div class="cloud-note">로그아웃해도 이 기기의 Asset OS 데이터는 삭제되지 않습니다.</div>`;
