@@ -11,6 +11,7 @@ for(const file of files)vm.runInContext(fs.readFileSync(path.join(root,file),'ut
 const run=(code,args=[])=>vm.runInContext(code,Object.assign(context,{__args:args})),plain=x=>JSON.parse(JSON.stringify(x)),close=(actual,expected,tolerance=.01)=>assert.ok(Math.abs(actual-expected)<=tolerance,`${actual} != ${expected}`);
 
 assert.equal(run('QA_MODE'),true);assert.equal(run('KEY'),'asset-os-qa-v1');assert.equal(run('localYmd()'),'2060-12-31');
+assert.equal(run('daysUntil("2061-12-31")'),365,'QA D-day must use the simulated app date');
 run('state=qaBuildThirtyFiveYearState();lastPersistedState=clone(state)');
 const stats=plain(run('qaDatasetStats()'));
 assert.deepEqual(stats,{isa:872,pension:907,integrated:5977,total:7756,totalAssets:1375710850.87,totalDebt:87400124,netAssets:1288310726.87,cash:529654229,isaAccounts:12,months:420});
