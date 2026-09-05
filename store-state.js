@@ -34,7 +34,7 @@ let transactionDisplayLimit=50,dividendDisplayLimit=50,pensionTransactionDisplay
 let dividendAnalysisExpanded=false,pensionIncomeAnalysisExpanded=false,pensionAssetAnalysisExpanded=false,isaHoldingsExpanded=false,pensionHoldingsExpanded=false;
 function pruneRecoveryKeys(limit=2){try{const prefixes=[`${KEY}-pre-restore-`,`${KEY}-recovery-`,`${KEY}-pre-cloud-`],keys=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&prefixes.some(p=>k.startsWith(p)))keys.push(k)}keys.sort().reverse().slice(limit).forEach(k=>localStorage.removeItem(k))}catch{}}
 function loadState(){
- for(const key of [KEY,...LEGACY_KEYS]){
+ for(const key of (QA_MODE?[KEY]:[KEY,...LEGACY_KEYS])){
   const raw=localStorage.getItem(key);if(!raw)continue;
   try{const parsed=JSON.parse(raw);if(!parsed?.data||![4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20].includes(Number(parsed.schemaVersion)))throw new Error('지원하지 않는 저장 형식');const loaded=normalizeState(parsed.data);if(key!==KEY){loaded.system.loadWarning='';try{localStorage.setItem(KEY,JSON.stringify({schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,savedAt:new Date().toISOString(),data:loaded}))}catch{}}return loaded}
   catch(e){loadIssue=`저장 데이터 손상 또는 형식 오류: ${e.message}`;try{localStorage.setItem(`${KEY}-recovery-${Date.now()}`,raw);pruneRecoveryKeys()}catch{};continue}
