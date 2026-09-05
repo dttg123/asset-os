@@ -10,7 +10,7 @@ const files=['core-config.js','broker-kis.js','broker-kis-client.js','data-defau
 for(const file of files)vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),context,{filename:file});
 const run=(code,args=[])=>vm.runInContext(code,Object.assign(context,{__args:args})),plain=x=>JSON.parse(JSON.stringify(x)),close=(actual,expected,tolerance=.01)=>assert.ok(Math.abs(actual-expected)<=tolerance,`${actual} != ${expected}`);
 
-assert.equal(run('QA_MODE'),true);assert.equal(run('APP_VERSION'),'v0.5');assert.equal(run('KEY'),'asset-os-qa-v1');assert.equal(run('localYmd()'),'2060-12-31');
+assert.equal(run('QA_MODE'),true);assert.equal(run('APP_VERSION'),'v0.5');assert.equal(run('KEY'),'asset-os-qa-v0.5');assert.equal(run('localYmd()'),'2060-12-31');
 assert.equal(run('daysUntil("2061-12-31")'),365,'QA D-day must use the simulated app date');
 run('state=qaBuildThirtyFiveYearState();lastPersistedState=clone(state)');
 const stats=plain(run('qaDatasetStats()'));
@@ -75,7 +75,7 @@ assert.deepEqual(plain(run('({integrated:state.integrated.ledger.length,pension:
 assert.equal(run('qaRunMistakes()'),true);
 
 assert.equal(run('state.brokerKis.balanceSnapshots.length'),2);assert.equal(run('state.brokerKis.orders.length'),1);assert.equal(run('state.brokerKis.rights.length'),1);
-assert.equal(run('persist(false)'),true);assert.equal(storage.get('asset-os-v1.9.45-live'),'LIVE-SENTINEL','운영 키는 절대 변경 금지');assert.ok(storage.get('asset-os-qa-v1').length>100000);
+assert.equal(run('persist(false)'),true);assert.equal(storage.get('asset-os-v1.9.45-live'),'LIVE-SENTINEL','운영 키는 절대 변경 금지');assert.ok(storage.get('asset-os-qa-v0.5').length>100000);
 const before=plain(run('qaDatasetStats()'));run('state=loadState()');assert.deepEqual(plain(run('qaDatasetStats()')),before,'QA 새로고침 보존');
 assert.equal(run('brokerKisClient.configure(BROKER_KIS_PUBLIC_CONFIG).ok'),true);assert.equal(networkClients,0);assert.equal(run('brokerKisClient.consumeRedirect().error'),'QA_NETWORK_BLOCKED');
 (async()=>{assert.equal(await run('initSupabaseCloud()'),false);assert.equal(await run('cloudPushState()'),false);assert.equal(await run('cloudReconcileState()'),false);assert.equal(networkClients,0);assert.equal(fetches,0);console.log('QA mode isolation and 35-year real-user dataset tests: PASS')})().catch(error=>{console.error(error);process.exitCode=1});

@@ -2,7 +2,7 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const BROKER_KIS_PUBLIC_CONFIG=Object.freeze({projectUrl:'https://wjrzukoofscmvwicmoey.supabase.co',publishableKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indqcnp1a29vZnNjbXZ3aWNtb2V5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgxNTk0NjcsImV4cCI6MjEwMzczNTQ2N30.DEYttJ7nXU9Z67NY3WXzIjiVFHUEMQ04qPd3JktVYz4',functionName:'kis-read',redirectUrl:'https://dttg123.github.io/asset-os/'});
 const QA_MODE=typeof location!=='undefined'&&/(?:^|[?&])qa=1(?:&|$)/.test(String(location.search||''));
-const QA_STORAGE_KEY='asset-os-qa-v1',LIVE_STORAGE_KEY='asset-os-v1.9.45-live';
+const QA_STORAGE_KEY='asset-os-qa-v0.5',LIVE_STORAGE_KEY='asset-os-v1.9.45-live';
 const DEFAULT_FINANCE_DAY=25; const APP_VERSION='v0.5',APP_ENV=QA_MODE?'qa':'live',SCHEMA_VERSION=20,KEY=QA_MODE?QA_STORAGE_KEY:LIVE_STORAGE_KEY,LEGACY_KEYS=['asset-os-v1.9.22-central-schedule','asset-os-v1.9.20-real-finance','asset-os-v1.9.19-finance-linked','asset-os-v1.9.18-integrated-ui-refine','asset-os-v1.9.17-integrated-complete-stage1','asset-os-v1.9.16-integrated-ledger-stage2','asset-os-v1.9.9-pension-step2-analysis','asset-os-v1.9.7-pension-step2-precision','asset-os-v1.9.6-pension-step2-refine','asset-os-v1.9.5-pension-step2','asset-os-v1.9.4-pension-step1','asset-os-v1.9.3-pension-step1','asset-os-v1.9.2-isa-review','asset-os-v1.9.1-isa-review','asset-os-v1.9-isa-review','asset-os-v1.8-isa-review','asset-os-v1.7-isa-review','asset-os-v1.6.1-isa-review','asset-os-v1.6-isa-review','asset-os-v1.5-isa-review','asset-os-v1.4-isa-review','asset-os-v1.3-isa-review'];
 const nf=new Intl.NumberFormat('ko-KR');
 const clone=v=>JSON.parse(JSON.stringify(v));
