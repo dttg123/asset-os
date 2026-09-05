@@ -75,6 +75,7 @@ assert.deepEqual(plain(run('({integrated:state.integrated.ledger.length,pension:
 assert.equal(run('qaRunMistakes()'),true);
 
 assert.equal(run('state.brokerKis.balanceSnapshots.length'),2);assert.equal(run('state.brokerKis.orders.length'),1);assert.equal(run('state.brokerKis.rights.length'),1);
+assert.ok(run('stateEnvelopeBytes(stateEnvelopeJson())')<2000000,'구버전 QA와 함께 보관 가능한 크기로 압축되어야 함');
 assert.equal(run('persist(false)'),true);assert.equal(storage.get('asset-os-v1.9.45-live'),'LIVE-SENTINEL','운영 키는 절대 변경 금지');assert.ok(storage.get('asset-os-qa-v0.5').length>100000);
 const before=plain(run('qaDatasetStats()'));run('state=loadState()');assert.deepEqual(plain(run('qaDatasetStats()')),before,'QA 새로고침 보존');
 assert.equal(run('brokerKisClient.configure(BROKER_KIS_PUBLIC_CONFIG).ok'),true);assert.equal(networkClients,0);assert.equal(run('brokerKisClient.consumeRedirect().error'),'QA_NETWORK_BLOCKED');

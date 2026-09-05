@@ -3,6 +3,18 @@
 const QA_START_YEAR=2026,QA_END_YEAR=2060,QA_MONTHS=(QA_END_YEAR-QA_START_YEAR+1)*12;
 const QA_ISA_SKIP_YEARS=new Set([2027,2031,2036,2042,2049,2054,2058]);
 const QA_PENSION_SKIP_YEARS=new Set([2033,2041,2052]);
+function qaStorageState(input){
+ const out=clone(input),dropZero=(row,key)=>{if(!Number(row[key]))delete row[key]},dropEmpty=(row,key)=>{if(row[key]===''||row[key]==null)delete row[key]};
+ for(const account of out.accounts||[]){
+  for(const key of ['ledgerIndex','contributionLedger','cashLedger','securityLedger','adjustmentLedger'])delete account[key];
+  for(const tx of account.transactions||[]){if(tx.tradeDate===tx.date)delete tx.tradeDate;delete tx.createdAt;delete tx.idempotencyKey;dropEmpty(tx,'settlementDate');if(!tx.revisions?.length)delete tx.revisions;for(const key of ['fee','tax','amount','qty','price','setQty','setAvg'])dropZero(tx,key);if(tx.meta?.qaGenerated===true&&Object.keys(tx.meta).length===1)delete tx.meta}
+  for(const snapshot of account.assetSnapshots||[])if(snapshot.meta?.qaFixture===true)delete snapshot.meta;
+ }
+ for(const tx of out.pension?.transactions||[]){delete tx.createdAt;for(const key of ['fee','tax','amount','qty','price','setQty','setAvg'])dropZero(tx,key);dropEmpty(tx,'note')}
+ for(const snapshot of out.pension?.assetSnapshots||[])if(snapshot.meta?.qaFixture===true)delete snapshot.meta;
+ for(const tx of out.integrated?.ledger||[]){delete tx.createdAt;delete tx.sequence;if(tx.fixed===false)delete tx.fixed;for(const key of ['note','sourceModule','sourceId','productId'])dropEmpty(tx,key);if(tx.meta?.qaGenerated===true){delete tx.meta.qaGenerated;if(!Object.keys(tx.meta).length)delete tx.meta}}
+ return out
+}
 function qaPad(value){return String(value).padStart(2,'0')}
 function qaStamp(date,index=0){return `${date}T12:00:00.${String(index%1000).padStart(3,'0')}Z`}
 function qaRound(value,unit=1000){return Math.max(unit,Math.round(Number(value||0)/unit)*unit)}
