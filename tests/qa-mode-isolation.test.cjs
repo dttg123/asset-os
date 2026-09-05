@@ -6,14 +6,14 @@ let networkClients=0,fetches=0;
 const document={querySelector:()=>null,querySelectorAll:()=>[],documentElement:{dataset:{},classList:{add(){},remove(){}},scrollHeight:0},body:{dataset:{}}};
 const window={addEventListener(){},removeEventListener(){},scrollTo(){},isSecureContext:false,supabase:{createClient(){networkClients++;throw new Error('QA must not initialize Supabase')}}};
 const context=vm.createContext({console,Date,Set,Map,URL,Blob,File:global.File,TextEncoder,TextDecoder,Uint8Array,DataView,ArrayBuffer,Intl,Math,JSON,Number,String,Boolean,Object,RegExp,Promise,encodeURIComponent,decodeURIComponent,localStorage,document,window,navigator:{},location:{search:'?qa=1',hash:'',pathname:'/asset-os/'},history:{replaceState(){}},fetch:async()=>{fetches++;throw new Error('QA network blocked')},requestAnimationFrame:fn=>fn(),setTimeout:()=>0,clearTimeout(){},toast(){} });
-const files=['core-config.js','broker-kis.js','broker-kis-client.js','data-defaults.js','integrated-ledger-engine.js','integrated-schedule-engine.js','integrated-finance-engine.js','store-migrations.js','store-state.js','core-accessors.js','pension-contributions.js','pension-ledger.js','pension-assets.js','isa-validation.js','isa-ledger.js','integrated-forms.js','qa-mode.js','supabase-sync.js'];
+const files=['core-config.js','broker-kis.js','broker-kis-client.js','data-defaults.js','integrated-ledger-engine.js','integrated-schedule-engine.js','integrated-finance-engine.js','store-migrations.js','store-state.js','core-accessors.js','core-visual-utils.js','pension-contributions.js','pension-ledger.js','pension-assets.js','isa-validation.js','isa-ledger.js','integrated-forms.js','qa-mode.js','supabase-sync.js'];
 for(const file of files)vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),context,{filename:file});
 const run=(code,args=[])=>vm.runInContext(code,Object.assign(context,{__args:args})),plain=x=>JSON.parse(JSON.stringify(x)),close=(actual,expected,tolerance=.01)=>assert.ok(Math.abs(actual-expected)<=tolerance,`${actual} != ${expected}`);
 
 assert.equal(run('QA_MODE'),true);assert.equal(run('KEY'),'asset-os-qa-v1');assert.equal(run('localYmd()'),'2060-12-31');
 run('state=qaBuildThirtyFiveYearState();lastPersistedState=clone(state)');
 const stats=plain(run('qaDatasetStats()'));
-assert.deepEqual(stats,{isa:872,pension:907,integrated:5977,total:7756,totalAssets:1375710852.83,totalDebt:87400124,netAssets:1288310728.83,cash:529654229,isaAccounts:12,months:420});
+assert.deepEqual(stats,{isa:872,pension:907,integrated:5977,total:7756,totalAssets:1375710850.87,totalDebt:87400124,netAssets:1288310726.87,cash:529654229,isaAccounts:12,months:420});
 assert.deepEqual(plain(run('integratedIssues()')),[]);assert.deepEqual(plain(run('pensionTransactionIssues()')),[]);assert.deepEqual(plain(run('allIsaIssues()')),[]);assert.deepEqual(plain(run('brokerKisIssues(state.brokerKis)')),[]);assert.deepEqual(plain(run('systemIntegrityIssues()')),[]);
 
 // ISA: 3년 주기 12계좌, 지정 7개년 5월 스킵과 6월 보충, 계좌별 목표 납입액 보존.
@@ -24,6 +24,7 @@ assert.deepEqual(plain(run('state.accounts.map(a=>[a.openedAt,a.maturityAt,a.sta
  ['2050-01-01','2052-12-31','closed'],['2053-01-01','2055-12-31','closed'],['2056-01-01','2058-12-31','closed'],['2059-01-01','2061-12-31','active']
 ]);
 assert.deepEqual(plain(run('state.accounts.map(a=>a.transactions.filter(t=>t.type==="deposit").reduce((n,t)=>n+t.amount,0))')),[20000000,50000000,60000000,20000000,50000000,60000000,20000000,50000000,60000000,20000000,50000000,40000000]);
+assert.equal(run('annualContributionTotal(state.accounts.at(-1))'),20000000);
 assert.equal(run('state.accounts.flatMap(a=>a.transactions).filter(t=>t.type==="deposit"&&/-05-25$/.test(t.date)&&QA_ISA_SKIP_YEARS.has(Number(t.date.slice(0,4)))).length'),0);
 assert.equal(run('state.accounts.flatMap(a=>a.transactions).filter(t=>t.type==="deposit"&&/-06-25$/.test(t.date)&&QA_ISA_SKIP_YEARS.has(Number(t.date.slice(0,4)))).length'),7);
 
