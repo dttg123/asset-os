@@ -2,8 +2,8 @@
 function pensionStore(){return state.pension}
 function pensionAccount(id){return pensionStore().accounts.find(a=>a.id===id)||null}
 function pensionAccountKindLabel(kind){return kind==='irp'?'IRP':'연금저축'}
-function pensionYearRecords(year=String(new Date().getFullYear())){return centralPensionContributionRows(year)}
-function pensionSummary(year=String(new Date().getFullYear())){
+function pensionYearRecords(year=localYmd().slice(0,4)){return centralPensionContributionRows(year)}
+function pensionSummary(year=localYmd().slice(0,4)){
  const records=pensionYearRecords(year),p=policyForYear('pension',year),isaP=policyForYear('isa',year),accounts=new Map(pensionStore().accounts.map(a=>[a.id,a]));
  let ordinaryPs=0,ordinaryIrp=0,transferPs=0,transferIrp=0;
  for(const x of records){const a=accounts.get(x.accountId),kind=a?.kind||x.kind;if(!['pension','irp'].includes(kind))continue;const amount=Number(x.amount)||0,isIrp=kind==='irp',isTransfer=x.type==='isaTransfer';if(isTransfer){if(isIrp)transferIrp+=amount;else transferPs+=amount}else{if(isIrp)ordinaryIrp+=amount;else ordinaryPs+=amount}}
@@ -15,7 +15,7 @@ function pensionSummary(year=String(new Date().getFullYear())){
  const goalPs=Number(pensionStore().goal?.pensionSavings)||6000000,goalIrp=Number(pensionStore().goal?.irp)||3000000,goalTotal=goalPs+goalIrp,goalCurrent=Math.min(ordinaryPs,goalPs)+Math.min(ordinaryIrp,goalIrp);
  return{year,records,ordinaryPs,ordinaryIrp,transferPs,transferIrp,ordinary,transfer,total,psTotal,irpTotal,psLimit,combinedLimit,annualContributionLimit,regularCreditBase,extraLimit,totalCreditLimit,creditBase,creditRate,estimatedCredit,remainingCredit:Math.max(0,totalCreditLimit-creditBase),remainingOrdinary:Math.max(0,annualContributionLimit-ordinary),goalPs,goalIrp,goalTotal,goalCurrent}
 }
-function pensionMonthly(year=String(new Date().getFullYear())){const rows=Array.from({length:12},(_,i)=>({month:i+1,pension:0,irp:0,total:0,transfer:0,transferPension:0,transferIrp:0})),accounts=new Map(pensionStore().accounts.map(a=>[a.id,a]));for(const x of pensionYearRecords(year)){const m=Number(String(x.date).slice(5,7)),row=rows[m-1],a=accounts.get(x.accountId),kind=a?.kind||x.kind;if(!row||!['pension','irp'].includes(kind))continue;const amount=Number(x.amount)||0,isIrp=kind==='irp';if(x.type==='isaTransfer'){row.transfer+=amount;if(isIrp)row.transferIrp+=amount;else row.transferPension+=amount}else{row[isIrp?'irp':'pension']+=amount;row.total+=amount}}return rows}
+function pensionMonthly(year=localYmd().slice(0,4)){const rows=Array.from({length:12},(_,i)=>({month:i+1,pension:0,irp:0,total:0,transfer:0,transferPension:0,transferIrp:0})),accounts=new Map(pensionStore().accounts.map(a=>[a.id,a])),source=pensionYearRecords(year);for(const x of source){const m=Number(String(x.date).slice(5,7)),row=rows[m-1],a=accounts.get(x.accountId),kind=a?.kind||x.kind;if(!row||!['pension','irp'].includes(kind))continue;const amount=Number(x.amount)||0,isIrp=kind==='irp';if(x.type==='isaTransfer'){row.transfer+=amount;if(isIrp)row.transferIrp+=amount;else row.transferPension+=amount}else{row[isIrp?'irp':'pension']+=amount;row.total+=amount}}return rows}
 function pensionCurrentMonthOrdinary(){const key=localYmd().slice(0,7),accounts=new Map(pensionStore().accounts.map(a=>[a.id,a]));let pension=0,irp=0;for(const x of centralPensionContributionRows().filter(x=>x.type==='contribution'&&String(x.date).startsWith(key))){const a=accounts.get(x.accountId),kind=a?.kind||x.kind;if(kind==='irp')irp+=Number(x.amount)||0;else if(kind==='pension')pension+=Number(x.amount)||0}return{pension,irp,total:pension+irp}}
 
 function pensionContributionBatchScheduleId(kind){return `pension-contribution-${kind}-monthly`}
@@ -27,7 +27,7 @@ function pensionContributionBatchLatestMonth(year,day=25,today=localYmd()){
  return Math.max(0,month-(date<Number(day)?1:0))
 }
 function pensionContributionBatchInput(input={}){
- const year=String(input.year||new Date().getFullYear()),day=Math.min(28,Math.max(1,Number(input.day)||25)),throughMonth=Math.min(12,Math.max(0,Number(input.throughMonth)||0));
+ const year=String(input.year||localYmd().slice(0,4)),day=Math.min(28,Math.max(1,Number(input.day)||25)),throughMonth=Math.min(12,Math.max(0,Number(input.throughMonth)||0));
  const months={pension:[...(input.months?.pension||[])].map(Number).filter(m=>m>=1&&m<=throughMonth),irp:[...(input.months?.irp||[])].map(Number).filter(m=>m>=1&&m<=throughMonth)};
  return{year,day,throughMonth,pensionAmount:Math.max(0,Number(input.pensionAmount)||0),irpAmount:Math.max(0,Number(input.irpAmount)||0),pensionAccountId:String(input.pensionAccountId||''),irpAccountId:String(input.irpAccountId||''),months:{pension:[...new Set(months.pension)].sort((a,b)=>a-b),irp:[...new Set(months.irp)].sort((a,b)=>a-b)}}
 }
@@ -63,4 +63,3 @@ function applyPensionContributionBatch(input={}){
  state.integrated=candidate.nextIntegrated;state.pension=candidate.nextPension;state.financeSchedules=candidate.nextSchedules;
  return{ok:true,summary:candidate.summary,data:candidate.data}
 }
-
