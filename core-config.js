@@ -7,7 +7,7 @@ const DEFAULT_FINANCE_DAY=25; const APP_VERSION='v0.4',SCHEMA_VERSION=20,KEY=QA_
 const nf=new Intl.NumberFormat('ko-KR');
 const clone=v=>JSON.parse(JSON.stringify(v));
 const INVESTMENT_ROLES=['성장','배당','현금흐름','안정','현금'];
-function localYmd(d){if(d===undefined&&QA_MODE)return'2055-12-31';const value=d===undefined?new Date():d,y=value.getFullYear(),m=String(value.getMonth()+1).padStart(2,'0'),day=String(value.getDate()).padStart(2,'0');return `${y}-${m}-${day}`}
+function localYmd(d){if(d===undefined&&QA_MODE)return'2060-12-31';const value=d===undefined?new Date():d,y=value.getFullYear(),m=String(value.getMonth()+1).padStart(2,'0'),day=String(value.getDate()).padStart(2,'0');return `${y}-${m}-${day}`}
 const ymd=()=>localYmd();
 const normalizeName=s=>String(s||'').normalize('NFKC').replace(/\s+/g,'').replace(/[()（）·._-]/g,'').toUpperCase();
 const txDate=t=>String(t.tradeDate||t.date||'');
