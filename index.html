@@ -13,7 +13,7 @@
 <style>
 html.asset-auth-locked body{overflow:hidden}.asset-auth-locked .app,.asset-auth-locked body>section:not(.asset-auth-gate),.asset-auth-locked #scrim,.asset-auth-locked #dialogScrim,.asset-auth-locked #toast{visibility:hidden!important}.asset-auth-gate{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:24px;background:linear-gradient(160deg,#eef4ff,#f8fbff 55%,#e9f3ff);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#13233d}.asset-auth-gate[hidden]{display:none}.asset-auth-card{width:min(100%,420px);box-sizing:border-box;padding:30px 24px;border:1px solid rgba(47,111,237,.16);border-radius:28px;background:rgba(255,255,255,.94);box-shadow:0 24px 70px rgba(32,69,130,.16);text-align:center}.asset-auth-logo{display:grid;place-items:center;width:72px;height:72px;margin:0 auto 18px;border-radius:22px;background:#2f6fed;color:#fff;font-size:40px;font-weight:800}.asset-auth-card h1{margin:0;font-size:28px}.asset-auth-card p{margin:10px 0 24px;color:#60708a;line-height:1.55}.asset-auth-card button{width:100%;min-height:54px;border:0;border-radius:16px;background:#2f6fed;color:#fff;font-size:17px;font-weight:800}.asset-auth-card button:disabled{opacity:.55}.asset-auth-status{display:block;min-height:22px;margin-top:14px;color:#60708a;font-size:13px}.asset-auth-status.error{color:#b42318}
 </style>
-<link rel="stylesheet" href="./css-core-base.css?v=0.4.18">
+<link rel="stylesheet" href="./css-core-base.css?v=0.4.24">
 <link rel="stylesheet" href="./css-isa.css?v=0.4.21">
 <link rel="stylesheet" href="./css-pension.css?v=0.4.21">
 <link rel="stylesheet" href="./css-integrated.css?v=0.4.10">
@@ -22,6 +22,10 @@ html.asset-auth-locked body{overflow:hidden}.asset-auth-locked .app,.asset-auth-
 <link rel="stylesheet" href="./css-core-hardening.css">
 </head>
 <body>
+<aside id="qaBanner" class="qa-banner" hidden aria-label="QA 테스트 모드">
+ <div><strong>QA 전용 · 운영 데이터 분리</strong><small id="qaStats">가상 현재일 2055-12-31</small></div>
+ <div class="qa-actions"><button id="qaGenerate" type="button">30년 생성</button><button id="qaMistakes" type="button">실수 테스트</button><button id="qaReset" type="button">QA 초기화</button></div>
+</aside>
 <section id="assetAuthGate" class="asset-auth-gate" aria-live="polite">
   <div class="asset-auth-card">
     <div class="asset-auth-logo" aria-hidden="true">A</div>
@@ -87,7 +91,7 @@ html.asset-auth-locked body{overflow:hidden}.asset-auth-locked .app,.asset-auth-
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4"></script>
 <script src="./core-config.js"></script>
 <script src="./broker-kis.js?v=0.4.22"></script>
-<script src="./broker-kis-client.js?v=0.4.17"></script>
+<script src="./broker-kis-client.js?v=0.4.24"></script>
 <script src="./data-defaults.js?v=0.4.9"></script>
 <script src="./integrated-ledger-engine.js?v=0.4.23"></script>
 <script src="./integrated-schedule-engine.js"></script>
@@ -126,9 +130,10 @@ html.asset-auth-locked body{overflow:hidden}.asset-auth-locked .app,.asset-auth-
 <script src="./isa-maturity-policy.js"></script>
 <script src="./integrated-finance-ui.js"></script>
 <script src="./ui-settings.js?v=0.4.22"></script>
-<script src="./supabase-sync.js?v=0.4.23"></script>
-<script src="./pwa.js?v=0.4.22"></script>
-<script src="./boot.js?v=0.4.23"></script>
+<script src="./supabase-sync.js?v=0.4.24"></script>
+<script src="./qa-mode.js?v=0.4.24"></script>
+<script src="./pwa.js?v=0.4.24"></script>
+<script src="./boot.js?v=0.4.24"></script>
 
 </body>
 </html>
