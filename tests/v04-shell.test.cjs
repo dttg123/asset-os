@@ -29,7 +29,7 @@ assert.match(html,/pension-pages\.js\?v=0\.4\.22/);
 assert.match(html,/integrated-pages\.js\?v=0\.4\.22/);
 assert.match(integratedPages,/month=integratedMonthBar\(\)/,'all integrated tabs must reserve the same month-control row');
 assert.match(sharedCss,/\.integrated-overview-hero,[\s\S]*?\.spending-hero\{[^}]*height:177px/,'integrated overview and spending heroes must have the same outer height');
-assert.match(html,/pwa\.js\?v=0\.4\.24/);
+assert.match(html,/pwa\.js\?v=0\.4\.25/);
 assert.match(html,/initial-import\.js\?v=0\.4\.9/);
 assert.match(html,/chart-asset-analysis\.js\?v=0\.4\.17/);
 assert.match(html,/ui-settings\.js\?v=0\.4\.22/);
