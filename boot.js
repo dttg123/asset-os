@@ -31,5 +31,6 @@ window.__assetOS.brokerKis={
 window.__assetOS.brokerKisClient=brokerKisClient;
 brokerKisClient.configure(BROKER_KIS_PUBLIC_CONFIG);
 brokerKisClient.consumeRedirect();
+if(typeof initQaMode==='function')initQaMode();
 $('#assetAuthButton').onclick=async()=>{if(cloudUser())await startAssetAuthenticatedApp();else await signInAssetGoogle()};
 startAssetAuthenticatedApp().catch(()=>assetAuthGateState('error','연결 확인 중 오류가 발생했습니다. 다시 시도해 주세요.'));
