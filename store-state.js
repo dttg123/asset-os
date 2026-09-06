@@ -30,7 +30,7 @@ function normalizeState(data){
 let loadIssue='';
 let state=null;
 let lastPersistedState=null;
-let transactionDisplayLimit=50,dividendDisplayLimit=50,pensionTransactionDisplayLimit=20;
+let transactionDisplayLimit=50,dividendDisplayLimit=50,pensionTransactionDisplayLimit=20,pensionTransactionSearch='',integratedLedgerSearch='',integratedSearchDisplayLimit=50;
 let dividendAnalysisExpanded=false,pensionIncomeAnalysisExpanded=false,pensionAssetAnalysisExpanded=false,isaHoldingsExpanded=false,pensionHoldingsExpanded=false;
 function pruneRecoveryKeys(limit=2){try{const prefixes=[`${KEY}-pre-restore-`,`${KEY}-recovery-`,`${KEY}-pre-cloud-`,`${KEY}-pre-import-`],keys=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&prefixes.some(p=>k.startsWith(p)))keys.push(k)}keys.sort().reverse().slice(limit).forEach(k=>localStorage.removeItem(k))}catch{}}
 function storeRecoveryCopy(key,raw){localStorage.setItem(key,raw);if(localStorage.getItem(key)!==raw)throw new Error('복구용 사본 검증 실패');pruneRecoveryKeys();return true}
