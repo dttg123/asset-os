@@ -10,11 +10,11 @@ const files=['core-config.js','broker-kis.js','broker-kis-client.js','data-defau
 for(const file of files)vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),context,{filename:file});
 const run=(code,args=[])=>vm.runInContext(code,Object.assign(context,{__args:args})),plain=x=>JSON.parse(JSON.stringify(x)),close=(actual,expected,tolerance=.01)=>assert.ok(Math.abs(actual-expected)<=tolerance,`${actual} != ${expected}`);
 
-assert.equal(run('QA_MODE'),true);assert.equal(run('APP_VERSION'),'v0.5');assert.equal(run('KEY'),'asset-os-qa-v0.5');assert.equal(run('localYmd()'),'2060-12-31');
+assert.equal(run('QA_MODE'),true);assert.equal(run('APP_VERSION'),'v0.5.0');assert.equal(run('KEY'),'asset-os-qa-v0.5');assert.equal(run('localYmd()'),'2060-12-31');
 assert.equal(run('daysUntil("2061-12-31")'),365,'QA D-day must use the simulated app date');
 run('state=qaBuildThirtyFiveYearState();lastPersistedState=clone(state)');
 const stats=plain(run('qaDatasetStats()'));
-assert.equal(run('state.system.qaDataset.version'),'v0.5');
+assert.equal(run('state.system.qaDataset.version'),'v0.5.0');
 assert.deepEqual(stats,{isa:872,pension:907,integrated:5977,total:7756,totalAssets:1375710853.59,totalDebt:87400124,netAssets:1288310729.59,cash:529654229,isaAccounts:12,months:420});
 assert.deepEqual(plain(run('integratedIssues()')),[]);assert.deepEqual(plain(run('pensionTransactionIssues()')),[]);assert.deepEqual(plain(run('allIsaIssues()')),[]);assert.deepEqual(plain(run('brokerKisIssues(state.brokerKis)')),[]);assert.deepEqual(plain(run('systemIntegrityIssues()')),[]);
 
@@ -37,7 +37,7 @@ assert.equal(run('state.pension.transactions.filter(t=>t.accountId==="qa-irp"&&t
 assert.equal(run('state.pension.transactions.filter(t=>t.accountId==="qa-pension"&&t.type==="buy"&&/-07-25$/.test(t.date)&&QA_PENSION_SKIP_YEARS.has(Number(t.date.slice(0,4)))).length'),0);
 assert.equal(run('state.pension.transactions.filter(t=>t.accountId==="qa-pension"&&t.type==="buy"&&t.note==="전월 미납 보충매수").length'),3);
 assert.deepEqual(plain(run('(({year,ordinaryPs,ordinaryIrp,total})=>({year,ordinaryPs,ordinaryIrp,total}))(pensionSummary())')),{year:'2060',ordinaryPs:6000000,ordinaryIrp:3000000,total:9000000});
-assert.deepEqual(plain(run('(({currentAge,years})=>({currentAge,years}))(pensionProjection())')),{currentAge:65,years:0});
+assert.deepEqual(plain(run('(({currentAge,years,monthly})=>({currentAge,years,monthly}))(pensionProjection())')),{currentAge:65,years:0,monthly:750000});
 assert.equal(run('pensionIncomeSummary().year'),'2060');
 
 // 생활 원장: 월급 2회 휴직, 카드/보험/소비, 대출 원리금. 전 기간 현금·부채 음수 없음.
@@ -76,7 +76,7 @@ assert.equal(run('qaRunMistakes()'),true);
 
 assert.equal(run('state.brokerKis.balanceSnapshots.length'),2);assert.equal(run('state.brokerKis.orders.length'),1);assert.equal(run('state.brokerKis.rights.length'),1);
 assert.ok(run('stateEnvelopeBytes(stateEnvelopeJson())')<2000000,'구버전 QA와 함께 보관 가능한 크기로 압축되어야 함');
-assert.equal(run('persist(false)'),true);assert.equal(storage.get('asset-os-v1.9.45-live'),'LIVE-SENTINEL','운영 키는 절대 변경 금지');assert.ok(storage.get('asset-os-qa-v0.5').length>100000);
+assert.equal(run('persist(false)'),true);assert.equal(storage.get('asset-os-v1.9.45-live'),'LIVE-SENTINEL','운영 키는 절대 변경 금지');assert.ok(storage.get('asset-os-qa-v0.5').length>100000);assert.equal([...storage.keys()].filter(key=>key.startsWith('asset-os-qa-')).length,1,'QA 버전업은 격리 저장 키를 누적하면 안 됨');
 const before=plain(run('qaDatasetStats()'));run('state=loadState()');assert.deepEqual(plain(run('qaDatasetStats()')),before,'QA 새로고침 보존');
 assert.equal(run('brokerKisClient.configure(BROKER_KIS_PUBLIC_CONFIG).ok'),true);assert.equal(networkClients,0);assert.equal(run('brokerKisClient.consumeRedirect().error'),'QA_NETWORK_BLOCKED');
 (async()=>{assert.equal(await run('initSupabaseCloud()'),false);assert.equal(await run('cloudPushState()'),false);assert.equal(await run('cloudReconcileState()'),false);assert.equal(networkClients,0);assert.equal(fetches,0);console.log('QA mode isolation and 35-year real-user dataset tests: PASS')})().catch(error=>{console.error(error);process.exitCode=1});

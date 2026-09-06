@@ -59,7 +59,9 @@ function aiStrategyPreflight(payload,amount,fundingSource){
  if(stale7.length)blockers.push(`ISA 현재가가 7일 넘게 오래된 종목 ${stale7.length}개가 있습니다.`);else if(stale3.length)warnings.push(`ISA 현재가가 3일 넘게 오래된 종목 ${stale3.length}개가 있습니다.`);
  const pensionAccounts=[...payload.pensionSavings.accounts,...payload.irp.accounts];
  const kisAccounts=pensionAccounts.filter(a=>a.source==='한국투자 조회'),staleKis=kisAccounts.filter(a=>aiIsoAgeHours(a.sync?.lastCompleteAt)>36);
- if(pensionAccounts.some(a=>Math.abs(a.summary.componentDelta)>1))blockers.push('연금 조회 합계에 종목 상세가 없는 금액이 있습니다.');
+ const negativePensionDelta=pensionAccounts.filter(a=>Number(a.summary.componentDelta)<-1),positivePensionDelta=pensionAccounts.filter(a=>Number(a.summary.componentDelta)>1);
+ if(negativePensionDelta.length)blockers.push('연금 조회 합계가 현금·종목 구성값보다 작아 원장 확인이 필요합니다.');
+ if(positivePensionDelta.length)warnings.push(`연금 조회 합계 중 종목 상세가 없는 기타자산이 있는 계좌 ${positivePensionDelta.length}개를 별도 금액으로 포함했습니다.`);
  if(pensionAccounts.some(a=>a.summary.cashConfirmed===false))blockers.push('당일 체결 때문에 연금 예수금의 실제 사용 가능액이 확정되지 않았습니다.');
  if(kisAccounts.some(a=>a.sync?.lastError))blockers.push('한국투자 잔고·체결 갱신이 부분 완료 상태입니다.');
  if(staleKis.length)blockers.push(`한국투자 전체 갱신이 36시간 넘게 오래된 계좌 ${staleKis.length}개가 있습니다.`);

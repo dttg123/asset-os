@@ -61,4 +61,13 @@ assert.match(payload.request.prompt,/앱이나 데이터 구조를 평가하는 
 const json=JSON.stringify(payload);
 for(const forbidden of ['accountNo','accessToken','refreshToken','appSecret','dttg123@gmail.com'])assert.doesNotMatch(json,new RegExp(forbidden,'i'));
 
+const preflightPayload=JSON.parse(JSON.stringify(payload));
+preflightPayload.pensionSavings.accounts=[{source:'한국투자 조회',sync:{lastCompleteAt:new Date().toISOString(),lastError:''},summary:{componentDelta:500000,cashConfirmed:true,availableCash:0,cash:0}}];
+const positiveOtherAsset=vm.runInContext('aiStrategyPreflight(__payload,3000000,"new_money")',Object.assign(context,{__payload:preflightPayload}));
+assert.equal(positiveOtherAsset.ready,true,'정상적인 양수 기타자산은 AI 공유를 막으면 안 된다');
+assert.match(positiveOtherAsset.warnings.join(' '),/기타자산/);
+preflightPayload.pensionSavings.accounts[0].summary.componentDelta=-500000;
+const negativeMismatch=vm.runInContext('aiStrategyPreflight(__payload,3000000,"new_money")',Object.assign(context,{__payload:preflightPayload}));
+assert.equal(negativeMismatch.ready,false,'합계가 구성값보다 작은 모순은 AI 공유를 막아야 한다');
+
 console.log('AI strategy payload tests: PASS');

@@ -1,0 +1,13 @@
+'use strict';
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const vm=require('node:vm');
+const context=vm.createContext({console,document:{querySelector:()=>null,querySelectorAll:()=>[]},window:{addEventListener(){}},location:{search:''},Intl,Date,Math,JSON,Number,String,Boolean,Object,RegExp});
+vm.runInContext(fs.readFileSync('core-config.js','utf8'),context,{filename:'core-config.js'});
+vm.runInContext(fs.readFileSync('isa-registration.js','utf8'),context,{filename:'isa-registration.js'});
+const base={id:'one',type:'buy',date:'2026-09-06',tradeDate:'2026-09-06',sequence:1,holdingId:'holding',qty:10,price:1000,fee:0,tax:0,status:'posted'};
+context.__account={transactions:[base]};context.__same={...base,id:'two'};context.__split={...base,id:'three',sequence:2};
+assert.equal(vm.runInContext('findDuplicateTransaction(__account,__same)?.id',context),'one','같은 순번의 완전 동일 거래는 중복으로 감지');
+assert.equal(vm.runInContext('findDuplicateTransaction(__account,__split)',context),undefined,'같은 조건이라도 다른 순번의 정상 체결은 허용');
+assert.match(fs.readFileSync('isa-registration.js','utf8'),/submitButton\?\.disabled/,'연속 탭은 저장 직전에 차단');
+console.log('ISA duplicate and double-submit guard tests: PASS');

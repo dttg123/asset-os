@@ -8,7 +8,8 @@ const context=vm.createContext({
  console,Date,Math,Number,String,Array,Map,Set,JSON,
  localYmd:()=>today,
  isCurrentAccount:a=>a.status==='active',
- accountMetrics:a=>({cost:a.testCost,holdings:[{marketValue:a.testValue}]})
+ accountMetrics:a=>({cost:a.testCost,holdings:[{marketValue:a.testValue}]}),
+ pensionAssetMetrics:kind=>kind==='irp'?{cost:300,value:330,cash:30,source:'manual'}:{cost:500,value:550,cash:50,source:'manual'}
 });
 vm.runInContext(fs.readFileSync('store-state.js','utf8'),context,{filename:'store-state.js'});
 vm.runInContext(`state={moduleVerification:{isa:true},accounts:[{id:'isa-main',status:'active',testCost:100,testValue:110,assetSnapshots:[]}]}`,context);
@@ -26,6 +27,17 @@ assert.equal(rows.length,2,'날짜가 바뀌면 ISA 일별 스냅샷을 추가�
 vm.runInContext(`state={moduleVerification:{isa:false},accounts:[{id:'isa-unverified',status:'active',testCost:200,testValue:230,assetSnapshots:[]}]}`,context);
 vm.runInContext('syncCurrentIsaSnapshots()',context);
 assert.equal(vm.runInContext('state.accounts[0].assetSnapshots.length',context),1,'실제 현재자산이 있으면 과거 검산 플래그와 무관하게 스냅샷을 저장해야 한다');
+
+today='2026-09-06';
+vm.runInContext(`state={moduleVerification:{isa:true},accounts:[{id:'isa-manual',status:'active',testCost:300,testValue:350,assetSnapshots:[{date:'2026-09-06',cost:900,value:999,meta:{source:'manual-import'}}]}]}`,context);
+vm.runInContext('syncCurrentIsaSnapshots()',context);
+assert.equal(vm.runInContext('state.accounts[0].assetSnapshots.length',context),1,'같은 날짜의 수동 ISA 스냅샷 옆에 자동 중복을 만들면 안 된다');
+assert.equal(vm.runInContext('state.accounts[0].assetSnapshots[0].value',context),999,'수동 ISA 스냅샷은 자동 저장이 덮어쓰면 안 된다');
+
+vm.runInContext(`state={moduleVerification:{pension:true,irp:true},pension:{assetSnapshots:[{date:'2026-09-01',pension:{cost:900,value:999},irp:{cost:800,value:888},meta:{source:'manual-import'}}]}}`,context);
+vm.runInContext('syncCurrentPensionSnapshot()',context);
+assert.equal(vm.runInContext('state.pension.assetSnapshots.length',context),1,'같은 달의 수동 연금 스냅샷 옆에 자동 중복을 만들면 안 된다');
+assert.equal(vm.runInContext('state.pension.assetSnapshots[0].pension.value',context),999,'수동 연금 스냅샷은 자동 저장이 덮어쓰면 안 된다');
 
 vm.runInContext(fs.readFileSync('chart-asset-analysis.js','utf8'),context,{filename:'chart-asset-analysis.js'});
 const account={assetSnapshots:[
