@@ -24,7 +24,15 @@ function assetAuthGateState(mode,message=''){
  else{button.disabled=false;button.textContent='다시 확인';status.textContent=message||'연결을 확인하지 못했습니다.'}
 }
 function assetAuthGateUnlock(){if(assetAppUnlocked)return;assetAppUnlocked=true;const gate=$('#assetAuthGate');if(gate)gate.hidden=true;document.documentElement.classList.remove('asset-auth-locked');if(!location.hash)location.hash='#/home';render();refreshCloudProfileUI();if(state.system?.loadWarning)setTimeout(()=>toast('저장 데이터 확인이 필요합니다.'),100)}
-async function startAssetAuthenticatedApp(){if(qaCloudBlocked()){cloudSetStatus('QA 로컬 전용','ok');assetAuthGateUnlock();return true}const callbackFailure=cloudAuthCallbackFailure();if(callbackFailure)return assetAuthGateState('error',callbackFailure);assetAuthGateState('loading');const initialized=await initSupabaseCloud();if(!initialized)return assetAuthGateState('error','Supabase 연결을 확인한 뒤 다시 시도해 주세요.');if(!cloudUser())return assetAuthGateState('login');const ok=await cloudReconcileState();if(ok)assetAuthGateUnlock();else assetAuthGateState('error','클라우드 원장을 확인하지 못했습니다. 네트워크를 확인해 주세요.')}
+function cloudAuthGateMessage(){
+ if(cloudSyncStatus==='동기화 충돌 확인 필요')return'클라우드와 이 기기의 원장이 동시에 변경되어 자동으로 열지 않았습니다. 자료 충돌을 확인해 주세요.';
+ if(cloudSyncStatus==='빈 클라우드 자료 보호됨')return'빈 클라우드 자료가 이 기기의 원장을 덮지 않도록 앱을 잠갔습니다.';
+ if(cloudSyncStatus==='클라우드 데이터 확인 필요')return'클라우드 원장 형식을 확인하지 못해 앱을 열지 않았습니다.';
+ if(cloudSyncStatus==='DB 설정 필요')return'Supabase DB 설정을 확인해 주세요.';
+ if(cloudSyncStatus==='동기화 오류')return'클라우드 원장 동기화 중 오류가 발생했습니다. 다시 확인해 주세요.';
+ return'클라우드 원장을 확인하지 못했습니다. 네트워크를 확인해 주세요.'
+}
+async function startAssetAuthenticatedApp(){if(qaCloudBlocked()){cloudSetStatus('QA 로컬 전용','ok');assetAuthGateUnlock();return true}const callbackFailure=cloudAuthCallbackFailure();if(callbackFailure)return assetAuthGateState('error',callbackFailure);assetAuthGateState('loading');const initialized=await initSupabaseCloud();if(!initialized)return assetAuthGateState('error','Supabase 연결을 확인한 뒤 다시 시도해 주세요.');if(!cloudUser())return assetAuthGateState('login');const ok=await cloudReconcileState();if(ok)assetAuthGateUnlock();else assetAuthGateState('error',cloudAuthGateMessage())}
 
 function cloudUser(){return assetSupabaseSession?.user||null}
 function syncBrokerKisSessionFromCloud(session=assetSupabaseSession){
@@ -42,7 +50,12 @@ function cloudLocalEnvelope(){
  return{envelope:{schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,savedAt:'',data:clone(state||seed)},raw:'',stored:false}
 }
 function cloudEnvelopeTime(x){const t=Date.parse(String(x?.savedAt||''));return Number.isFinite(t)?t:0}
-function cloudEnvelopeFingerprint(x){try{return JSON.stringify(x?.data||{})}catch{return''}}
+function cloudCanonicalValue(value){
+ if(Array.isArray(value))return value.map(cloudCanonicalValue);
+ if(value&&typeof value==='object')return Object.keys(value).sort().reduce((result,key)=>{const item=cloudCanonicalValue(value[key]);if(item!==undefined)result[key]=item;return result},{});
+ return value
+}
+function cloudEnvelopeFingerprint(x){try{return JSON.stringify(cloudCanonicalValue(x?.data||{}))}catch{return''}}
 function cloudCurrentEnvelope(){const local=cloudLocalEnvelope();if(local.stored)return local.envelope;return{schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,savedAt:new Date().toISOString(),data:clone(state)}}
 function cloudPayloadValid(payload){return !!(payload&&typeof payload==='object'&&payload.data&&typeof payload.data==='object')}
 function cloudDataHasMeaningfulRecords(data){const d=data||{},p=d.pension||{},i=d.integrated||{};return !!((d.accounts||[]).length||(p.accounts||[]).length||(p.contributions||[]).length||(p.transactions||[]).length||(p.holdings||[]).length||(p.incomes||[]).length||(d.financialProducts?.items||[]).length||(d.financialProducts?.events||[]).length||(d.financeSchedules?.items||[]).length||(i.ledger||[]).length)}
@@ -79,7 +92,7 @@ async function handleCloudAuthState(event,session){
  if(!session){cloudSetStatus('로그인 필요','wait');assetAppUnlocked=false;assetAuthGateState('login');return false}
  if(['INITIAL_SESSION','SIGNED_IN','TOKEN_REFRESHED','USER_UPDATED'].includes(String(event||''))){
   cloudSetStatus('동기화 확인 중','wait');
-  const ok=await cloudReconcileState();if(ok)assetAuthGateUnlock();return ok
+  const ok=await cloudReconcileState();if(ok)assetAuthGateUnlock();else if(!assetAppUnlocked)assetAuthGateState('error',cloudAuthGateMessage());return ok
  }
  return true
 }
