@@ -26,7 +26,7 @@ function legacyData(){
 }
 
 for(let schema=4;schema<=20;schema++){
- context.__payload={format:'asset-os-backup-v1',schemaVersion:schema,appVersion:schema===4?'v0.1':'v0.6.1',environment:'live',exportedAt:'2026-09-02T00:00:00.000Z',data:legacyData()};
+ context.__payload={format:'asset-os-backup-v1',schemaVersion:schema,appVersion:schema===4?'v0.1':'v0.6.2',environment:'live',exportedAt:'2026-09-02T00:00:00.000Z',data:legacyData()};
  const normalized=plain(run('validateBackupPayload(__payload)'));
  assert.equal(normalized.accounts[0].transactions[0].id,'legacy-deposit',`schema ${schema} ISA 원장 보존`);
  assert.equal(normalized.pension.contributions[0].id,'pc-2026-01-ps',`schema ${schema} 연금 납입 보존`);
@@ -37,6 +37,6 @@ for(let schema=4;schema<=20;schema++){
  assert.equal(roundTrip.data.pension.contributions[0].amount,500000);
 }
 for(const schema of [3,21]){context.__payload={format:'asset-os-backup-v1',schemaVersion:schema,data:{}};assert.throws(()=>run('validateBackupPayload(__payload)'),/지원하지 않는 데이터 구조/)}
-context.__payload={format:'asset-os-backup-v1',schemaVersion:20,appVersion:'v0.6.1',environment:'qa',data:{accounts:[],pension:{},integrated:{ledger:[]}}};
+context.__payload={format:'asset-os-backup-v1',schemaVersion:20,appVersion:'v0.6.2',environment:'qa',data:{accounts:[],pension:{},integrated:{ledger:[]}}};
 assert.throws(()=>run('validateBackupPayload(__payload)'),/QA 백업은 운영 화면에 복원할 수 없습니다/);
 console.log('backup schema 4-20 real-normalization compatibility tests: PASS');
