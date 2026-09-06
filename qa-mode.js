@@ -45,7 +45,7 @@ function qaBuildThirtyFiveYearState(){
 
  for(let cycle=0;cycle<12;cycle++){
   const start=QA_START_YEAR+cycle*3,end=start+2,lastYear=Math.min(end,QA_END_YEAR),count=(lastYear-start+1)*12,id=`qa-isa-${start}`,holdingId=`qa-isa-h-${start}`;
-  const targets=[20000000,50000000,60000000],target=Math.round(targets[cycle%3]*count/36),scenario=cycle%3===0?'2천만원':cycle%3===1?'5천만원':'1억원 성장';
+  const targets=[20000000,50000000,60000000],target=Math.round(targets[cycle%3]*count/36),scenario=`납입 ${Math.round(target/10000).toLocaleString('ko-KR')}만원`;
   const account={id,name:`QA ISA ${start} · ${scenario}`,type:cycle%4===0?'서민형':'일반형',status:end<=QA_END_YEAR?'closed':'active',openedAt:`${start}-01-01`,closedAt:end<=QA_END_YEAR?`${end}-12-31`:'',maturityAt:`${end}-12-31`,policyId:next.policies.isa.activePolicyId,policyHistory:[],baseline:{date:`${start}-01-01`,cash:0,contribution:0},baselineDate:`${start}-01-01`,baselineCash:0,reconciliationTolerance:10,holdings:[{id:holdingId,name:'QA 미국지수 ETF',securityKey:`QAUSINDEX${start}`,instrumentCode:'379800',quoteType:'stock',quoteSource:'',investmentRole:'성장',baselineQty:0,baselineAvg:0,currentPrice:qaMarketPrice(lastYear,12,100000)}],transactions:[],assetSnapshots:[]};
   let txSequence=0,totalQty=0,cash=0,paid=0;
   for(let i=0;i<count;i++){
