@@ -74,6 +74,13 @@ test('successful integrated save clears hidden search and filter state',()=>{
  assert.match(source,/integratedLedgerFilter='all'/);
 });
 
+test('the global duplicate-submit guard does not cancel the first ISA save',()=>{
+ const boot=read('boot.js'),isa=read('isa-registration.js');
+ assert.match(boot,/lastSubmitAt/,'rapid duplicate submits still need a time guard');
+ assert.doesNotMatch(boot,/submitters\.forEach\(x=>x\.disabled=true\)/,'capture phase must not disable the first submit before the ISA handler runs');
+ assert.match(isa,/if\(submitButton\?\.disabled\)return/,'the ISA form keeps its own in-flight submit guard');
+});
+
 test('financial growth drag changes the selected point and visible amount',()=>{
  const nodes={},track={style:{},setPointerCapture(){},releasePointerCapture(){},getBoundingClientRect(){return{left:0,width:100}}};
  nodes['[data-growth-track]']=track;
