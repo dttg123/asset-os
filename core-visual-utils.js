@@ -2,6 +2,7 @@
 function getHolding(a,id){return accountMetrics(a).holdings.find(h=>h.id===id)}
 function holdingName(a,id){return a.holdings.find(h=>h.id===id)?.name||'계좌 현금'}
 function formatDate(d){if(!d)return'-';const [y,m,day]=d.split('-');return `${y}.${m}.${day}`}
+function quantityNumber(value,maxDigits=6){const n=Number(value)||0;return new Intl.NumberFormat('ko-KR',{minimumFractionDigits:0,maximumFractionDigits:maxDigits}).format(n)}
 function daysUntil(d){if(!d)return null;const [y,m,day]=d.split('-').map(Number),todayParts=String(typeof localYmd==='function'?localYmd():'').split('-').map(Number),now=todayParts.length===3&&todayParts.every(Number.isFinite)?new Date(todayParts[0],todayParts[1]-1,todayParts[2]):new Date(),today=new Date(now.getFullYear(),now.getMonth(),now.getDate()),target=new Date(y,m-1,day);return Math.ceil((target-today)/86400000)}
 function ddayLabel(d){const left=daysUntil(d);if(left===null)return'-';if(left>0)return`D-${left}`;if(left===0)return'D-DAY';return`D+${Math.abs(left)}`}
 function polarToCartesian(cx,cy,r,angleDeg){const rad=(angleDeg-90)*Math.PI/180;return{x:cx+r*Math.cos(rad),y:cy+r*Math.sin(rad)}}

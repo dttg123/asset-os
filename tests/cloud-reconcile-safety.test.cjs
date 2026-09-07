@@ -6,7 +6,7 @@ const path=require('node:path');
 const clone=value=>JSON.parse(JSON.stringify(value));
 const context=vm.createContext({
  console,Date,Promise,setTimeout:fn=>fn(),clearTimeout:()=>{},clone,
- SCHEMA_VERSION:20,APP_VERSION:'v0.6.2',APP_ENV:'live',KEY:'asset-test',seed:{accounts:[]},state:{accounts:[]},
+ SCHEMA_VERSION:20,APP_VERSION:'v0.6.3',APP_ENV:'live',KEY:'asset-test',seed:{accounts:[]},state:{accounts:[]},
  localStorage:{getItem:()=>null,setItem:()=>{},removeItem:()=>{}},
  normalizeState:clone,pruneRecoveryKeys:()=>{},render:()=>{},toast:()=>{},formatDateTime:value=>value,
  $:()=>null,document:{documentElement:{classList:{add:()=>{},remove:()=>{}}}},location:{hash:'#/home'}

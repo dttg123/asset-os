@@ -15,13 +15,14 @@ const rows=[
 context.__rows=rows;
 vm.runInContext('integratedLedger=()=>__rows',context);
 const result=JSON.parse(vm.runInContext("JSON.stringify(integratedSpendingAnalysis('2026-08'))",context));
-assert.equal(result.total,175);
-assert.equal(result.fixed,125);
+assert.equal(result.total,150);
+assert.equal(result.fixed,100);
 assert.equal(result.variable,50);
 assert.equal(result.previousTotal,100);
-assert.equal(result.change,75);
+assert.equal(result.change,50);
 assert.equal(result.trend.length,6);
-assert.deepEqual(result.categories.map(row=>row.key),['보험','식비','대출 이자']);
+assert.deepEqual(result.categories.map(row=>row.key),['보험','식비']);
+assert.ok(!result.rows.some(row=>row.id==='interest'),'소비 분석에 대출 이자를 중복 포함하지 않음');
 assert.ok(!result.rows.some(row=>row.id==='saving'));
 const summaryRows=[
  {date:'2026-08-01',type:'externalIncome',amount:1000,toAccountId:'cash-main'},

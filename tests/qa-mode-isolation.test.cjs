@@ -5,22 +5,23 @@ const localStorage={get length(){return storage.size},key:i=>[...storage.keys()]
 let networkClients=0,fetches=0;
 const document={querySelector:()=>null,querySelectorAll:()=>[],documentElement:{dataset:{},classList:{add(){},remove(){}},scrollHeight:0},body:{dataset:{}}};
 const window={addEventListener(){},removeEventListener(){},scrollTo(){},isSecureContext:false,supabase:{createClient(){networkClients++;throw new Error('QA must not initialize Supabase')}}};
-const context=vm.createContext({console,Date,Set,Map,URL,Blob,File:global.File,TextEncoder,TextDecoder,Uint8Array,DataView,ArrayBuffer,Intl,Math,JSON,Number,String,Boolean,Object,RegExp,Promise,encodeURIComponent,decodeURIComponent,localStorage,document,window,navigator:{},location:{search:'?qa=1',hash:'',pathname:'/asset-os/'},history:{replaceState(){}},fetch:async()=>{fetches++;throw new Error('QA network blocked')},requestAnimationFrame:fn=>fn(),setTimeout:()=>0,clearTimeout(){},toast(){} });
+const context=vm.createContext({console,Date,Set,Map,URL,Blob,File:global.File,TextEncoder,TextDecoder,Uint8Array,DataView,ArrayBuffer,Intl,Math,JSON,Number,String,Boolean,Object,RegExp,Promise,encodeURIComponent,decodeURIComponent,localStorage,document,window,navigator:{},location:{search:'?qa=1',hash:'',pathname:'/asset-os/'},history:{replaceState(){}},fetch:async()=>{fetches++;throw new Error('QA network blocked')},requestAnimationFrame:fn=>fn(),setTimeout:()=>0,clearTimeout(){},toast(){},closeSheets(){},render(){},haptic(){} });
 const files=['core-config.js','broker-kis.js','broker-kis-client.js','data-defaults.js','integrated-ledger-engine.js','integrated-schedule-engine.js','integrated-finance-engine.js','store-migrations.js','store-state.js','core-accessors.js','core-visual-utils.js','pension-contributions.js','pension-ledger.js','chart-asset-analysis.js','pension-assets.js','isa-validation.js','isa-ledger.js','integrated-forms.js','home.js','qa-mode.js','supabase-sync.js'];
 for(const file of files)vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),context,{filename:file});
 const run=(code,args=[])=>vm.runInContext(code,Object.assign(context,{__args:args})),plain=x=>JSON.parse(JSON.stringify(x)),close=(actual,expected,tolerance=.01)=>assert.ok(Math.abs(actual-expected)<=tolerance,`${actual} != ${expected}`);
 
-assert.equal(run('QA_MODE'),true);assert.equal(run('APP_VERSION'),'v0.6.2');assert.equal(run('KEY'),'asset-os-qa-v0.5');assert.equal(run('localYmd()'),'2060-12-31');
+assert.equal(run('QA_MODE'),true);assert.equal(run('APP_VERSION'),'v0.6.3');assert.equal(run('KEY'),'asset-os-qa-v0.5');assert.equal(run('localYmd()'),'2060-12-31');
 assert.equal(run('daysUntil("2061-12-31")'),365,'QA D-day must use the simulated app date');
 run('state=qaBuildThirtyFiveYearState();lastPersistedState=clone(state)');
 const stats=plain(run('qaDatasetStats()'));
-assert.equal(run('state.system.qaDataset.version'),'v0.6.2');
-assert.deepEqual(stats,{isa:872,pension:907,integrated:5977,total:7756,totalAssets:1375710853.59,totalDebt:87400124,netAssets:1288310729.59,cash:529654229,isaAccounts:12,months:420});
+assert.equal(run('state.system.qaDataset.version'),'v0.6.3');
+assert.deepEqual(stats,{isa:872,pension:891,integrated:5977,total:7740,totalAssets:1342937642,totalDebt:87400124,netAssets:1255537518,cash:529654229,isaAccounts:12,months:420});
 assert.equal(run('homeSample().contributed'),2416674,'홈 저축·투자는 ISA·연금저축·IRP를 포함해야 한다');
 assert.ok(run('homeSample().activity.living')>0,'홈 월 합계에 생활비·고정지출이 있어야 한다');
 assert.ok(run('homeSample().activity.loan')>0,'홈 월 합계에 대출 원금·이자가 있어야 한다');
-assert.equal(run('homeSample().outgoing'),run('homeSample().activity.living+homeSample().activity.saving+homeSample().activity.loan'));
+assert.equal(run('homeSample().outgoing'),run('homeSample().activity.living+homeSample().activity.saving+homeSample().activity.loan+homeSample().activity.other'));
 assert.equal(run('scheduleOccurrences("2060-12").filter(x=>x.status==="done").length'),2,'이미 존재하는 연금·IRP 납입 원장은 일정 완료로 인식해야 한다');
+assert.deepEqual(plain(run('[...new Set(financeSchedules().map(x=>x.kind))].sort()')),['expense','income','insurance','investment','loan','saving'],'QA 일정은 월급·생활비·보험·저축·투자·대출을 모두 포함해야 한다');
 assert.equal(run('state.accounts.at(-1).name'),'QA ISA 2059 · 납입 4,000만원');
 assert.deepEqual(plain(run('integratedIssues()')),[]);assert.deepEqual(plain(run('pensionTransactionIssues()')),[]);assert.deepEqual(plain(run('allIsaIssues()')),[]);assert.deepEqual(plain(run('brokerKisIssues(state.brokerKis)')),[]);assert.deepEqual(plain(run('systemIntegrityIssues()')),[]);
 
@@ -35,11 +36,15 @@ assert.deepEqual(plain(run('state.accounts.map(a=>a.transactions.filter(t=>t.typ
 assert.equal(run('annualContributionTotal(state.accounts.at(-1))'),20000000);
 assert.equal(run('state.accounts.flatMap(a=>a.transactions).filter(t=>t.type==="deposit"&&/-05-25$/.test(t.date)&&QA_ISA_SKIP_YEARS.has(Number(t.date.slice(0,4)))).length'),0);
 assert.equal(run('state.accounts.flatMap(a=>a.transactions).filter(t=>t.type==="deposit"&&/-06-25$/.test(t.date)&&QA_ISA_SKIP_YEARS.has(Number(t.date.slice(0,4)))).length'),7);
+assert.equal(run('state.accounts.flatMap(a=>a.transactions).filter(t=>t.qty!=null&&!Number.isInteger(t.qty)).length'),0,'국내 ISA 종목 수량은 정수 주식이어야 한다');
+assert.equal(run('centralIsaReplayRows(state.accounts.at(-1)).length'),0,'같은 날짜·금액의 과거 ISA 입금과 통합 납입을 중복 가산하면 안 된다');
+assert.ok(run('accountMetrics(state.accounts.at(-1)).cash')<1000000,'중복 납입 제거 후 남은 ISA 현금만 표시해야 한다');
+close(run('historicalFinancialModel(localYmd()).isa'),run('integratedFinancialModel().isa'),.01);
 
 // 연금: 420개월, 지정 3개년 7월 미납 및 8월 보충. IRP는 매월 유지.
 assert.equal(run('state.pension.assetSnapshots.length'),420);
 assert.equal(run('state.pension.transactions.filter(t=>t.accountId==="qa-pension"&&t.type==="buy").length'),417);
-assert.equal(run('state.pension.transactions.filter(t=>t.accountId==="qa-irp"&&t.type==="buy").length'),420);
+assert.equal(run('state.pension.transactions.filter(t=>t.accountId==="qa-irp"&&t.type==="buy").length'),404);
 assert.equal(run('state.pension.transactions.filter(t=>t.accountId==="qa-pension"&&t.type==="buy"&&/-07-25$/.test(t.date)&&QA_PENSION_SKIP_YEARS.has(Number(t.date.slice(0,4)))).length'),0);
 assert.equal(run('state.pension.transactions.filter(t=>t.accountId==="qa-pension"&&t.type==="buy"&&t.note==="전월 미납 보충매수").length'),3);
 assert.deepEqual(plain(run('(({year,ordinaryPs,ordinaryIrp,total})=>({year,ordinaryPs,ordinaryIrp,total}))(pensionSummary())')),{year:'2060',ordinaryPs:6000000,ordinaryIrp:3000000,total:9000000});
@@ -67,8 +72,22 @@ assert.equal(run('state.integrated.ledger.filter(t=>t.id.startsWith("qa-car-inte
 // 분석: QA 그래프가 실제 스냅샷을 읽고 대표 불황기에 하락을 표시한다.
 const growth=plain(run('financialGrowthSeries("all").map(x=>({label:x.label,totalAssets:x.totalAssets,totalDebt:x.totalDebt,netAssets:x.netAssets}))')),byYear=new Map(growth.map(x=>[x.label,x]));
 assert.equal(growth.length,35);for(const year of ['2042','2050','2057'])assert.ok(byYear.get(year).totalAssets<byYear.get(String(Number(year)-1)).totalAssets,`${year} 불황 하락 미반영`);
+assert.equal(growth[0].label,'2026','자산 자료가 없는 부채 단독 시점을 그래프 기준점으로 쓰면 안 됨');
+assert.ok(run('financialGrowthSeries("all").every(x=>x.coverage.complete)'));
 close(stats.totalAssets,stats.cash+run('integratedFinancialModel().deposit+integratedFinancialModel().savings+integratedFinancialModel().isa+integratedFinancialModel().pension+integratedFinancialModel().irp+integratedFinancialModel().other'));
 close(stats.netAssets,stats.totalAssets-stats.totalDebt);
+
+// 같은 달 스냅샷은 마지막 날짜의 최신값 하나만 사용한다.
+run('state.pension.assetSnapshots.push({date:"2060-12-31",pension:{cost:1,value:987654321},irp:{cost:1,value:123456789}})');
+assert.equal(run('pensionAnalysisDisplayRows("all","1y").at(-1).value'),1111111110);
+assert.equal(run('pensionAnalysisDisplayRows("all","1y").filter(x=>x.key==="2060-12").length'),1);
+run('state.pension.assetSnapshots.pop()');
+
+// 대출 일정 완료는 총액을 전부 이자로 기록하지 않고 실제 원금·이자로 나눈다.
+const loanBefore=run('state.integrated.ledger.length');
+assert.equal(run('completeScheduleOccurrence("qa-schedule-home-loan","2060-12-26",0,"","",100000,50000)'),true);
+assert.deepEqual(plain(run('state.integrated.ledger.slice(-2).map(x=>[x.type,x.amount,x.meta.component])')),[['debtPrincipal',100000,'principal'],['debtInterest',50000,'interest']]);
+run(`state.integrated.ledger.splice(${loanBefore})`);
 
 // 잘못된 입력은 저장 전 차단되고 건수도 변하지 않는다.
 const mistakeCounts=plain(run('({integrated:state.integrated.ledger.length,pension:state.pension.transactions.length})'));
@@ -81,6 +100,7 @@ assert.deepEqual(plain(run('({integrated:state.integrated.ledger.length,pension:
 assert.equal(run('qaRunMistakes()'),true);
 
 assert.equal(run('state.brokerKis.balanceSnapshots.length'),2);assert.equal(run('state.brokerKis.orders.length'),1);assert.equal(run('state.brokerKis.rights.length'),1);
+assert.equal(run('quantityNumber(92.4553)'),'92.4553');assert.equal(run('quantityNumber(92)'),'92');
 assert.ok(run('stateEnvelopeBytes(stateEnvelopeJson())')<2000000,'구버전 QA와 함께 보관 가능한 크기로 압축되어야 함');
 assert.equal(run('persist(false)'),true);assert.equal(storage.get('asset-os-v1.9.45-live'),'LIVE-SENTINEL','운영 키는 절대 변경 금지');assert.ok(storage.get('asset-os-qa-v0.5').length>100000);assert.equal([...storage.keys()].filter(key=>key.startsWith('asset-os-qa-')).length,1,'QA 버전업은 격리 저장 키를 누적하면 안 됨');
 const before=plain(run('qaDatasetStats()'));run('state=loadState()');assert.deepEqual(plain(run('qaDatasetStats()')),before,'QA 새로고침 보존');

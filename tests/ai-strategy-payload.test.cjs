@@ -68,6 +68,18 @@ assert.equal(positiveOtherAsset.ready,true,'정상적인 양수 기타자산은 
 assert.match(positiveOtherAsset.warnings.join(' '),/기타자산/);
 preflightPayload.pensionSavings.accounts[0].summary.componentDelta=-500000;
 const negativeMismatch=vm.runInContext('aiStrategyPreflight(__payload,3000000,"new_money")',Object.assign(context,{__payload:preflightPayload}));
-assert.equal(negativeMismatch.ready,false,'합계가 구성값보다 작은 모순은 AI 공유를 막아야 한다');
+assert.equal(negativeMismatch.ready,true,'외부 자금·보유종목 분석은 연금 차액을 경고하고 계속할 수 있어야 한다');
+assert.match(negativeMismatch.warnings.join(' '),/500,000원/);
+const cashMismatch=vm.runInContext('aiStrategyPreflight(__payload,3000000,"account_cash")',Object.assign(context,{__payload:preflightPayload}));
+assert.equal(cashMismatch.ready,false,'구성 차액이 있는 계좌 현금을 투자금으로 쓸 때만 공유를 막아야 한다');
+const zeroRebalancePayload=JSON.parse(JSON.stringify(payload));
+zeroRebalancePayload.request.purpose='리밸런싱';
+const zeroRebalance=vm.runInContext('aiStrategyPreflight(__payload,0,"new_money")',Object.assign(context,{__payload:zeroRebalancePayload}));
+assert.equal(zeroRebalance.ready,true,'리밸런싱은 추가 투자금 0원으로도 가능해야 한다');
+assert.match(vm.runInContext('aiStrategyPrompt("rebalance",0,"new_money")',context),/추가 자금 없음/);
+const zeroBuyPayload=JSON.parse(JSON.stringify(payload));
+zeroBuyPayload.request.purpose='추가매수 판단';
+const zeroBuy=vm.runInContext('aiStrategyPreflight(__payload,0,"new_money")',Object.assign(context,{__payload:zeroBuyPayload}));
+assert.equal(zeroBuy.ready,false,'추가매수 판단은 투자금 0원을 허용하지 않는다');
 
 console.log('AI strategy payload tests: PASS');

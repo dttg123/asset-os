@@ -22,8 +22,9 @@ test('long-term transaction search is available without changing stored ledgers'
  const context={pensionStore:()=>({holdings:[]}),pensionHoldingById:()=>null,pensionAccount:()=>null,pensionTradeLabel:type=>type==='buy'?'매수':type};
  vm.runInNewContext(integrated,context);
  vm.runInNewContext(pension,context);
- assert.equal(context.transactionSearchKey(['2060-12-27','324,000원']),'2060-12-27324000원');
+ assert.equal(context.transactionSearchKey(['2060-12-27','324,000원']),'20601227324000원');
+ assert.equal(context.transactionSearchKey(['2060.12.27','324,000원']),'20601227324000원');
  assert.match(context.integratedTransactionSearchText({date:'2060-12-27',type:'expense',category:'생활용품',note:'QA 메모',amount:324000}),/생활용품.*qa메모.*324000/);
- assert.match(context.pensionTransactionSearchText({date:'2060-12-25',type:'buy',productName:'미국 S&P500 ETF',amount:1233300}),/2060-12-25.*매수.*미국s&p500etf.*1233300/);
+ assert.match(context.pensionTransactionSearchText({date:'2060-12-25',type:'buy',productName:'미국 S&P500 ETF',amount:1233300}),/20601225.*매수.*미국s&p500etf.*1233300/);
  assert.match(context.pensionTransactionSearchText({date:'2060-12-25',type:'buy',accountKind:'pension',productName:'미국지수'}),/연금저축/);
 });

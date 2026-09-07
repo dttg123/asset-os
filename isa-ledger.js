@@ -2,7 +2,7 @@
 function holdingPriceScale(h){const value=Number(h?.priceScale);return Number.isFinite(value)&&value>0?value:1}
 function holdingPositionValue(h,qty=h?.qty,price=h?.currentPrice){return (Number(qty)||0)*(Number(price)||0)/holdingPriceScale(h)}
 function holdingCostValue(h,qty=h?.qty,price=h?.avgPrice){return holdingPositionValue(h,qty,price)}
-function holdingQuantityText(h,qty=h?.qty){return h?.quantityUnit==='face'?`${num(qty)}원 액면`:`${num(qty)}주`}
+function holdingQuantityText(h,qty=h?.qty){return h?.quantityUnit==='face'?`${num(qty)}원 액면`:`${quantityNumber(qty)}주`}
 function transactionPositionValue(h,qty,price){return holdingPositionValue(h,qty,price)}
 function replay(account,candidateTxs=null,includeCentral=true){
  if(!account)return {holdings:[],cash:0,valid:true,error:null,errorTxId:null,realized:0,income:0,fees:0,taxes:0,facts:new Map()};
