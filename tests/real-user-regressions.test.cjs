@@ -96,6 +96,18 @@ test('the global duplicate-submit guard does not cancel the first ISA save',()=>
  assert.match(isa,/if\(submitButton\?\.disabled\)return/,'the ISA form keeps its own in-flight submit guard');
 });
 
+test('newly rendered sheet actions are bound before the first user tap',()=>{
+ const isa=read('isa-registration.js'),pension=read('pension-forms.js'),backup=read('backup.js'),insurance=read('insurance.js'),settings=read('ui-settings.js');
+ const pensionAccountManager=pension.slice(pension.indexOf('function openPensionAccountManager'),pension.indexOf('function openPensionTransactionDetail'));
+ const advancedSettings=settings.slice(settings.indexOf('function openAdvancedSettings'),settings.indexOf("let kisUiEmail"));
+ assert.doesNotMatch(isa,/openSheet\('#actionSheet'\);setTimeout\(/,'ISA quick actions must not expose an unbound first-tap window');
+ assert.doesNotMatch(isa,/function openAccountSelector\(\)[\s\S]*?openSheet\('#detailSheet'\);setTimeout\(/,'ISA account rows must bind immediately');
+ assert.doesNotMatch(pensionAccountManager,/openSheet\('#detailSheet'\);\s*setTimeout\(/,'pension account actions must bind immediately');
+ assert.doesNotMatch(backup,/function openBackupHub\(\)[\s\S]*?openSheet\('#detailSheet'\);setTimeout\(/,'backup actions must bind immediately');
+ assert.doesNotMatch(insurance,/function openInsuranceHub\(\)[\s\S]*?openSheet\('#detailSheet'\);setTimeout\(/,'insurance rows must bind immediately');
+ assert.doesNotMatch(advancedSettings,/openSheet\('#detailSheet'\);setTimeout\(/,'advanced settings actions must bind immediately');
+});
+
 test('financial growth drag changes the selected point and visible amount',()=>{
  const nodes={},track={style:{},setPointerCapture(){},releasePointerCapture(){},getBoundingClientRect(){return{left:0,width:100}}};
  nodes['[data-growth-track]']=track;
