@@ -67,6 +67,21 @@ test('home wording and selected-month summaries cannot regress',()=>{
  assert.match(render,/setting\(\)\.integratedMonth=localYmd\(\)\.slice\(0,7\)/);
 });
 
+test('completed schedules show actual amounts and empty calendar days are not buttons',()=>{
+ const pages=read('integrated-pages.js');
+ assert.match(pages,/function scheduleOccurrenceDisplayAmount/);
+ assert.match(pages,/o\.status==='done'\?'실제 금액'/);
+ assert.match(pages,/list\.length\?`<button class="schedule-day/);
+ assert.match(pages,/:`<span class="schedule-day/);
+});
+
+test('ISA balance registrations appear in adjustment filter and linked details use the displayed total',()=>{
+ const isa=read('isa-summary.js'),pages=read('integrated-pages.js');
+ assert.match(isa,/filter==='adjustment'&&t\.type==='openingAllocation'/);
+ assert.match(pages,/sourceLabel=.*한국투자 조회 합계/);
+ assert.match(pages,/won\(known\)/);
+});
+
 test('successful integrated save clears hidden search and filter state',()=>{
  const source=read('integrated-forms.js');
  assert.match(source,/integratedLedgerSearch=''/);

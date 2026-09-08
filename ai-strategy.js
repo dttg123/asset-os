@@ -57,7 +57,7 @@ function aiStrategyPreflight(payload,amount,fundingSource){
  const isRebalance=payload?.request?.purpose==='리밸런싱';
  const isaHoldings=payload.isa.accounts.flatMap(a=>a.holdings),stale7=isaHoldings.filter(h=>h.quoteAgeHours>168),stale3=isaHoldings.filter(h=>h.quoteAgeHours>72&&h.quoteAgeHours<=168);
  if(payload.isa.accounts.some(a=>Math.abs(a.summary.componentDelta)>1))blockers.push('ISA 합계와 보유·현금 구성값이 일치하지 않습니다.');
- if(stale7.length)blockers.push(`ISA 현재가가 7일 넘게 오래된 종목 ${stale7.length}개가 있습니다.`);else if(stale3.length)warnings.push(`ISA 현재가가 3일 넘게 오래된 종목 ${stale3.length}개가 있습니다.`);
+ if(stale7.length)warnings.push(`ISA 현재가가 7일 넘게 오래된 종목 ${stale7.length}개가 있습니다. 최신 주문 전에는 현재가를 다시 갱신해 주세요.`);else if(stale3.length)warnings.push(`ISA 현재가가 3일 넘게 오래된 종목 ${stale3.length}개가 있습니다.`);
  const pensionAccounts=[...payload.pensionSavings.accounts,...payload.irp.accounts];
  const kisAccounts=pensionAccounts.filter(a=>a.source==='한국투자 조회'),staleKis=kisAccounts.filter(a=>aiIsoAgeHours(a.sync?.lastCompleteAt)>36);
  const negativePensionDelta=pensionAccounts.filter(a=>Number(a.summary.componentDelta)<-1),positivePensionDelta=pensionAccounts.filter(a=>Number(a.summary.componentDelta)>1);
@@ -69,7 +69,7 @@ function aiStrategyPreflight(payload,amount,fundingSource){
  if(positivePensionDelta.length)warnings.push(`연금 조회 합계 중 종목 상세가 없는 기타자산이 있는 계좌 ${positivePensionDelta.length}개를 별도 금액으로 포함했습니다.`);
  if(pensionAccounts.some(a=>a.summary.cashConfirmed===false))blockers.push('당일 체결 때문에 연금 예수금의 실제 사용 가능액이 확정되지 않았습니다.');
  if(kisAccounts.some(a=>a.sync?.lastError))blockers.push('한국투자 잔고·체결 갱신이 부분 완료 상태입니다.');
- if(staleKis.length)blockers.push(`한국투자 전체 갱신이 36시간 넘게 오래된 계좌 ${staleKis.length}개가 있습니다.`);
+ if(staleKis.length)warnings.push(`한국투자 전체 갱신이 36시간 넘게 오래된 계좌 ${staleKis.length}개가 있습니다. 최신 주문 전에는 다시 갱신해 주세요.`);
  if(payload.irp.risk.classificationComplete===false)blockers.push('IRP에 위험자산 분류가 확인되지 않은 종목이 있습니다.');
  if(amount<=0&&!isRebalance)blockers.push('판단할 투자금액이 0원입니다.');
  if(fundingSource==='account_cash'){
@@ -88,7 +88,7 @@ function buildAiStrategyPayload(purpose,amount,fundingSource='new_money'){
 }
 function payloadNumber(value){return Number(value)||0}
 
-function aiStrategyFile(purpose,amount,fundingSource){const payload=buildAiStrategyPayload(purpose,amount,fundingSource),blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});return{file:new File([blob],'투자분석.json',{type:'application/json'}),payload}}
+function aiStrategyFile(purpose,amount,fundingSource){const payload=buildAiStrategyPayload(purpose,amount,fundingSource),blob=new Blob([JSON.stringify(payload,null,2)],{type:'text/plain'});return{file:new File([blob],'투자분석.txt',{type:'text/plain'}),payload}}
 async function shareAiStrategyFile(purpose,amount,fundingSource){
  const {file,payload}=aiStrategyFile(purpose,amount,fundingSource);
  if(!payload.dataQuality.ready){showNotice('공유 전 확인',payload.dataQuality.blockers.join('\n'));return false}

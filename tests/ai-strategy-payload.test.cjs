@@ -26,8 +26,8 @@ const context={
   brokerKisVisibleOrders:()=>[],
   pensionIncomeRecords:()=>[],
   pensionRiskMetrics:()=>({risky:4823025,unknown:0,ratio:67.57,maxRatio:67.57,limit:70,classificationComplete:true}),
-  Blob:class{},
-  File:class{},
+  Blob:class{constructor(parts,options){this.parts=parts;this.type=options?.type||''}},
+  File:class{constructor(parts,name,options){this.parts=parts;this.name=name;this.type=options?.type||''}},
   navigator:{},
   URL:{},
   document:{},
@@ -41,7 +41,7 @@ const context={
 };
 vm.createContext(context);
 const source=fs.readFileSync(path.resolve(__dirname,'..','ai-strategy.js'),'utf8');
-vm.runInContext(`${source}\nthis.__buildAiStrategyPayload=buildAiStrategyPayload;`,context);
+vm.runInContext(`${source}\nthis.__buildAiStrategyPayload=buildAiStrategyPayload;this.__aiStrategyFile=aiStrategyFile;`,context);
 const payload=context.__buildAiStrategyPayload('buy',3000000,'new_money');
 
 assert.equal(payload.request.additionalInvestmentWon,3000000);
@@ -81,5 +81,22 @@ const zeroBuyPayload=JSON.parse(JSON.stringify(payload));
 zeroBuyPayload.request.purpose='추가매수 판단';
 const zeroBuy=vm.runInContext('aiStrategyPreflight(__payload,0,"new_money")',Object.assign(context,{__payload:zeroBuyPayload}));
 assert.equal(zeroBuy.ready,false,'추가매수 판단은 투자금 0원을 허용하지 않는다');
+
+const staleKisPayload=JSON.parse(JSON.stringify(payload));
+staleKisPayload.request.purpose='리밸런싱';
+staleKisPayload.pensionSavings.accounts=[{source:'한국투자 조회',sync:{lastCompleteAt:'2026-01-01T00:00:00.000Z',lastError:''},summary:{componentDelta:0,cashConfirmed:true,availableCash:0,cash:0}}];
+const staleKis=vm.runInContext('aiStrategyPreflight(__payload,0,"new_money")',Object.assign(context,{__payload:staleKisPayload}));
+assert.equal(staleKis.ready,true,'오래된 한투 조회만으로 리밸런싱 자료 공유를 막으면 안 된다');
+assert.match(staleKis.warnings.join(' '),/36시간 넘게 오래된 계좌 1개/);
+const strategyFile=context.__aiStrategyFile('rebalance',0,'new_money').file;
+assert.equal(strategyFile.name,'투자분석.txt');
+assert.equal(strategyFile.type,'text/plain');
+
+const staleIsaPayload=JSON.parse(JSON.stringify(payload));
+staleIsaPayload.request.purpose='리밸런싱';
+staleIsaPayload.isa.accounts[0].holdings=[{quoteAgeHours:240}];
+const staleIsa=vm.runInContext('aiStrategyPreflight(__payload,0,"new_money")',Object.assign(context,{__payload:staleIsaPayload}));
+assert.equal(staleIsa.ready,true,'오래된 ISA 현재가만으로 리밸런싱 자료 공유를 막으면 안 된다');
+assert.match(staleIsa.warnings.join(' '),/ISA 현재가가 7일 넘게 오래된 종목 1개/);
 
 console.log('AI strategy payload tests: PASS');
