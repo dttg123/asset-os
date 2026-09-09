@@ -7,15 +7,15 @@ const document={querySelector:()=>null,querySelectorAll:()=>[],documentElement:{
 const window={addEventListener(){},removeEventListener(){},scrollTo(){},isSecureContext:false,supabase:{createClient(){networkClients++;throw new Error('QA must not initialize Supabase')}}};
 const context=vm.createContext({console,Date,Set,Map,URL,Blob,File:global.File,TextEncoder,TextDecoder,Uint8Array,DataView,ArrayBuffer,Intl,Math,JSON,Number,String,Boolean,Object,RegExp,Promise,encodeURIComponent,decodeURIComponent,localStorage,document,window,navigator:{},location:{search:'?qa=1',hash:'',pathname:'/asset-os/'},history:{replaceState(){}},fetch:async()=>{fetches++;throw new Error('QA network blocked')},requestAnimationFrame:fn=>fn(),setTimeout:()=>0,clearTimeout(){},toast(){},closeSheets(){},render(){},haptic(){} });
 vm.runInContext('let integratedAssetsExpanded=false',context);
-const files=['core-config.js','broker-kis.js','broker-kis-client.js','data-defaults.js','integrated-ledger-engine.js','integrated-schedule-engine.js','integrated-finance-engine.js','store-migrations.js','store-state.js','core-accessors.js','core-visual-utils.js','pension-contributions.js','pension-ledger.js','chart-asset-analysis.js','pension-assets.js','isa-validation.js','isa-ledger.js','integrated-forms.js','integrated-pages.js','home.js','qa-mode.js','supabase-sync.js'];
+const files=['core-config.js','broker-kis.js','broker-kis-client.js','data-defaults.js','integrated-ledger-engine.js','integrated-schedule-engine.js','integrated-finance-engine.js','store-state.js','core-accessors.js','core-visual-utils.js','pension-contributions.js','pension-ledger.js','chart-asset-analysis.js','pension-assets.js','isa-validation.js','isa-ledger.js','integrated-forms.js','integrated-pages.js','home.js','qa-mode.js','supabase-sync.js'];
 for(const file of files)vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),context,{filename:file});
 const run=(code,args=[])=>vm.runInContext(code,Object.assign(context,{__args:args})),plain=x=>JSON.parse(JSON.stringify(x)),close=(actual,expected,tolerance=.01)=>assert.ok(Math.abs(actual-expected)<=tolerance,`${actual} != ${expected}`);
 
-assert.equal(run('QA_MODE'),true);assert.equal(run('APP_VERSION'),'v0.6.6');assert.equal(run('KEY'),'asset-os-qa-v0.5');assert.equal(run('localYmd()'),'2060-12-31');
+assert.equal(run('QA_MODE'),true);assert.equal(run('APP_VERSION'),'v0.6.7');assert.equal(run('KEY'),'asset-os-qa-v0.5');assert.equal(run('localYmd()'),'2060-12-31');
 assert.equal(run('daysUntil("2061-12-31")'),365,'QA D-day must use the simulated app date');
 run('state=qaBuildThirtyFiveYearState();lastPersistedState=clone(state)');
 const stats=plain(run('qaDatasetStats()'));
-assert.equal(run('state.system.qaDataset.version'),'v0.6.6');
+assert.equal(run('state.system.qaDataset.version'),'v0.6.7');
 assert.deepEqual(stats,{isa:872,pension:891,integrated:5977,total:7740,totalAssets:1342937642,totalDebt:87400124,netAssets:1255537518,cash:529654229,isaAccounts:12,months:420});
 assert.equal(run('homeSample().contributed'),2416674,'홈 저축·투자는 ISA·연금저축·IRP를 포함해야 한다');
 assert.ok(run('homeSample().activity.living')>0,'홈 월 합계에 생활비·고정지출이 있어야 한다');

@@ -13,7 +13,7 @@ const context=vm.createContext({
  window:{addEventListener(){},isSecureContext:false},navigator:{},URL:{createObjectURL:()=>'',revokeObjectURL(){}},Blob:class{},
  localStorage:{get length(){return storage.size},key:i=>[...storage.keys()][i]??null,getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(String(k),String(v)),removeItem:k=>storage.delete(String(k))}
 });
-const files=['core-config.js','broker-kis.js','integrated-ledger-engine.js','data-defaults.js','integrated-schedule-engine.js','integrated-finance-engine.js','isa-validation.js','store-migrations.js','store-state.js','backup.js'];
+const files=['core-config.js','broker-kis.js','integrated-ledger-engine.js','data-defaults.js','integrated-schedule-engine.js','integrated-finance-engine.js','isa-validation.js','store-state.js','backup.js'];
 for(const file of files)vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),context,{filename:file});
 const run=code=>vm.runInContext(code,context),plain=value=>JSON.parse(JSON.stringify(value));
 

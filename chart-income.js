@@ -1,7 +1,6 @@
 'use strict';
 let pensionIncomeAnalysisMode='month',pensionIncomeSelectedPoint='',pensionIncomeYearRange='10y',pensionIncomeChartMode='bar';
 function pensionCompactWon(v){v=Math.max(0,Number(v)||0);if(v>=1000000000000)return `${(v/1000000000000).toFixed(v>=10000000000000?0:1).replace(/\.0$/,'')}조`;if(v>=100000000)return `${(v/100000000).toFixed(v>=1000000000?0:1).replace(/\.0$/,'')}억`;if(v>=10000)return `${(v/10000).toFixed(v>=100000?0:1).replace(/\.0$/,'')}만`;return `${Math.round(v).toLocaleString('ko-KR')}원`}
-function pensionHeroWon(v){v=Number(v)||0;return Math.abs(v)>=1000000000000?`${v<0?'-':''}${pensionCompactWon(Math.abs(v))}`:won(v)}
 function pensionHeroSigned(v){v=Number(v)||0;return `${v>=0?'+':'-'}${Math.abs(v)>=1000000000000?pensionCompactWon(Math.abs(v)):won(Math.abs(v))}`}
 function pensionReadableWon(v){v=Math.max(0,Math.round(Number(v)||0));if(v>=100000000)return displayWon(v);if(v>=10000)return `${nf.format(Math.round(v/10000))}만원`;return won(v)}
 function pensionFutureHeadlineWon(v){v=Math.max(0,Math.round(Number(v)||0));return pensionReadableWon(v)}
