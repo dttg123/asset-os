@@ -62,5 +62,5 @@ test('AI export includes six-month cash flow and names stale accounts by Korean 
 });
 
 test('freshly rendered detail buttons bind immediately without zero-delay wrappers',()=>{
- for(const name of ['integrated-pages.js','integrated-forms.js','integrated-finance-ui.js','chart-financial-growth.js'])assert.doesNotMatch(read(name),/setTimeout\(\(\)=>\{/);
+ for(const name of ['integrated-pages.js','integrated-forms.js','integrated-finance-ui.js','chart-financial-growth.js','ui-settings.js','isa-maturity-policy.js','chart-dividends.js','pension-forms.js','isa-registration.js'])assert.doesNotMatch(read(name),/setTimeout\(\(\)=>\{/);
 });
