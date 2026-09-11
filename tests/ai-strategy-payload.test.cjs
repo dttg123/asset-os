@@ -84,10 +84,11 @@ assert.equal(zeroBuy.ready,false,'추가매수 판단은 투자금 0원을 허�
 
 const staleKisPayload=JSON.parse(JSON.stringify(payload));
 staleKisPayload.request.purpose='리밸런싱';
-staleKisPayload.pensionSavings.accounts=[{source:'한국투자 조회',sync:{lastCompleteAt:'2026-01-01T00:00:00.000Z',lastError:''},summary:{componentDelta:0,cashConfirmed:true,availableCash:0,cash:0}}];
+staleKisPayload.pensionSavings.accounts=[{label:'연금저축 1',source:'한국투자 조회',sync:{lastCompleteAt:'2026-01-01T00:00:00.000Z',lastError:''},summary:{componentDelta:0,cashConfirmed:true,availableCash:0,cash:0}}];
 const staleKis=vm.runInContext('aiStrategyPreflight(__payload,0,"new_money")',Object.assign(context,{__payload:staleKisPayload}));
 assert.equal(staleKis.ready,true,'오래된 한투 조회만으로 리밸런싱 자료 공유를 막으면 안 된다');
-assert.match(staleKis.warnings.join(' '),/36시간 넘게 오래된 계좌 1개/);
+assert.match(staleKis.warnings.join(' '),/1거래일 넘게 지난 계좌: 연금저축 1/);
+assert.match(staleKis.warnings.join(' '),/주말·시장 휴장일은 제외/);
 const strategyFile=context.__aiStrategyFile('rebalance',0,'new_money').file;
 assert.equal(strategyFile.name,'투자분석.txt');
 assert.equal(strategyFile.type,'text/plain');

@@ -66,6 +66,11 @@
 .pension-future-focus.compact{display:block;margin:8px 0}.pension-future-focus-card{padding:10px 11px!important}.pension-future-focus-card>strong{display:block;font-size:11px;margin:0 0 7px;color:#5d4cc9}.pension-future-focus-values{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.pension-future-focus-values span{min-width:0}.pension-future-focus-values small{display:block;color:var(--muted);font-size:8px}.pension-future-focus-values b{display:block;margin-top:3px;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pension-future-x-title{display:none}
 @media(max-width:370px){.pension-future-focus-values{grid-template-columns:1fr 1fr}.pension-future-focus-values span:last-child{grid-column:1/-1}}
 
+/* v0.6.8 미래연금: 선택한 나이와 상단 금액을 하나의 표시로 연동 */
+.pension-future-principal{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0 2px;padding:9px 11px;border-radius:12px;background:var(--surface2);color:var(--muted);font-size:9.5px}.pension-future-principal b{color:var(--accent2)}.pension-future-principal strong{color:var(--text);font-size:11px;white-space:nowrap}
+.pension-future-chart{height:202px}
+.pension-future-details{margin-top:8px;border-top:1px solid var(--line);padding-top:8px;color:var(--muted);font-size:9px}.pension-future-details summary{cursor:pointer;font-weight:900;color:var(--accent2);list-style:none}.pension-future-details summary::-webkit-details-marker{display:none}.pension-future-details p{margin:8px 0 0;line-height:1.55}.pension-future-details .pension-future-assumptions{margin-top:8px}
+
 
 /* v1.9.11 period analysis + zero-income hard fix */
 .pension-income-bar.zero i{display:none!important;width:0!important;height:0!important;min-height:0!important;background:transparent!important;outline:0!important;box-shadow:none!important;transform:none!important;filter:none!important}

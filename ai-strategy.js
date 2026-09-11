@@ -21,6 +21,10 @@ function aiStrategyPrompt(purpose,amount,fundingSource='new_money'){
 
 function aiRecentRows(rows,limit=240){return [...(rows||[])].sort((a,b)=>String(b.date||b.orderDate||'').localeCompare(String(a.date||a.orderDate||''))).slice(0,limit)}
 function aiIsoAgeHours(value){const time=new Date(value||'').getTime();return Number.isFinite(time)?Math.max(0,(Date.now()-time)/36e5):Infinity}
+const AI_KR_MARKET_HOLIDAYS_2026=new Set(['2026-01-01','2026-02-16','2026-02-17','2026-02-18','2026-03-02','2026-05-05','2026-05-25','2026-08-17','2026-09-24','2026-09-25','2026-09-28','2026-10-05','2026-10-09','2026-12-25']);
+function aiKoreaDate(value){const date=new Date(value||'');if(!Number.isFinite(date.getTime()))return'';return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(date)}
+function aiTradingDaysSince(value,now=new Date()){const start=aiKoreaDate(value),end=aiKoreaDate(now);if(!start||!end)return Infinity;let cursor=new Date(`${start}T00:00:00Z`),finish=new Date(`${end}T00:00:00Z`),days=0;while(cursor<finish&&days<400){cursor.setUTCDate(cursor.getUTCDate()+1);const key=cursor.toISOString().slice(0,10),dow=cursor.getUTCDay();if(dow!==0&&dow!==6&&!AI_KR_MARKET_HOLIDAYS_2026.has(key))days++}return days}
+function aiKoreaTimestamp(value){const date=new Date(value||'');return Number.isFinite(date.getTime())?new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(date):'갱신 기록 없음'}
 function aiPurposeLabel(value){return value==='rebalance'?'리밸런싱':value==='tax'?'절세·납입':'추가매수 판단'}
 function aiFundingLabel(value){return value==='account_cash'?'계좌 안 현금':value==='next_contribution'?'다음 납입금':'새로 넣을 돈'}
 
@@ -38,7 +42,7 @@ function aiIsaAccountExport(account,index){
 
 function aiPensionAccountExport(account,index){
  const view=pensionAccountView(account),kind=account.kind==='irp'?'IRP':'연금저축',connection=state.brokerKis?.connections?.[account.kind]||{};
- return{ref:`${kind==='IRP'?'IRP':'PENSION'}${index+1}`,kind,status:account.status,openedAt:account.openedAt||'',source:view.kis?'한국투자 조회':'Asset OS 원장',sync:{lastCompleteAt:connection.lastCompleteSyncAt||'',lastBalanceAt:connection.lastBalanceAt||'',lastOrdersAt:connection.lastOrdersAt||'',lastError:connection.lastError||''},summary:{value:Math.round(view.total),cash:Math.round(view.cash),availableCash:view.cashStatus?.availableCash===null?null:Math.round(Number(view.cashStatus?.availableCash)||0),cashConfirmed:view.cashStatus?.confirmed!==false,pendingBuy:Math.round(Number(view.cashStatus?.pendingBuy)||0),securitiesValue:Math.round(view.holdingValue),unallocated:Math.round(view.unallocated),componentDelta:Math.round(view.componentDelta||0)},holdings:view.holdings.map(h=>({name:h.name,productCode:h.productCode||'',productType:h.productType||'',assetClass:h.assetClass||'',quantity:Number(h.qty)||0,averagePrice:Number(h.avgPrice)||0,currentPrice:Number(h.currentPrice)||0,marketValue:Math.round(pensionHoldingValue(h)),profitLoss:Math.round(pensionHoldingValue(h)-pensionHoldingCost(h)),riskClassification:h.risky===true?'risky':h.risky===false?'non_risky':'unclassified',riskSource:h.riskSource||'',readOnly:!!h.readOnly}))}
+ return{ref:`${kind==='IRP'?'IRP':'PENSION'}${index+1}`,label:account.name||kind,kind,status:account.status,openedAt:account.openedAt||'',source:view.kis?'한국투자 조회':'Asset OS 원장',sync:{lastCompleteAt:connection.lastCompleteSyncAt||'',lastBalanceAt:connection.lastBalanceAt||'',lastOrdersAt:connection.lastOrdersAt||'',lastError:connection.lastError||''},summary:{value:Math.round(view.total),cash:Math.round(view.cash),availableCash:view.cashStatus?.availableCash===null?null:Math.round(Number(view.cashStatus?.availableCash)||0),cashConfirmed:view.cashStatus?.confirmed!==false,pendingBuy:Math.round(Number(view.cashStatus?.pendingBuy)||0),securitiesValue:Math.round(view.holdingValue),unallocated:Math.round(view.unallocated),componentDelta:Math.round(view.componentDelta||0)},holdings:view.holdings.map(h=>({name:h.name,productCode:h.productCode||'',productType:h.productType||'',assetClass:h.assetClass||'',quantity:Number(h.qty)||0,averagePrice:Number(h.avgPrice)||0,currentPrice:Number(h.currentPrice)||0,marketValue:Math.round(pensionHoldingValue(h)),profitLoss:Math.round(pensionHoldingValue(h)-pensionHoldingCost(h)),riskClassification:h.risky===true?'risky':h.risky===false?'non_risky':'unclassified',riskSource:h.riskSource||'',readOnly:!!h.readOnly}))}
 }
 
 function aiPensionSection(kind){
@@ -52,6 +56,13 @@ function aiPensionSection(kind){
  return{accounts,combined:{value:Math.round(metrics.value),cost:Math.round(metrics.cost),cash:Math.round(metrics.cash),profit:Math.round(metrics.profit),returnRate:Number(metrics.rate)||0},contribution:{year,paid:Math.round(yearPaid)},policy:{name:currentPolicy.name||'',verifiedAt:currentPolicy.verifiedAt||'',annualContributionLimit:Number(currentPolicy.annualContributionLimit)||0,annualTaxCreditLimit:Number(currentPolicy.annualTaxCreditLimit)||0,combinedTaxCreditLimit:Number(currentPolicy.combinedTaxCreditLimit)||0,taxCreditRate:Number(currentPolicy.taxCreditRate)||0,riskyAssetLimit:Number(currentPolicy.riskyAssetLimit)||0},contributions,transactions,brokerOrders,income,assetSnapshots}
 }
 
+function aiIntegratedCashFlowExport(){
+ if(typeof integratedSelectedMonth!=='function'||typeof integratedSpendingMonthShift!=='function'||typeof integratedSummary!=='function'||typeof integratedSpendingAnalysis!=='function')return{currentMonth:'',monthlyLivingBudget:0,months:[]};
+ const current=integratedSelectedMonth(),months=[];
+ for(let offset=-5;offset<=0;offset++){const month=integratedSpendingMonthShift(current,offset),summary=integratedSummary(month),spending=integratedSpendingAnalysis(month);months.push({month,income:Math.round(summary.income),livingExpense:Math.round(spending.total),fixedExpense:Math.round(spending.fixed),variableExpense:Math.round(spending.variable),savingAndInvestment:Math.round(summary.invest),debtPrincipal:Math.round(summary.principal),operatingCashDelta:Math.round(summary.operatingCashDelta)})}
+ return{currentMonth:current,monthlyLivingBudget:Math.round(Math.max(0,Number(setting().monthlyLivingBudget)||0)),months}
+}
+
 function aiStrategyPreflight(payload,amount,fundingSource){
  const blockers=[],warnings=[];
  const isRebalance=payload?.request?.purpose==='리밸런싱';
@@ -59,7 +70,7 @@ function aiStrategyPreflight(payload,amount,fundingSource){
  if(payload.isa.accounts.some(a=>Math.abs(a.summary.componentDelta)>1))blockers.push('ISA 합계와 보유·현금 구성값이 일치하지 않습니다.');
  if(stale7.length)warnings.push(`ISA 현재가가 7일 넘게 오래된 종목 ${stale7.length}개가 있습니다. 최신 주문 전에는 현재가를 다시 갱신해 주세요.`);else if(stale3.length)warnings.push(`ISA 현재가가 3일 넘게 오래된 종목 ${stale3.length}개가 있습니다.`);
  const pensionAccounts=[...payload.pensionSavings.accounts,...payload.irp.accounts];
- const kisAccounts=pensionAccounts.filter(a=>a.source==='한국투자 조회'),staleKis=kisAccounts.filter(a=>aiIsoAgeHours(a.sync?.lastCompleteAt)>36);
+ const kisAccounts=pensionAccounts.filter(a=>a.source==='한국투자 조회'),staleKis=kisAccounts.filter(a=>aiTradingDaysSince(a.sync?.lastCompleteAt)>1);
  const negativePensionDelta=pensionAccounts.filter(a=>Number(a.summary.componentDelta)<-1),positivePensionDelta=pensionAccounts.filter(a=>Number(a.summary.componentDelta)>1);
  if(negativePensionDelta.length){
   const difference=negativePensionDelta.reduce((sum,a)=>sum+Math.abs(Number(a.summary.componentDelta)||0),0);
@@ -69,7 +80,7 @@ function aiStrategyPreflight(payload,amount,fundingSource){
  if(positivePensionDelta.length)warnings.push(`연금 조회 합계 중 종목 상세가 없는 기타자산이 있는 계좌 ${positivePensionDelta.length}개를 별도 금액으로 포함했습니다.`);
  if(pensionAccounts.some(a=>a.summary.cashConfirmed===false))blockers.push('당일 체결 때문에 연금 예수금의 실제 사용 가능액이 확정되지 않았습니다.');
  if(kisAccounts.some(a=>a.sync?.lastError))blockers.push('한국투자 잔고·체결 갱신이 부분 완료 상태입니다.');
- if(staleKis.length)warnings.push(`한국투자 전체 갱신이 36시간 넘게 오래된 계좌 ${staleKis.length}개가 있습니다. 최신 주문 전에는 다시 갱신해 주세요.`);
+ if(staleKis.length)warnings.push(`한국투자 갱신이 1거래일 넘게 지난 계좌: ${staleKis.map(a=>`${a.label||a.ref||a.kind||'계좌'} (${aiKoreaTimestamp(a.sync?.lastCompleteAt)})`).join(', ')}. 주말·시장 휴장일은 제외했습니다. 최신 주문 전에는 다시 갱신해 주세요.`);
  if(payload.irp.risk.classificationComplete===false)blockers.push('IRP에 위험자산 분류가 확인되지 않은 종목이 있습니다.');
  if(amount<=0&&!isRebalance)blockers.push('판단할 투자금액이 0원입니다.');
  if(fundingSource==='account_cash'){
@@ -82,7 +93,7 @@ function aiStrategyPreflight(payload,amount,fundingSource){
 
 function buildAiStrategyPayload(purpose,amount,fundingSource='new_money'){
  const isaAccounts=state.accounts.filter(isCurrentAccount).map(aiIsaAccountExport),pensionSavings=aiPensionSection('pension'),irpSection=aiPensionSection('irp'),projection=pensionProjection(),risk=pensionRiskMetrics();
- const payload={format:'asset-os-ai-strategy-v2',generatedAt:new Date().toISOString(),privacy:{excluded:['이름','이메일','계좌번호','메모','API 키','토큰']},request:{purpose:aiPurposeLabel(purpose),fundingSource:aiFundingLabel(fundingSource),additionalInvestmentWon:amount,prompt:aiStrategyPrompt(purpose,amount,fundingSource)},profile:{investmentHorizon:'3년 이상',riskStyle:'공격형',maximumDrawdownTolerance:'-40%',rebalancePreference:'가능하면 매도보다 신규 자금으로 조정'},isa:{accounts:isaAccounts,combined:{value:isaAccounts.reduce((s,x)=>s+x.summary.value,0),cost:isaAccounts.reduce((s,x)=>s+x.summary.cost,0),cash:isaAccounts.reduce((s,x)=>s+x.summary.cash,0),profit:isaAccounts.reduce((s,x)=>s+x.summary.profit,0)}},pensionSavings,irp:{...irpSection,risk:{riskyValue:Math.round(risk.risky),unclassifiedValue:Math.round(risk.unknown),confirmedRatio:Number(risk.ratio)||0,maximumPossibleRatio:Number(risk.maxRatio)||0,limit:Number(risk.limit)||70,classificationComplete:!!risk.classificationComplete}},combinedPlan:{totalValue:Math.round(payloadNumber(pensionSavings.combined.value)+payloadNumber(irpSection.combined.value)+isaAccounts.reduce((s,x)=>s+x.summary.value,0)),projection:{retirementAge:projection.retirementAge,currentAge:projection.currentAge,monthlyContribution:Math.round(projection.monthly),annualReturnRate:Number(projection.annual)||0,inflationRate:Number(projection.inflation)||0,expectedAssetsAtRetirement:Math.round(projection.future),expectedMonthlyPension:Math.round(projection.monthlyPension)}}};
+ const payload={format:'asset-os-ai-strategy-v2',generatedAt:new Date().toISOString(),privacy:{excluded:['이름','이메일','계좌번호','메모','API 키','토큰']},request:{purpose:aiPurposeLabel(purpose),fundingSource:aiFundingLabel(fundingSource),additionalInvestmentWon:amount,prompt:aiStrategyPrompt(purpose,amount,fundingSource)},profile:{investmentHorizon:'3년 이상',riskStyle:'공격형',maximumDrawdownTolerance:'-40%',rebalancePreference:'가능하면 매도보다 신규 자금으로 조정'},isa:{accounts:isaAccounts,combined:{value:isaAccounts.reduce((s,x)=>s+x.summary.value,0),cost:isaAccounts.reduce((s,x)=>s+x.summary.cost,0),cash:isaAccounts.reduce((s,x)=>s+x.summary.cash,0),profit:isaAccounts.reduce((s,x)=>s+x.summary.profit,0)}},pensionSavings,irp:{...irpSection,risk:{riskyValue:Math.round(risk.risky),unclassifiedValue:Math.round(risk.unknown),confirmedRatio:Number(risk.ratio)||0,maximumPossibleRatio:Number(risk.maxRatio)||0,limit:Number(risk.limit)||70,classificationComplete:!!risk.classificationComplete}},cashFlow:aiIntegratedCashFlowExport(),combinedPlan:{totalValue:Math.round(payloadNumber(pensionSavings.combined.value)+payloadNumber(irpSection.combined.value)+isaAccounts.reduce((s,x)=>s+x.summary.value,0)),projection:{retirementAge:projection.retirementAge,currentAge:projection.currentAge,monthlyContribution:Math.round(projection.monthly),annualReturnRate:Number(projection.annual)||0,inflationRate:Number(projection.inflation)||0,expectedAssetsAtRetirement:Math.round(projection.future),expectedMonthlyPension:Math.round(projection.monthlyPension)}}};
  payload.dataQuality=aiStrategyPreflight(payload,amount,fundingSource);
  return payload
 }
