@@ -1,5 +1,5 @@
 'use strict';
-/* v0.6.9 final product polish. Existing ledgers stay untouched; this layer only reshapes views. */
+/* v0.6.10 final product polish. Existing ledgers stay untouched; this layer only reshapes views. */
 let v069AssetGroup='',v069ScheduleGroup={summary:'',page:''},v069AiDraft=null;
 const v069HomeCard=homeCard;
 homeCard=function(id){return v069HomeCard(id).replace('이번 달 지출·납입','이번 달 자금 계획').replace(/기록 ([^<]+) · 남은 일정 \d+건/,'집행 $1 · 예정 '+displayWon(homeSample().scheduled))};

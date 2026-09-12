@@ -1,16 +1,26 @@
 'use strict';
 state=loadState();
 lastPersistedState=clone(state);
+function applyExternalSavedState(saved){
+ const interruptedInput=sheetMode==='input'&&sheetDirty;
+ if(interruptedInput){
+  if(activeSheetId==='#registerSheet')holdingRegistrationDraft=null;
+  closeSheets({all:true});
+ }
+ state=normalizeState(saved.data);
+ lastPersistedState=clone(state);
+ render();
+ if(typeof qaRenderStats==='function')qaRenderStats();
+ if(interruptedInput)showNotice('다른 화면에서 변경됨','충돌로 인한 저장 누락을 막기 위해 작성 중이던 입력 화면을 닫고 최신 내용을 반영했습니다. 다시 열어 입력해 주세요.');
+ else toast('다른 화면의 최신 변경사항을 반영했습니다.');
+ return interruptedInput;
+}
 window.addEventListener('storage',event=>{
  if(event.storageArea!==localStorage||event.key!==KEY||!event.newValue)return;
  try{
   const saved=JSON.parse(event.newValue);
   if(!saved?.data||Number(saved.schemaVersion)!==SCHEMA_VERSION)return;
-  state=normalizeState(saved.data);
-  lastPersistedState=clone(state);
-  render();
-  if(typeof qaRenderStats==='function')qaRenderStats();
-  toast('다른 화면의 최신 변경사항을 반영했습니다.');
+  applyExternalSavedState(saved);
  }catch{}
 });
 $$('.nav').forEach(b=>b.onclick=()=>nav(b.dataset.root));window.addEventListener('hashchange',()=>{resetTransientPanels();window.scrollTo(0,0);render()});$('#profile').onclick=()=>{refreshCloudProfileUI();openSheet('#profileSheet')};$('#scrim').onclick=()=>requestCloseSheets('scrim');$('#dialogScrim').onclick=()=>hideDialog(true);$('#confirmCancel').onclick=()=>hideDialog(true);$('#confirmOk').onclick=()=>{const cb=dialogConfirmAction;hideDialog(false);if(cb)cb()};document.addEventListener('input',e=>{if(e.target.closest('.sheet.open')&&sheetMode==='input')sheetDirty=true});document.addEventListener('submit',e=>{const form=e.target;if(!(form instanceof HTMLFormElement))return;const now=Date.now(),last=Number(form.dataset.lastSubmitAt)||0;if(now-last<500){e.preventDefault();e.stopImmediatePropagation();return}form.dataset.lastSubmitAt=String(now)},true);window.addEventListener('popstate',()=>{if(suppressSheetPop){suppressSheetPop=false;const y=pendingScrollRestore;pendingScrollRestore=null;if(y!=null)requestAnimationFrame(()=>window.scrollTo(0,y));return}if($$('.sheet.open').length)requestCloseSheets('back',true)});

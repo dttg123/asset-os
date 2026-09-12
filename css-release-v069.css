@@ -1,4 +1,4 @@
-/* v0.6.9 final density and alignment pass */
+/* v0.6.10 final density and alignment pass */
 .pension-kpis.three{grid-template-columns:repeat(3,minmax(0,1fr))}
 .pension-future-toolbar{min-height:30px;align-items:center}.pension-future-toolbar>span{color:var(--muted);font-size:9px;font-weight:800}
 .pension-future-page .future-primary{align-items:stretch}.pension-future-page .future-primary .metric{display:flex;min-height:78px;box-sizing:border-box;flex-direction:column;justify-content:center}.pension-future-page .future-primary .metric>span{min-height:15px}.pension-future-page .future-primary .metric>strong{min-height:26px;display:flex;align-items:center;font-size:clamp(16px,4.6vw,21px)!important;line-height:1.12!important}

@@ -6,7 +6,7 @@ const path=require('node:path');
 const root=path.join(__dirname,'..');
 const read=name=>fs.readFileSync(path.join(root,name),'utf8');
 
-test('v0.6.9 final views and export assets are shipped in the PWA shell',()=>{
+test('v0.6.10 final views and export assets are shipped in the PWA shell',()=>{
  const html=read('index.html'),worker=read('service-worker.js'),pwa=read('pwa.js'),release=read('release-v069.js'),home=read('home.js');
  for(const name of ['export-csv.js','release-v069.js','css-release-v069.css']){
   assert.match(html,new RegExp(name.replace('.','\\.')));
@@ -15,12 +15,12 @@ test('v0.6.9 final views and export assets are shipped in the PWA shell',()=>{
  for(const text of ['이번 달 자금 계획','순금융자산','현금성 자산','투자자산','대출·부채','대출·이자','생활 고정비','가용 현금','월별 납입 내역 정리','분석파일 만들기'])assert.match(release,new RegExp(text));
  assert.match(release,/Math\.min\(20,Number\(remaining\)/);
  assert.match(read('css-release-v069.css'),/pension-future-chart\{height:192px!important\}/);
- assert.match(html,/v=0\.6\.9-r5/);
- assert.match(html,/pwa\.js\?v=0\.6\.9-r5/);
- assert.match(html,/boot\.js\?v=0\.6\.9-r5/);
- assert.match(worker,/asset-os-v0\.6\.9-r5/);
- assert.match(worker,/v=0\.6\.9-r5/);
- assert.match(pwa,/service-worker\.js\?v=0\.6\.9-r5/);
+ assert.match(html,/v=0\.6\.10-r1/);
+ assert.match(html,/pwa\.js\?v=0\.6\.10-r1/);
+ assert.match(html,/boot\.js\?v=0\.6\.10-r1/);
+ assert.match(worker,/asset-os-v0\.6\.10-r1/);
+ assert.match(worker,/v=0\.6\.10-r1/);
+ assert.match(pwa,/service-worker\.js\?v=0\.6\.10-r1/);
  assert.match(home,/function openAlertsCenter\(\)\{const isaReady=homeSample\(\)\.isaSource==='asset-os'/);
  const boot=read('boot.js');
  assert.match(boot,/addEventListener\('storage'/);
@@ -55,6 +55,27 @@ test('Excel CSV output is UTF-8 BOM, quoted safely, and neutralizes formulas',()
  assert.equal(csv.charCodeAt(0),0xfeff);
  assert.match(csv,/"쉼표,포함"/);
  assert.match(csv,/'=HYPERLINK\(1\)/);
+ assert.equal(vm.runInContext("csvSafeText('-1+1')",context),"'-1+1");
+ assert.equal(vm.runInContext("csvSafeText('  -cmd')",context),"'  -cmd");
  const entries=vm.runInContext('excelCsvEntries()',context);
  assert.deepEqual(Array.from(entries,x=>x.name),['통합거래.csv','ISA거래.csv','연금거래.csv','월별요약.csv']);
+});
+
+test('cross-tab sync closes a dirty input before replacing state',()=>{
+ const boot=read('boot.js');
+ const source=boot.match(/function applyExternalSavedState\(saved\)\{[\s\S]*?\n\}/)?.[0];
+ assert.ok(source,'storage application helper must exist');
+ const calls=[];
+ const context=vm.createContext({sheetMode:'input',sheetDirty:true,activeSheetId:'#registerSheet',holdingRegistrationDraft:{items:[1]},state:{old:true},lastPersistedState:null,closeSheets:options=>calls.push(['close',options]),normalizeState:data=>({normalized:data}),clone:value=>structuredClone(value),render:()=>calls.push(['render']),qaRenderStats:()=>calls.push(['qa']),showNotice:(title,message)=>calls.push(['notice',title,message]),toast:message=>calls.push(['toast',message])});
+ vm.runInContext(source,context);
+ assert.equal(vm.runInContext("applyExternalSavedState({data:{fresh:true}})",context),true);
+ assert.equal(vm.runInContext('holdingRegistrationDraft',context),null);
+ assert.equal(vm.runInContext('JSON.stringify(state)',context),'{"normalized":{"fresh":true}}');
+ assert.deepEqual(calls.map(x=>x[0]),['close','render','qa','notice']);
+ assert.equal(JSON.stringify(calls[0][1]),'{"all":true}');
+ calls.length=0;
+ vm.runInContext("sheetDirty=false;activeSheetId='';holdingRegistrationDraft=null",context);
+ assert.equal(vm.runInContext("applyExternalSavedState({data:{newer:true}})",context),false);
+ assert.equal(vm.runInContext('JSON.stringify(state)',context),'{"normalized":{"newer":true}}');
+ assert.deepEqual(calls.map(x=>x[0]),['render','qa','toast']);
 });
