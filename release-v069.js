@@ -36,7 +36,7 @@ integratedSpendingPage=function(){const analysis=integratedSpendingAnalysis(inte
 
 secondaryActions=function(){const past=state.accounts.filter(isPastAccount).length;return `<section class="card isa-compact-manage"><div class="isa-compact-manage-row single"><strong>회차 관리</strong><button data-history-route>이전 ISA <b>${past}</b></button></div></section>`};
 const v069TransactionsPage=transactionsPage;
-transactionsPage=function(){if(transactionDisplayLimit===50)transactionDisplayLimit=20;return v069TransactionsPage()};
+transactionsPage=function(){if(transactionDisplayLimit===50)transactionDisplayLimit=20;return v069TransactionsPage().replace(/(<button class="diagnostic-action" data-tx-more>다음 )\d+(건 보기 · 남은 (\d+)건<\/button>)/,(_,head,tail,remaining)=>`${head}${Math.min(20,Number(remaining)||0)}${tail}`)};
 
 const V069_KR_HOLIDAYS={2026:AI_KR_MARKET_HOLIDAYS_2026};
 aiTradingDaysSince=function(value,now=new Date()){const start=aiKoreaDate(value),end=aiKoreaDate(now);if(!start||!end)return Infinity;let cursor=new Date(`${start}T00:00:00Z`),finish=new Date(`${end}T00:00:00Z`),days=0;while(cursor<finish&&days<400){cursor.setUTCDate(cursor.getUTCDate()+1);const key=cursor.toISOString().slice(0,10),dow=cursor.getUTCDay(),holidays=V069_KR_HOLIDAYS[Number(key.slice(0,4))];if(dow!==0&&dow!==6&&!holidays?.has(key))days++}return days};

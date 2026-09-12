@@ -13,6 +13,7 @@ test('v0.6.9 final views and export assets are shipped in the PWA shell',()=>{
   assert.match(worker,new RegExp(`'${name.replace('.','\\.')}'`));
  }
  for(const text of ['이번 달 자금 계획','순금융자산','현금성 자산','투자자산','대출·부채','대출·이자','생활 고정비','가용 현금','월별 납입 내역 정리','분석파일 만들기'])assert.match(release,new RegExp(text));
+ assert.match(release,/Math\.min\(20,Number\(remaining\)/);
  assert.match(read('css-release-v069.css'),/pension-future-chart\{height:192px!important\}/);
 });
 
