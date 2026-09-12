@@ -9,6 +9,7 @@ window.addEventListener('storage',event=>{
   state=normalizeState(saved.data);
   lastPersistedState=clone(state);
   render();
+  if(typeof qaRenderStats==='function')qaRenderStats();
   toast('다른 화면의 최신 변경사항을 반영했습니다.');
  }catch{}
 });
