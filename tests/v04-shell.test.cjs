@@ -89,7 +89,7 @@ for(const icon of manifest.icons){const file=path.join(root,icon.src.replace(/^\
 const indexAssets=[...html.matchAll(/(?:src|href)="\.\/([^"?]+\.(?:js|css))(?:\?[^"#]+)?"/g)].map(match=>match[1]);
 const workerAssets=[...worker.matchAll(/'([^']+\.(?:js|css))'/g)].map(match=>match[1]);
 assert.deepEqual([...new Set(workerAssets)].sort(),[...new Set([...indexAssets,'service-worker.js'])].sort(),'service worker shell must exactly match the current index assets');
-for(const match of html.matchAll(/(?:src|href)="\.\/([^"?]+\.(?:js|css))(?:\?([^"#]+))?"/g))assert.equal(match[2],'v=0.6.9-r2',`${match[1]} must use the v0.6.9 cache key`);
+for(const match of html.matchAll(/(?:src|href)="\.\/([^"?]+\.(?:js|css))(?:\?([^"#]+))?"/g))assert.equal(match[2],'v=0.6.9-r5',`${match[1]} must use the v0.6.9 cache key`);
 assert.match(worker,/const STATIC_PATHS=new Set/,'service worker must explicitly allowlist cacheable files');
 assert.match(worker,/if\(!STATIC_PATHS\.has\(url\.pathname\)\)return/,'unlisted same-origin responses must not enter the app cache');
 assert.match(worker,/if\(request\.mode==='navigate'\)/,'navigation must use the offline shell without caching OAuth callback URLs');
