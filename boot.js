@@ -1,6 +1,17 @@
 'use strict';
 state=loadState();
 lastPersistedState=clone(state);
+window.addEventListener('storage',event=>{
+ if(event.storageArea!==localStorage||event.key!==KEY||!event.newValue)return;
+ try{
+  const saved=JSON.parse(event.newValue);
+  if(!saved?.data||Number(saved.schemaVersion)!==SCHEMA_VERSION)return;
+  state=normalizeState(saved.data);
+  lastPersistedState=clone(state);
+  render();
+  toast('다른 화면의 최신 변경사항을 반영했습니다.');
+ }catch{}
+});
 $$('.nav').forEach(b=>b.onclick=()=>nav(b.dataset.root));window.addEventListener('hashchange',()=>{resetTransientPanels();window.scrollTo(0,0);render()});$('#profile').onclick=()=>{refreshCloudProfileUI();openSheet('#profileSheet')};$('#scrim').onclick=()=>requestCloseSheets('scrim');$('#dialogScrim').onclick=()=>hideDialog(true);$('#confirmCancel').onclick=()=>hideDialog(true);$('#confirmOk').onclick=()=>{const cb=dialogConfirmAction;hideDialog(false);if(cb)cb()};document.addEventListener('input',e=>{if(e.target.closest('.sheet.open')&&sheetMode==='input')sheetDirty=true});document.addEventListener('submit',e=>{const form=e.target;if(!(form instanceof HTMLFormElement))return;const now=Date.now(),last=Number(form.dataset.lastSubmitAt)||0;if(now-last<500){e.preventDefault();e.stopImmediatePropagation();return}form.dataset.lastSubmitAt=String(now)},true);window.addEventListener('popstate',()=>{if(suppressSheetPop){suppressSheetPop=false;const y=pendingScrollRestore;pendingScrollRestore=null;if(y!=null)requestAnimationFrame(()=>window.scrollTo(0,y));return}if($$('.sheet.open').length)requestCloseSheets('back',true)});
 $$('[data-profile-action]').forEach(b=>b.onclick=()=>{const x=b.dataset.profileAction;if(x==='cloud-auth')openCloudAccountSheet();else if(x==='appearance')openSheet('#appearanceSheet');else if(x==='pension-settings')openPensionSettings();else if(x==='backup')openBackupHub();else if(x==='insurance')openInsuranceHub();else if(x==='ai-strategy')openAiStrategy();else if(x==='kis')openKisSettings();else if(x==='advanced')openAdvancedSettings();});
 $('#themeToggle').onchange=e=>{setting().theme=e.target.checked?'dark':'light';persist();applyTheme()};$('#fabToggle').onchange=e=>{setting().fab=false;e.target.checked=false;persist();applyTheme()};$('#hapticToggle').onchange=e=>{setting().haptics=e.target.checked;persist();applyTheme()};$('#backupInput').onchange=async e=>{const f=e.target.files?.[0];e.target.value='';if(f)await restoreBackupFile(f)};$('#initialImportInput').onchange=async e=>{const f=e.target.files?.[0];e.target.value='';if(f)await importInitialMergeFile(f)};$('#accentChoices').onclick=e=>{const b=e.target.closest('[data-value]');if(!b)return;setting().accent=b.dataset.value;persist();applyTheme()};
