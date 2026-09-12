@@ -16,11 +16,14 @@ test('v0.6.9 final views and export assets are shipped in the PWA shell',()=>{
  assert.match(release,/Math\.min\(20,Number\(remaining\)/);
  assert.match(read('css-release-v069.css'),/pension-future-chart\{height:192px!important\}/);
  assert.match(html,/v=0\.6\.9-r3/);
- assert.match(worker,/asset-os-v0\.6\.9-r3/);
- assert.match(worker,/v=0\.6\.9-r3/);
- assert.match(pwa,/service-worker\.js\?v=0\.6\.9-r3/);
+ assert.match(html,/pwa\.js\?v=0\.6\.9-r4/);
+ assert.match(html,/boot\.js\?v=0\.6\.9-r4/);
+ assert.match(worker,/asset-os-v0\.6\.9-r4/);
+ assert.match(worker,/v=0\.6\.9-r4/);
+ assert.match(pwa,/service-worker\.js\?v=0\.6\.9-r4/);
  const boot=read('boot.js');
  assert.match(boot,/addEventListener\('storage'/);
+ assert.match(boot,/qaRenderStats/);
  assert.match(boot,/다른 화면의 최신 변경사항을 반영했습니다/);
 });
 
