@@ -113,6 +113,9 @@ function sample(overrides={}){
  assert.equal(first.inserted,1);assert.equal(duplicate.skipped,1);assert.equal(correction.updated,1);assert.equal(store.rights.length,1);
  assert.equal(store.rights[0].amount,11000);assert.equal(store.rights[0].revisions.length,1);
  assert.equal(store.rights[0].classification,'unclassified_cash_right','권리코드 32를 검증 없이 배당으로 자동 분류하면 안 된다');
+ const income=plain(call('brokerKisRightIncomeRecords',store,'pension'));
+ assert.equal(income.length,1);assert.equal(income[0].type,'other_right','확인되지 않은 권리는 기타 권리로 표시해야 한다');
+ assert.equal(income[0].amount,11000);assert.equal(income[0].source,'kis-right');assert.equal(income[0].readOnly,true);
  assert.equal(store.connections.pension.lastSyncAt,'2026-09-01T03:00:00.000Z');
 }
 

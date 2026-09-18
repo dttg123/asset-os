@@ -24,7 +24,7 @@ const context={
   pensionAccount:()=>null,
   pensionHoldingById:()=>null,
   brokerKisVisibleOrders:()=>[],
-  pensionIncomeRecords:()=>[],
+  pensionIncomeRecords:()=>[{date:'2026-09-17',type:'other_right',amount:8500,grossAmount:10000,tax:1500,label:'테스트 ETF',source:'kis-right',readOnly:true,rightTypeCode:'32',productCode:'ETF001'}],
   pensionRiskMetrics:()=>({risky:4823025,unknown:0,ratio:67.57,maxRatio:67.57,limit:70,classificationComplete:true}),
   Blob:class{constructor(parts,options){this.parts=parts;this.type=options?.type||''}},
   File:class{constructor(parts,name,options){this.parts=parts;this.name=name;this.type=options?.type||''}},
@@ -50,6 +50,7 @@ assert.equal(payload.isa.combined.cost,4556261);
 assert.equal(payload.isa.combined.profit,-1194936);
 assert.equal(payload.format,'asset-os-ai-strategy-v2');
 assert.equal(payload.pensionSavings.combined.value,41533833);
+assert.deepEqual(JSON.parse(JSON.stringify(payload.pensionSavings.income[0])),{date:'2026-09-17',type:'other_right',amount:8500,grossAmount:10000,tax:1500,label:'테스트 ETF',source:'kis-right',readOnly:true,rightTypeCode:'32',productCode:'ETF001'});
 assert.equal(payload.combinedPlan.projection.expectedAssetsAtRetirement,1311070000);
 assert.equal(payload.irp.risk.confirmedRatio,67.57);
 assert.equal(payload.dataQuality.ready,true);

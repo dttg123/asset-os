@@ -35,7 +35,14 @@ assert.equal(run('state.pension.transactions.length'),before.pension.transaction
 assert.equal(run('centralPensionContributionRows().length'),before.pension.contributions.length,'KIS 가져오기가 납입을 만들면 안 된다');
 
 run('brokerKisImportBalanceSnapshot(state.brokerKis,{cash:500000,securitiesValue:1500000,totalValue:2000000,holdings:[{productCode:"ETF001",productName:"테스트 ETF",quantity:100,avgPrice:10200,currentPrice:15000,marketValue:1500000}]},"pension","ps-main","2026-09-01T08:00:00Z")');
-run('brokerKisImportRights(state.brokerKis,[{rightTypeCode:"32",baseDate:"2026-08-01",cashPaymentDate:"2026-08-20",productCode:"ETF001",productName:"테스트 ETF",amount:10000,tax:0}],"pension","ps-main","2026-09-01T08:00:00Z")');
+run('brokerKisImportRights(state.brokerKis,[{rightTypeCode:"32",baseDate:"2026-08-01",cashPaymentDate:"2026-08-20",productCode:"ETF001",productName:"테스트 ETF",amount:10000,tax:1500}],"pension","ps-main","2026-09-01T08:00:00Z")');
+const rightIncome=plain(run('pensionIncomeRecords("pension")'));
+assert.equal(rightIncome.length,1,'한투 권리 수령액이 배당·이자·권리 수익에 보여야 한다');
+assert.equal(rightIncome[0].type,'other_right','권리코드를 추측해 배당으로 만들면 안 된다');
+assert.equal(rightIncome[0].grossAmount,10000);assert.equal(rightIncome[0].tax,1500);assert.equal(rightIncome[0].amount,8500,'표시 금액은 세후 실수령액이어야 한다');
+assert.equal(rightIncome[0].source,'kis-right');assert.equal(rightIncome[0].readOnly,true);
+assert.equal(run('pensionIncomeRecords("pension").reduce((sum,row)=>sum+row.amount,0)'),8500,'한투 세후 수령액이 수익 합계에 반영되어야 한다');
+assert.equal(run('state.pension.transactions.length'),before.pension.transactions.length,'권리 조회가 거래원장을 만들면 안 된다');
 const kisDetail=plain(run('pensionAssetMetrics("pension")'));
 assert.equal(kisDetail.value,2000000,'KIS 잔고와 개인연금 상세 평가액이 같아야 한다');
 assert.equal(kisDetail.cash,500000);
