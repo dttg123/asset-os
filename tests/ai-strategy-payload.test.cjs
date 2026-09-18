@@ -54,11 +54,12 @@ assert.deepEqual(JSON.parse(JSON.stringify(payload.pensionSavings.income[0])),{d
 assert.equal(payload.combinedPlan.projection.expectedAssetsAtRetirement,1311070000);
 assert.equal(payload.irp.risk.confirmedRatio,67.57);
 assert.equal(payload.dataQuality.ready,true);
-assert.match(payload.request.prompt,/국제 정세/);
-assert.match(payload.request.prompt,/ISA를 별도로/);
-assert.match(payload.request.prompt,/연금저축을 별도로/);
-assert.match(payload.request.prompt,/IRP는 위험자산 한도/);
-assert.match(payload.request.prompt,/앱이나 데이터 구조를 평가하는 보고서가 아니라/);
+assert.match(payload.request.prompt,/결론부터/);
+assert.match(payload.request.prompt,/매수 \/ 분할매수 \/ 대기 \/ 유지 \/ 축소 \/ 교체/);
+assert.match(payload.request.prompt,/1~3개월, 6~12개월, 3~5년/);
+assert.match(payload.request.prompt,/최신 웹 가격/);
+assert.match(payload.request.prompt,/일반적인 투자 위험 설명.*쓰지 않는다/);
+assert.match(payload.request.prompt,/금액, 최신 현재가 기준 예상 수량, 실행 순서/);
 const json=JSON.stringify(payload);
 for(const forbidden of ['accountNo','accessToken','refreshToken','appSecret','dttg123@gmail.com'])assert.doesNotMatch(json,new RegExp(forbidden,'i'));
 
@@ -93,6 +94,8 @@ assert.match(staleKis.warnings.join(' '),/주말·시장 휴장일은 제외/);
 const strategyFile=context.__aiStrategyFile('rebalance',0,'new_money').file;
 assert.equal(strategyFile.name,'투자분석.txt');
 assert.equal(strategyFile.type,'text/plain');
+const strategyText=strategyFile.parts[0].parts[0];
+assert.doesNotMatch(strategyText,/"warnings"/,'AI에 공유되는 파일은 진단 경고 목록으로 판단을 흐리면 안 된다');
 
 const staleIsaPayload=JSON.parse(JSON.stringify(payload));
 staleIsaPayload.request.purpose='리밸런싱';
