@@ -126,7 +126,7 @@ function sample(overrides={}){
  assert.equal(income.length,1);assert.equal(income[0].type,'distribution','ETF로 확인되는 KODEX 권리는 분배금이어야 한다');
  assert.equal(income[0].incomeCategory,'dividend','ETF 분배금은 상위 분류상 배당수익이어야 한다');
  assert.equal(income[0].incomeType,'distribution');assert.equal(income[0].brokerRight,true);assert.equal(income[0].accountKind,'pension');
- assert.equal(income[0].classificationBasis,'instrument-type');
+ assert.equal(income[0].classificationBasis,'name-inferred');
  assert.equal(call('brokerKisIncomeTypeLabel',income[0].type),'분배금');
  assert.equal(store.rights[0].classification,'unclassified_cash_right','불명확한 권리코드 자체를 임의 해석해서는 안 된다');
 }

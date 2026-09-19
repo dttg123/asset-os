@@ -38,10 +38,11 @@ function pensionAssetModel(scope=pensionAssetScope(),lens='assetClass'){
 function pensionAssetGroupHoldings(scope,role){const m=pensionAssetMetrics(scope);return m.holdings.filter(h=>investmentRoleForHolding(h)===role).sort((a,b)=>pensionHoldingValue(b)-pensionHoldingValue(a)||String(a.name).localeCompare(String(b.name),'ko'))}
 function pensionRiskMetrics(){const m=pensionAssetMetrics('irp'),risky=m.holdings.filter(h=>h.risky===true).reduce((s,h)=>s+pensionHoldingValue(h),0),unknown=m.holdings.filter(h=>h.risky!==true&&h.risky!==false).reduce((s,h)=>s+pensionHoldingValue(h),0),ratio=m.value?risky/m.value*100:0,maxRatio=m.value?(risky+unknown)/m.value*100:0,limit=Math.max(0,Math.min(100,(Number(policy('irp').riskyAssetLimit)||.70)*100));return{...m,risky,unknown,ratio,maxRatio,limit,remaining:limit-ratio,classificationComplete:unknown<=.5}}
 function pensionIncomeRecords(scope=pensionAssetScope()){
- const allowedAccounts=new Set(pensionStore().accounts.filter(a=>scope==='all'||a.kind===scope).map(a=>a.id)),allowedHoldings=new Set(pensionStore().holdings.filter(h=>allowedAccounts.has(h.accountId)).map(h=>h.id)),legacy=pensionStore().incomes.filter(x=>allowedAccounts.has(x.accountId)&&(x.holdingId?allowedHoldings.has(x.holdingId):true)),txIncome=(pensionStore().transactions||[]).filter(t=>['dividend','distribution','interest','other_right'].includes(t.type)&&allowedAccounts.has(t.accountId)&&(t.holdingId?allowedHoldings.has(t.holdingId):true)).map(t=>({id:t.id,accountId:t.accountId,holdingId:t.holdingId,type:t.type,date:t.date,amount:Math.max(0,(Number(t.amount)||0)-(Number(t.fee)||0)-(Number(t.tax)||0)),source:'transaction'})),kisRights=typeof brokerKisRightIncomeRecords==='function'?brokerKisRightIncomeRecords(state.brokerKis,scope==='all'?'':scope).filter(x=>allowedAccounts.has(x.accountId)):[],ledger=[...legacy,...txIncome,...kisRights],occupied=new Set(ledger.map(x=>`${pensionAccount(x.accountId)?.kind||scope}|${String(x.date).slice(0,7)}`)),archive=typeof pensionArchiveIncomeRecords==='function'?pensionArchiveIncomeRecords(scope).filter(x=>!occupied.has(`${x.accountKind}|${String(x.date).slice(0,7)}`)):[];return [...ledger,...archive].sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.id).localeCompare(String(a.id)))
+ const allowedAccounts=new Set(pensionStore().accounts.filter(a=>scope==='all'||a.kind===scope).map(a=>a.id)),allowedHoldings=new Set(pensionStore().holdings.filter(h=>allowedAccounts.has(h.accountId)).map(h=>h.id)),legacy=pensionStore().incomes.filter(x=>allowedAccounts.has(x.accountId)&&(x.holdingId?allowedHoldings.has(x.holdingId):true)),txIncome=(pensionStore().transactions||[]).filter(t=>['dividend','distribution','interest','other_right'].includes(t.type)&&allowedAccounts.has(t.accountId)&&(t.holdingId?allowedHoldings.has(t.holdingId):true)).map(t=>({...t,id:t.id,accountId:t.accountId,holdingId:t.holdingId,type:t.type,date:t.date,amount:Math.max(0,(Number(t.amount)||0)-(Number(t.fee)||0)-(Number(t.tax)||0)),grossAmount:Number(t.amount)||0,tax:Number(t.tax)||0,fee:Number(t.fee)||0,source:'transaction'})),kisRights=typeof brokerKisRightIncomeRecords==='function'?brokerKisRightIncomeRecords(state.brokerKis,scope==='all'?'':scope).filter(x=>allowedAccounts.has(x.accountId)):[],ledger=[...legacy,...txIncome,...kisRights];return pensionReconcileIncome(ledger,typeof pensionArchiveIncomeRecords==='function'?pensionArchiveIncomeRecords(scope):[])
+
 }
-function pensionIncomePrincipalAt(scope,key='',mode=''){const rows=pensionSnapshotRows(scope);if(!rows.length)return pensionAssetMetrics(scope).cost;let end=localYmd();if(mode==='month'&&/^\d{4}-\d{2}$/.test(String(key))){const [y,m]=String(key).split('-').map(Number);end=localYmd(new Date(y,m,0))}else if(mode==='year'&&/^\d{4}$/.test(String(key)))end=`${key}-12-31`;const snap=rows.filter(x=>String(x.date||'')<=end).at(-1);return Math.max(0,Number(snap?.cost)||0)}
-function pensionIncomeRate(scope,amount,key='',mode=''){const cost=key?pensionIncomePrincipalAt(scope,key,mode):pensionAssetMetrics(scope).cost;return cost?(Number(amount)||0)/cost*100:0}
+function pensionIncomePrincipalAt(scope,key='',mode=''){const rows=pensionSnapshotRows(scope);if(!rows.length)return key?null:pensionAssetMetrics(scope).cost;let end=localYmd();if(mode==='month'&&/^\d{4}-\d{2}$/.test(String(key))){const [y,m]=String(key).split('-').map(Number);end=localYmd(new Date(y,m,0))}else if(mode==='year'&&/^\d{4}$/.test(String(key)))end=`${key}-12-31`;const snap=rows.filter(x=>String(x.date||'')<=end).at(-1);return Math.max(0,Number(snap?.cost)||0)}
+function pensionIncomeRate(scope,amount,key='',mode=''){const cost=key?pensionIncomePrincipalAt(scope,key,mode):pensionAssetMetrics(scope).cost;return cost>0?(Number(amount)||0)/cost*100:null}
 function pensionIncomeSummary(scope=pensionAssetScope()){
  const records=pensionIncomeRecords(scope),year=localYmd().slice(0,4),total=records.reduce((s,x)=>s+(Number(x.amount)||0),0),yearTotal=records.filter(x=>String(x.date).startsWith(year)).reduce((s,x)=>s+(Number(x.amount)||0),0),yieldRate=pensionIncomeRate(scope,yearTotal,year,'year'),totalYieldRate=pensionIncomeRate(scope,total);return{records,total,yearTotal,yieldRate,totalYieldRate,year,count:records.length}
 }
@@ -51,3 +52,33 @@ function pensionProjectionScheduledMonthly(){if(typeof financeSchedules!=='funct
 function pensionProjection(){const p=pensionStore().projection||{},m=pensionAssetMetrics('all'),currentYear=Number(localYmd().slice(0,4)),birthYear=Math.max(1900,Math.min(currentYear,Math.round(Number(p.birthYear)||Number(seed.pension.projection.birthYear)||currentYear))),retirementAge=Math.max(1,Math.min(100,Math.round(Number(p.retirementAge)||Number(seed.pension.projection.retirementAge)||65))),currentAge=Math.max(0,currentYear-birthYear),years=Math.max(0,retirementAge-currentAge),scheduled=pensionProjectionScheduledMonthly(),monthly=Math.max(0,Number(p.monthlyContribution)||scheduled||0),annual=Math.max(0,Number(p.annualReturn)||0),r=annual/12,n=Math.round(years*12),future=r>0?m.value*Math.pow(1+r,n)+monthly*(Math.pow(1+r,n)-1)/r:m.value+monthly*n,withdrawal=Math.max(0,Number(p.withdrawalRate)||0),inflation=Math.max(0,Number(p.inflationRate)||0),monthlyPension=future*withdrawal/12,futureReal=inflation>0?future/Math.pow(1+inflation,years):future,monthlyPensionReal=futureReal*withdrawal/12;return{...p,birthYear,current:m.value,years,yearsToRetire:years,monthly,annual,future,withdrawal,monthlyPension,inflation,retirementAge,currentAge,futureReal,monthlyPensionReal}}
 function pensionPerformanceContribution(scope=pensionAssetScope()){const model=pensionAssetModel(scope,'assetClass'),base=Math.max(0,model.cost),rows=model.segments.map(x=>({name:x.name,key:x.key,value:x.value,cost:x.cost,profit:x.profit,rate:x.cost?x.profit/x.cost*100:0,contribution:base?x.profit/base*100:0,pct:x.pct,color:x.color}));return{scope,totalRate:model.rate,totalProfit:model.profit,totalCost:model.cost,rows,ranked:[...rows].sort((a,b)=>Math.abs(b.contribution)-Math.abs(a.contribution))}}
 function pensionHoldingById(id){return pensionScopedHoldings('all').find(h=>h.id===id)||null}
+
+function pensionReconcileIncome(details,archives){
+ // Archives are historical monthly totals, not individual cash movements.
+ // Retain their unitemized remainder; never drop a whole month for one payment.
+ const rows=[],remaining=new Map(),matched=new Set();
+ const key=x=>{const holding=x.holdingId&&typeof pensionHoldingById==='function'?pensionHoldingById(x.holdingId):null,product=x.productCode||holding?.productCode||holding?.code;return x.accountId&&product?[x.accountId,product,x.date,brokerKisIncomeCategory(x.type),Number(x.amount)||0,Number(x.tax)||0].join('|'):''};
+ const broker=details.filter(x=>x.brokerRight);
+ for(const x of details){
+  if(!x.brokerRight){const k=key(x),same=k?broker.find(b=>!matched.has(b.id)&&key(b)===k):null;if(same){matched.add(same.id);continue}}
+  if(rows.some(r=>r.id===x.id&&r.source===x.source))continue;
+  rows.push({...x});
+ }
+ for(const x of rows){
+  if(!['dividend','distribution'].includes(x.type))continue;
+  const kind=x.accountKind||pensionAccount(x.accountId)?.kind;
+  const key=kind+'|'+String(x.date).slice(0,7);
+  remaining.set(key,(remaining.get(key)||0)+(Number(x.amount)||0));
+ }
+ for(const x of archives){
+  const key=x.accountKind+'|'+String(x.date).slice(0,7),original=Number(x.amount)||0,covered=Math.min(original,remaining.get(key)||0);
+  remaining.set(key,Math.max(0,(remaining.get(key)||0)-covered));
+  rows.push({...x,archive:true,readOnly:true,originalAmount:original,amount:Math.max(0,original-covered),reconciledAmount:covered,label:covered?'과거 월합계 · 미상세분':x.label});
+ }
+ return rows.sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.id).localeCompare(String(a.id)));
+}
+function pensionVisibleTransactionRows(scope='all'){
+ const incomes=pensionIncomeRecords(scope),manual=pensionTransactions(scope).filter(x=>!['dividend','distribution','interest','other_right'].includes(x.type)),orders=brokerKisVisibleOrders(state.brokerKis,scope);
+ const realized=typeof pensionArchiveTransactionRows==='function'?pensionArchiveTransactionRows(scope).filter(x=>x.type!=='dividend'):[];
+ return [...manual,...orders,...incomes,...realized].sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.time||'').localeCompare(String(a.time||''))||String(b.id).localeCompare(String(a.id)));
+}

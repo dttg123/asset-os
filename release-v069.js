@@ -1,5 +1,5 @@
 'use strict';
-/* v0.6.14 final product polish. Existing ledgers stay untouched; this layer only reshapes views. */
+/* v0.6.15 final product polish. Existing ledgers stay untouched; this layer only reshapes views. */
 let v069AssetGroup='',v069ScheduleGroup={summary:'',page:''},v069AiDraft=null;
 const v069HomeCard=homeCard;
 homeCard=function(id){return v069HomeCard(id).replace('이번 달 지출·납입','이번 달 자금 계획').replace(/기록 ([^<]+) · 남은 일정 \d+건/,'집행 $1 · 예정 '+displayWon(homeSample().scheduled))};
@@ -15,7 +15,7 @@ openPensionContributionBatchForm=function(){v069PensionBatch();if($('#formTitle'
 const v069PensionAssets=pensionAssetsPage;
 pensionAssetsPage=function(){return v069PensionAssets().replace(/투자자산 · ([^<]+) 평가액/,'$1 평가액').replace('받은 배당·이자','배당·이자 현황')};
 const v069PensionFuture=pensionFuturePage;
-pensionFuturePage=function(){const template=document.createElement('template');template.innerHTML=v069PensionFuture();const head=template.content.querySelector('.pension-future-page>.sectionhead');if(head){head.classList.add('pension-future-toolbar');head.innerHTML='<span>나이를 움직여 예상 금액을 확인하세요.</span><button data-pension-future-settings>계산 기준</button>'}return template.innerHTML};
+pensionFuturePage=function(){const template=document.createElement('template');template.innerHTML=v069PensionFuture();const head=template.content.querySelector('.pension-future-page>.sectionhead');if(head){head.classList.add('pension-future-toolbar');head.innerHTML=`<span>${pensionProjection().years>0?'나이를 움직여 예상 금액을 확인하세요.':'현재 연금자산의 월 인출 환산액입니다.'}</span><button data-pension-future-settings>계산 기준</button>`}return template.innerHTML};
 const v069FutureMarkup=pensionFutureSheetMarkup;
 pensionFutureSheetMarkup=function(){const c=pensionFutureChartModel(),age=pensionFutureSelectedAge==null?c.p.retirementAge:Number(pensionFutureSelectedAge),point=c.points.reduce((best,x)=>Math.abs(x.age-age)<Math.abs(best.age-age)?x:best,c.points[0]),years=Math.max(0,point.age-c.p.currentAge),real=point.value/Math.pow(1+c.p.inflation,years),monthlyReal=real*c.p.withdrawal/12;return v069FutureMarkup().replace(/<text class="pension-future-axis-title"[^>]*>자산금액<\/text>/,'').replace('<p>현재 자산과 월 납입액을 기준으로',`<div class="pension-future-real" id="pensionFutureRealValue">물가 반영 현재가치 · 예상자산 ${pensionReadableWon(real)} · 월연금 ${pensionReadableWon(monthlyReal)}</div><p>현재 자산과 월 납입액을 기준으로`)};
 const v069UpdateFuture=updatePensionFuturePoint;
@@ -32,7 +32,7 @@ openIntegratedMonthDetail=function(month){v069MonthDetail(month);if($('#sheetEye
 const v069SchedulePage=integratedSchedulePage;
 integratedSchedulePage=function(){const month=integratedScheduleMonth(),occ=scheduleOccurrences(month),pending=occ.filter(o=>o.status!=='done'),done=occ.length-pending.length,template=document.createElement('template');template.innerHTML=v069SchedulePage();const title=template.content.querySelector('.schedule-head h2'),small=template.content.querySelector('.schedule-head small'),pill=template.content.querySelector('.schedule-head .count-pill'),list=template.content.querySelector('.schedule-card .schedule-list');if(title)title.textContent=`${integratedMonthLabel(month)} 예정 일정`;if(small)small.textContent=`미완료 ${pending.length}건 · 예정액 ${won(pending.reduce((sum,o)=>sum+scheduleOccurrenceDisplayAmount(o),0))}`;if(pill)pill.textContent=`완료 ${done}건`;if(list)list.innerHTML=occ.length?v069ScheduleGroups(occ,'page'):'<div class="integrated-empty">이 달의 금융 일정이 없습니다.</div>';return template.innerHTML};
 const v069SpendingPage=integratedSpendingPage;
-integratedSpendingPage=function(){const analysis=integratedSpendingAnalysis(integratedSelectedMonth()),template=document.createElement('template');template.innerHTML=v069SpendingPage();const budget=template.content.querySelector('[data-spending-budget]>span'),hint=template.content.querySelector('[data-spending-budget]>small');if(budget)budget.textContent='월간 생활비 기준';if(hint&&!setting().monthlyLivingBudget)hint.textContent='필요할 때만 설정할 수 있습니다.';const list=template.content.querySelector('.spending-categories'),top=analysis.categories.slice(0,5),other=analysis.categories.slice(5);if(list&&other.length){list.innerHTML=top.map(row=>`<button data-spending-detail="category" data-spending-key="${escapeHtml(row.key)}"><span>${escapeHtml(row.key)}<small>${row.count}건</small></span><strong>${won(row.amount)}</strong><i>›</i></button>`).join('')+`<button data-spending-detail="all"><span>기타 ${other.length}개<small>${other.reduce((n,x)=>n+x.count,0)}건</small></span><strong>${won(other.reduce((n,x)=>n+x.amount,0))}</strong><i>›</i></button>`}return template.innerHTML};
+integratedSpendingPage=function(){const analysis=integratedSpendingAnalysis(integratedSelectedMonth()),template=document.createElement('template');template.innerHTML=v069SpendingPage();const budget=template.content.querySelector('[data-spending-budget]>span'),hint=template.content.querySelector('[data-spending-budget]>small');if(budget)budget.textContent='월간 생활비 기준';if(hint&&!setting().monthlyLivingBudget)hint.textContent='필요할 때만 설정할 수 있습니다.';const list=template.content.querySelector('.spending-categories'),top=analysis.categories.slice(0,5),other=analysis.categories.slice(5);if(list&&other.length){list.innerHTML=top.map(row=>`<button data-spending-detail="category" data-spending-key="${escapeHtml(row.key)}"><span>${escapeHtml(row.key)}<small>${row.count}건</small></span><strong>${won(row.amount)}</strong><i>›</i></button>`).join('')+`<button data-spending-detail="other"><span>기타 ${other.length}개<small>${other.reduce((n,x)=>n+x.count,0)}건</small></span><strong>${won(other.reduce((n,x)=>n+x.amount,0))}</strong><i>›</i></button>`}return template.innerHTML};
 
 secondaryActions=function(){const past=state.accounts.filter(isPastAccount).length;return `<section class="card isa-compact-manage"><div class="isa-compact-manage-row single"><strong>회차 관리</strong><button data-history-route>이전 ISA <b>${past}</b></button></div></section>`};
 const v069TransactionsPage=transactionsPage;
@@ -56,3 +56,16 @@ openFinancialProductDetail=function(id){v069FinanceDetail(id);for(const span of 
 const v069Bind=bind;
 bind=function(){v069Bind();$$('[data-integrated-asset-group]').forEach(button=>button.onclick=()=>{v069AssetGroup=v069AssetGroup===button.dataset.integratedAssetGroup?'':button.dataset.integratedAssetGroup;renderKeepingScroll()});$$('[data-schedule-category]').forEach(button=>button.onclick=()=>{const scope=button.dataset.scheduleScope,key=button.dataset.scheduleCategory;v069ScheduleGroup[scope]=v069ScheduleGroup[scope]===key?'':key;renderKeepingScroll()});const more=$('[data-tx-more]');if(more)more.onclick=()=>{transactionDisplayLimit+=20;renderKeepingScroll()}};
 const appearanceMenu=document.querySelector('[data-profile-action="appearance"] small');if(appearanceMenu)appearanceMenu.textContent='포인트색·다크모드·터치 진동';
+
+const v0615BackupHub=openBackupHub;
+openBackupHub=function(){
+ v0615BackupHub();
+ const grid=$('#sheetBody .backup-grid');if(!grid)return;
+ const advanced=document.createElement('details');advanced.className='source-note';
+ const title=document.createElement('summary');title.textContent='고급 백업 설정';advanced.appendChild(title);
+ const body=document.createElement('div');body.className='backup-grid';advanced.appendChild(body);
+ for(const key of ['data-phone-folder','data-phone-now','data-backup-drive','data-backup-keep']){
+  const button=grid.querySelector('['+key+']');if(button)body.appendChild(button);
+ }
+ grid.after(advanced);
+};

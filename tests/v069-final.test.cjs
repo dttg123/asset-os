@@ -6,7 +6,7 @@ const path=require('node:path');
 const root=path.join(__dirname,'..');
 const read=name=>fs.readFileSync(path.join(root,name),'utf8');
 
-test('v0.6.14 final views and export assets are shipped in the PWA shell',()=>{
+test('v0.6.15 final views and export assets are shipped in the PWA shell',()=>{
  const html=read('index.html'),worker=read('service-worker.js'),pwa=read('pwa.js'),release=read('release-v069.js'),home=read('home.js');
  for(const name of ['export-csv.js','release-v069.js','css-release-v069.css']){
   assert.match(html,new RegExp(name.replace('.','\\.')));
@@ -15,12 +15,12 @@ test('v0.6.14 final views and export assets are shipped in the PWA shell',()=>{
  for(const text of ['이번 달 자금 계획','순금융자산','현금성 자산','투자자산','대출·부채','대출·이자','생활 고정비','가용 현금','월별 납입 내역 정리','분석파일 만들기'])assert.match(release,new RegExp(text));
  assert.match(release,/Math\.min\(20,Number\(remaining\)/);
  assert.match(read('css-release-v069.css'),/pension-future-chart\{height:192px!important\}/);
- assert.match(html,/v=0\.6\.14-r1/);
- assert.match(html,/pwa\.js\?v=0\.6\.14-r1/);
- assert.match(html,/boot\.js\?v=0\.6\.14-r1/);
- assert.match(worker,/asset-os-v0\.6\.14-r1/);
- assert.match(worker,/v=0\.6\.14-r1/);
- assert.match(pwa,/service-worker\.js\?v=0\.6\.14-r1/);
+ assert.match(html,/v=0\.6\.15-r1/);
+ assert.match(html,/pwa\.js\?v=0\.6\.15-r1/);
+ assert.match(html,/boot\.js\?v=0\.6\.15-r1/);
+ assert.match(worker,/asset-os-v0\.6\.15-r1/);
+ assert.match(worker,/v=0\.6\.15-r1/);
+ assert.match(pwa,/service-worker\.js\?v=0\.6\.15-r1/);
  assert.match(home,/function openAlertsCenter\(\)\{const isaReady=homeSample\(\)\.isaSource==='asset-os'/);
  const boot=read('boot.js');
  assert.match(boot,/addEventListener\('storage'/);
@@ -49,7 +49,7 @@ test('insurance schedule linking is idempotent and adopts one matching manual sc
 });
 
 test('Excel CSV output is UTF-8 BOM, quoted safely, and neutralizes formulas',()=>{
- const context=vm.createContext({console,TextEncoder,DataView,Uint8Array,Blob,File:class{},URL:{},document:{},integratedLedger:()=>[],state:{accounts:[]},pensionStore:()=>({transactions:[]}),integratedSummary:()=>({}),integratedSpendingAnalysis:()=>({}),integratedMonthKey:()=>'',integratedTxLabel:()=>'',integratedTxAccountsText:()=>'',txDate:()=>'',typeText:()=>'',holdingName:()=>'',pensionAccount:()=>null,pensionHoldingById:()=>null,localYmd:()=> '2026-09-12',zipDosStamp:()=>({time:0,date:0}),crc32:()=>0});
+ const context=vm.createContext({console,TextEncoder,DataView,Uint8Array,Blob,File:class{},URL:{},document:{},integratedLedger:()=>[],state:{accounts:[]},pensionStore:()=>({transactions:[]}),pensionVisibleTransactionRows:()=>[],integratedSummary:()=>({}),integratedSpendingAnalysis:()=>({}),integratedMonthKey:()=>'',integratedTxLabel:()=>'',integratedTxAccountsText:()=>'',txDate:()=>'',typeText:()=>'',holdingName:()=>'',pensionAccount:()=>null,pensionHoldingById:()=>null,localYmd:()=> '2026-09-12',zipDosStamp:()=>({time:0,date:0}),crc32:()=>0});
  vm.runInContext(read('export-csv.js'),context);
  const csv=vm.runInContext("csvTable(['이름','메모'],[['정상','쉼표,포함'],['수식','=HYPERLINK(1)']])",context);
  assert.equal(csv.charCodeAt(0),0xfeff);
