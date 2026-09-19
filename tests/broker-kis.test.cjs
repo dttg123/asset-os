@@ -124,9 +124,19 @@ function sample(overrides={}){
  call('brokerKisImportRights',store,[{rightTypeCode:'32',baseDate:'2026-09-01',cashPaymentDate:'2026-09-17',productCode:'489250',productName:'KODEX 미국배당다우존스',amount:11808,tax:0}],'pension','ps-main','2026-09-19T01:00:00Z');
  const income=plain(call('brokerKisRightIncomeRecords',store,'pension'));
  assert.equal(income.length,1);assert.equal(income[0].type,'distribution','ETF로 확인되는 KODEX 권리는 분배금이어야 한다');
+ assert.equal(income[0].incomeCategory,'dividend','ETF 분배금은 상위 분류상 배당수익이어야 한다');
+ assert.equal(income[0].incomeType,'distribution');assert.equal(income[0].brokerRight,true);assert.equal(income[0].accountKind,'pension');
  assert.equal(income[0].classificationBasis,'instrument-type');
  assert.equal(call('brokerKisIncomeTypeLabel',income[0].type),'분배금');
  assert.equal(store.rights[0].classification,'unclassified_cash_right','불명확한 권리코드 자체를 임의 해석해서는 안 된다');
+}
+
+{
+ for(const productName of ['RISE 미국나스닥100','ACE 글로벌반도체TOP4 Plus','KODEX 미국AI전력핵심인프라','KODEX 미국AI테크TOP10']){
+  assert.equal(call('brokerKisRightIncomeType',{productName}),'distribution',`${productName} 권리는 ETF 분배금이어야 한다`);
+ }
+ assert.equal(call('brokerKisIncomeCategory','distribution'),'dividend');
+ assert.equal(call('brokerKisIncomeCategory','interest'),'interest');
 }
 
 {

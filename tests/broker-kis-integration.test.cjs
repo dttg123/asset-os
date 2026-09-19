@@ -39,6 +39,7 @@ run('brokerKisImportRights(state.brokerKis,[{rightTypeCode:"32",baseDate:"2026-0
 const rightIncome=plain(run('pensionIncomeRecords("pension")'));
 assert.equal(rightIncome.length,1,'한투 권리 수령액이 배당·이자·권리 수익에 보여야 한다');
 assert.equal(rightIncome[0].type,'distribution','ETF 상품명으로 확인되는 권리는 분배금으로 표시해야 한다');
+assert.equal(rightIncome[0].incomeCategory,'dividend','ETF 분배금은 배당수익으로 집계해야 한다');
 assert.equal(rightIncome[0].grossAmount,10000);assert.equal(rightIncome[0].tax,1500);assert.equal(rightIncome[0].amount,8500,'표시 금액은 세후 실수령액이어야 한다');
 assert.equal(rightIncome[0].source,'kis-right');assert.equal(rightIncome[0].readOnly,true);
 assert.equal(run('pensionIncomeRecords("pension").reduce((sum,row)=>sum+row.amount,0)'),8500,'한투 세후 수령액이 수익 합계에 반영되어야 한다');
