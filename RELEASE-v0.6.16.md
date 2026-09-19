@@ -32,3 +32,5 @@ QA scope: isolated QA data only. Read-only navigation, settings, theme toggle, a
 Post-deploy QA caught product-name-only income rendering as generic 종목. v0.6.16-r2 uses the stored product name in recent income cards, analysis and AI labels.
 
 Further form review: v0.6.16-r3 aligns manual distribution/other-right receipt types across form, validation, net cash and normalization/restore. Broker rights remain separate read-only records and are not posted into manual cash.
+
+Final r4: income labels also resolve original local holdings when a KIS snapshot replaces the visible holding list. QA demonstrated that productName fallback alone did not cover that case.
