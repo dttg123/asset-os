@@ -3,7 +3,8 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('nod
 const root=path.join(__dirname,'..'),storage=new Map([['asset-os-v1.9.45-live','LIVE-SENTINEL']]);
 const localStorage={get length(){return storage.size},key:i=>[...storage.keys()][i]??null,getItem:k=>storage.has(k)?storage.get(k):null,setItem:(k,v)=>storage.set(String(k),String(v)),removeItem:k=>storage.delete(String(k))};
 let networkClients=0,fetches=0;
-const document={querySelector:()=>null,querySelectorAll:()=>[],documentElement:{dataset:{},classList:{add(){},remove(){}},scrollHeight:0},body:{dataset:{}}};
+const qaControls=new Map(['#qaGenerate','#qaMistakes','#qaReset','#qaStats'].map(id=>[id,{}]));
+const document={querySelector:selector=>qaControls.get(selector)||null,querySelectorAll:()=>[],documentElement:{dataset:{},classList:{add(){},remove(){}},scrollHeight:0},body:{dataset:{}}};
 const window={addEventListener(){},removeEventListener(){},scrollTo(){},isSecureContext:false,supabase:{createClient(){networkClients++;throw new Error('QA must not initialize Supabase')}}};
 const context=vm.createContext({console,Date,Set,Map,URL,Blob,File:global.File,TextEncoder,TextDecoder,Uint8Array,DataView,ArrayBuffer,Intl,Math,JSON,Number,String,Boolean,Object,RegExp,Promise,encodeURIComponent,decodeURIComponent,localStorage,document,window,navigator:{},location:{search:'?qa=1',hash:'',pathname:'/asset-os/'},history:{replaceState(){}},fetch:async()=>{fetches++;throw new Error('QA network blocked')},requestAnimationFrame:fn=>fn(),setTimeout:()=>0,clearTimeout(){},toast(){},closeSheets(){},render(){},haptic(){} });
 vm.runInContext('let integratedAssetsExpanded=false',context);
@@ -139,3 +140,11 @@ assert.equal(run('brokerKisClient.configure(BROKER_KIS_PUBLIC_CONFIG).ok'),true)
 
 assert.equal(run('homeMonthActivity().remainingAmount'),2100000,'예정 월급은 지출·납입에 포함하지 않는다');
 assert.equal(run("scheduleOccurrences().some(x=>x.schedule.kind==='income'&&x.status!=='done')"),false);
+
+// Boot must never replace reset/manual QA data or regenerate on a version change.
+run('qaResetData();state=loadState();initQaMode()');
+assert.equal(run('qaDatasetStats().total'),0,'Reset then boot must remain empty');
+run('state.system.qaDataset={version:"old",range:"manual"};state.integrated.ledger.push({id:"manual-sentinel",date:"2031-01-01",type:"externalIncome",amount:3000000,toAccountId:"cash-main"});persist(false);state=loadState();initQaMode()');
+assert.equal(run('state.integrated.ledger.length'),1);
+assert.equal(run('state.integrated.ledger[0].id'),'manual-sentinel');
+assert.equal(storage.get('asset-os-v1.9.45-live'),'LIVE-SENTINEL');
