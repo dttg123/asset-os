@@ -15,12 +15,12 @@ test('v0.6.16 final views and export assets are shipped in the PWA shell',()=>{
  for(const text of ['이번 달 자금 계획','순금융자산','현금성 자산','투자자산','대출·부채','대출·이자','생활 고정비','가용 현금','월별 납입 내역 정리','분석파일 만들기'])assert.match(release,new RegExp(text));
  assert.match(release,/Math\.min\(20,Number\(remaining\)/);
  assert.match(read('css-release-v069.css'),/pension-future-chart\{height:192px!important\}/);
- assert.match(html,/v=0\.6\.16-r2/);
- assert.match(html,/pwa\.js\?v=0\.6\.16-r2/);
- assert.match(html,/boot\.js\?v=0\.6\.16-r2/);
- assert.match(worker,/asset-os-v0\.6\.16-r2/);
- assert.match(worker,/v=0\.6\.16-r2/);
- assert.match(pwa,/service-worker\.js\?v=0\.6\.16-r2/);
+ assert.match(html,/v=0\.6\.16-r3/);
+ assert.match(html,/pwa\.js\?v=0\.6\.16-r3/);
+ assert.match(html,/boot\.js\?v=0\.6\.16-r3/);
+ assert.match(worker,/asset-os-v0\.6\.16-r3/);
+ assert.match(worker,/v=0\.6\.16-r3/);
+ assert.match(pwa,/service-worker\.js\?v=0\.6\.16-r3/);
  assert.match(home,/function openAlertsCenter\(\)\{const isaReady=homeSample\(\)\.isaSource==='asset-os'/);
  const boot=read('boot.js');
  assert.match(boot,/addEventListener\('storage'/);

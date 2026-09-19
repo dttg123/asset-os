@@ -50,6 +50,14 @@ const bondAccount={id:'bond-a',name:'나무 ISA',status:'active',openedAt:'2025-
 const bondMetrics=plain(run('accountMetrics(__args[0])',[bondAccount]));close(bondMetrics.holdingsValue,1001825,'채권 평가금액 단위');close(bondMetrics.cost,1026661,'채권 투자원금 단위');close(bondMetrics.value,1028642,'채권과 현금 합계');assert.equal(run('holdingQuantityText(__args[0])',[bondMetrics.holdings[0]]),'980,000원 액면');
 
 const pensionHolding={id:'ph-a',accountId:'ps-a',name:'연금 ETF',baselineQty:0,baselineAvgPrice:0};
+for(const type of ['distribution','other_right']){
+ const receipt={id:`receipt-${type}`,accountId:'receipt-account',holdingId:'',type,date:'2026-01-02',amount:10000,fee:100,tax:1500};
+ assert.equal(run('pensionTradeCashDelta(__args[0])',[receipt]),8400,'수동 분배금·기타 권리는 세후 금액만 현금에 반영');
+ const restored=plain(run('normalizeState({...clone(seed),pension:{...clone(seed.pension),transactions:[__args[0]],incomes:[__args[0]]}})',[receipt]));
+ assert.equal(restored.pension.transactions[0].type,type,'복원 시 수령 유형을 매수로 바꾸지 않음');
+ assert.equal(restored.pension.incomes[0].type,type,'과거 수령 내역의 세부 유형 유지');
+ assert.equal(restored.pension.transactions[0].amount,10000);
+}
 const pensionRows=[{id:'p1',holdingId:'ph-a',type:'buy',date:'2026-01-01',createdAt:'1',qty:3.5,price:100,fee:1,tax:0},{id:'p2',holdingId:'ph-a',type:'buy',date:'2026-01-02',createdAt:'2',qty:1.5,price:200,fee:1,tax:0},{id:'p3',holdingId:'ph-a',type:'sell',date:'2026-01-03',createdAt:'3',qty:5,price:250,fee:0,tax:0},{id:'p4',holdingId:'ph-a',type:'buy',date:'2026-01-04',createdAt:'4',qty:2.5,price:80,fee:.5,tax:0},{id:'other',holdingId:'ph-b',type:'buy',date:'2026-01-01',createdAt:'1',qty:999,price:1,fee:0,tax:0}];
 const pensionPos=plain(run('pensionPositionFromLedger(__args[0],__args[1])',[pensionHolding,pensionRows]));assert.equal(pensionPos.qty,2.5);close(pensionPos.avg,80.2,'연금 전량매도 후 재매수 평균단가');
 run(`state.pension.accounts=[{id:'ps-delete',kind:'pension',name:'삭제검증',status:'active',openedAt:'2026-01-01'}];state.pension.holdings=[{id:'ph-delete',accountId:'ps-delete',name:'ETF',baselineQty:0,baselineAvgPrice:0}];state.pension.contributions=[{id:'pc-delete',accountId:'ps-delete',date:'2026-01-01',amount:1000,type:'contribution'}];state.pension.transactions=[{id:'buy-delete',accountId:'ps-delete',holdingId:'ph-delete',type:'buy',date:'2026-01-02',createdAt:'1',qty:5,price:100,fee:0,tax:0},{id:'sell-delete',accountId:'ps-delete',holdingId:'ph-delete',type:'sell',date:'2026-01-03',createdAt:'2',qty:5,price:100,fee:0,tax:0}]`);
