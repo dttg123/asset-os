@@ -38,7 +38,7 @@ run('brokerKisImportBalanceSnapshot(state.brokerKis,{cash:500000,securitiesValue
 run('brokerKisImportRights(state.brokerKis,[{rightTypeCode:"32",baseDate:"2026-08-01",cashPaymentDate:"2026-08-20",productCode:"ETF001",productName:"테스트 ETF",amount:10000,tax:1500}],"pension","ps-main","2026-09-01T08:00:00Z")');
 const rightIncome=plain(run('pensionIncomeRecords("pension")'));
 assert.equal(rightIncome.length,1,'한투 권리 수령액이 배당·이자·권리 수익에 보여야 한다');
-assert.equal(rightIncome[0].type,'other_right','권리코드를 추측해 배당으로 만들면 안 된다');
+assert.equal(rightIncome[0].type,'distribution','ETF 상품명으로 확인되는 권리는 분배금으로 표시해야 한다');
 assert.equal(rightIncome[0].grossAmount,10000);assert.equal(rightIncome[0].tax,1500);assert.equal(rightIncome[0].amount,8500,'표시 금액은 세후 실수령액이어야 한다');
 assert.equal(rightIncome[0].source,'kis-right');assert.equal(rightIncome[0].readOnly,true);
 assert.equal(run('pensionIncomeRecords("pension").reduce((sum,row)=>sum+row.amount,0)'),8500,'한투 세후 수령액이 수익 합계에 반영되어야 한다');

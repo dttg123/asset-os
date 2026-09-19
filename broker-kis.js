@@ -86,9 +86,17 @@ function brokerKisRightKey(row){return['kis-right',brokerKisKind(row.accountKind
 function brokerKisNormalizeRight(row,accountKind='',accountId='',fetchedAt=''){
  const next={source:'kis',accountKind:brokerKisKind(accountKind||row?.accountKind),accountId:brokerKisText(accountId||row?.accountId,100),rightTypeCode:brokerKisText(row?.rightTypeCode,30),baseDate:brokerKisDate(row?.baseDate),cashPaymentDate:brokerKisDate(row?.cashPaymentDate),productCode:brokerKisText(row?.productCode,80),productName:brokerKisText(row?.productName,160),amount:brokerKisNonNegative(row?.amount),tax:brokerKisNonNegative(row?.tax),classification:'unclassified_cash_right',fetchedAt:brokerKisTimestamp(fetchedAt||row?.fetchedAt),revisions:[]};next.netAmount=Math.max(0,next.amount-next.tax);next.rightKey=brokerKisRightKey(next);return next
 }
-function brokerKisIncomeTypeLabel(type){return type==='dividend'?'배당':type==='distribution'?'분배금':type==='interest'?'이자':'기타 권리'}
+const KIS_ETF_NAME_PREFIX=/^(?:KODEX|TIGER|RISE|ACE|SOL|HANARO|KOSEF|PLUS|TIMEFOLIO|KIWOOM|1Q)(?:\s|[A-Z0-9가-힣])/i;
+function brokerKisRightIncomeType(row){
+ const instrumentType=brokerKisText(row?.instrumentType||row?.productType,40).toLowerCase(),name=brokerKisText(row?.productName,160).normalize('NFKC').trim();
+ if(['etf','exchange_traded_fund'].includes(instrumentType)||/\bETF\b/i.test(name)||KIS_ETF_NAME_PREFIX.test(name))return'distribution';
+ if(['stock','equity'].includes(instrumentType))return'dividend';
+ if(['deposit','cash','bond_interest'].includes(instrumentType))return'interest';
+ return'other_right'
+}
+function brokerKisIncomeTypeLabel(type){return type==='dividend'?'배당금':type==='distribution'?'분배금':type==='interest'?'이자':'기타 권리'}
 function brokerKisRightIncomeRecords(store,accountKind=''){
- const kind=brokerKisKind(accountKind);return(Array.isArray(store?.rights)?store.rights:[]).filter(row=>!kind||row.accountKind===kind).map(row=>({id:row.rightKey,accountId:row.accountId,holdingId:'',type:'other_right',date:row.cashPaymentDate||row.baseDate,amount:Math.max(0,Number(row.netAmount??((Number(row.amount)||0)-(Number(row.tax)||0)))||0),grossAmount:Math.max(0,Number(row.amount)||0),tax:Math.max(0,Number(row.tax)||0),label:row.productName||row.productCode||'한투 권리',source:'kis-right',readOnly:true,rightTypeCode:row.rightTypeCode||'',productCode:row.productCode||'',classification:row.classification||'unclassified_cash_right'})).filter(row=>row.date&&row.amount>=0)
+ const kind=brokerKisKind(accountKind);return(Array.isArray(store?.rights)?store.rights:[]).filter(row=>!kind||row.accountKind===kind).map(row=>{const type=brokerKisRightIncomeType(row);return{id:row.rightKey,accountId:row.accountId,holdingId:'',type,date:row.cashPaymentDate||row.baseDate,amount:Math.max(0,Number(row.netAmount??((Number(row.amount)||0)-(Number(row.tax)||0)))||0),grossAmount:Math.max(0,Number(row.amount)||0),tax:Math.max(0,Number(row.tax)||0),label:row.productName||row.productCode||'한투 권리',source:'kis-right',readOnly:true,rightTypeCode:row.rightTypeCode||'',productCode:row.productCode||'',classification:row.classification||'unclassified_cash_right',classificationBasis:type==='other_right'?'unverified':'instrument-type'}}).filter(row=>row.date&&row.amount>=0)
 }
 function brokerKisImportRights(store,rows,accountKind,accountId,fetchedAt=new Date().toISOString()){
  const kind=brokerKisKind(accountKind),timestamp=brokerKisTimestamp(fetchedAt);if(!kind||!timestamp)return{inserted:0,updated:0,skipped:0,rejected:Array.isArray(rows)?rows.length:0,total:(store?.rights||[]).length,error:'KIS_RESPONSE_METADATA_INVALID'};const target=store||brokerKisEmptyStore(),list=Array.isArray(target.rights)?target.rights:(target.rights=[]),byKey=new Map(list.map(x=>[x.rightKey,x]));let inserted=0,updated=0,skipped=0,rejected=0;

@@ -121,6 +121,16 @@ function sample(overrides={}){
 
 {
  const store=call('brokerKisEmptyStore');
+ call('brokerKisImportRights',store,[{rightTypeCode:'32',baseDate:'2026-09-01',cashPaymentDate:'2026-09-17',productCode:'489250',productName:'KODEX 미국배당다우존스',amount:11808,tax:0}],'pension','ps-main','2026-09-19T01:00:00Z');
+ const income=plain(call('brokerKisRightIncomeRecords',store,'pension'));
+ assert.equal(income.length,1);assert.equal(income[0].type,'distribution','ETF로 확인되는 KODEX 권리는 분배금이어야 한다');
+ assert.equal(income[0].classificationBasis,'instrument-type');
+ assert.equal(call('brokerKisIncomeTypeLabel',income[0].type),'분배금');
+ assert.equal(store.rights[0].classification,'unclassified_cash_right','불명확한 권리코드 자체를 임의 해석해서는 안 된다');
+}
+
+{
+ const store=call('brokerKisEmptyStore');
  call('brokerKisImportOrderSnapshots',store,[sample({filledQty:100,filledAmount:1000000,remainingQty:0})],'pension','ps-main','2026-09-01T07:00:00Z');
  const normalized=plain(call('normalizeBrokerKis',plain(store)));
  assert.deepEqual(normalized,plain(store),'저장→정규화 Round Trip에서 KIS 데이터가 변하면 안 된다');
