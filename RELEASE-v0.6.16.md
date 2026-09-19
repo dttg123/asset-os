@@ -28,3 +28,5 @@ Sources:
 - https://tiller.com/templates/
 
 QA scope: isolated QA data only. Read-only navigation, settings, theme toggle, analysis preview and transaction detail. Real broker authentication, financial account actions and external AI sharing are not claimed as tested in this review.
+
+Post-deploy QA caught product-name-only income rendering as generic 종목. v0.6.16-r2 uses the stored product name in recent income cards, analysis and AI labels.
