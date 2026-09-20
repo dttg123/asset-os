@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Asset OS QA 화면 크기 검사</title>
+<style>body{margin:0;background:#e4e9f0;font:14px system-ui}header{padding:10px;display:flex;gap:12px;align-items:center;justify-content:center}select{font:inherit;padding:6px}iframe{display:block;border:1px solid #9aa7b8;margin:0 auto;background:white;width:360px;height:800px;max-width:100%;box-sizing:border-box}</style>
+<header><strong>QA 화면 크기 검사</strong><label>화면 너비 <select id="width" aria-label="화면 너비"><option value="360">360px</option><option value="412">412px</option><option value="720">720px</option></select></label></header>
+<iframe title="Asset OS QA" src="./qa-manual.html?qa=1"></iframe>
+<script>document.querySelector('#width').addEventListener('change',e=>{document.querySelector('iframe').style.width=e.target.value+'px'})</script>
+</html>
