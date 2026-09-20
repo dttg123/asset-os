@@ -13,3 +13,4 @@
 
 /* Keep test controls out of the sticky app header hit area. */
 .qa-mode .qa-banner{position:relative}
+[data-life-extension][hidden],[data-life-settlement][hidden],[data-life-transfer][hidden]{display:none!important}
