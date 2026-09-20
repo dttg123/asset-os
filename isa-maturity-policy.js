@@ -27,10 +27,10 @@ function openPolicyAssignment(id){
 }
 function applyPolicyVersion(kind,id){const group=policyGroup(kind),target=group.versions.find(v=>v.id===id);
 if(!target)return toast('제도 버전을 찾지 못했습니다.');
-if(kind==='isa'&&['proposal','retired'].includes(String(target.status||'')))return toast('제안·폐기 상태의 제도는 계좌에 적용할 수 없습니다.');
-if(kind==='isa'&&target.effectiveFrom&&ymd()<String(target.effectiveFrom))return toast(`${formatDate(target.effectiveFrom)}부터 적용할 수 있는 제도입니다.`);
+if(['proposal','retired'].includes(String(target.status||'')))return toast('제안·폐기 상태의 제도는 계좌에 적용할 수 없습니다.');
+if(target.effectiveFrom&&ymd()<String(target.effectiveFrom))return toast(`${formatDate(target.effectiveFrom)}부터 적용할 수 있는 제도입니다.`);
 if(kind==='isa')return openPolicyAssignment(id);
-showDialog({title:'기본 제도로 적용할까요?',message:`${target.name}을 기본 적용 제도로 사용합니다.`,confirmText:'적용'},()=>{group.activePolicyId=id;if(!persist())return;openPolicyHub(kind);render();toast('기본 적용 제도를 변경했습니다.')})}
+showDialog({title:'기본 제도로 적용할까요?',message:`${target.name}을 기본 적용 제도로 사용합니다.`,confirmText:'적용'},()=>{const previous=group.versions.find(v=>v.id===group.activePolicyId);group.applicationHistory=Array.isArray(group.applicationHistory)?group.applicationHistory:[];if(!group.applicationHistory.length&&previous)group.applicationHistory.push({policyId:previous.id,effectiveFrom:previous.effectiveFrom||'1900-01-01'});group.applicationHistory.push({policyId:id,effectiveFrom:ymd()});group.activePolicyId=id;if(!persist())return;openPolicyHub(kind);render();toast('기본 적용 제도를 변경했습니다.')})}
 
 function recordIsaLifecycle(accountId,input){
  const a=state.accounts.find(x=>x.id===accountId);if(!a||!isCurrentAccount(a))return{ok:false,error:'운영 중인 ISA를 선택해 주세요.'};
