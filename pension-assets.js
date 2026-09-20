@@ -80,5 +80,6 @@ function pensionReconcileIncome(details,archives){
 function pensionVisibleTransactionRows(scope='all'){
  const incomes=pensionIncomeRecords(scope),manual=pensionTransactions(scope).filter(x=>!['dividend','distribution','interest','other_right'].includes(x.type)),orders=brokerKisVisibleOrders(state.brokerKis,scope);
  const realized=typeof pensionArchiveTransactionRows==='function'?pensionArchiveTransactionRows(scope).filter(x=>x.type!=='dividend'):[];
- return [...manual,...orders,...incomes,...realized].sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.time||'').localeCompare(String(a.time||''))||String(b.id).localeCompare(String(a.id)));
+ const contributions=typeof centralPensionContributionRows==='function'?centralPensionContributionRows().filter(t=>scope==='all'||t.kind===scope).map(t=>({...t,accountKind:t.kind,linkedContribution:true})):[];
+ return [...manual,...orders,...incomes,...realized,...contributions].sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.time||'').localeCompare(String(a.time||''))||String(b.id).localeCompare(String(a.id)));
 }

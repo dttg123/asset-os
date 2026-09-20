@@ -54,9 +54,9 @@ test('financial growth and insurance details expose real interactive and derived
  assert.match(growth,/data-growth-track/);
  assert.match(growth,/onpointerdown=pick/);
  assert.match(growth,/ArrowLeft/);
- const context={localYmd:()=> '2060-12-31'};
+ const context={localYmd:()=> '2060-12-31',financeSchedules:()=>[]};
  vm.runInNewContext(insurance,context);
- assert.deepEqual({...context.insurancePremiumSummary({premium:250000,contractDate:'2026-01-01',paymentEndDate:'2060-12-31'})},{total:105000000,paid:105000000,remaining:0});
+ assert.deepEqual({...context.insurancePremiumSummary({premium:250000,contractDate:'2026-01-01',paymentEndDate:'2060-12-31'})},{total:105000000,paid:0,remaining:0,previousRecorded:0});
 });
 
 test('home wording and selected-month summaries cannot regress',()=>{

@@ -29,7 +29,7 @@ async function saveZipBackup(){
   if(String(e?.name)==='AbortError'){toast('ZIP 저장을 취소했습니다.');return false}
   try{
    const bytes=createBackupZipBytes();downloadBytes(bytes,name);
-   showNotice('저장 위치 선택을 열지 못했습니다.',`브라우저가 저장 위치 선택을 거부해 Downloads에 백업했습니다. (${e.message||e})`);
+   showNotice('저장 위치 선택을 열지 못했습니다.','기본 다운로드 위치로 백업 파일을 내려받았습니다. 다운로드 목록에서 파일을 확인해 주세요.');
    return true
   }catch(f){toast(`백업 실패: ${f.message||e.message}`);return false}
  }
