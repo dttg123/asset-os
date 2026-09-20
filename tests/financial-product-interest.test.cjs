@@ -19,3 +19,12 @@ context.integratedReplay=()=>({assets:{'finance-asset-saving':800000},liabilitie
 const afterWithdrawal=JSON.parse(JSON.stringify(vm.runInContext('financeProductInterestEstimate(__product)',context)));
 assert.ok(afterWithdrawal.gross<result.gross,'중도 출금 이후 기간의 이자는 감소해야 함');
 console.log('financial product dated-interest tests: PASS');
+
+ledger.splice(0,ledger.length,{id:'variable-open',date:'2031-01-01',type:'externalAssetIn',amount:1000000,toAccountId:'finance-asset-saving'});
+context.integratedReplay=()=>({assets:{'finance-asset-saving':1000000},liabilities:{}});
+context.__product={id:'saving',type:'deposit',startDate:'2031-01-01',annualRate:0,interestMethod:'simple',taxMode:'taxfree',rateHistory:[{effectiveFrom:'2031-01-01',rate:4},{effectiveFrom:'2035-07-01',rate:2},{effectiveFrom:'2040-01-01',rate:0}]};
+const day=(a,b)=>(Date.parse(b+'T00:00:00Z')-Date.parse(a+'T00:00:00Z'))/86400000;
+for(let year=2035;year<=2060;year++){
+ const end=year+'-12-31',result=vm.runInContext(`financeProductInterestEstimate(__product,'${end}')`,context),expected=1000000*(.04*day('2031-01-01','2035-07-01')+.02*day('2035-07-01',end<'2040-01-01'?end:'2040-01-01'))/365;
+ assert.ok(Math.abs(result.gross-expected)<.01,`${year} 금리 변경 이후 누계`);
+}
