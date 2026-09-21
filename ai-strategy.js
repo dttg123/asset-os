@@ -100,6 +100,11 @@ function buildAiStrategyPayload(purpose,amount,fundingSource='new_money'){
 function payloadNumber(value){return Number(value)||0}
 
 function aiStrategyFile(purpose,amount,fundingSource){const payload=buildAiStrategyPayload(purpose,amount,fundingSource),exportPayload={...payload,dataQuality:{ready:payload.dataQuality.ready,blockers:payload.dataQuality.blockers}} ,blob=new Blob([JSON.stringify(exportPayload,null,2)],{type:'text/plain'});return{file:new File([blob],'투자분석.txt',{type:'text/plain'}),payload}}
+function downloadAiStrategyFile(purpose,amount,fundingSource){
+ const {file,payload}=aiStrategyFile(purpose,amount,fundingSource);
+ if(!payload.dataQuality.ready){showNotice('저장 전 확인',payload.dataQuality.blockers.join('\n'));return false}
+ downloadBytes(file,file.name,file.type);toast('분석파일을 내려받았습니다. ChatGPT 대화에 첨부해 주세요.');return true;
+}
 async function shareAiStrategyFile(purpose,amount,fundingSource){
  const {file,payload}=aiStrategyFile(purpose,amount,fundingSource);
  if(!payload.dataQuality.ready){showNotice('공유 전 확인',payload.dataQuality.blockers.join('\n'));return false}

@@ -24,3 +24,19 @@ test('saved-only and proposed policies never silently change historic pension li
 test('lump-sum insurance records actual cash and refund without monthly schedules',()=>{const c=env();run(c,"state.insurance.policies.push({id:'lump',name:'QA 일시납',status:'active',paymentStyle:'lump',premium:1000000,contractDate:'2040-01-31',paymentEndDate:'2040-01-31',coverages:[]});syncInsuranceSchedule(insurancePolicies().find(p=>p.id==='lump'),true)");assert.equal(run(c,"financeSchedules().some(s=>s.productId==='lump')"),false);const cash=run(c,"integratedReplay().assets['cash-main']");assert.equal(run(c,"recordInsurancePayment('lump',{date:'2040-01-31',amount:1000000,paymentId:'lump-paid'}).ok"),true);assert.equal(run(c,"recordInsurancePayment('lump',{date:'2040-01-31',amount:1000000,paymentId:'lump-paid'}).ok"),false);assert.equal(run(c,"insurancePremiumSummary(insurancePolicies().find(p=>p.id==='lump')).paid"),1000000);assert.equal(run(c,"integratedReplay().assets['cash-main']"),cash-1000000);assert.equal(run(c,"recordIntegratedRefund('lump-paid','2040-02-01',100000).ok"),true);assert.equal(run(c,"insurancePremiumSummary(insurancePolicies().find(p=>p.id==='lump')).paid"),900000);for(let year=2040;year<=2060;year++)assert.equal(run(c,`insurancePremiumSummary(insurancePolicies().find(p=>p.id==='lump'),'${year}-12-31').paid`),900000)});
 
 test('editing an outside insurance expense preserves the original funding path and link',()=>{const c=settlementEnv();run(c,"state.integrated.ledger.push({id:'insurance-edit',date:'2040-01-01',type:'externalExpense',amount:10000,productId:'policy-existing',fixed:true,meta:{insurancePayment:true}})");c.form={dataset:{editId:'insurance-edit'},values:{date:'2040-01-01',uiType:'lifeExpense',amount:'15000',category:'QA 보험료'}};const tx=run(c,'integratedCandidatesFromForm(form)[0]');assert.equal(tx.type,'externalExpense');assert.equal(tx.productId,'policy-existing');assert.equal(tx.fromAccountId,undefined);assert.equal(tx.fixed,true);assert.equal(tx.meta.insurancePayment,true)});
+
+test('monthly detail includes refunds, external expenses, outside contributions and withdrawals',()=>{
+ const c=env();run(c,`state.integrated.ledger.push(
+ {id:'detail-exp',date:'2040-03-01',type:'externalExpense',amount:700,category:'outside expense'},
+ {id:'detail-ref',date:'2040-03-02',type:'refund',amount:100,category:'refund row',toAccountId:'cash-main'},
+ {id:'detail-invest',date:'2040-03-03',type:'externalAssetIn',amount:900,category:'outside pension',toAccountId:state.integrated.accounts.find(a=>a.kind==='pension').id},
+ {id:'detail-out',date:'2040-03-04',type:'externalWithdrawal',amount:800,category:'withdrawal row',fromAccountId:'cash-main'});
+ globalThis.nodes={};document.querySelector=key=>nodes[key]||(nodes[key]={});openSheet=()=>{};openIntegratedMonthDetail('2040-03');`);
+ const html=run(c,"nodes['#sheetBody'].innerHTML");
+ for(const [name,value] of [['outside expense',700],['refund row',-100],['outside pension',900],['withdrawal row',800]])assert.ok(html.includes(`<span>${name}</span><strong>${value}원</strong>`),name);
+});
+test('inactive schedules retain completed historical occurrences without adding unpaid plans',()=>{
+ const c=env();run(c,`state.financeSchedules.items.push({id:'history-insurance',name:'QA closed policy',kind:'insurance',active:false,day:25,startDate:'2031-01-01',endDate:'2034-03-31',amount:10000});state.integrated.ledger.push({id:'history-paid',date:'2034-02-25',type:'expense',amount:10000,fromAccountId:'cash-main',meta:{scheduleId:'history-insurance',scheduleDate:'2034-02-25'}})`);
+ assert.equal(run(c,"scheduleOccurrences('2034-02').find(x=>x.schedule.id==='history-insurance').status"),'done');
+ for(const month of ['2034-01','2034-03','2034-04','2060-12'])assert.equal(run(c,`scheduleOccurrences('${month}').some(x=>x.schedule.id==='history-insurance')`),false);
+});
