@@ -40,3 +40,15 @@ test('inactive schedules retain completed historical occurrences without adding 
  assert.equal(run(c,"scheduleOccurrences('2034-02').find(x=>x.schedule.id==='history-insurance').status"),'done');
  for(const month of ['2034-01','2034-03','2034-04','2060-12'])assert.equal(run(c,`scheduleOccurrences('${month}').some(x=>x.schedule.id==='history-insurance')`),false);
 });
+
+test('ISA dividend filter includes ETF distributions and linked detail shows reinvestment',()=>{
+ const c=env();vm.runInContext(fs.readFileSync(path.join(root,'core-visual-utils.js'),'utf8'),c);vm.runInContext(fs.readFileSync(path.join(root,'isa-summary.js'),'utf8'),c);
+ run(c,`globalThis.a=state.accounts[0];currentAccount=()=>a;setting().txFilter='dividend';a.transactions.push({id:'qa-dist',type:'distribution',date:'2033-02-01',holdingId:'qa-etf',amount:2000,linkedBuyId:'qa-buy'},{id:'qa-buy',type:'buy',date:'2033-02-02',holdingId:'qa-etf',qty:1,price:10000,sourceDividendId:'qa-dist'});a.holdings.push({id:'qa-etf',name:'QA ETF',qty:0,avgPrice:0,currentPrice:10000});`);
+ assert.ok(run(c,'transactionsPage()').includes('data-tx="qa-dist"'));assert.ok(!run(c,'transactionsPage()').includes('data-tx="qa-buy"'));
+ run(c,`globalThis.nodes={};document.querySelector=key=>nodes[key]||(nodes[key]={addEventListener:()=>{}});openSheet=()=>{};openTransactionDetail('qa-dist');`);
+ assert.ok(run(c,"nodes['#sheetBody'].innerHTML").includes('연결된 매수'));assert.ok(run(c,"nodes['#sheetBody'].innerHTML").includes('2033.02.02 · 10,000원'));
+});
+test('ISA quick registration binds the button inside the action sheet',()=>{
+ const c=env();run(c,`globalThis.quickButton={};globalThis.mainButton={};globalThis.grid={querySelector:key=>quickButton};document.querySelector=key=>key==='#actionGrid'?grid:key==='[data-register]'?mainButton:{};openSheet=()=>{};openTransactionChoice();`);
+ assert.equal(run(c,'quickButton.onclick===openRegisterChoice'),true);assert.equal(run(c,'mainButton.onclick'),undefined);
+});
