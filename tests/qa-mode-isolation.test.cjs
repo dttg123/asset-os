@@ -138,6 +138,11 @@ const before=plain(run('qaDatasetStats()'));run('state=loadState()');assert.deep
 assert.equal(run('brokerKisClient.configure(BROKER_KIS_PUBLIC_CONFIG).ok'),true);assert.equal(networkClients,0);assert.equal(run('brokerKisClient.consumeRedirect().error'),'QA_NETWORK_BLOCKED');
 (async()=>{assert.equal(await run('initSupabaseCloud()'),false);assert.equal(await run('cloudPushState()'),false);assert.equal(await run('cloudReconcileState()'),false);assert.equal(networkClients,0);assert.equal(fetches,0);console.log('QA mode isolation and 35-year real-user dataset tests: PASS')})().catch(error=>{console.error(error);process.exitCode=1});
 
+// QA 원장을 교체하거나 초기화하면 이전 자료에서 사용하던 검색·필터가 새 원장을 가리지 않아야 한다.
+run('pensionTransactionSearch="기타 권리";pensionTransactionDisplayLimit=80;integratedLedgerSearch="월급";integratedSearchDisplayLimit=150;setting().integratedLedgerFilter="expense"');
+assert.equal(run('qaGenerateThirtyFiveYears()'),true);
+assert.deepEqual(plain(run('({pensionTransactionSearch,pensionTransactionDisplayLimit,integratedLedgerSearch,integratedSearchDisplayLimit,integratedLedgerFilter:setting().integratedLedgerFilter})')),{pensionTransactionSearch:'',pensionTransactionDisplayLimit:20,integratedLedgerSearch:'',integratedSearchDisplayLimit:50,integratedLedgerFilter:'all'});
+
 assert.equal(run('homeMonthActivity().remainingAmount'),2100000,'예정 월급은 지출·납입에 포함하지 않는다');
 assert.equal(run("scheduleOccurrences().some(x=>x.schedule.kind==='income'&&x.status!=='done')"),false);
 
