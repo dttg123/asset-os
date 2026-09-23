@@ -55,6 +55,7 @@ assert.deepEqual(JSON.parse(JSON.stringify(payload.pensionSavings.income[0])),{d
 assert.equal(payload.combinedPlan.projection.expectedAssetsAtRetirement,1311070000);
 assert.equal(payload.irp.risk.confirmedRatio,67.57);
 assert.equal(payload.dataQuality.ready,true);
+assert.deepEqual(Array.from(payload.request.includedScopes),['isa','pension','irp']);
 assert.match(payload.request.prompt,/결론부터/);
 assert.match(payload.request.prompt,/매수 \/ 분할매수 \/ 대기 \/ 유지 \/ 축소 \/ 교체/);
 assert.match(payload.request.prompt,/1~3개월, 6~12개월, 3~5년/);
@@ -97,6 +98,14 @@ assert.equal(strategyFile.name,'투자분석.txt');
 assert.equal(strategyFile.type,'text/plain');
 const strategyText=strategyFile.parts[0].parts[0];
 assert.doesNotMatch(strategyText,/"warnings"/,'AI에 공유되는 파일은 진단 경고 목록으로 판단을 흐리면 안 된다');
+
+const isaOnly=context.__buildAiStrategyPayload('buy',3000000,'new_money',['isa']);
+assert.deepEqual(Array.from(isaOnly.request.includedScopes),['isa']);
+assert.equal(isaOnly.request.includedAccountTypes,'ISA');
+assert.equal(isaOnly.pensionSavings.accounts.length,0,'제외한 개인연금 계좌는 파일에 포함하면 안 된다');
+assert.equal(isaOnly.irp.accounts.length,0,'제외한 IRP 계좌는 파일에 포함하면 안 된다');
+assert.match(isaOnly.request.prompt,/ISA 계좌별로/);
+assert.doesNotMatch(isaOnly.request.prompt,/ISA·연금저축·IRP별로/);
 
 const staleIsaPayload=JSON.parse(JSON.stringify(payload));
 staleIsaPayload.request.purpose='리밸런싱';

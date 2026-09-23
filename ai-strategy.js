@@ -1,22 +1,30 @@
 'use strict';
 
 let aiStrategyPurpose='buy';
+const AI_STRATEGY_SCOPES=['isa','pension','irp'];
+
+function aiStrategyScopes(value){
+ if(!Array.isArray(value))return[...AI_STRATEGY_SCOPES];
+ return AI_STRATEGY_SCOPES.filter(key=>value.includes(key))
+}
+function aiStrategyScopeLabels(scopes){const labels={isa:'ISA',pension:'개인연금',irp:'IRP'};return aiStrategyScopes(scopes).map(key=>labels[key]).join(' · ')}
 
 function aiStrategySetting(){
  const saved=setting().aiStrategy||{};
  return{
   purpose:['buy','rebalance','tax'].includes(saved.purpose)?saved.purpose:'buy',
   fundingSource:['new_money','account_cash','next_contribution'].includes(saved.fundingSource)?saved.fundingSource:'new_money',
+  includedScopes:aiStrategyScopes(saved.includedScopes),
   amount:Math.max(0,Math.round(Number(saved.amount)||0)),
   horizonYears:Math.max(3,Math.round(Number(saved.horizonYears)||3)),
   riskStyle:'공격형',maxDrawdown:-40,preferNewMoney:true
  }
 }
 
-function aiStrategyPrompt(purpose,amount,fundingSource='new_money'){
- const focus=purpose==='rebalance'?'전체 리밸런싱':purpose==='tax'?'연금·절세 전략':'지금 더 투자해도 되는지',zeroRebalance=purpose==='rebalance'&&amount<=0;
+function aiStrategyPrompt(purpose,amount,fundingSource='new_money',includedScopes=AI_STRATEGY_SCOPES){
+ const focus=purpose==='rebalance'?'전체 리밸런싱':purpose==='tax'?'연금·절세 전략':'지금 더 투자해도 되는지',zeroRebalance=purpose==='rebalance'&&amount<=0,scopeLabel=aiStrategyScopeLabels(includedScopes);
  const sourceLabel=zeroRebalance?'추가 자금 없음 · 기존 보유종목 비중 조정':fundingSource==='account_cash'?'계좌 안 현금':fundingSource==='next_contribution'?'다음 납입금':'새로 넣을 돈';
- return `너는 내 계좌를 평가하는 감사자가 아니라 실제 매수 결정을 돕는 투자판단 파트너다. 첨부한 Asset OS 자료와 오늘의 최신 시장자료를 함께 사용해 ${focus}에 대한 결론을 내려라.\n\n가장 먼저 보여줄 것\n- ISA·연금저축·IRP별로 지금 행동을 매수 / 분할매수 / 대기 / 유지 / 축소 / 교체 중 하나로 확정\n- 각 계좌에서 실행할 종목, 금액, 최신 현재가 기준 예상 수량, 실행 순서\n- 지금 전액을 쓰지 않는다면 이번 집행액과 남겨둘 금액\n\n판단 순서\n1. 웹에서 오늘 날짜의 금리·환율·미국 및 한국 증시·보유종목 가격과 핵심 이슈를 확인한다. 첨부 현재가가 오래됐으면 최신 웹 가격을 사용한다.\n2. 현재 시장을 5줄 이내로 판단한다.\n3. 앞으로 1~3개월, 6~12개월, 3~5년의 기본 전망을 계좌 보유종목과 투자 테마에 연결한다.\n4. ISA, 연금저축, IRP를 각각 판단하고 마지막에 실제 실행 순서를 하나의 표로 정리한다.\n5. 다음 매수 또는 판단 변경 시점을 날짜·가격·시장 조건 중 확인 가능한 기준으로 제시한다.\n\n내 조건\n- 자금 출처: ${sourceLabel}\n- ${zeroRebalance?'추가 투자금':'판단 금액'}: ${amount.toLocaleString('ko-KR')}원\n- 투자기간: 3년 이상\n- 투자성향: 공격형\n- 감내 가능한 최대 손실: -40%\n- ${zeroRebalance?'추가 자금 없이 기존 보유종목의 유지·축소·교체를 판단':'기존 종목을 불필요하게 매도하지 말고 신규 자금 배분을 우선'}\n\n답변 원칙\n- 결론부터 말하고 애매한 양비론으로 끝내지 않는다.\n- 앱 구조, 데이터 형식, 개인정보 제외 여부를 설명하지 않는다.\n- 일반적인 투자 위험 설명, 교과서식 주의사항, 긴 면책문구를 쓰지 않는다.\n- 보유내역을 그대로 다시 읽어주는 데 분량을 쓰지 않는다.\n- 위험요인은 별도 장문 항목으로 만들지 말고 매수·대기 판단을 바꾸는 조건에만 짧게 반영한다.\n- 정확한 수량을 계산할 수 없으면 최신 가격 기준의 금액 범위로 제시한다.\n- 오늘 이미 체결한 주문은 중복 추천하지 않는다.`;
+ return `너는 내 계좌를 평가하는 감사자가 아니라 실제 매수 결정을 돕는 투자판단 파트너다. 첨부한 Asset OS 자료와 오늘의 최신 시장자료를 함께 사용해 ${focus}에 대한 결론을 내려라.\n\n가장 먼저 보여줄 것\n- ${scopeLabel} 계좌별로 지금 행동을 매수 / 분할매수 / 대기 / 유지 / 축소 / 교체 중 하나로 확정\n- 각 계좌에서 실행할 종목, 금액, 최신 현재가 기준 예상 수량, 실행 순서\n- 지금 전액을 쓰지 않는다면 이번 집행액과 남겨둘 금액\n\n판단 순서\n1. 웹에서 오늘 날짜의 금리·환율·미국 및 한국 증시·보유종목 가격과 핵심 이슈를 확인한다. 첨부 현재가가 오래됐으면 최신 웹 가격을 사용한다.\n2. 현재 시장을 5줄 이내로 판단한다.\n3. 앞으로 1~3개월, 6~12개월, 3~5년의 기본 전망을 계좌 보유종목과 투자 테마에 연결한다.\n4. 선택한 ${scopeLabel} 계좌를 각각 판단하고 마지막에 실제 실행 순서를 하나의 표로 정리한다.\n5. 다음 매수 또는 판단 변경 시점을 날짜·가격·시장 조건 중 확인 가능한 기준으로 제시한다.\n\n내 조건\n- 자금 출처: ${sourceLabel}\n- ${zeroRebalance?'추가 투자금':'판단 금액'}: ${amount.toLocaleString('ko-KR')}원\n- 투자기간: 3년 이상\n- 투자성향: 공격형\n- 감내 가능한 최대 손실: -40%\n- ${zeroRebalance?'추가 자금 없이 기존 보유종목의 유지·축소·교체를 판단':'기존 종목을 불필요하게 매도하지 말고 신규 자금 배분을 우선'}\n\n답변 원칙\n- 결론부터 말하고 애매한 양비론으로 끝내지 않는다.\n- 앱 구조, 데이터 형식, 개인정보 제외 여부를 설명하지 않는다.\n- 일반적인 투자 위험 설명, 교과서식 주의사항, 긴 면책문구를 쓰지 않는다.\n- 보유내역을 그대로 다시 읽어주는 데 분량을 쓰지 않는다.\n- 위험요인은 별도 장문 항목으로 만들지 말고 매수·대기 판단을 바꾸는 조건에만 짧게 반영한다.\n- 정확한 수량을 계산할 수 없으면 최신 가격 기준의 금액 범위로 제시한다.\n- 오늘 이미 체결한 주문은 중복 추천하지 않는다.`;
 }
 
 function aiRecentRows(rows,limit=240){return [...(rows||[])].sort((a,b)=>String(b.date||b.orderDate||'').localeCompare(String(a.date||a.orderDate||''))).slice(0,limit)}
@@ -81,7 +89,8 @@ function aiStrategyPreflight(payload,amount,fundingSource){
  if(pensionAccounts.some(a=>a.summary.cashConfirmed===false))blockers.push('당일 체결 때문에 연금 예수금의 실제 사용 가능액이 확정되지 않았습니다.');
  if(kisAccounts.some(a=>a.sync?.lastError))blockers.push('한국투자 잔고·체결 갱신이 부분 완료 상태입니다.');
  if(staleKis.length)warnings.push(`한국투자 갱신이 1거래일 넘게 지난 계좌: ${staleKis.map(a=>`${a.label||a.ref||a.kind||'계좌'} (${aiKoreaTimestamp(a.sync?.lastCompleteAt)})`).join(', ')}. 주말·시장 휴장일은 제외했습니다. 최신 주문 전에는 다시 갱신해 주세요.`);
- if(payload.irp.risk.classificationComplete===false)blockers.push('IRP에 위험자산 분류가 확인되지 않은 종목이 있습니다.');
+ if(!payload.request.includedScopes?.length)blockers.push('분석에 포함할 계좌를 하나 이상 선택해 주세요.');
+ if(payload.irp.accounts.length&&payload.irp.risk.classificationComplete===false)blockers.push('IRP에 위험자산 분류가 확인되지 않은 종목이 있습니다.');
  if(amount<=0&&!isRebalance)blockers.push('판단할 투자금액이 0원입니다.');
  if(fundingSource==='account_cash'){
   const accounts=[...payload.isa.accounts,...pensionAccounts],unconfirmed=accounts.some(a=>a.summary.cashConfirmed===false),available=accounts.reduce((sum,a)=>sum+Math.max(0,Number(a.summary.availableCash??a.summary.cash)||0),0);
@@ -91,33 +100,34 @@ function aiStrategyPreflight(payload,amount,fundingSource){
  return{ready:blockers.length===0,blockers,warnings}
 }
 
-function buildAiStrategyPayload(purpose,amount,fundingSource='new_money'){
- const isaAccounts=state.accounts.filter(isCurrentAccount).map(aiIsaAccountExport),pensionSavings=aiPensionSection('pension'),irpSection=aiPensionSection('irp'),projection=pensionProjection(),risk=pensionRiskMetrics();
- const payload={format:'asset-os-ai-strategy-v2',generatedAt:new Date().toISOString(),privacy:{excluded:['이름','이메일','계좌번호','메모','API 키','토큰']},request:{purpose:aiPurposeLabel(purpose),fundingSource:aiFundingLabel(fundingSource),additionalInvestmentWon:amount,prompt:aiStrategyPrompt(purpose,amount,fundingSource)},profile:{investmentHorizon:'3년 이상',riskStyle:'공격형',maximumDrawdownTolerance:'-40%',rebalancePreference:'가능하면 매도보다 신규 자금으로 조정'},isa:{accounts:isaAccounts,combined:{value:isaAccounts.reduce((s,x)=>s+x.summary.value,0),cost:isaAccounts.reduce((s,x)=>s+x.summary.cost,0),cash:isaAccounts.reduce((s,x)=>s+x.summary.cash,0),profit:isaAccounts.reduce((s,x)=>s+x.summary.profit,0)}},pensionSavings,irp:{...irpSection,risk:{riskyValue:Math.round(risk.risky),unclassifiedValue:Math.round(risk.unknown),confirmedRatio:Number(risk.ratio)||0,maximumPossibleRatio:Number(risk.maxRatio)||0,limit:Number(risk.limit)||70,classificationComplete:!!risk.classificationComplete}},cashFlow:aiIntegratedCashFlowExport(),combinedPlan:{totalValue:Math.round(payloadNumber(pensionSavings.combined.value)+payloadNumber(irpSection.combined.value)+isaAccounts.reduce((s,x)=>s+x.summary.value,0)),projection:{retirementAge:projection.retirementAge,currentAge:projection.currentAge,monthlyContribution:Math.round(projection.monthly),annualReturnRate:Number(projection.annual)||0,inflationRate:Number(projection.inflation)||0,expectedAssetsAtRetirement:Math.round(projection.future),expectedMonthlyPension:Math.round(projection.monthlyPension)}}};
+function aiEmptyPensionSection(){return{accounts:[],combined:{value:0,cost:0,cash:0,profit:0,returnRate:0},contribution:{year:String(businessYear()),paid:0},policy:{},contributions:[],transactions:[],brokerOrders:[],income:[],assetSnapshots:[]}}
+function buildAiStrategyPayload(purpose,amount,fundingSource='new_money',includedScopes=AI_STRATEGY_SCOPES){
+ const scopes=aiStrategyScopes(includedScopes),has=key=>scopes.includes(key),isaAccounts=has('isa')?state.accounts.filter(isCurrentAccount).map(aiIsaAccountExport):[],pensionSavings=has('pension')?aiPensionSection('pension'):aiEmptyPensionSection(),irpSection=has('irp')?aiPensionSection('irp'):aiEmptyPensionSection(),projection=pensionProjection(),risk=has('irp')?pensionRiskMetrics():{risky:0,unknown:0,ratio:0,maxRatio:0,limit:70,classificationComplete:true};
+ const payload={format:'asset-os-ai-strategy-v2',generatedAt:new Date().toISOString(),privacy:{excluded:['이름','이메일','계좌번호','메모','API 키','토큰']},request:{purpose:aiPurposeLabel(purpose),fundingSource:aiFundingLabel(fundingSource),additionalInvestmentWon:amount,includedScopes:scopes,includedAccountTypes:aiStrategyScopeLabels(scopes),prompt:aiStrategyPrompt(purpose,amount,fundingSource,scopes)},profile:{investmentHorizon:'3년 이상',riskStyle:'공격형',maximumDrawdownTolerance:'-40%',rebalancePreference:'가능하면 매도보다 신규 자금으로 조정'},isa:{accounts:isaAccounts,combined:{value:isaAccounts.reduce((s,x)=>s+x.summary.value,0),cost:isaAccounts.reduce((s,x)=>s+x.summary.cost,0),cash:isaAccounts.reduce((s,x)=>s+x.summary.cash,0),profit:isaAccounts.reduce((s,x)=>s+x.summary.profit,0)}},pensionSavings,irp:{...irpSection,risk:{riskyValue:Math.round(risk.risky),unclassifiedValue:Math.round(risk.unknown),confirmedRatio:Number(risk.ratio)||0,maximumPossibleRatio:Number(risk.maxRatio)||0,limit:Number(risk.limit)||70,classificationComplete:!!risk.classificationComplete}},cashFlow:aiIntegratedCashFlowExport(),combinedPlan:{totalValue:Math.round(payloadNumber(pensionSavings.combined.value)+payloadNumber(irpSection.combined.value)+isaAccounts.reduce((s,x)=>s+x.summary.value,0)),projection:{retirementAge:projection.retirementAge,currentAge:projection.currentAge,monthlyContribution:Math.round(projection.monthly),annualReturnRate:Number(projection.annual)||0,inflationRate:Number(projection.inflation)||0,expectedAssetsAtRetirement:Math.round(projection.future),expectedMonthlyPension:Math.round(projection.monthlyPension)}}};
  payload.dataQuality=aiStrategyPreflight(payload,amount,fundingSource);
  return payload
 }
 function payloadNumber(value){return Number(value)||0}
 
-function aiStrategyFile(purpose,amount,fundingSource){const payload=buildAiStrategyPayload(purpose,amount,fundingSource),exportPayload={...payload,dataQuality:{ready:payload.dataQuality.ready,blockers:payload.dataQuality.blockers}} ,blob=new Blob([JSON.stringify(exportPayload,null,2)],{type:'text/plain'});return{file:new File([blob],'투자분석.txt',{type:'text/plain'}),payload}}
-function downloadAiStrategyFile(purpose,amount,fundingSource){
- const {file,payload}=aiStrategyFile(purpose,amount,fundingSource);
+function aiStrategyFile(purpose,amount,fundingSource,includedScopes){const payload=buildAiStrategyPayload(purpose,amount,fundingSource,includedScopes),exportPayload={...payload,dataQuality:{ready:payload.dataQuality.ready,blockers:payload.dataQuality.blockers}} ,blob=new Blob([JSON.stringify(exportPayload,null,2)],{type:'text/plain'});return{file:new File([blob],'투자분석.txt',{type:'text/plain'}),payload}}
+function downloadAiStrategyFile(purpose,amount,fundingSource,includedScopes){
+ const {file,payload}=aiStrategyFile(purpose,amount,fundingSource,includedScopes);
  if(!payload.dataQuality.ready){showNotice('저장 전 확인',payload.dataQuality.blockers.join('\n'));return false}
  downloadBytes(file,file.name,file.type);toast('분석파일을 내려받았습니다. ChatGPT 대화에 첨부해 주세요.');return true;
 }
-async function shareAiStrategyFile(purpose,amount,fundingSource){
- const {file,payload}=aiStrategyFile(purpose,amount,fundingSource);
+async function shareAiStrategyFile(purpose,amount,fundingSource,includedScopes){
+ const {file,payload}=aiStrategyFile(purpose,amount,fundingSource,includedScopes);
  if(!payload.dataQuality.ready){showNotice('공유 전 확인',payload.dataQuality.blockers.join('\n'));return false}
  if(!(navigator.share&&navigator.canShare?.({files:[file]}))){showNotice('공유 기능 필요','이 기기에서는 파일 공유를 지원하지 않습니다. Android의 Chrome 또는 설치된 Asset OS에서 다시 시도해 주세요.');return false}
- try{await navigator.share({title:'Asset OS 투자분석',text:'ISA·연금저축·IRP 투자판단 자료입니다.',files:[file]});toast('투자분석 자료를 공유했습니다.');return true}catch(error){if(error?.name!=='AbortError')showNotice('공유 실패','파일을 공유하지 못했습니다. 잠시 후 다시 시도해 주세요.');return false}
+ try{await navigator.share({title:'Asset OS 투자분석',text:`${payload.request.includedAccountTypes} 투자판단 자료입니다.`,files:[file]});toast('투자분석 자료를 공유했습니다.');return true}catch(error){if(error?.name!=='AbortError')showNotice('공유 실패','파일을 공유하지 못했습니다. 잠시 후 다시 시도해 주세요.');return false}
 }
 
 function aiStrategyMarkup(){
  const saved=aiStrategySetting();aiStrategyPurpose=saved.purpose;
- return `<form id="aiStrategyForm" class="form ai-strategy-form"><div class="ai-purpose-grid">${[['buy','추가매수 판단'],['rebalance','리밸런싱'],['tax','절세·납입']].map(([key,label])=>`<button type="button" class="ai-purpose ${saved.purpose===key?'active':''}" data-ai-purpose="${key}">${label}</button>`).join('')}</div><div class="field"><label>사용할 돈</label><select name="fundingSource"><option value="new_money" ${saved.fundingSource==='new_money'?'selected':''}>새로 넣을 돈</option><option value="account_cash" ${saved.fundingSource==='account_cash'?'selected':''}>계좌 안 현금</option><option value="next_contribution" ${saved.fundingSource==='next_contribution'?'selected':''}>다음 납입금</option></select></div><div class="field"><label id="aiStrategyAmountLabel">${saved.purpose==='rebalance'?'추가 투자금 (선택)':'판단할 금액'}</label><input name="amount" type="number" inputmode="numeric" min="0" step="10000" value="${saved.amount||''}" placeholder="${saved.purpose==='rebalance'?'0원도 가능':'예: 3,000,000'}"></div><div class="ai-amount-preset">${[500000,1000000,3000000,5000000].map(v=>`<button type="button" data-ai-amount="${v}">${v/10000}만원</button>`).join('')}</div><div class="source-note">리밸런싱은 추가 투자금 0원으로도 기존 보유종목 비중을 분석할 수 있습니다. 개인정보와 연결 비밀값은 제외합니다.</div><div class="form-actions one"><button class="form-btn primary">공유하기</button></div></form>`
+ return `<form id="aiStrategyForm" class="form ai-strategy-form"><div class="ai-purpose-grid">${[['buy','추가매수 판단'],['rebalance','리밸런싱'],['tax','절세·납입']].map(([key,label])=>`<button type="button" class="ai-purpose ${saved.purpose===key?'active':''}" data-ai-purpose="${key}">${label}</button>`).join('')}</div><div class="field"><label>분석에 포함할 계좌</label><div class="ai-account-scopes">${[['isa','ISA'],['pension','개인연금'],['irp','IRP']].map(([key,label])=>`<label><input type="checkbox" name="includedScope" value="${key}" ${saved.includedScopes.includes(key)?'checked':''}><span>${label}</span></label>`).join('')}</div></div><div class="field"><label>사용할 돈</label><select name="fundingSource"><option value="new_money" ${saved.fundingSource==='new_money'?'selected':''}>새로 넣을 돈</option><option value="account_cash" ${saved.fundingSource==='account_cash'?'selected':''}>계좌 안 현금</option><option value="next_contribution" ${saved.fundingSource==='next_contribution'?'selected':''}>다음 납입금</option></select></div><div class="field"><label id="aiStrategyAmountLabel">${saved.purpose==='rebalance'?'추가 투자금 (선택)':'판단할 금액'}</label><input name="amount" type="number" inputmode="numeric" min="0" step="10000" value="${saved.amount||''}" placeholder="${saved.purpose==='rebalance'?'0원도 가능':'예: 3,000,000'}"></div><div class="ai-amount-preset">${[500000,1000000,3000000,5000000].map(v=>`<button type="button" data-ai-amount="${v}">${v/10000}만원</button>`).join('')}</div><div class="source-note">선택한 계좌 자료만 파일에 포함합니다. 개인정보와 연결 비밀값은 제외합니다.</div><div class="form-actions one"><button class="form-btn primary">공유하기</button></div></form>`
 }
 function openAiStrategy(){
  const saved=aiStrategySetting();$('#sheetEyebrow').textContent='통합 투자자료';$('#sheetTitle').textContent='AI 투자전략';$('#sheetBody').innerHTML=aiStrategyMarkup();openSheet('#detailSheet');
  const form=$('#aiStrategyForm');$$('[data-ai-purpose]').forEach(button=>button.onclick=()=>{aiStrategyPurpose=button.dataset.aiPurpose;$$('[data-ai-purpose]').forEach(x=>x.classList.toggle('active',x===button));const rebalance=aiStrategyPurpose==='rebalance',label=$('#aiStrategyAmountLabel');if(label)label.textContent=rebalance?'추가 투자금 (선택)':'판단할 금액';form.amount.placeholder=rebalance?'0원도 가능':'예: 3,000,000'});$$('[data-ai-amount]').forEach(button=>button.onclick=()=>{form.amount.value=button.dataset.aiAmount});
- form.onsubmit=async event=>{event.preventDefault();const data=new FormData(form),amount=Math.max(0,Math.round(Number(data.get('amount'))||0)),fundingSource=String(data.get('fundingSource')||'new_money');if(amount<=0&&aiStrategyPurpose!=='rebalance')return toast('판단할 금액을 입력해 주세요.');setting().aiStrategy={...saved,purpose:aiStrategyPurpose,fundingSource,amount};if(!persist(false))return;await shareAiStrategyFile(aiStrategyPurpose,amount,fundingSource)}
+ form.onsubmit=async event=>{event.preventDefault();const data=new FormData(form),amount=Math.max(0,Math.round(Number(data.get('amount'))||0)),fundingSource=String(data.get('fundingSource')||'new_money'),includedScopes=aiStrategyScopes(data.getAll('includedScope'));if(!includedScopes.length)return toast('분석에 포함할 계좌를 하나 이상 선택해 주세요.');if(amount<=0&&aiStrategyPurpose!=='rebalance')return toast('판단할 금액을 입력해 주세요.');setting().aiStrategy={...saved,purpose:aiStrategyPurpose,fundingSource,amount,includedScopes};if(!persist(false))return;await shareAiStrategyFile(aiStrategyPurpose,amount,fundingSource,includedScopes)}
 }
