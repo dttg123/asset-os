@@ -22,6 +22,6 @@
 .integrated-overview-sub{margin-top:16px!important;padding-top:12px!important;gap:18px!important}
 .integrated-module-shell>.integrated-monthbar{min-height:50px;margin-bottom:12px;padding:0 8px}
 .integrated-module-shell>.integrated-monthbar input{max-width:150px!important;font-size:15px!important;text-align:center}
-.integrated-investment-refresh{margin-top:12px;margin-bottom:0}
-.integrated-investment-refresh button{white-space:nowrap}
+.home-investment-refresh{margin-top:-2px}
+.home-investment-refresh button{white-space:nowrap}
 .pension-credit-year{border:0;cursor:pointer;font-family:inherit}

@@ -58,11 +58,36 @@ test('ordinary pension contributions stop at 18 million while ISA transfers stay
 });
 
 test('ISA transfer window, unified refresh and shared KIS token cache are wired',()=>{
- const maturity=source('isa-maturity-policy.js'),release=source('release-v069.js'),edge=source('supabase/functions/kis-read/index.ts');
+ const maturity=source('isa-maturity-policy.js'),home=source('home.js'),release=source('release-v069.js'),settings=source('ui-settings.js'),edge=source('supabase/functions/kis-read/index.ts');
  assert.match(maturity,/transferWindowDays/);
  assert.match(maturity,/isaDateAddDays\(terminationDate/);
- assert.match(release,/data-investment-refresh-all/);
+ assert.match(home,/data-investment-refresh-all/);
+ assert.match(home,/home-investment-refresh/);
+ assert.doesNotMatch(release,/data-investment-refresh-all/);
+ assert.match(settings,/investmentRefreshPromise/);
+ assert.match(settings,/갱신 중 \$\{index\+1\}\/\$\{tasks\.length\}/);
  assert.match(edge,/KIS_APP_KEY/);
  assert.match(edge,/tokenCacheKind/);
  assert.match(edge,/cacheKind/);
+});
+
+test('home unified refresh runs once, reports progress and keeps partial account results',async()=>{
+ const settings=source('ui-settings.js'),refreshSource=settings.slice(settings.indexOf('let investmentRefreshPromise='),settings.indexOf('async function syncKisHistory'));
+ const calls=[],buttons=[{disabled:false,textContent:''}];
+ let releaseIsa;
+ const isaGate=new Promise(resolve=>{releaseIsa=resolve});
+ const context=vm.createContext({console,currentAccount:()=>({id:'isa'}),isaQuoteLinks:()=>[{}],kisConnectedAccount:()=>true,refreshIsaQuotes:async()=>{calls.push('isa');await isaGate;return{ok:true}},refreshBrokerKisManually:async kinds=>{calls.push(kinds[0]);return{ok:kinds[0]!=='irp'}},$$:()=>buttons,renderKeepingScroll:()=>calls.push('render'),toast:message=>calls.push(message)});
+ vm.runInContext(refreshSource,context);
+ const first=vm.runInContext('refreshAllInvestments()',context),second=vm.runInContext('refreshAllInvestments()',context);
+ assert.equal(first,second,'a repeated tap must reuse the in-flight request');
+ assert.equal(buttons[0].disabled,true);
+ assert.equal(buttons[0].textContent,'갱신 중 1/3');
+ releaseIsa();
+ const result=await first;
+ assert.deepEqual(JSON.parse(JSON.stringify(result.results)),{isa:'ok',pension:'ok',irp:'failed'});
+ assert.deepEqual(calls.slice(0,4),['isa','pension','irp','render']);
+ assert.match(calls.at(-1),/부분 완료/);
+ await Promise.resolve();
+ assert.equal(buttons[0].disabled,false);
+ assert.equal(buttons[0].textContent,'전체 갱신');
 });

@@ -27,6 +27,9 @@ test('v0.6.4 final views and export assets are shipped in the PWA shell',()=>{
  assert.match(worker,/v=0\.6\.4/);
  assert.match(pwa,/service-worker\.js\?v=0\.6\.4/);
  assert.match(home,/function openAlertsCenter\(\)\{const isaReady=homeSample\(\)\.isaSource==='asset-os'/);
+ assert.match(home,/homeInvestmentRefreshMarkup\(\)/);
+ assert.match(home,/data-investment-refresh-all/);
+ assert.doesNotMatch(release,/integrated-investment-refresh/);
  const boot=read('boot.js');
  assert.match(boot,/addEventListener\('storage'/);
  assert.match(boot,/qaRenderStats/);

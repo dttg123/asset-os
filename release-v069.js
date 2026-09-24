@@ -53,8 +53,6 @@ openFinancialProductHub=function(filter){v069FinanceHub(filter);for(const small 
 const v069FinanceDetail=openFinancialProductDetail;
 openFinancialProductDetail=function(id){v069FinanceDetail(id);for(const span of $$('#sheetBody .finance-product-summary span')){if(span.textContent==='현재 기록 잔액')span.textContent='현재 잔액';if(span.textContent==='현재 적용금리')span.textContent='적용 금리'}};
 
-const v064IntegratedSummary=integratedSummaryPage;
-integratedSummaryPage=function(){const template=document.createElement('template');template.innerHTML=v064IntegratedSummary();const hero=template.content.querySelector('.integrated-overview-hero'),refresh=investmentRefreshStatus();if(hero){const row=document.createElement('section');row.className='manual-refresh-row integrated-investment-refresh';row.innerHTML=`<div><strong>투자계좌 전체 갱신${refresh.errors.length?' · 확인 필요':''}</strong><small>${refresh.last?`전체 기준 ${formatDateTime(refresh.last)}`:'아직 전체 갱신 전'} · ISA · 연금저축 · IRP</small></div><button data-investment-refresh-all>전체 자산 갱신</button>`;hero.after(row)}return template.innerHTML};
 
 const v069Bind=bind;
 bind=function(){v069Bind();$$('[data-integrated-asset-group]').forEach(button=>button.onclick=()=>{v069AssetGroup=v069AssetGroup===button.dataset.integratedAssetGroup?'':button.dataset.integratedAssetGroup;renderKeepingScroll()});$$('[data-schedule-category]').forEach(button=>button.onclick=()=>{const scope=button.dataset.scheduleScope,key=button.dataset.scheduleCategory;v069ScheduleGroup[scope]=v069ScheduleGroup[scope]===key?'':key;renderKeepingScroll()});const more=$('[data-tx-more]');if(more)more.onclick=()=>{transactionDisplayLimit+=20;renderKeepingScroll()}};
