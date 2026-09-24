@@ -68,7 +68,9 @@ test('ISA transfer window, unified refresh and shared KIS token cache are wired'
  assert.match(settings,/갱신 중 \$\{index\+1\}\/\$\{tasks\.length\}/);
  assert.match(edge,/KIS_APP_KEY/);
  assert.match(edge,/tokenCacheKind/);
- assert.match(edge,/cacheKind/);
+ assert.match(edge,/function tokenCacheKind\(\): AccountKind \{\s*return 'pension'/);
+ assert.match(edge,/cano: env\(prefix \+ 'CANO'\)/);
+ assert.doesNotMatch(edge,/env\(prefix \+ 'APP_(?:KEY|SECRET)'\)/);
 });
 
 test('home unified refresh runs once, reports progress and keeps partial account results',async()=>{

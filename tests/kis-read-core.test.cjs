@@ -49,6 +49,24 @@ assert.ok(!edge.includes('CANO: input'),'client account number must never be acc
 assert.match(edge,/FHKBJ773400C0/,'official KIS domestic bond quote TR id required');
 assert.match(edge,/FHKST01010100/,'official KIS domestic stock quote TR id required');
 assert.match(edge,/firstBody/,'다중 페이지 잔고 조회에서 첫 페이지 합계 정보를 보존해야 한다');
-assert.match(edge,/tokenCacheKind/,'같은 앱키를 쓰는 연금저축·IRP는 한투 접근토큰을 재사용해야 한다');
+assert.match(edge,/appkey: Deno\.env\.get\('KIS_APP_KEY'\) \|\| env\('KIS_PENSION_APP_KEY'\)/,'연금저축·IRP는 하나의 한투 앱키를 사용해야 한다');
+assert.match(edge,/appsecret: Deno\.env\.get\('KIS_APP_SECRET'\) \|\| env\('KIS_PENSION_APP_SECRET'\)/,'연금저축·IRP는 하나의 한투 앱시크릿을 사용해야 한다');
+assert.match(edge,/cano: env\(prefix \+ 'CANO'\)/,'연금저축·IRP 계좌번호는 계좌 종류별로 분리되어야 한다');
+assert.match(edge,/productCode: env\(prefix \+ 'ACNT_PRDT_CD'\)/,'연금저축·IRP 상품코드는 계좌 종류별로 분리되어야 한다');
+assert.doesNotMatch(edge,/env\(prefix \+ 'APP_(?:KEY|SECRET)'\)/,'계좌별 앱키로 분기해 토큰을 두 번 발급하면 안 된다');
+assert.match(edge,/function tokenCacheKind\(\): AccountKind \{\s*return 'pension'\s*\}/,'모든 투자계좌 요청은 하나의 접근토큰 캐시를 사용해야 한다');
+
+const accountConfigSource=edge.match(/function accountConfig\(accountKind: AccountKind\): AccountConfig \{[\s\S]*?\n\}/)?.[0]
+  .replace('accountKind: AccountKind','accountKind').replace('): AccountConfig',')');
+assert.ok(accountConfigSource,'계좌 설정 함수를 검사할 수 있어야 한다');
+const secretValues={KIS_PENSION_APP_KEY:'one-key',KIS_PENSION_APP_SECRET:'one-secret',KIS_PENSION_CANO:'pension-cano',KIS_PENSION_ACNT_PRDT_CD:'29',KIS_IRP_CANO:'irp-cano',KIS_IRP_ACNT_PRDT_CD:'29'};
+const configContext=vm.createContext({Deno:{env:{get:name=>secretValues[name]}},env:name=>{if(!secretValues[name])throw new Error('missing');return secretValues[name]}});
+new vm.Script(`${accountConfigSource};this.accountConfig=accountConfig`).runInContext(configContext);
+const pensionConfig=configContext.accountConfig('pension'),irpConfig=configContext.accountConfig('irp');
+assert.equal(pensionConfig.appkey,irpConfig.appkey,'두 계좌는 동일한 앱키를 사용해야 한다');
+assert.equal(pensionConfig.appsecret,irpConfig.appsecret,'두 계좌는 동일한 앱시크릿을 사용해야 한다');
+assert.notEqual(pensionConfig.cano,irpConfig.cano,'두 계좌의 계좌번호는 절대 합치면 안 된다');
+assert.equal(pensionConfig.cano,'pension-cano');
+assert.equal(irpConfig.cano,'irp-cano');
 
 console.log('kis-read core tests: PASS');
