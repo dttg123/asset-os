@@ -1,5 +1,5 @@
 'use strict';
-/* v0.6.15 final product polish. Existing ledgers stay untouched; this layer only reshapes views. */
+/* v0.6.4 final product polish. Existing ledgers stay untouched; this layer only reshapes views. */
 let v069AssetGroup='',v069ScheduleGroup={summary:'',page:''},v069AiDraft=null;
 const v069HomeCard=homeCard;
 homeCard=function(id){return v069HomeCard(id).replace('이번 달 지출·납입','이번 달 자금 계획').replace(/기록 ([^<]+) · 남은 일정 \d+건/,'집행 $1 · 예정 '+displayWon(homeSample().scheduled))};
@@ -9,7 +9,7 @@ const v069Growth=openFinancialGrowthAnalysis;
 openFinancialGrowthAnalysis=function(period){v069Growth(period);if($('#sheetTitle'))$('#sheetTitle').textContent='순금융자산 추이';for(const span of $$('#sheetBody .finance-growth-box span'))if(span.textContent==='순자산 증가율')span.textContent='순금융자산 증가율'};
 
 const v069PensionContribution=pensionContributionPage;
-pensionContributionPage=function(){const template=document.createElement('template');template.innerHTML=v069PensionContribution();const kpis=template.content.querySelector('.pension-kpis');if(kpis){const current=[...kpis.children].find(x=>x.querySelector('span')?.textContent==='현재 공제한도');current?.remove();kpis.classList.add('three')}const batch=template.content.querySelector('[data-pension-contribution-batch]');if(batch)batch.textContent='월별 납입 내역 정리';return template.innerHTML};
+pensionContributionPage=function(){const template=document.createElement('template');template.innerHTML=v069PensionContribution();const year=localYmd().slice(0,4),summary=pensionSummary(year),kpis=template.content.querySelector('.pension-kpis');if(kpis){const current=[...kpis.children].find(x=>x.querySelector('span')?.textContent==='현재 공제한도');current?.remove();kpis.classList.add('three')}const badge=template.content.querySelector('.pension-credit-year');if(badge){const button=document.createElement('button');button.className='pension-credit-year';button.dataset.pensionTaxProfile='';button.textContent=`${year} · ${(summary.creditRate*100).toFixed(1)}%`;badge.replaceWith(button)}const hero=template.content.querySelector('.pension-credit-hero');if(hero&&summary.ordinaryOverage){const warning=document.createElement('div');warning.className='warningbox';warning.textContent=`일반 납입한도 초과 ${won(summary.ordinaryOverage)}`;hero.appendChild(warning)}else if(hero&&!summary.taxProfile.configured){const note=document.createElement('div');note.className='auto-note';note.textContent='총급여를 입력하면 13.2%·16.5% 공제율을 자동 적용합니다.';hero.appendChild(note)}const batch=template.content.querySelector('[data-pension-contribution-batch]');if(batch)batch.textContent='월별 납입 내역 정리';return template.innerHTML};
 const v069PensionBatch=openPensionContributionBatchForm;
 openPensionContributionBatchForm=function(){v069PensionBatch();if($('#formTitle'))$('#formTitle').textContent='월별 납입 내역 정리'};
 const v069PensionAssets=pensionAssetsPage;
@@ -52,6 +52,9 @@ const v069FinanceHub=openFinancialProductHub;
 openFinancialProductHub=function(filter){v069FinanceHub(filter);for(const small of $$('#sheetBody .finance-product-card small'))small.innerHTML=small.innerHTML.replace('현재 기록 잔액','현재 잔액')};
 const v069FinanceDetail=openFinancialProductDetail;
 openFinancialProductDetail=function(id){v069FinanceDetail(id);for(const span of $$('#sheetBody .finance-product-summary span')){if(span.textContent==='현재 기록 잔액')span.textContent='현재 잔액';if(span.textContent==='현재 적용금리')span.textContent='적용 금리'}};
+
+const v064IntegratedSummary=integratedSummaryPage;
+integratedSummaryPage=function(){const template=document.createElement('template');template.innerHTML=v064IntegratedSummary();const hero=template.content.querySelector('.integrated-overview-hero'),refresh=investmentRefreshStatus();if(hero){const row=document.createElement('section');row.className='manual-refresh-row integrated-investment-refresh';row.innerHTML=`<div><strong>투자계좌 전체 갱신${refresh.errors.length?' · 확인 필요':''}</strong><small>${refresh.last?`전체 기준 ${formatDateTime(refresh.last)}`:'아직 전체 갱신 전'} · ISA · 연금저축 · IRP</small></div><button data-investment-refresh-all>전체 자산 갱신</button>`;hero.after(row)}return template.innerHTML};
 
 const v069Bind=bind;
 bind=function(){v069Bind();$$('[data-integrated-asset-group]').forEach(button=>button.onclick=()=>{v069AssetGroup=v069AssetGroup===button.dataset.integratedAssetGroup?'':button.dataset.integratedAssetGroup;renderKeepingScroll()});$$('[data-schedule-category]').forEach(button=>button.onclick=()=>{const scope=button.dataset.scheduleScope,key=button.dataset.scheduleCategory;v069ScheduleGroup[scope]=v069ScheduleGroup[scope]===key?'':key;renderKeepingScroll()});const more=$('[data-tx-more]');if(more)more.onclick=()=>{transactionDisplayLimit+=20;renderKeepingScroll()}};

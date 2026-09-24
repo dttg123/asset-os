@@ -6,7 +6,7 @@ const path=require('node:path');
 const root=path.join(__dirname,'..');
 const read=name=>fs.readFileSync(path.join(root,name),'utf8');
 
-test('v0.6.3 final views and export assets are shipped in the PWA shell',()=>{
+test('v0.6.4 final views and export assets are shipped in the PWA shell',()=>{
  const html=read('index.html'),worker=read('service-worker.js'),pwa=read('pwa.js'),release=read('release-v069.js'),home=read('home.js');
  for(const name of ['export-csv.js','release-v069.js','css-release-v069.css']){
   assert.match(html,new RegExp(name.replace('.','\\.')));
@@ -20,12 +20,12 @@ test('v0.6.3 final views and export assets are shipped in the PWA shell',()=>{
  assert.match(release,/ai-review-actions/);
  assert.match(releaseCss,/ai-account-scopes/);
  assert.match(releaseCss,/ai-review-actions/);
- assert.match(html,/v=0\.6\.3/);
- assert.match(html,/pwa\.js\?v=0\.6\.3/);
- assert.match(html,/boot\.js\?v=0\.6\.3/);
- assert.match(worker,/asset-os-v0\.6\.3/);
- assert.match(worker,/v=0\.6\.3/);
- assert.match(pwa,/service-worker\.js\?v=0\.6\.3/);
+ assert.match(html,/v=0\.6\.4/);
+ assert.match(html,/pwa\.js\?v=0\.6\.4/);
+ assert.match(html,/boot\.js\?v=0\.6\.4/);
+ assert.match(worker,/asset-os-v0.6.4/);
+ assert.match(worker,/v=0\.6\.4/);
+ assert.match(pwa,/service-worker\.js\?v=0\.6\.4/);
  assert.match(home,/function openAlertsCenter\(\)\{const isaReady=homeSample\(\)\.isaSource==='asset-os'/);
  const boot=read('boot.js');
  assert.match(boot,/addEventListener\('storage'/);

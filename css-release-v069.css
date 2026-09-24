@@ -1,4 +1,4 @@
-/* v0.6.15 final density and alignment pass */
+/* v0.6.4 final density and alignment pass */
 .pension-kpis.three{grid-template-columns:repeat(2,minmax(0,1fr))}.pension-kpis.three .pension-kpi:last-child{grid-column:1/-1}.pension-kpis.three .pension-kpi strong{overflow:visible;text-overflow:clip}
 .pension-future-toolbar{min-height:30px;align-items:center}.pension-future-toolbar>span{color:var(--muted);font-size:9px;font-weight:800}
 .pension-future-page .future-primary{align-items:stretch}.pension-future-page .future-primary .metric{display:flex;min-height:78px;box-sizing:border-box;flex-direction:column;justify-content:center}.pension-future-page .future-primary .metric>span{min-height:15px}.pension-future-page .future-primary .metric>strong{min-height:26px;display:flex;align-items:center;font-size:clamp(16px,4.6vw,21px)!important;line-height:1.12!important}
@@ -16,3 +16,12 @@
 /* Keep test controls out of the sticky app header hit area. */
 .qa-mode .qa-banner{position:relative}
 [data-life-extension][hidden],[data-life-settlement][hidden],[data-life-transfer][hidden]{display:none!important}
+
+/* Keep the integrated total readable and give its breakdown a clear second row. */
+.integrated-overview-value{font-size:clamp(29px,8vw,38px)!important;letter-spacing:-.052em!important}
+.integrated-overview-sub{margin-top:16px!important;padding-top:12px!important;gap:18px!important}
+.integrated-module-shell>.integrated-monthbar{min-height:50px;margin-bottom:12px;padding:0 8px}
+.integrated-module-shell>.integrated-monthbar input{max-width:150px!important;font-size:15px!important;text-align:center}
+.integrated-investment-refresh{margin-top:12px;margin-bottom:0}
+.integrated-investment-refresh button{white-space:nowrap}
+.pension-credit-year{border:0;cursor:pointer;font-family:inherit}

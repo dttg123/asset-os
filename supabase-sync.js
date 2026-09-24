@@ -3,7 +3,7 @@ const SUPABASE_URL='https://wjrzukoofscmvwicmoey.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_mZa3v8Ekw08_5tHQMNSPWQ_uMcioPDM';
 const SUPABASE_STATE_TABLE='asset_os_state';
 const SUPABASE_REDIRECT_URL='https://dttg123.github.io/asset-os/';
-let assetSupabaseClient=null,assetSupabaseSession=null,cloudSyncTimer=0,cloudSyncBusy=false,cloudPushPending=false,cloudSyncStatus='로그인 필요',cloudSyncTone='wait',cloudLastSyncAt='',assetAppUnlocked=false;
+let assetSupabaseClient=null,assetSupabaseSession=null,cloudSyncTimer=0,cloudSyncBusy=false,cloudPushPending=false,cloudSyncStatus='로그인 필요',cloudSyncTone='wait',cloudLastSyncAt='',cloudBaseFingerprint='',assetAppUnlocked=false;
 const qaCloudBlocked=()=>typeof QA_MODE!=='undefined'&&QA_MODE;
 
 function cloudAuthCallbackFailure(){
@@ -127,9 +127,10 @@ async function cloudPushState(envelope=cloudCurrentEnvelope(),quiet=false){
  try{
   const payload={...clone(envelope),schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION};
   if(!payload.savedAt)payload.savedAt=new Date().toISOString();
+  const current=await cloudFetchStateRow(),remote=current.row?.payload,remoteFingerprint=cloudPayloadValid(remote)?cloudEnvelopeFingerprint(remote):'',payloadFingerprint=cloudEnvelopeFingerprint(payload);if(current.error){cloudSetStatus('동기화 확인 실패','wait');return false}if(cloudBaseFingerprint&&remoteFingerprint&&remoteFingerprint!==cloudBaseFingerprint&&remoteFingerprint!==payloadFingerprint){cloudSetStatus('동기화 충돌 확인 필요','wait');if(!quiet)toast('다른 기기에서 원장이 변경됐습니다. 덮어쓰지 않고 충돌로 보호했습니다.');return false}
   const now=new Date().toISOString(),{error}=await assetSupabaseClient.from(SUPABASE_STATE_TABLE).upsert({user_id:cloudUser().id,payload,updated_at:now},{onConflict:'user_id'});
   if(error){if(cloudTableMissing(error))cloudSetStatus('DB 설정 필요','wait');else cloudSetStatus('클라우드 저장 실패','wait');if(!quiet)toast(cloudTableMissing(error)?'Supabase DB 설정이 아직 필요합니다.':'클라우드 저장을 확인해 주세요.');return false}
-  cloudSetStatus('동기화됨','ok',now);return true
+  cloudBaseFingerprint=payloadFingerprint;cloudSetStatus('동기화됨','ok',now);return true
  }finally{cloudSyncBusy=false;if(cloudPushPending){clearTimeout(cloudSyncTimer);cloudSyncTimer=setTimeout(()=>cloudPushState(cloudCurrentEnvelope(),true).catch(()=>{}),250)}}
 }
 function queueCloudStatePush(){
@@ -147,7 +148,7 @@ function cloudApplyRemoteEnvelope(payload){
  state=normalized;lastPersistedState=clone(normalized);
  const savedAt=String(payload.savedAt||new Date().toISOString());
  localStorage.setItem(KEY,JSON.stringify({schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,environment:APP_ENV,savedAt,data:normalized}));
- pruneRecoveryKeys();if(assetAppUnlocked)render();
+ cloudBaseFingerprint=cloudEnvelopeFingerprint(payload);pruneRecoveryKeys();if(assetAppUnlocked)render();
 }
 
 async function cloudReconcileState(force='auto'){
@@ -167,6 +168,7 @@ async function cloudReconcileState(force='auto'){
   if(force==='pull'||!local.stored||rt>lt){cloudApplyRemoteEnvelope(remote);cloudSetStatus('클라우드에서 복원됨','ok',row.updated_at||remote.savedAt);toast('Supabase에서 최신 데이터를 복원했습니다.');return true}
   if(force==='push'||lt>rt){cloudSyncBusy=false;return await cloudPushState(local.envelope,true)}
   if(cloudEnvelopeFingerprint(local.envelope)!==cloudEnvelopeFingerprint(remote)){cloudSetStatus('동기화 충돌 확인 필요','wait');return false}
+  cloudBaseFingerprint=cloudEnvelopeFingerprint(remote);
   cloudSetStatus('동기화됨','ok',row.updated_at||remote.savedAt);return true
  }catch(e){cloudSetStatus('동기화 오류','wait');return false}
  finally{cloudSyncBusy=false}

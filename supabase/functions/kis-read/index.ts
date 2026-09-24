@@ -40,9 +40,11 @@ function response(body: unknown, status: number, origin = '') {
 
 function accountConfig(accountKind: AccountKind): AccountConfig {
   const prefix = accountKind === 'pension' ? 'KIS_PENSION_' : 'KIS_IRP_'
+  const sharedKey = Deno.env.get('KIS_APP_KEY') || ''
+  const sharedSecret = Deno.env.get('KIS_APP_SECRET') || ''
   return {
-    appkey: env(prefix + 'APP_KEY'),
-    appsecret: env(prefix + 'APP_SECRET'),
+    appkey: sharedKey || env(prefix + 'APP_KEY'),
+    appsecret: sharedSecret || env(prefix + 'APP_SECRET'),
     cano: env(prefix + 'CANO'),
     productCode: env(prefix + 'ACNT_PRDT_CD'),
   }
@@ -67,7 +69,9 @@ async function readValidToken(db: ReturnType<typeof serverClient>, accountKind: 
 }
 
 function tokenCacheKind(accountKind: AccountKind, cfg: AccountConfig): AccountKind {
-  if (accountKind === 'irp' && cfg.appkey === Deno.env.get('KIS_PENSION_APP_KEY') && cfg.appsecret === Deno.env.get('KIS_PENSION_APP_SECRET')) return 'pension'
+  const pensionKey = Deno.env.get('KIS_APP_KEY') || Deno.env.get('KIS_PENSION_APP_KEY') || ''
+  const pensionSecret = Deno.env.get('KIS_APP_SECRET') || Deno.env.get('KIS_PENSION_APP_SECRET') || ''
+  if (accountKind === 'irp' && cfg.appkey === pensionKey && cfg.appsecret === pensionSecret) return 'pension'
   return accountKind
 }
 
