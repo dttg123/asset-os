@@ -4,6 +4,7 @@ import { normalizeBalance, normalizeOrders, normalizeQuote, normalizeRights, saf
 
 const KIS_BASE = 'https://openapi.koreainvestment.com:9443'
 const REFRESH_MARGIN_MS = 5 * 60 * 1000
+const KIS_REQUEST_TIMEOUT_MS = 20000
 const MAX_PAGES = 10
 
 type AccountKind = 'pension' | 'irp'
@@ -38,11 +39,35 @@ function response(body: unknown, status: number, origin = '') {
   return new Response(JSON.stringify(body), { status, headers })
 }
 
+async function kisFetch(url: string, options: RequestInit = {}) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), KIS_REQUEST_TIMEOUT_MS)
+  try {
+    return await fetch(url, { ...options, signal: controller.signal })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') throw new Error('KIS_REQUEST_TIMEOUT')
+    throw error
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+function isTokenFailure(upstream: Response, body: Record<string, any>) {
+  const code = String(body?.msg_cd || body?.error_code || '')
+  const message = String(body?.msg1 || body?.error_description || '').toLowerCase()
+  return upstream.status === 401 || upstream.status === 403
+    || ['EGW00121', 'EGW00122', 'EGW00123'].includes(code)
+    || /access token|토큰.*(만료|유효하지|오류)/i.test(message)
+}
+
 function accountConfig(accountKind: AccountKind): AccountConfig {
   const prefix = accountKind === 'pension' ? 'KIS_PENSION_' : 'KIS_IRP_'
+  const sharedKey = Deno.env.get('KIS_APP_KEY') || ''
+  const sharedSecret = Deno.env.get('KIS_APP_SECRET') || ''
+  if (!!sharedKey !== !!sharedSecret) throw new Error('SERVER_CONFIG_MISSING')
   return {
-    appkey: Deno.env.get('KIS_APP_KEY') || env('KIS_PENSION_APP_KEY'),
-    appsecret: Deno.env.get('KIS_APP_SECRET') || env('KIS_PENSION_APP_SECRET'),
+    appkey: sharedKey || env('KIS_PENSION_APP_KEY'),
+    appsecret: sharedSecret || env('KIS_PENSION_APP_SECRET'),
     cano: env(prefix + 'CANO'),
     productCode: env(prefix + 'ACNT_PRDT_CD'),
   }
@@ -81,7 +106,7 @@ async function accessToken(accountKind: AccountKind, cfg: AccountConfig) {
   })
   if (claimError) throw new Error('TOKEN_REFRESH_LOCK_FAILED')
   if (!claimed) {
-    for (let attempt = 0; attempt < 10; attempt += 1) {
+    for (let attempt = 0; attempt < 50; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 500))
       const waiting = await readValidToken(db, cacheKind)
       if (waiting) return waiting
@@ -90,7 +115,7 @@ async function accessToken(accountKind: AccountKind, cfg: AccountConfig) {
   }
 
   try {
-    const tokenResponse = await fetch(`${KIS_BASE}/oauth2/tokenP`, {
+    const tokenResponse = await kisFetch(`${KIS_BASE}/oauth2/tokenP`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ grant_type: 'client_credentials', appkey: cfg.appkey, appsecret: cfg.appsecret }),
@@ -117,6 +142,16 @@ async function accessToken(accountKind: AccountKind, cfg: AccountConfig) {
   }
 }
 
+async function invalidateToken(failedToken: string) {
+  const { error } = await serverClient().from('kis_token_cache').update({
+    access_token: '',
+    expires_at: new Date(0).toISOString(),
+    refreshing_until: null,
+    updated_at: new Date().toISOString(),
+  }).eq('account_type', tokenCacheKind()).eq('access_token', failedToken)
+  if (error) throw new Error('TOKEN_CACHE_SAVE_FAILED')
+}
+
 async function kisPages(
   cfg: AccountConfig,
   token: string,
@@ -131,7 +166,7 @@ async function kisPages(
   let trCont = ''
   for (let page = 0; page < MAX_PAGES; page += 1) {
     const query = new URLSearchParams(params)
-    const upstream = await fetch(`${KIS_BASE}${path}?${query.toString()}`, {
+    const upstream = await kisFetch(`${KIS_BASE}${path}?${query.toString()}`, {
       headers: {
         authorization: `Bearer ${token}`,
         appkey: cfg.appkey,
@@ -142,6 +177,7 @@ async function kisPages(
       },
     })
     body = await upstream.json().catch(() => ({}))
+    if (isTokenFailure(upstream, body)) throw new Error('KIS_TOKEN_INVALID')
     if (page === 0) firstBody = body
     if (!upstream.ok || body?.rt_cd !== '0') throw new Error('KIS_UPSTREAM_FAILED')
     const nextRows = Array.isArray(body?.[outputKey]) ? body[outputKey] : []
@@ -209,11 +245,12 @@ async function quoteOne(cfg: AccountConfig, token: string, item: Record<string, 
   const path = bond ? '/uapi/domestic-bond/v1/quotations/inquire-price' : '/uapi/domestic-stock/v1/quotations/inquire-price'
   const trId = bond ? 'FHKBJ773400C0' : 'FHKST01010100'
   const params = new URLSearchParams({ FID_COND_MRKT_DIV_CODE: bond ? 'B' : 'J', FID_INPUT_ISCD: code })
-  const upstream = await fetch(`${KIS_BASE}${path}?${params.toString()}`, { headers: {
+  const upstream = await kisFetch(`${KIS_BASE}${path}?${params.toString()}`, { headers: {
     authorization: `Bearer ${token}`, appkey: cfg.appkey, appsecret: cfg.appsecret,
     tr_id: trId, custtype: 'P',
   } })
   const body = await upstream.json().catch(() => ({}))
+  if (isTokenFailure(upstream, body)) throw new Error('KIS_TOKEN_INVALID')
   if (!upstream.ok || body?.rt_cd !== '0') throw new Error('KIS_UPSTREAM_FAILED')
   const row = Array.isArray(body?.output) ? body.output[0] : body?.output
   const normalized = normalizeQuote(row, type, code)
@@ -235,7 +272,8 @@ const safeErrors = new Set([
   'AUTH_REQUIRED', 'AUTH_INVALID', 'AUTH_FORBIDDEN', 'ACTION_INVALID', 'ACCOUNT_KIND_INVALID',
   'DATE_RANGE_INVALID', 'SERVER_CONFIG_MISSING',
   'TOKEN_CACHE_READ_FAILED', 'TOKEN_REFRESH_LOCK_FAILED', 'TOKEN_REFRESH_BUSY', 'TOKEN_FAILED',
-  'TOKEN_CACHE_SAVE_FAILED', 'KIS_UPSTREAM_FAILED', 'KIS_RESULT_TRUNCATED',
+  'TOKEN_CACHE_SAVE_FAILED', 'KIS_REQUEST_TIMEOUT', 'KIS_TOKEN_INVALID', 'KIS_BALANCE_INVALID',
+  'KIS_UPSTREAM_FAILED', 'KIS_RESULT_TRUNCATED',
   'QUOTE_TYPE_INVALID', 'QUOTE_CODE_INVALID', 'QUOTE_LIST_INVALID', 'QUOTE_EMPTY',
 ])
 
@@ -267,21 +305,32 @@ Deno.serve(async (req) => {
     if (action !== 'quote' && !['pension', 'irp'].includes(accountKind)) throw new Error('ACCOUNT_KIND_INVALID')
     const tokenKind: AccountKind = action === 'quote' ? 'pension' : accountKind
     const cfg = accountConfig(tokenKind)
-    const token = await accessToken(tokenKind, cfg)
+    let token = await accessToken(tokenKind, cfg)
     const fetchedAt = new Date().toISOString()
-    const payload = action === 'quote'
+    const run = async () => action === 'quote'
       ? { quotes: await quotes(cfg, token, input?.quotes) }
       : action === 'balance'
       ? { balance: await balance(accountKind, cfg, token, fetchedAt) }
       : action === 'orders'
         ? { orders: await orders(accountKind, cfg, token, input?.from, input?.to) }
         : { rights: await rights(cfg, token, input?.from, input?.to) }
+    let payload
+    try {
+      payload = await run()
+    } catch (error) {
+      if (!(error instanceof Error) || error.message !== 'KIS_TOKEN_INVALID') throw error
+      await invalidateToken(token)
+      token = await accessToken(tokenKind, cfg)
+      payload = await run()
+    }
     return response({ ok: true, action, ...(action === 'quote' ? {} : { accountKind }), fetchedAt, ...payload }, 200, origin)
   } catch (error) {
     const code = error instanceof Error ? error.message : 'INTERNAL_ERROR'
+    const badRequest = new Set(['ACTION_INVALID', 'ACCOUNT_KIND_INVALID', 'DATE_RANGE_INVALID',
+      'QUOTE_TYPE_INVALID', 'QUOTE_CODE_INVALID', 'QUOTE_LIST_INVALID'])
     const status = code === 'AUTH_FORBIDDEN' ? 403
       : code.startsWith('AUTH_') ? 401
-        : code.endsWith('_INVALID') ? 400
+        : badRequest.has(code) ? 400
           : code === 'SERVER_CONFIG_MISSING' ? 503 : 502
     return response({ ok: false, error: safeErrors.has(code) ? code : 'INTERNAL_ERROR' }, status, origin)
   }

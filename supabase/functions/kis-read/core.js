@@ -86,7 +86,9 @@ export function normalizeOrders(input) {
 
 export function normalizeBalance(body, fetchedAt = new Date().toISOString()) {
   const output1 = rows(body?.output1)
-  const summary = rows(body?.output2)[0] || {}
+  const summaries = rows(body?.output2)
+  if (!summaries.length) throw new Error('KIS_BALANCE_INVALID')
+  const summary = summaries[0]
   const holdings = output1.map((row) => ({
     productCode: cleanText(pick(row, ['pdno', 'prdt_no']), 80),
     productName: cleanText(pick(row, ['prdt_name', 'prdt_name1']), 160),

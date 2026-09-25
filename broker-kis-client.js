@@ -1,6 +1,7 @@
 'use strict';
 
 const brokerKisClient=(()=>{
+ const REQUEST_TIMEOUT_MS=20000;
  let config={projectUrl:'',publishableKey:'',functionName:'kis-read',redirectUrl:''};
  let session={accessToken:'',expiresAt:0};
  let authClient=null;
@@ -27,9 +28,10 @@ const brokerKisClient=(()=>{
  function signOut(){session={accessToken:'',expiresAt:0};authClient?.auth.signOut({scope:'local'}).catch(()=>{});return{ok:true}}
  async function jsonRequest(url,options={}){
   if(qaBlocked())return{ok:false,error:'QA_NETWORK_BLOCKED'};
-  const response=await fetch(url,options),text=await response.text();let data={};try{data=text?JSON.parse(text):{}}catch{data={error:'BROKER_RESPONSE_INVALID'}}
-  if(!response.ok)return{ok:false,status:response.status,error:cleanText(data?.message||data?.msg||data?.error||`HTTP_${response.status}`,240)};
-  return{ok:true,status:response.status,data}
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),REQUEST_TIMEOUT_MS);try{const response=await fetch(url,{...options,signal:controller.signal}),text=await response.text();let data={};try{data=text?JSON.parse(text):{}}catch{data={error:'BROKER_RESPONSE_INVALID'}}
+   if(!response.ok)return{ok:false,status:response.status,error:cleanText(data?.message||data?.msg||data?.error||`HTTP_${response.status}`,240)};
+   return{ok:true,status:response.status,data}
+  }catch(error){return{ok:false,error:error?.name==='AbortError'?'BROKER_REQUEST_TIMEOUT':'BROKER_NETWORK_ERROR'}}finally{clearTimeout(timer)}
  }
  function publicHeaders(extra={}){return{'content-type':'application/json',apikey:config.publishableKey,...extra}}
  async function requestOtp(email){
@@ -51,7 +53,7 @@ const brokerKisClient=(()=>{
   const allowed=new Set(['balance','orders','rights','quote']),name=cleanText(action,30);if(!allowed.has(name))return{ok:false,error:'BROKER_ACTION_INVALID'};
   const payload=name==='quote'?{action:name,quotes:Array.isArray(body.quotes)?body.quotes:[]}:{action:name,accountKind:body.accountKind,from:body.from,to:body.to};
   const result=await jsonRequest(`${config.projectUrl}/functions/v1/${config.functionName}`,{method:'POST',headers:publicHeaders({authorization:`Bearer ${session.accessToken}`}),body:JSON.stringify(payload)});
-  if(!result.ok)return result;const data=result.data;if(!data||data.ok!==true||data.action!==name||(name!=='quote'&&!['pension','irp'].includes(data.accountKind))||(name==='quote'&&!Array.isArray(data.quotes)))return{ok:false,error:'BROKER_RESPONSE_CONTRACT_INVALID'};return{ok:true,data}
+  if(!result.ok)return result;const data=result.data;if(!data||data.ok!==true||data.action!==name||(name!=='quote'&&data.accountKind!==body.accountKind)||(name==='quote'&&!Array.isArray(data.quotes)))return{ok:false,error:'BROKER_RESPONSE_CONTRACT_INVALID'};return{ok:true,data}
  }
  async function sync(action,accountKind,localAccountId,range={}){
   const result=await invoke(action,{accountKind,from:range.from,to:range.to});if(!result.ok)return result;const data=result.data,fetchedAt=data.fetchedAt||new Date().toISOString(),api=window.__assetOS?.brokerKis;if(!api)return{ok:false,error:'BROKER_STORE_UNAVAILABLE'};

@@ -93,3 +93,11 @@ test('home unified refresh runs once, reports progress and keeps partial account
  assert.equal(buttons[0].disabled,false);
  assert.equal(buttons[0].textContent,'전체 갱신');
 });
+
+test('PWA registration, shell assets and worker cache use one build id',()=>{
+ const index=source('index.html'),pwa=source('pwa.js'),worker=source('service-worker.js');
+ const indexBuild=index.match(/build=(\d{8}-\d+)/)?.[1],pwaBuild=pwa.match(/build(?:=)?(\d{8}-\d+)/)?.[1],workerBuild=worker.match(/build(\d{8}-\d+)/)?.[1];
+ assert.ok(indexBuild&&pwaBuild&&workerBuild);
+ assert.equal(pwaBuild,indexBuild);
+ assert.equal(workerBuild,indexBuild);
+});
