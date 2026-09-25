@@ -6,12 +6,12 @@ const path=require('node:path');
 const root=path.join(__dirname,'..');
 const read=name=>fs.readFileSync(path.join(root,name),'utf8');
 
-test('v0.6.5 final views and export assets are shipped in the PWA shell',()=>{
+test('v0.6.6 final views and export assets are shipped in the PWA shell',()=>{
  const html=read('index.html'),worker=read('service-worker.js'),pwa=read('pwa.js'),release=read('release-v069.js'),home=read('home.js');
- for(const name of ['export-csv.js','release-v069.js','css-release-v069.css']){
-  assert.match(html,new RegExp(name.replace('.','\\.')));
-  assert.match(worker,new RegExp(`'${name.replace('.','\\.')}'`));
- }
+ const bundles=JSON.parse(read('runtime-bundles.json'));
+ assert.ok(bundles.scripts['asset-core.js'].includes('export-csv.js'));
+ assert.ok(bundles.scripts['asset-ui.js'].includes('release-v069.js'));
+ assert.ok(bundles.styles['asset-os.css'].includes('css-release-v069.css'));
  for(const text of ['이번 달 자금 계획','순금융자산','현금성 자산','투자자산','대출·부채','대출·이자','생활 고정비','가용 현금','월별 납입 내역 정리','분석파일 만들기'])assert.match(release,new RegExp(text));
  assert.match(release,/Math\.min\(20,Number\(remaining\)/);
  const releaseCss=read('css-release-v069.css');
@@ -20,12 +20,10 @@ test('v0.6.5 final views and export assets are shipped in the PWA shell',()=>{
  assert.match(release,/ai-review-actions/);
  assert.match(releaseCss,/ai-account-scopes/);
  assert.match(releaseCss,/ai-review-actions/);
- assert.match(html,/v=0\.6\.5/);
- assert.match(html,/pwa\.js\?v=0\.6\.5/);
- assert.match(html,/boot\.js\?v=0\.6\.5/);
- assert.match(worker,/asset-os-v0.6.5/);
- assert.match(worker,/v=0\.6\.5/);
- assert.match(pwa,/service-worker\.js\?v=0\.6\.5/);
+ assert.match(html,/dist\/asset-runtime\.js\?v=0\.6\.6&build=20260926-2/);
+ assert.match(worker,/asset-os-v0\.6\.6-build20260926-2/);
+ assert.match(worker,/v=0\.6\.6&build=20260926-2/);
+ assert.match(pwa,/service-worker\.js\?v=0\.6\.6&build=20260926-2/);
  assert.match(home,/function openAlertsCenter\(\)\{const isaReady=homeSample\(\)\.isaSource==='asset-os'/);
  assert.match(home,/homeInvestmentRefreshMarkup\(\)/);
  assert.match(home,/data-investment-refresh-all/);

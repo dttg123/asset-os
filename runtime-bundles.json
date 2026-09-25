@@ -1,0 +1,70 @@
+{
+  "scripts": {
+    "asset-core.js": [
+      "core-config.js",
+      "broker-kis.js",
+      "broker-kis-client.js",
+      "data-defaults.js",
+      "integrated-ledger-engine.js",
+      "integrated-schedule-engine.js",
+      "integrated-finance-engine.js",
+      "store-state.js",
+      "backup.js",
+      "export-csv.js",
+      "initial-import.js",
+      "initial-import-ui.js",
+      "backup-v04.js",
+      "insurance.js",
+      "source-archive.js",
+      "core-accessors.js"
+    ],
+    "asset-ledgers.js": [
+      "pension-contributions.js",
+      "pension-ledger.js",
+      "pension-assets.js",
+      "isa-validation.js",
+      "isa-ledger.js",
+      "isa-quotes.js"
+    ],
+    "asset-ui.js": [
+      "core-visual-utils.js",
+      "home.js",
+      "isa-summary.js",
+      "pension-forms.js",
+      "pension-pages.js",
+      "chart-income.js",
+      "ai-strategy.js",
+      "chart-pension-future.js",
+      "chart-asset-analysis.js",
+      "integrated-pages.js",
+      "ui-render.js",
+      "integrated-forms.js",
+      "ui-sheets.js",
+      "chart-financial-growth.js",
+      "isa-registration.js",
+      "chart-dividends.js",
+      "isa-maturity-policy.js",
+      "integrated-finance-ui.js",
+      "ui-settings.js",
+      "release-v069.js"
+    ],
+    "asset-runtime.js": [
+      "supabase-sync.js",
+      "qa-mode.js",
+      "pwa.js",
+      "boot.js"
+    ]
+  },
+  "styles": {
+    "asset-os.css": [
+      "css-core-base.css",
+      "css-isa.css",
+      "css-pension.css",
+      "css-integrated.css",
+      "css-shared-common.css",
+      "css-shared-investment.css",
+      "css-core-hardening.css",
+      "css-release-v069.css"
+    ]
+  }
+}
