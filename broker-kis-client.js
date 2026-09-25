@@ -56,7 +56,7 @@ const brokerKisClient=(()=>{
   if(!result.ok)return result;const data=result.data;if(!data||data.ok!==true||data.action!==name||(name!=='quote'&&data.accountKind!==body.accountKind)||(name==='quote'&&!Array.isArray(data.quotes)))return{ok:false,error:'BROKER_RESPONSE_CONTRACT_INVALID'};return{ok:true,data}
  }
  async function sync(action,accountKind,localAccountId,range={}){
-  const result=await invoke(action,{accountKind,from:range.from,to:range.to});if(!result.ok)return result;const data=result.data,fetchedAt=data.fetchedAt||new Date().toISOString(),api=window.__assetOS?.brokerKis;if(!api)return{ok:false,error:'BROKER_STORE_UNAVAILABLE'};
+  const result=await invoke(action,{accountKind,from:range.from,to:range.to});if(!result.ok)return result;const data=result.data,fetchedAt=data.fetchedAt||new Date().toISOString(),api=((typeof assetOsRuntimeApi!=="undefined"&&assetOsRuntimeApi)||window.__assetOS)?.brokerKis;if(!api)return{ok:false,error:'BROKER_STORE_UNAVAILABLE'};
   if(action==='balance')return api.importBalance(data.balance||{},accountKind,localAccountId,fetchedAt);
   if(action==='orders')return api.importOrders(data.orders||[],accountKind,localAccountId,fetchedAt,range.to||'');
   return api.importRights(data.rights||[],accountKind,localAccountId,fetchedAt)

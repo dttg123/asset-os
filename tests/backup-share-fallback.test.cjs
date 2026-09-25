@@ -29,5 +29,8 @@ vm.runInContext(`${source}\nthis.__shareDriveBackup=shareDriveBackup;this.__pars
  const txtBytes=new TextEncoder().encode(JSON.stringify({format:'asset-os-backup-v1',schemaVersion:20,data:{ok:true}}));
  const txt=await context.__parseBackupFile({name:'AssetOS_backup.txt',arrayBuffer:async()=>txtBytes.buffer});
  assert.equal(txt.data.ok,true);
+ await assert.rejects(()=>context.__parseBackupFile({name:'oversize.json',size:8*1024*1024+1,arrayBuffer:async()=>new ArrayBuffer(0)}),/8MB 이하/);
+ assert.throws(()=>vm.runInContext('parseBackupZipBytes(new Uint8Array(8*1024*1024+1))',context),/8MB 이하/);
+ assert.match(fs.readFileSync(path.resolve(__dirname,'..','initial-import.js'),'utf8'),/assertImportFileSize\(file,'초기자료'\)/);
  console.log('backup share fallback tests: PASS');
 })().catch(error=>{console.error(error);process.exitCode=1});
