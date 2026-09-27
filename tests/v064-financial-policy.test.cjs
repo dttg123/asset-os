@@ -26,6 +26,7 @@ test('ISA tax estimate excludes domestic equity gains and keeps taxable ETF gain
  const facts=new Map([['domestic',{realized:500000}],['overseas',{realized:300000}],['dividend',{grossAmount:100000}]]);
  const account={openedAt:'2025-01-01',baselineDate:'2025-01-01',taxBreakdown:{},holdings:[{id:'d',assetClass:'국내주식 ETF'},{id:'o',assetClass:'해외주식 ETF'}],transactions:[{id:'domestic',holdingId:'d',type:'sell',date:'2026-01-01'},{id:'overseas',holdingId:'o',type:'sell',date:'2026-01-02'},{id:'dividend',type:'distribution',date:'2026-01-03',amount:100000,fee:1000,tax:15400}]};
  const context=vm.createContext({console,isPastAccount:()=>false,isaTransactionDateError:()=>'',transactionNumericError:()=>'',sortTxs:x=>x,txDate:x=>x.date});
+ vm.runInContext(source('src/domain/investment-position.js'),context);
  vm.runInContext(source('isa-ledger.js'),context);
  context.replay=()=>({facts});
  const result=vm.runInContext(`taxableBreakdown(${JSON.stringify(account)})`,context);

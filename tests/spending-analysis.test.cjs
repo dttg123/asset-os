@@ -4,6 +4,7 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 const path=require('node:path');
 const context=vm.createContext({console,Date,String,Number,Map,Set,Math});
+vm.runInContext(fs.readFileSync(path.join(__dirname,'..','src/domain/integrated-replay.js'),'utf8'),context,{filename:'integrated-replay.js'});
 vm.runInContext(fs.readFileSync(path.join(__dirname,'..','integrated-ledger-engine.js'),'utf8'),context,{filename:'integrated-ledger-engine.js'});
 const rows=[
  {id:'july',date:'2026-07-10',type:'expense',fixed:false,category:'식비',amount:100},

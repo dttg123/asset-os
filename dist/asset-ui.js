@@ -834,6 +834,72 @@ function actions(){if(route().root!=='isa')return toast('현재 검토본은 ISA
 function haptic(kind='light'){if(!setting().haptics||!('vibrate'in navigator))return;try{navigator.vibrate(kind==='warning'?[18,40,18]:kind==='success'?[10,25,14]:[8])}catch{}}
 let toastTimer;function toast(msg){const el=$('#toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2100)}
 ;
+/* asset-os source: policy-review-ui.js */
+'use strict';
+function policyReviewClass(review) { return review.code === 'needs-review' ? 'review-needed' : review.code === 'review-soon' ? 'review-soon' : 'review-ok'; }
+function policySafeSourceUrl(value) { try {
+    const url = new URL(String(value || ''));
+    return url.protocol === 'https:' ? url.href : '';
+}
+catch {
+    return '';
+} }
+function renderPolicyReviewNotice(item) {
+    const card = document.querySelector('#sheetBody .policy-card');
+    if (!card)
+        return;
+    const review = policyReviewState(item, localYmd()), badge = card.querySelector('.policy-status');
+    if (badge) {
+        badge.textContent = review.label;
+        badge.classList.remove('user', 'review-needed', 'review-soon', 'review-ok');
+        badge.classList.add(policyReviewClass(review));
+    }
+    card.querySelector('.policy-review-notice')?.remove();
+    if (review.code !== 'ok') {
+        const notice = document.createElement('div');
+        notice.className = `policy-review-notice ${policyReviewClass(review)}`;
+        notice.textContent = review.code === 'needs-review' ? `정책값 재확인이 필요합니다 · ${review.reason}` : `${formatDate(review.reviewAt)}까지 정책값을 다시 확인하세요.`;
+        card.querySelector('.policy-summary-grid')?.before(notice);
+    }
+    const note = card.querySelector('.source-note'), url = policySafeSourceUrl(item.sourceUrl);
+    if (note) {
+        note.textContent = `다음 재검토 ${formatDate(review.reviewAt)} · 계산은 현재 저장값을 계속 사용합니다.`;
+        if (url) {
+            const link = document.createElement('a');
+            link.href = url;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = ' 출처 열기';
+            note.appendChild(link);
+        }
+    }
+}
+const openPolicyHubWithoutReview = openPolicyHub;
+openPolicyHub = function (initialKind = '', financeFilter = 'all') {
+    const result = openPolicyHubWithoutReview(initialKind, financeFilter);
+    if (initialKind === 'finance')
+        return result;
+    const kind = ['isa', 'pension', 'irp'].includes(initialKind) ? initialKind : (['isa', 'pension', 'irp'].includes(setting().policyTab || '') ? String(setting().policyTab) : 'isa'), item = kind === 'isa' ? policy('isa', currentAccount()) : policy(kind, null);
+    renderPolicyReviewNotice(item);
+    return result;
+};
+const openPolicyReadonlyWithoutReview = openPolicyReadonly;
+openPolicyReadonly = function (kind = 'isa', policyId = '') {
+    const result = openPolicyReadonlyWithoutReview(kind, policyId), group = policyGroup(kind), item = policyId ? (group.versions.find(version => version.id === policyId) || policy(kind)) : policy(kind), review = policyReviewState(item, localYmd()), note = document.querySelector('#sheetBody .source-note'), url = policySafeSourceUrl(item.sourceUrl);
+    if (note) {
+        note.textContent = `${item.sourceLabel} · 적용 ${formatDate(item.effectiveFrom)} · 확인 ${formatDate(item.verifiedAt)} · ${review.label}`;
+        if (url) {
+            const link = document.createElement('a');
+            link.href = url;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = ' · 출처 열기';
+            note.appendChild(link);
+        }
+    }
+    return result;
+};
+;
 /* asset-os source: release-v069.js */
 'use strict';
 /* v0.6.4 final product polish. Existing ledgers stay untouched; this layer only reshapes views. */

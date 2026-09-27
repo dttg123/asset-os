@@ -1,0 +1,24 @@
+{
+  "name": "asset-os",
+  "version": "0.6.7",
+  "private": true,
+  "description": "Personal Asset OS quality gates",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "build": "node scripts/build-runtime-bundles.mjs",
+    "check:syntax": "node scripts/check-syntax.mjs",
+    "check:types": "tsc --project jsconfig.json",
+    "check:secrets": "node scripts/scan-secrets.mjs",
+    "check:generated": "node scripts/check-generated.mjs",
+    "test": "node --test tests/*.test.cjs",
+    "test:gates": "node --test tests/quality-gates.test.cjs",
+    "audit": "npm audit --audit-level=high",
+    "ci": "npm run check:syntax && npm run check:types && npm run check:secrets && npm run check:generated && npm test && npm run audit"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.0",
+    "typescript": "7.0.2"
+  }
+}

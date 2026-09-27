@@ -1,3 +1,33 @@
+/* asset-os source: src/domain/investment-position.js */
+'use strict';
+function holdingPriceScale(holding) { const value = Number(holding?.priceScale); return Number.isFinite(value) && value > 0 ? value : 1; }
+function holdingPositionValue(holding, quantity = holding?.qty, price = holding?.currentPrice) { return (Number(quantity) || 0) * (Number(price) || 0) / holdingPriceScale(holding); }
+function holdingCostValue(holding, quantity = holding?.qty, price = holding?.avgPrice) { return holdingPositionValue(holding, quantity, price); }
+function transactionPositionValue(holding, quantity, price) { return holdingPositionValue(holding, quantity, price); }
+function calculatePensionPosition(holding, transactions) {
+    let qty = Math.max(0, Number(holding.baselineQty ?? holding.qty) || 0), avg = Math.max(0, Number(holding.baselineAvgPrice ?? holding.avgPrice) || 0);
+    const rows = transactions.filter(transaction => transaction.holdingId === holding.id && ['buy', 'sell', 'adjustment'].includes(String(transaction.type))).sort((left, right) => String(left.date).localeCompare(String(right.date)) || String(left.createdAt || '').localeCompare(String(right.createdAt || '')) || String(left.id).localeCompare(String(right.id)));
+    for (const transaction of rows) {
+        if (transaction.type === 'buy') {
+            const quantity = Math.max(0, Number(transaction.qty) || 0), price = Math.max(0, Number(transaction.price) || 0), oldCost = qty * avg, newCost = quantity * price + Math.max(0, Number(transaction.fee) || 0) + Math.max(0, Number(transaction.tax) || 0);
+            qty += quantity;
+            avg = qty ? (oldCost + newCost) / qty : 0;
+        }
+        else if (transaction.type === 'sell') {
+            qty = Math.max(0, qty - Math.max(0, Number(transaction.qty) || 0));
+            if (qty <= 1e-9) {
+                qty = 0;
+                avg = 0;
+            }
+        }
+        else if (transaction.type === 'adjustment') {
+            qty = Math.max(0, Number(transaction.setQty) || 0);
+            avg = qty ? Math.max(0, Number(transaction.setAvg) || 0) : 0;
+        }
+    }
+    return { qty, avg };
+}
+;
 /* asset-os source: pension-contributions.js */
 'use strict';
 function pensionStore(){return state.pension}
@@ -85,7 +115,7 @@ function investmentThemeTag(h){const explicit=String(h?.themeTag||'').trim();if(
 function investmentRoleMeta(h){const role=investmentRoleForHolding(h),tag=investmentThemeTag(h);return tag?`${role} · ${tag}`:role}
 function pensionTransactions(scope='all'){return pensionStore().transactions.filter(t=>{const a=pensionAccount(t.accountId);return a&&(scope==='all'||a.kind===scope)}).sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.createdAt||'').localeCompare(String(a.createdAt||'')))}
 function pensionTradeLabel(type){return({contribution:'납입',isaTransfer:'ISA 만기 이전',buy:'매수',sell:'매도',dividend:'배당금',distribution:'분배금',interest:'이자',other_right:'기타 권리',adjustment:'보정'})[type]||type}
-function pensionPositionFromLedger(h,transactions=pensionStore().transactions){let qty=Math.max(0,Number(h.baselineQty??h.qty)||0),avg=Math.max(0,Number(h.baselineAvgPrice??h.avgPrice)||0);const rows=transactions.filter(t=>t.holdingId===h.id&&['buy','sell','adjustment'].includes(t.type)).sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.createdAt||'').localeCompare(String(b.createdAt||''))||String(a.id).localeCompare(String(b.id)));for(const t of rows){if(t.type==='buy'){const q=Math.max(0,Number(t.qty)||0),price=Math.max(0,Number(t.price)||0),oldCost=qty*avg,newCost=q*price+Math.max(0,Number(t.fee)||0)+Math.max(0,Number(t.tax)||0);qty+=q;avg=qty?((oldCost+newCost)/qty):0}else if(t.type==='sell'){qty=Math.max(0,qty-Math.max(0,Number(t.qty)||0));if(qty<=1e-9){qty=0;avg=0}}else if(t.type==='adjustment'){qty=Math.max(0,Number(t.setQty)||0);avg=qty?Math.max(0,Number(t.setAvg)||0):0}}return{qty,avg}}
+function pensionPositionFromLedger(h,transactions=pensionStore().transactions){return calculatePensionPosition(h,transactions)}
 function syncPensionDerivedHoldings(target=state){const ps=target?.pension;if(!ps)return;const txs=Array.isArray(ps.transactions)?ps.transactions:[];for(const h of ps.holdings||[]){const pos=pensionPositionFromLedger(h,txs);h.qty=pos.qty;h.avgPrice=pos.avg;h.investmentRole=normalizeInvestmentRole(h.investmentRole||h.assetClass,h);h.assetClass=h.investmentRole}}
 function pensionTradeCashDelta(t){const fee=Math.max(0,Number(t.fee)||0),tax=Math.max(0,Number(t.tax)||0);if(t.type==='buy')return-((Number(t.qty)||0)*(Number(t.price)||0)+fee+tax);if(t.type==='sell')return (Number(t.qty)||0)*(Number(t.price)||0)-fee-tax;if(['dividend','distribution','interest','other_right'].includes(t.type))return (Number(t.amount)||0)-fee-tax;return 0}
 function pensionTransactionIssues(transactions=pensionStore().transactions){
@@ -230,11 +260,7 @@ function typeText(t){return ({buy:'매수',sell:'매도',openingAllocation:'기�
 ;
 /* asset-os source: isa-ledger.js */
 'use strict';
-function holdingPriceScale(h){const value=Number(h?.priceScale);return Number.isFinite(value)&&value>0?value:1}
-function holdingPositionValue(h,qty=h?.qty,price=h?.currentPrice){return (Number(qty)||0)*(Number(price)||0)/holdingPriceScale(h)}
-function holdingCostValue(h,qty=h?.qty,price=h?.avgPrice){return holdingPositionValue(h,qty,price)}
 function holdingQuantityText(h,qty=h?.qty){return h?.quantityUnit==='face'?`${num(qty)}원 액면`:`${quantityNumber(qty)}주`}
-function transactionPositionValue(h,qty,price){return holdingPositionValue(h,qty,price)}
 function replay(account,candidateTxs=null,includeCentral=true){
  if(!account)return {holdings:[],cash:0,valid:true,error:null,errorTxId:null,realized:0,income:0,fees:0,taxes:0,facts:new Map()};
  if(isPastAccount(account)){

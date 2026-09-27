@@ -26,6 +26,7 @@ const context=vm.createContext({
   }
  }
 });
+vm.runInContext(fs.readFileSync(path.join(__dirname,'..','src/integrations/kis-normalization.js'),'utf8'),context,{filename:'kis-normalization.js'});
 vm.runInContext(fs.readFileSync(path.join(__dirname,'..','broker-kis.js'),'utf8'),context,{filename:'broker-kis.js'});
 vm.runInContext('state.brokerKis=brokerKisEmptyStore();window.__assetOS={brokerKis:{beginHistory:input=>brokerKisBeginHistory(state.brokerKis,input),updateHistory:input=>brokerKisUpdateHistory(state.brokerKis,input)}}',context);
 vm.runInContext(fs.readFileSync(path.join(__dirname,'..','ui-settings.js'),'utf8'),context,{filename:'ui-settings.js'});
