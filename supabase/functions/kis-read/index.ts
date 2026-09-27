@@ -11,6 +11,19 @@ type AccountKind = 'pension' | 'irp'
 type Action = 'balance' | 'orders' | 'rights' | 'quote'
 type AccountConfig = { appkey: string; appsecret: string; cano: string; productCode: string }
 
+class KisUpstreamError extends Error {
+  upstreamCode: string
+  constructor(upstreamCode = '') {
+    super('KIS_UPSTREAM_FAILED')
+    this.upstreamCode = upstreamCode
+  }
+}
+
+function safeUpstreamCode(body: Record<string, any>) {
+  const value = String(body?.msg_cd || body?.error_code || '').trim().toUpperCase()
+  return /^[A-Z0-9_-]{1,40}$/.test(value) ? value : ''
+}
+
 function env(name: string) {
   const value = Deno.env.get(name)
   if (!value) throw new Error('SERVER_CONFIG_MISSING')
@@ -66,8 +79,8 @@ function accountConfig(accountKind: AccountKind): AccountConfig {
   const sharedSecret = Deno.env.get('KIS_APP_SECRET') || ''
   if (!!sharedKey !== !!sharedSecret) throw new Error('SERVER_CONFIG_MISSING')
   return {
-    appkey: sharedKey || env('KIS_PENSION_APP_KEY'),
-    appsecret: sharedSecret || env('KIS_PENSION_APP_SECRET'),
+    appkey: sharedKey || env(prefix + 'APP_KEY'),
+    appsecret: sharedSecret || env(prefix + 'APP_SECRET'),
     cano: env(prefix + 'CANO'),
     productCode: env(prefix + 'ACNT_PRDT_CD'),
   }
@@ -91,13 +104,18 @@ async function readValidToken(db: ReturnType<typeof serverClient>, accountKind: 
   return data.access_token as string
 }
 
-function tokenCacheKind(): AccountKind {
-  return 'pension'
+function tokenCacheKind(accountKind: AccountKind, cfg: AccountConfig): AccountKind {
+  if (accountKind === 'pension') return 'pension'
+  const pensionKey = Deno.env.get('KIS_APP_KEY') || Deno.env.get('KIS_PENSION_APP_KEY') || ''
+  const pensionSecret = Deno.env.get('KIS_APP_SECRET') || Deno.env.get('KIS_PENSION_APP_SECRET') || ''
+  return pensionKey && pensionSecret && cfg.appkey === pensionKey && cfg.appsecret === pensionSecret
+    ? 'pension'
+    : accountKind
 }
 
 async function accessToken(accountKind: AccountKind, cfg: AccountConfig) {
   const db = serverClient()
-  const cacheKind = tokenCacheKind()
+  const cacheKind = tokenCacheKind(accountKind, cfg)
   const cached = await readValidToken(db, cacheKind)
   if (cached) return cached
 
@@ -142,13 +160,13 @@ async function accessToken(accountKind: AccountKind, cfg: AccountConfig) {
   }
 }
 
-async function invalidateToken(failedToken: string) {
+async function invalidateToken(accountKind: AccountKind, cfg: AccountConfig, failedToken: string) {
   const { error } = await serverClient().from('kis_token_cache').update({
     access_token: '',
     expires_at: new Date(0).toISOString(),
     refreshing_until: null,
     updated_at: new Date().toISOString(),
-  }).eq('account_type', tokenCacheKind()).eq('access_token', failedToken)
+  }).eq('account_type', tokenCacheKind(accountKind, cfg)).eq('access_token', failedToken)
   if (error) throw new Error('TOKEN_CACHE_SAVE_FAILED')
 }
 
@@ -179,7 +197,7 @@ async function kisPages(
     body = await upstream.json().catch(() => ({}))
     if (isTokenFailure(upstream, body)) throw new Error('KIS_TOKEN_INVALID')
     if (page === 0) firstBody = body
-    if (!upstream.ok || body?.rt_cd !== '0') throw new Error('KIS_UPSTREAM_FAILED')
+    if (!upstream.ok || body?.rt_cd !== '0') throw new KisUpstreamError(safeUpstreamCode(body))
     const nextRows = Array.isArray(body?.[outputKey]) ? body[outputKey] : []
     collected.push(...nextRows.filter((row: unknown) => row && typeof row === 'object'))
     trCont = upstream.headers.get('tr_cont') || ''
@@ -251,7 +269,7 @@ async function quoteOne(cfg: AccountConfig, token: string, item: Record<string, 
   } })
   const body = await upstream.json().catch(() => ({}))
   if (isTokenFailure(upstream, body)) throw new Error('KIS_TOKEN_INVALID')
-  if (!upstream.ok || body?.rt_cd !== '0') throw new Error('KIS_UPSTREAM_FAILED')
+  if (!upstream.ok || body?.rt_cd !== '0') throw new KisUpstreamError(safeUpstreamCode(body))
   const row = Array.isArray(body?.output) ? body.output[0] : body?.output
   const normalized = normalizeQuote(row, type, code)
   if (!normalized) throw new Error('QUOTE_EMPTY')
@@ -279,6 +297,8 @@ const safeErrors = new Set([
 
 Deno.serve(async (req) => {
   let origin = ''
+  let requestedAction = ''
+  let requestedAccountKind = ''
   try {
     origin = allowedOrigin(req.headers.get('origin'))
   } catch {
@@ -301,6 +321,8 @@ Deno.serve(async (req) => {
     const input = await req.json()
     const action = input?.action as Action
     const accountKind = input?.accountKind as AccountKind
+    requestedAction = String(action || '')
+    requestedAccountKind = action === 'quote' ? 'pension' : String(accountKind || '')
     if (!['balance', 'orders', 'rights', 'quote'].includes(action)) throw new Error('ACTION_INVALID')
     if (action !== 'quote' && !['pension', 'irp'].includes(accountKind)) throw new Error('ACCOUNT_KIND_INVALID')
     const tokenKind: AccountKind = action === 'quote' ? 'pension' : accountKind
@@ -319,19 +341,28 @@ Deno.serve(async (req) => {
       payload = await run()
     } catch (error) {
       if (!(error instanceof Error) || error.message !== 'KIS_TOKEN_INVALID') throw error
-      await invalidateToken(token)
+      await invalidateToken(tokenKind, cfg, token)
       token = await accessToken(tokenKind, cfg)
       payload = await run()
     }
     return response({ ok: true, action, ...(action === 'quote' ? {} : { accountKind }), fetchedAt, ...payload }, 200, origin)
   } catch (error) {
     const code = error instanceof Error ? error.message : 'INTERNAL_ERROR'
+    const upstreamCode = error instanceof KisUpstreamError ? error.upstreamCode : ''
+    if (code === 'KIS_UPSTREAM_FAILED') console.warn(JSON.stringify({
+      event: 'kis_upstream_failed', action: requestedAction, accountKind: requestedAccountKind,
+      ...(upstreamCode ? { upstreamCode } : {}),
+    }))
     const badRequest = new Set(['ACTION_INVALID', 'ACCOUNT_KIND_INVALID', 'DATE_RANGE_INVALID',
       'QUOTE_TYPE_INVALID', 'QUOTE_CODE_INVALID', 'QUOTE_LIST_INVALID'])
     const status = code === 'AUTH_FORBIDDEN' ? 403
       : code.startsWith('AUTH_') ? 401
         : badRequest.has(code) ? 400
           : code === 'SERVER_CONFIG_MISSING' ? 503 : 502
-    return response({ ok: false, error: safeErrors.has(code) ? code : 'INTERNAL_ERROR' }, status, origin)
+    return response({
+      ok: false, error: safeErrors.has(code) ? code : 'INTERNAL_ERROR',
+      ...(code === 'KIS_UPSTREAM_FAILED' && requestedAction ? { stage: requestedAction } : {}),
+      ...(code === 'KIS_UPSTREAM_FAILED' && upstreamCode ? { upstreamCode } : {}),
+    }, status, origin)
   }
 })
