@@ -50,29 +50,36 @@ assert.ok(!edge.includes('CANO: input'),'client account number must never be acc
 assert.match(edge,/FHKBJ773400C0/,'official KIS domestic bond quote TR id required');
 assert.match(edge,/FHKST01010100/,'official KIS domestic stock quote TR id required');
 assert.match(edge,/firstBody/,'다중 페이지 잔고 조회에서 첫 페이지 합계 정보를 보존해야 한다');
-assert.match(edge,/appkey: sharedKey \|\| env\('KIS_PENSION_APP_KEY'\)/,'연금저축·IRP는 하나의 한투 앱키를 사용해야 한다');
-assert.match(edge,/appsecret: sharedSecret \|\| env\('KIS_PENSION_APP_SECRET'\)/,'연금저축·IRP는 하나의 한투 앱시크릿을 사용해야 한다');
+assert.match(edge,/appkey: sharedKey \|\| env\(prefix \+ 'APP_KEY'\)/,'계좌별 앱키를 지원해야 한다');
+assert.match(edge,/appsecret: sharedSecret \|\| env\(prefix \+ 'APP_SECRET'\)/,'계좌별 앱시크릿을 지원해야 한다');
 assert.match(edge,/!!sharedKey !== !!sharedSecret/,'공용 앱키와 시크릿은 반드시 한 쌍으로 검증해야 한다');
 assert.match(edge,/cano: env\(prefix \+ 'CANO'\)/,'연금저축·IRP 계좌번호는 계좌 종류별로 분리되어야 한다');
 assert.match(edge,/productCode: env\(prefix \+ 'ACNT_PRDT_CD'\)/,'연금저축·IRP 상품코드는 계좌 종류별로 분리되어야 한다');
-assert.doesNotMatch(edge,/env\(prefix \+ 'APP_(?:KEY|SECRET)'\)/,'계좌별 앱키로 분기해 토큰을 두 번 발급하면 안 된다');
-assert.match(edge,/function tokenCacheKind\(\): AccountKind \{\s*return 'pension'\s*\}/,'모든 투자계좌 요청은 하나의 접근토큰 캐시를 사용해야 한다');
+assert.match(edge,/function tokenCacheKind\(accountKind: AccountKind, cfg: AccountConfig\)/,'토큰 캐시는 실제 계좌 인증정보를 기준으로 선택해야 한다');
+assert.match(edge,/cfg\.appkey === pensionKey && cfg\.appsecret === pensionSecret/,'앱키와 시크릿이 모두 같을 때만 토큰을 공유해야 한다');
 assert.match(edge,/KIS_REQUEST_TIMEOUT_MS/,'한투 요청은 제한시간이 있어야 한다');
 assert.match(edge,/KIS_TOKEN_INVALID/,'무효 토큰을 구분해야 한다');
-assert.match(edge,/await invalidateToken\(token\)[\s\S]*token = await accessToken/,'무효 토큰은 폐기 후 한 번 재발급해야 한다');
+assert.match(edge,/await invalidateToken\(tokenKind, cfg, token\)[\s\S]*token = await accessToken/,'해당 인증정보의 무효 토큰만 폐기 후 한 번 재발급해야 한다');
+assert.match(edge,/upstreamCode/,'한투 오류 코드는 비밀정보 없이 진단 가능해야 한다');
+assert.match(edge,/stage: requestedAction/,'실패 단계가 응답에 포함되어야 한다');
+assert.doesNotMatch(edge,/msg1[^\n]*response/,'한투 원문 메시지는 클라이언트에 노출하면 안 된다');
 
 const accountConfigSource=edge.match(/function accountConfig\(accountKind: AccountKind\): AccountConfig \{[\s\S]*?\n\}/)?.[0]
   .replace('accountKind: AccountKind','accountKind').replace('): AccountConfig',')');
 assert.ok(accountConfigSource,'계좌 설정 함수를 검사할 수 있어야 한다');
-const secretValues={KIS_PENSION_APP_KEY:'one-key',KIS_PENSION_APP_SECRET:'one-secret',KIS_PENSION_CANO:'pension-cano',KIS_PENSION_ACNT_PRDT_CD:'29',KIS_IRP_CANO:'irp-cano',KIS_IRP_ACNT_PRDT_CD:'29'};
+const secretValues={KIS_PENSION_APP_KEY:'pension-key',KIS_PENSION_APP_SECRET:'pension-secret',KIS_IRP_APP_KEY:'irp-key',KIS_IRP_APP_SECRET:'irp-secret',KIS_PENSION_CANO:'pension-cano',KIS_PENSION_ACNT_PRDT_CD:'29',KIS_IRP_CANO:'irp-cano',KIS_IRP_ACNT_PRDT_CD:'29'};
 const configContext=vm.createContext({Deno:{env:{get:name=>secretValues[name]}},env:name=>{if(!secretValues[name])throw new Error('missing');return secretValues[name]}});
 new vm.Script(`${accountConfigSource};this.accountConfig=accountConfig`).runInContext(configContext);
 const pensionConfig=configContext.accountConfig('pension'),irpConfig=configContext.accountConfig('irp');
-assert.equal(pensionConfig.appkey,irpConfig.appkey,'두 계좌는 동일한 앱키를 사용해야 한다');
-assert.equal(pensionConfig.appsecret,irpConfig.appsecret,'두 계좌는 동일한 앱시크릿을 사용해야 한다');
+assert.notEqual(pensionConfig.appkey,irpConfig.appkey,'별도 발급된 두 계좌 앱키를 강제로 합치면 안 된다');
+assert.notEqual(pensionConfig.appsecret,irpConfig.appsecret,'별도 발급된 두 계좌 앱시크릿을 강제로 합치면 안 된다');
 assert.notEqual(pensionConfig.cano,irpConfig.cano,'두 계좌의 계좌번호는 절대 합치면 안 된다');
 assert.equal(pensionConfig.cano,'pension-cano');
 assert.equal(irpConfig.cano,'irp-cano');
+secretValues.KIS_APP_KEY='shared-key';secretValues.KIS_APP_SECRET='shared-secret';
+const sharedPension=configContext.accountConfig('pension'),sharedIrp=configContext.accountConfig('irp');
+assert.equal(sharedPension.appkey,sharedIrp.appkey,'명시한 공용 앱키는 두 계좌가 함께 사용해야 한다');
+assert.equal(sharedPension.appsecret,sharedIrp.appsecret,'명시한 공용 앱시크릿은 두 계좌가 함께 사용해야 한다');
 
 const migration=fs.readFileSync('supabase/migrations/202609250001_harden_kis_token_cache.sql','utf8');
 assert.match(migration,/insert into public\.kis_token_cache/,'토큰 캐시 행이 없어도 생성돼야 한다');

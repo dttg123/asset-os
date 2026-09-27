@@ -6,10 +6,12 @@ const path=require('node:path');
 
 const requests=[];
 let forcedAccountKind='';
+let forcedFailure=false;
 const fakeFetch=async(url,options={})=>{
  requests.push({url,options});
  const body=JSON.parse(options.body||'{}');
  if(url.includes('/auth/v1/otp'))return{ok:true,status:200,text:async()=>JSON.stringify({})};
+ if(forcedFailure)return{ok:false,status:502,text:async()=>JSON.stringify({ok:false,error:'KIS_UPSTREAM_FAILED',stage:'balance',upstreamCode:'TEST001',message:'must-not-leak'})};
  return{ok:true,status:200,text:async()=>JSON.stringify(body.action==='quote'?{ok:true,action:'quote',fetchedAt:'2026-09-02T00:00:00Z',quotes:[{type:'stock',code:'035720',price:40000}]}:{ok:true,action:body.action,accountKind:forcedAccountKind||body.accountKind,fetchedAt:'2026-09-02T00:00:00Z',balance:{totalValue:123},orders:[],rights:[]})}
 };
 const imports=[];
@@ -29,6 +31,7 @@ assert.deepEqual(plain(run('brokerKisClient.authState()')),{configured:true,sign
  assert.equal(plain(run('brokerKisClient.adoptSession(__args[0])',[{access_token:'USER_JWT_MEMORY_ONLY',expires_in:3600}])).ok,true);
  assert.equal(run('brokerKisClient.authState().signedIn'),true);
  const synced=plain(await run('brokerKisClient.sync("balance","pension","ps-main")'));assert.equal(synced.ok,true);assert.equal(imports.length,1);assert.equal(imports[0].input.totalValue,123);
+ forcedFailure=true;const diagnosed=plain(await run('brokerKisClient.invoke("balance",{accountKind:"irp"})'));forcedFailure=false;assert.deepEqual(diagnosed,{ok:false,status:502,error:'KIS_UPSTREAM_FAILED',stage:'balance',upstreamCode:'TEST001'});assert.equal(JSON.stringify(diagnosed).includes('must-not-leak'),false,'upstream messages must not reach the browser');
  forcedAccountKind='irp';const mismatched=plain(await run('brokerKisClient.sync("balance","pension","ps-main")'));assert.deepEqual(mismatched,{ok:false,error:'BROKER_RESPONSE_CONTRACT_INVALID'});assert.equal(imports.length,1,'다른 계좌 종류 응답은 저장하면 안 된다');forcedAccountKind='';
  const invokeRequest=requests.at(-1);assert.equal(invokeRequest.options.headers.authorization,'Bearer USER_JWT_MEMORY_ONLY');assert.equal(JSON.parse(invokeRequest.options.body).accountNumber,undefined,'계좌번호를 브라우저에서 보내면 안 된다');
  const quoted=plain(await run('brokerKisClient.quotes([{type:"stock",code:"035720"}])'));assert.equal(quoted.ok,true);assert.equal(quoted.data.quotes[0].price,40000);const quoteBody=JSON.parse(requests.at(-1).options.body);assert.deepEqual(quoteBody,{action:'quote',quotes:[{type:'stock',code:'035720'}]});assert.equal(quoteBody.accountKind,undefined,'quote must not transmit an account kind or account number');

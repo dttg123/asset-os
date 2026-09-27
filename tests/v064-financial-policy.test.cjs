@@ -57,7 +57,7 @@ test('ordinary pension contributions stop at 18 million while ISA transfers stay
  assert.match(vm.runInContext('integratedPolicyLimitIssues(store)[0]',context),/1원 초과/);
 });
 
-test('ISA transfer window, unified refresh and shared KIS token cache are wired',()=>{
+test('ISA transfer window, unified refresh and conditional KIS token cache are wired',()=>{
  const maturity=source('isa-maturity-policy.js'),home=source('home.js'),release=source('release-v069.js'),settings=source('ui-settings.js'),edge=source('supabase/functions/kis-read/index.ts');
  assert.match(maturity,/transferWindowDays/);
  assert.match(maturity,/isaDateAddDays\(terminationDate/);
@@ -65,12 +65,14 @@ test('ISA transfer window, unified refresh and shared KIS token cache are wired'
  assert.match(home,/home-investment-refresh/);
  assert.doesNotMatch(release,/data-investment-refresh-all/);
  assert.match(settings,/investmentRefreshPromise/);
+ assert.match(settings,/refreshFailedInvestments/);
  assert.match(settings,/갱신 중 \$\{index\+1\}\/\$\{tasks\.length\}/);
  assert.match(edge,/KIS_APP_KEY/);
  assert.match(edge,/tokenCacheKind/);
- assert.match(edge,/function tokenCacheKind\(\): AccountKind \{\s*return 'pension'/);
+ assert.match(edge,/function tokenCacheKind\(accountKind: AccountKind, cfg: AccountConfig\)/);
+ assert.match(edge,/cfg\.appkey === pensionKey && cfg\.appsecret === pensionSecret/);
  assert.match(edge,/cano: env\(prefix \+ 'CANO'\)/);
- assert.doesNotMatch(edge,/env\(prefix \+ 'APP_(?:KEY|SECRET)'\)/);
+ assert.match(edge,/env\(prefix \+ 'APP_KEY'\)/);
 });
 
 test('home unified refresh runs once, reports progress and keeps partial account results',async()=>{
@@ -78,7 +80,7 @@ test('home unified refresh runs once, reports progress and keeps partial account
  const calls=[],buttons=[{disabled:false,textContent:''}];
  let releaseIsa;
  const isaGate=new Promise(resolve=>{releaseIsa=resolve});
- const context=vm.createContext({console,currentAccount:()=>({id:'isa'}),isaQuoteLinks:()=>[{}],kisConnectedAccount:()=>true,refreshIsaQuotes:async()=>{calls.push('isa');await isaGate;return{ok:true}},refreshBrokerKisManually:async kinds=>{calls.push(kinds[0]);return{ok:kinds[0]!=='irp'}},$$:()=>buttons,renderKeepingScroll:()=>calls.push('render'),toast:message=>calls.push(message)});
+ const context=vm.createContext({console,currentAccount:()=>({id:'isa'}),isaQuoteLinks:()=>[{}],kisConnectedAccount:()=>true,investmentRefreshStatus:()=>({errors:[]}),refreshIsaQuotes:async()=>{calls.push('isa');await isaGate;return{ok:true}},refreshBrokerKisManually:async kinds=>{calls.push(kinds[0]);return{ok:kinds[0]!=='irp',results:kinds[0]==='irp'?[{ok:false,error:'KIS_UPSTREAM_FAILED|balance|TEST'}]:[{ok:true}]}},$$:()=>buttons,renderKeepingScroll:()=>calls.push('render'),toast:message=>calls.push(message)});
  vm.runInContext(refreshSource,context);
  const first=vm.runInContext('refreshAllInvestments()',context),second=vm.runInContext('refreshAllInvestments()',context);
  assert.equal(first,second,'a repeated tap must reuse the in-flight request');
@@ -91,6 +93,19 @@ test('home unified refresh runs once, reports progress and keeps partial account
  assert.match(calls.at(-1),/부분 완료/);
  await Promise.resolve();
  assert.equal(buttons[0].disabled,false);
+ assert.equal(buttons[0].textContent,'전체 갱신');
+});
+
+test('failed-only refresh retries only the failed account and keeps successful accounts untouched',async()=>{
+ const settings=source('ui-settings.js'),refreshSource=settings.slice(settings.indexOf('let investmentRefreshPromise='),settings.indexOf('async function syncKisHistory'));
+ const calls=[],buttons=[{disabled:false,textContent:''}];let errors=['irp'];
+ const context=vm.createContext({console,currentAccount:()=>null,isaQuoteLinks:()=>[],kisConnectedAccount:kind=>kind==='irp',investmentRefreshStatus:()=>({errors}),refreshIsaQuotes:async()=>{calls.push('isa');return{ok:true}},refreshBrokerKisManually:async kinds=>{calls.push(kinds[0]);errors=[];return{ok:true,results:[{ok:true}]}},$$:()=>buttons,renderKeepingScroll:()=>calls.push('render'),toast:message=>calls.push(message)});
+ vm.runInContext(refreshSource,context);
+ const result=await vm.runInContext('refreshFailedInvestments()',context);
+ assert.equal(result.ok,true);
+ assert.deepEqual(calls.slice(0,2),['irp','render']);
+ assert.ok(!calls.includes('isa'));
+ await Promise.resolve();
  assert.equal(buttons[0].textContent,'전체 갱신');
 });
 

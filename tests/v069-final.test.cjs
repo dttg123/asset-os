@@ -6,7 +6,7 @@ const path=require('node:path');
 const root=path.join(__dirname,'..');
 const read=name=>fs.readFileSync(path.join(root,name),'utf8');
 
-test('v0.6.6 final views and export assets are shipped in the PWA shell',()=>{
+test('v0.6.7 final views and export assets are shipped in the PWA shell',()=>{
  const html=read('index.html'),worker=read('service-worker.js'),pwa=read('pwa.js'),release=read('release-v069.js'),home=read('home.js');
  const bundles=JSON.parse(read('runtime-bundles.json'));
  assert.ok(bundles.scripts['asset-core.js'].includes('export-csv.js'));
@@ -20,10 +20,10 @@ test('v0.6.6 final views and export assets are shipped in the PWA shell',()=>{
  assert.match(release,/ai-review-actions/);
  assert.match(releaseCss,/ai-account-scopes/);
  assert.match(releaseCss,/ai-review-actions/);
- assert.match(html,/dist\/asset-runtime\.js\?v=0\.6\.6&build=20260926-2/);
- assert.match(worker,/asset-os-v0\.6\.6-build20260926-2/);
- assert.match(worker,/v=0\.6\.6&build=20260926-2/);
- assert.match(pwa,/service-worker\.js\?v=0\.6\.6&build=20260926-2/);
+ assert.match(html,/dist\/asset-runtime\.js\?v=0\.6\.7&build=20260926-3/);
+ assert.match(worker,/asset-os-v0\.6\.7-build20260926-3/);
+ assert.match(worker,/v=0\.6\.7&build=20260926-3/);
+ assert.match(pwa,/service-worker\.js\?v=0\.6\.7&build=20260926-3/);
  assert.match(home,/function openAlertsCenter\(\)\{const isaReady=homeSample\(\)\.isaSource==='asset-os'/);
  assert.match(home,/homeInvestmentRefreshMarkup\(\)/);
  assert.match(home,/data-investment-refresh-all/);
