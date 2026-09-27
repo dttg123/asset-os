@@ -9,6 +9,8 @@ const brokerKisClient=(()=>{
  const qaBlocked=()=>typeof QA_MODE!=='undefined'&&QA_MODE;
  const cleanUrl=v=>String(v||'').trim().replace(/\/+$/,'');
  const cleanText=(v,max=200)=>String(v||'').trim().slice(0,max);
+ const cleanCode=v=>{const value=cleanText(v,40).toUpperCase();return/^[A-Z0-9_-]{1,40}$/.test(value)?value:''};
+ const cleanStage=v=>{const value=cleanText(v,20).toLowerCase();return['balance','orders','rights','quote'].includes(value)?value:''};
  function configure(input={}){
   const projectUrl=cleanUrl(input.projectUrl),publishableKey=cleanText(input.publishableKey,300),functionName=cleanText(input.functionName||'kis-read',80),redirectUrl=cleanText(input.redirectUrl,500);
   if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(projectUrl))return{ok:false,error:'BROKER_PROJECT_URL_INVALID'};
@@ -29,7 +31,7 @@ const brokerKisClient=(()=>{
  async function jsonRequest(url,options={}){
   if(qaBlocked())return{ok:false,error:'QA_NETWORK_BLOCKED'};
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),REQUEST_TIMEOUT_MS);try{const response=await fetch(url,{...options,signal:controller.signal}),text=await response.text();let data={};try{data=text?JSON.parse(text):{}}catch{data={error:'BROKER_RESPONSE_INVALID'}}
-   if(!response.ok)return{ok:false,status:response.status,error:cleanText(data?.message||data?.msg||data?.error||`HTTP_${response.status}`,240)};
+   if(!response.ok)return{ok:false,status:response.status,error:cleanCode(data?.error)||`HTTP_${response.status}`,stage:cleanStage(data?.stage),upstreamCode:cleanCode(data?.upstreamCode)};
    return{ok:true,status:response.status,data}
   }catch(error){return{ok:false,error:error?.name==='AbortError'?'BROKER_REQUEST_TIMEOUT':'BROKER_NETWORK_ERROR'}}finally{clearTimeout(timer)}
  }
