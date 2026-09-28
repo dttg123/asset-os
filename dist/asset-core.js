@@ -39,6 +39,50 @@ function holdScrollGuard(guard,height,targetY){if(!guard)return;clearScrollGuard
 function renderKeepingScroll(){const y=window.scrollY;render();restoreScrollY(y)}
 function stableInlineToggle(anchor,panel,guard,expand,fill){if(!anchor||!panel)return;const y=window.scrollY,beforeH=panel.hidden?0:panel.getBoundingClientRect().height,globalGuard=$('#globalScrollGuard');clearScrollGuard(guard);clearScrollGuard(globalGuard);if(expand){if(typeof fill==='function')fill();panel.hidden=false;panel.classList.add('open');restoreScrollY(y);return}panel.hidden=true;panel.classList.remove('open');requestAnimationFrame(()=>{holdScrollGuard(globalGuard||guard,beforeH,y);restoreScrollY(y)})}
 ;
+/* asset-os source: policy-review.js */
+'use strict';
+const POLICY_REVIEW_DAYS = 180, POLICY_REVIEW_SOON_DAYS = 30;
+function policyDateOrdinal(value) { const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || '')); if (!match)
+    return NaN; const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]), date = new Date(Date.UTC(year, month - 1, day)); return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? Math.floor(date.getTime() / 86400000) : NaN; }
+function policyOrdinalDate(ordinal) { return new Date(ordinal * 86400000).toISOString().slice(0, 10); }
+function policyDateAddDays(date, days) { const ordinal = policyDateOrdinal(date); return Number.isFinite(ordinal) ? policyOrdinalDate(ordinal + Math.trunc(days)) : ''; }
+function policyLocalDate(value) { if (typeof value === 'string')
+    return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : ''; const date = value instanceof Date ? value : new Date(value); if (Number.isNaN(date.getTime()))
+    return ''; return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; }
+function policyReviewState(item, at = new Date()) {
+    const today = policyLocalDate(at), verifiedAt = String(item?.verifiedAt || ''), verifiedOrdinal = policyDateOrdinal(verifiedAt), todayOrdinal = policyDateOrdinal(today);
+    if (!Number.isFinite(verifiedOrdinal) || !Number.isFinite(todayOrdinal))
+        return { code: 'needs-review', label: '확인 필요', reviewAt: '', reason: '확인일 없음', daysRemaining: null };
+    const configuredReview = String(item?.reviewAfter || item?.expiresAt || ''), ageReview = policyDateOrdinal(configuredReview) > verifiedOrdinal ? configuredReview : policyDateAddDays(verifiedAt, POLICY_REVIEW_DAYS);
+    const yearReview = `${Number(verifiedAt.slice(0, 4)) + 1}-01-01`, reviewAt = [ageReview, yearReview].filter(date => Number.isFinite(policyDateOrdinal(date))).sort()[0] || ageReview;
+    const daysRemaining = policyDateOrdinal(reviewAt) - todayOrdinal;
+    if (daysRemaining <= 0) {
+        const reason = today.slice(0, 4) !== verifiedAt.slice(0, 4) ? '연도 변경' : '확인 후 180일 경과';
+        return { code: 'needs-review', label: '확인 필요', reviewAt, reason, daysRemaining };
+    }
+    if (daysRemaining <= POLICY_REVIEW_SOON_DAYS)
+        return { code: 'review-soon', label: '재검토 예정', reviewAt, reason: '검토일 임박', daysRemaining };
+    return { code: 'ok', label: '정상', reviewAt, reason: '', daysRemaining };
+}
+;
+/* asset-os source: src/integrations/kis-normalization.js */
+'use strict';
+function kisInputRecord(value) { return value && typeof value === 'object' ? value : {}; }
+function brokerKisText(value, max = 160) { return String(value ?? '').trim().slice(0, max); }
+function brokerKisNumber(value) { const number = Number(String(value ?? '').replaceAll(',', '')); return Number.isFinite(number) ? number : 0; }
+function brokerKisNonNegative(value) { return Math.max(0, brokerKisNumber(value)); }
+function brokerKisDate(value) { const text = brokerKisText(value, 10); return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : ''; }
+function brokerKisTimestamp(value) { if (value === undefined || value === null || value === '')
+    return new Date().toISOString(); const text = brokerKisText(value, 40), date = new Date(text); return text && !Number.isNaN(date.getTime()) ? date.toISOString() : ''; }
+function brokerKisOptionalTimestamp(value) { const text = brokerKisText(value, 40), date = new Date(text); return text && !Number.isNaN(date.getTime()) ? date.toISOString() : ''; }
+function brokerKisKind(value) { return value === 'pension' || value === 'irp' ? value : ''; }
+function brokerKisSide(value) { const text = brokerKisText(value, 12).toLowerCase(); return text === 'sell' || text === '01' ? 'sell' : text === 'buy' || text === '02' ? 'buy' : ''; }
+function brokerKisNormalizeHolding(input) { const row = kisInputRecord(input); return { productCode: brokerKisText(row.productCode, 80), productName: brokerKisText(row.productName, 160), quantity: brokerKisNonNegative(row.quantity), avgPrice: brokerKisNonNegative(row.avgPrice), currentPrice: brokerKisNonNegative(row.currentPrice), marketValue: brokerKisNonNegative(row.marketValue), profitLoss: brokerKisNumber(row.profitLoss) }; }
+function brokerKisNormalizeCashDetail(input) {
+    const source = kisInputRecord(input), optional = (key) => source[key] === null || source[key] === undefined || source[key] === '' ? null : brokerKisNonNegative(source[key]);
+    return { depositCash: optional('depositCash'), settledCash: optional('settledCash'), nextDayCash: optional('nextDayCash'), d2Cash: optional('d2Cash'), todayBuyAmount: optional('todayBuyAmount'), todaySellAmount: optional('todaySellAmount'), availableCash: optional('availableCash') };
+}
+;
 /* asset-os source: broker-kis.js */
 'use strict';
 
@@ -49,13 +93,6 @@ const KIS_HISTORY_STATUSES=new Set(['idle','running','paused','complete']);
 function brokerKisEmptyStore(){
  return{version:KIS_BROKER_STORE_VERSION,connections:{pension:{accountId:'',lastSyncAt:'',lastCompleteSyncAt:'',lastBalanceAt:'',lastOrdersAt:'',lastRightsAt:'',orderSyncThrough:'',lastError:''},irp:{accountId:'',lastSyncAt:'',lastCompleteSyncAt:'',lastBalanceAt:'',lastOrdersAt:'',lastRightsAt:'',orderSyncThrough:'',lastError:''}},history:{pension:brokerKisEmptyHistory('pension'),irp:brokerKisEmptyHistory('irp')},orders:[],balanceSnapshots:[],rights:[],instrumentLinks:[],matches:[]}
 }
-function brokerKisText(v,max=160){return String(v??'').trim().slice(0,max)}
-function brokerKisNumber(v){const n=Number(String(v??'').replaceAll(',',''));return Number.isFinite(n)?n:0}
-function brokerKisNonNegative(v){return Math.max(0,brokerKisNumber(v))}
-function brokerKisDate(v){const s=brokerKisText(v,10);return /^\d{4}-\d{2}-\d{2}$/.test(s)?s:''}
-function brokerKisTimestamp(v){if(v===undefined||v===null||v==='')return new Date().toISOString();const s=brokerKisText(v,40),d=new Date(s);return s&&!Number.isNaN(d.getTime())?d.toISOString():''}
-function brokerKisOptionalTimestamp(v){const s=brokerKisText(v,40),d=new Date(s);return s&&!Number.isNaN(d.getTime())?d.toISOString():''}
-function brokerKisKind(v){return v==='pension'||v==='irp'?v:''}
 function brokerKisNormalizeConnection(input,migrateLegacy=false){const legacy=brokerKisOptionalTimestamp(input?.lastSyncAt);return{accountId:brokerKisText(input?.accountId,100),lastSyncAt:legacy,lastCompleteSyncAt:brokerKisOptionalTimestamp(input?.lastCompleteSyncAt)||(migrateLegacy?legacy:''),lastBalanceAt:brokerKisOptionalTimestamp(input?.lastBalanceAt),lastOrdersAt:brokerKisOptionalTimestamp(input?.lastOrdersAt),lastRightsAt:brokerKisOptionalTimestamp(input?.lastRightsAt),orderSyncThrough:brokerKisDate(input?.orderSyncThrough),lastError:brokerKisText(input?.lastError,240)}}
 function brokerKisEmptyHistory(accountKind='pension'){return{accountKind:brokerKisKind(accountKind),accountId:'',startDate:'',targetDate:'',orderThrough:'',rightsThrough:'',status:'idle',lastError:'',updatedAt:'',completedAt:''}}
 function brokerKisNormalizeHistory(input,accountKind='pension'){
@@ -79,7 +116,6 @@ function brokerKisUpdateHistory(store,input={}){
 function brokerKisMarkSync(store,accountKind,accountId,fetchedAt,part=''){const target=store||brokerKisEmptyStore(),kind=brokerKisKind(accountKind),timestamp=brokerKisTimestamp(fetchedAt);if(!kind||!timestamp)return null;target.connections=target.connections||brokerKisEmptyStore().connections;const current=brokerKisNormalizeConnection(target.connections[kind]),partKey=part==='balance'?'lastBalanceAt':part==='orders'?'lastOrdersAt':part==='rights'?'lastRightsAt':'',latest=(a,b)=>!a||b>a?b:a;target.connections[kind]={...current,accountId:brokerKisText(accountId,100),lastSyncAt:latest(current.lastSyncAt,timestamp),lastError:'',...(partKey?{[partKey]:latest(current[partKey],timestamp)}:{})};return target.connections[kind]}
 function brokerKisCompleteSync(store,accountKind,accountId,completedAt=new Date().toISOString()){const timestamp=brokerKisTimestamp(completedAt),connection=brokerKisMarkSync(store,accountKind,accountId,timestamp);if(!connection)return null;connection.lastCompleteSyncAt=!connection.lastCompleteSyncAt||timestamp>connection.lastCompleteSyncAt?timestamp:connection.lastCompleteSyncAt;connection.lastError='';return connection}
 function brokerKisFailSync(store,accountKind,accountId,error,failedAt=new Date().toISOString()){const target=store||brokerKisEmptyStore(),kind=brokerKisKind(accountKind),timestamp=brokerKisTimestamp(failedAt);if(!kind||!timestamp)return null;target.connections=target.connections||brokerKisEmptyStore().connections;const current=brokerKisNormalizeConnection(target.connections[kind]);target.connections[kind]={...current,accountId:brokerKisText(accountId,100),lastError:brokerKisText(error||'SYNC_FAILED',240),lastSyncAt:current.lastSyncAt||timestamp};return target.connections[kind]}
-function brokerKisSide(v){const s=brokerKisText(v,12).toLowerCase();return s==='sell'||s==='01'?'sell':s==='buy'||s==='02'?'buy':''}
 function brokerKisKeyPart(v){return encodeURIComponent(brokerKisText(v,180))}
 function brokerKisOrderKey(row){
  return['kis',brokerKisKind(row.accountKind),row.accountId,row.orderDate,row.branchNo,row.orderNo,row.productCode,row.exchangeCode,row.side].map(brokerKisKeyPart).join('|')
@@ -121,9 +157,6 @@ function brokerKisImportOrderSnapshots(store,rows,accountKind,accountId,fetchedA
  const connection=brokerKisMarkSync(target,kind,accountId,timestamp,'orders'),through=brokerKisDate(orderSyncThrough);if(connection&&through&&(!connection.orderSyncThrough||through>connection.orderSyncThrough))connection.orderSyncThrough=through;
  return{inserted,updated,skipped,rejected,total:list.length}
 }
-function brokerKisNormalizeHolding(row){
- return{productCode:brokerKisText(row?.productCode,80),productName:brokerKisText(row?.productName,160),quantity:brokerKisNonNegative(row?.quantity),avgPrice:brokerKisNonNegative(row?.avgPrice),currentPrice:brokerKisNonNegative(row?.currentPrice),marketValue:brokerKisNonNegative(row?.marketValue),profitLoss:brokerKisNumber(row?.profitLoss)}
-}
 function brokerKisRightKey(row){return['kis-right',brokerKisKind(row.accountKind),row.accountId,row.rightTypeCode,row.baseDate,row.cashPaymentDate,row.productCode].map(brokerKisKeyPart).join('|')}
 function brokerKisNormalizeRight(row,accountKind='',accountId='',fetchedAt=''){
  const next={source:'kis',accountKind:brokerKisKind(accountKind||row?.accountKind),accountId:brokerKisText(accountId||row?.accountId,100),rightTypeCode:brokerKisText(row?.rightTypeCode,30),baseDate:brokerKisDate(row?.baseDate),cashPaymentDate:brokerKisDate(row?.cashPaymentDate),productCode:brokerKisText(row?.productCode,80),productName:brokerKisText(row?.productName,160),rightTypeName:brokerKisText(row?.rightTypeName||row?.eventType,100),instrumentType:brokerKisText(row?.instrumentType||row?.productType,40),amount:brokerKisNonNegative(row?.amount),tax:brokerKisNonNegative(row?.tax),classification:'unclassified_cash_right',fetchedAt:brokerKisTimestamp(fetchedAt||row?.fetchedAt),revisions:[]};next.netAmount=Math.max(0,next.amount-next.tax);next.rightKey=brokerKisRightKey(next);return next
@@ -161,7 +194,6 @@ function brokerKisImportRights(store,rows,accountKind,accountId,fetchedAt=new Da
  if(current.amount===next.amount&&current.tax===next.tax){Object.assign(current,{fetchedAt:next.fetchedAt,rightTypeName:next.rightTypeName,instrumentType:next.instrumentType,productName:next.productName});if(metadataChanged)updated++;else skipped++;continue}const revisions=Array.isArray(current.revisions)?current.revisions:[];revisions.push({changedAt:next.fetchedAt,before:{amount:current.amount,tax:current.tax,netAmount:current.netAmount},after:{amount:next.amount,tax:next.tax,netAmount:next.netAmount}});Object.assign(current,next,{revisions});updated++}
  list.sort((a,b)=>(a.cashPaymentDate||a.baseDate).localeCompare(b.cashPaymentDate||b.baseDate)||a.rightKey.localeCompare(b.rightKey));brokerKisMarkSync(target,kind,accountId,timestamp,'rights');return{inserted,updated,skipped,rejected,total:list.length}
 }
-function brokerKisNormalizeCashDetail(input){const src=input&&typeof input==='object'?input:{},optional=key=>src[key]===null||src[key]===undefined||src[key]===''?null:brokerKisNonNegative(src[key]);return{depositCash:optional('depositCash'),settledCash:optional('settledCash'),nextDayCash:optional('nextDayCash'),d2Cash:optional('d2Cash'),todayBuyAmount:optional('todayBuyAmount'),todaySellAmount:optional('todaySellAmount'),availableCash:optional('availableCash')}}
 function brokerKisNormalizeBalanceSnapshot(input,accountKind='',accountId='',fetchedAt=''){
  const holdings=(Array.isArray(input?.holdings)?input.holdings:[]).map(brokerKisNormalizeHolding).filter(x=>x.productCode&&x.quantity>=0),kind=brokerKisKind(accountKind||input?.accountKind),date=brokerKisDate(input?.date)||brokerKisTimestamp(fetchedAt||input?.fetchedAt).slice(0,10);
  return{id:['kis-balance',kind,accountId,date].map(brokerKisKeyPart).join('|'),source:'kis',summaryOnly:input?.summaryOnly===true,authoritative:input?.authoritative===true,accountKind:kind,accountId:brokerKisText(accountId||input?.accountId,100),date,fetchedAt:brokerKisTimestamp(fetchedAt||input?.fetchedAt),cash:brokerKisNonNegative(input?.cash),cashDetail:brokerKisNormalizeCashDetail(input?.cashDetail),securitiesValue:brokerKisNonNegative(input?.securitiesValue),totalValue:brokerKisNonNegative(input?.totalValue),holdings}
@@ -210,72 +242,148 @@ function normalizeBrokerKis(input){
 ;
 /* asset-os source: broker-kis-client.js */
 'use strict';
-
-const brokerKisClient=(()=>{
- const REQUEST_TIMEOUT_MS=20000;
- let config={projectUrl:'',publishableKey:'',functionName:'kis-read',redirectUrl:''};
- let session={accessToken:'',expiresAt:0};
- let authClient=null;
- let authSubscription=null;
- const qaBlocked=()=>typeof QA_MODE!=='undefined'&&QA_MODE;
- const cleanUrl=v=>String(v||'').trim().replace(/\/+$/,'');
- const cleanText=(v,max=200)=>String(v||'').trim().slice(0,max);
- const cleanCode=v=>{const value=cleanText(v,40).toUpperCase();return/^[A-Z0-9_-]{1,40}$/.test(value)?value:''};
- const cleanStage=v=>{const value=cleanText(v,20).toLowerCase();return['balance','orders','rights','quote'].includes(value)?value:''};
- function configure(input={}){
-  const projectUrl=cleanUrl(input.projectUrl),publishableKey=cleanText(input.publishableKey,300),functionName=cleanText(input.functionName||'kis-read',80),redirectUrl=cleanText(input.redirectUrl,500);
-  if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(projectUrl))return{ok:false,error:'BROKER_PROJECT_URL_INVALID'};
-  if(!publishableKey)return{ok:false,error:'BROKER_PUBLISHABLE_KEY_REQUIRED'};
-  if(redirectUrl&&!/^https:\/\/[a-z0-9.-]+(?:\/[^?#]*)?$/i.test(redirectUrl))return{ok:false,error:'BROKER_REDIRECT_URL_INVALID'};
-  config={projectUrl,publishableKey,functionName,redirectUrl};
-  if(qaBlocked())return{ok:true,qa:true};
-  if(authSubscription?.unsubscribe)authSubscription.unsubscribe();
-  authClient=window.supabase?.createClient?window.supabase.createClient(projectUrl,publishableKey,{auth:{autoRefreshToken:true,persistSession:true,detectSessionInUrl:false,storageKey:'asset-os-kis-auth'}}):null;
-  if(authClient){const listener=authClient.auth.onAuthStateChange((_event,next)=>adoptSession(next));authSubscription=listener?.data?.subscription||null;authClient.auth.getSession().then(({data})=>adoptSession(data?.session)).catch(()=>{})}
-  return{ok:true}
- }
- function configured(){return !!config.projectUrl&&!!config.publishableKey}
- function authState(){return{configured:configured(),signedIn:!!session.accessToken&&session.expiresAt>Date.now(),expiresAt:session.expiresAt||0}}
- function adoptSession(input){if(qaBlocked())return{ok:false,error:'QA_NETWORK_BLOCKED'};const accessToken=cleanText(input?.access_token,6000),expiresAt=Math.max(0,Number(input?.expires_at)||0)*1000;if(!accessToken)return{ok:false,error:'AUTH_SESSION_MISSING'};session={accessToken,expiresAt:expiresAt||Date.now()+Math.max(0,Number(input?.expires_in)||0)*1000};return{ok:true,expiresAt:session.expiresAt}}
- function accessTokenMatchesProject(token){try{const part=String(token||'').split('.')[1]||'',padded=part.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(part.length/4)*4,'='),payload=JSON.parse(atob(padded)),issuer=new URL(String(payload.iss||'')),provider=String(payload.app_metadata?.provider||''),methods=(Array.isArray(payload.amr)?payload.amr:[]).map(x=>String(x?.method||'').toLowerCase()),oauthSession=methods.some(x=>x==='oauth'||x.startsWith('oauth_provider/'));return issuer.origin===config.projectUrl&&provider==='email'&&!oauthSession}catch{return false}}
- function signOut(){session={accessToken:'',expiresAt:0};authClient?.auth.signOut({scope:'local'}).catch(()=>{});return{ok:true}}
- async function jsonRequest(url,options={}){
-  if(qaBlocked())return{ok:false,error:'QA_NETWORK_BLOCKED'};
-  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),REQUEST_TIMEOUT_MS);try{const response=await fetch(url,{...options,signal:controller.signal}),text=await response.text();let data={};try{data=text?JSON.parse(text):{}}catch{data={error:'BROKER_RESPONSE_INVALID'}}
-   if(!response.ok)return{ok:false,status:response.status,error:cleanCode(data?.error)||`HTTP_${response.status}`,stage:cleanStage(data?.stage),upstreamCode:cleanCode(data?.upstreamCode)};
-   return{ok:true,status:response.status,data}
-  }catch(error){return{ok:false,error:error?.name==='AbortError'?'BROKER_REQUEST_TIMEOUT':'BROKER_NETWORK_ERROR'}}finally{clearTimeout(timer)}
- }
- function publicHeaders(extra={}){return{'content-type':'application/json',apikey:config.publishableKey,...extra}}
- async function requestOtp(email){
-  if(qaBlocked())return{ok:false,error:'QA_NETWORK_BLOCKED'};
-  if(!configured())return{ok:false,error:'BROKER_NOT_CONFIGURED'};const value=cleanText(email,240);if(!/^\S+@\S+\.\S+$/.test(value))return{ok:false,error:'EMAIL_INVALID'};
-  if(authClient){const {error}=await authClient.auth.signInWithOtp({email:value,options:{shouldCreateUser:false,emailRedirectTo:config.redirectUrl||undefined}});return error?{ok:false,status:Number(error.status)||0,error:cleanText(error.message||error.code||'AUTH_LINK_FAILED',240)}:{ok:true}}
-  const redirect=config.redirectUrl?`?redirect_to=${encodeURIComponent(config.redirectUrl)}`:'';
-  const result=await jsonRequest(`${config.projectUrl}/auth/v1/otp${redirect}`,{method:'POST',headers:publicHeaders(),body:JSON.stringify({email:value,create_user:false})});return result.ok?{ok:true}:{ok:false,status:result.status,error:result.error}
- }
- function consumeRedirect(){
-  if(qaBlocked())return{ok:false,error:'QA_NETWORK_BLOCKED'};
-  if(typeof location==='undefined')return{ok:false,error:'BROKER_REDIRECT_UNAVAILABLE'};const raw=String(location.hash||'');if(!raw.includes('access_token='))return{ok:false,error:'BROKER_REDIRECT_EMPTY'};
-  const params=new URLSearchParams(raw.replace(/^#/,'')),accessToken=cleanText(params.get('access_token'),6000),refreshToken=cleanText(params.get('refresh_token'),6000),expiresIn=Math.max(0,Number(params.get('expires_in'))||0);if(!accessToken)return{ok:false,error:'AUTH_SESSION_MISSING'};if(!accessTokenMatchesProject(accessToken))return{ok:false,error:'BROKER_REDIRECT_FOREIGN'};
-  session={accessToken,expiresAt:Date.now()+expiresIn*1000};if(authClient&&refreshToken)authClient.auth.setSession({access_token:accessToken,refresh_token:refreshToken}).catch(()=>{});history.replaceState(null,'',`${location.pathname}${location.search}#/home`);return{ok:true,expiresAt:session.expiresAt}
- }
- async function invoke(action,body={}){
-  if(qaBlocked())return{ok:false,error:'QA_NETWORK_BLOCKED'};
-  if(!configured())return{ok:false,error:'BROKER_NOT_CONFIGURED'};if(!authState().signedIn)return{ok:false,error:'BROKER_AUTH_REQUIRED'};
-  const allowed=new Set(['balance','orders','rights','quote']),name=cleanText(action,30);if(!allowed.has(name))return{ok:false,error:'BROKER_ACTION_INVALID'};
-  const payload=name==='quote'?{action:name,quotes:Array.isArray(body.quotes)?body.quotes:[]}:{action:name,accountKind:body.accountKind,from:body.from,to:body.to};
-  const result=await jsonRequest(`${config.projectUrl}/functions/v1/${config.functionName}`,{method:'POST',headers:publicHeaders({authorization:`Bearer ${session.accessToken}`}),body:JSON.stringify(payload)});
-  if(!result.ok)return result;const data=result.data;if(!data||data.ok!==true||data.action!==name||(name!=='quote'&&data.accountKind!==body.accountKind)||(name==='quote'&&!Array.isArray(data.quotes)))return{ok:false,error:'BROKER_RESPONSE_CONTRACT_INVALID'};return{ok:true,data}
- }
- async function sync(action,accountKind,localAccountId,range={}){
-  const result=await invoke(action,{accountKind,from:range.from,to:range.to});if(!result.ok)return result;const data=result.data,fetchedAt=data.fetchedAt||new Date().toISOString(),api=((typeof assetOsRuntimeApi!=="undefined"&&assetOsRuntimeApi)||window.__assetOS)?.brokerKis;if(!api)return{ok:false,error:'BROKER_STORE_UNAVAILABLE'};
-  if(action==='balance')return api.importBalance(data.balance||{},accountKind,localAccountId,fetchedAt);
-  if(action==='orders')return api.importOrders(data.orders||[],accountKind,localAccountId,fetchedAt,range.to||'');
-  return api.importRights(data.rights||[],accountKind,localAccountId,fetchedAt)
- }
- async function quotes(items){return invoke('quote',{quotes:items})}
- return{configure,authState,adoptSession,signOut,requestOtp,consumeRedirect,invoke,sync,quotes}
+const brokerKisClient = (() => {
+    const REQUEST_TIMEOUT_MS = 20000;
+    let config = { projectUrl: '', publishableKey: '', functionName: 'kis-read', redirectUrl: '' };
+    let session = { accessToken: '', expiresAt: 0 };
+    let authClient = null;
+    let authSubscription = null;
+    const record = (value) => value && typeof value === 'object' ? value : {};
+    const qaBlocked = () => typeof QA_MODE !== 'undefined' && QA_MODE;
+    const cleanUrl = (value) => String(value || '').trim().replace(/\/+$/, '');
+    const cleanText = (value, max = 200) => String(value || '').trim().slice(0, max);
+    const cleanCode = (value) => { const text = cleanText(value, 40).toUpperCase(); return /^[A-Z0-9_-]{1,40}$/.test(text) ? text : ''; };
+    const cleanStage = (value) => { const text = cleanText(value, 20).toLowerCase(); return ['balance', 'orders', 'rights', 'quote'].includes(text) ? text : ''; };
+    function configure(input = {}) {
+        const projectUrl = cleanUrl(input.projectUrl), publishableKey = cleanText(input.publishableKey, 300), functionName = cleanText(input.functionName || 'kis-read', 80), redirectUrl = cleanText(input.redirectUrl, 500);
+        if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(projectUrl))
+            return { ok: false, error: 'BROKER_PROJECT_URL_INVALID' };
+        if (!publishableKey)
+            return { ok: false, error: 'BROKER_PUBLISHABLE_KEY_REQUIRED' };
+        if (redirectUrl && !/^https:\/\/[a-z0-9.-]+(?:\/[^?#]*)?$/i.test(redirectUrl))
+            return { ok: false, error: 'BROKER_REDIRECT_URL_INVALID' };
+        config = { projectUrl, publishableKey, functionName, redirectUrl };
+        if (qaBlocked())
+            return { ok: true, qa: true };
+        if (authSubscription?.unsubscribe)
+            authSubscription.unsubscribe();
+        const browserWindow = window;
+        authClient = browserWindow.supabase?.createClient ? browserWindow.supabase.createClient(projectUrl, publishableKey, { auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: false, storageKey: 'asset-os-kis-auth' } }) : null;
+        if (authClient) {
+            const listener = authClient.auth.onAuthStateChange((_event, next) => adoptSession(next));
+            authSubscription = listener?.data?.subscription || null;
+            authClient.auth.getSession().then(({ data }) => adoptSession(data?.session)).catch(() => { });
+        }
+        return { ok: true };
+    }
+    function configured() { return !!config.projectUrl && !!config.publishableKey; }
+    function authState() { return { configured: configured(), signedIn: !!session.accessToken && session.expiresAt > Date.now(), expiresAt: session.expiresAt || 0 }; }
+    function adoptSession(input) { if (qaBlocked())
+        return { ok: false, error: 'QA_NETWORK_BLOCKED' }; const source = record(input), accessToken = cleanText(source.access_token, 6000), expiresAt = Math.max(0, Number(source.expires_at) || 0) * 1000; if (!accessToken)
+        return { ok: false, error: 'AUTH_SESSION_MISSING' }; session = { accessToken, expiresAt: expiresAt || Date.now() + Math.max(0, Number(source.expires_in) || 0) * 1000 }; return { ok: true, expiresAt: session.expiresAt }; }
+    function accessTokenMatchesProject(token) { try {
+        const part = String(token || '').split('.')[1] || '', padded = part.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(part.length / 4) * 4, '='), payload = record(JSON.parse(atob(padded))), issuer = new URL(String(payload.iss || '')), metadata = record(payload.app_metadata), provider = String(metadata.provider || ''), methods = (Array.isArray(payload.amr) ? payload.amr : []).map(item => String(record(item).method || '').toLowerCase()), oauthSession = methods.some(method => method === 'oauth' || method.startsWith('oauth_provider/'));
+        return issuer.origin === config.projectUrl && provider === 'email' && !oauthSession;
+    }
+    catch {
+        return false;
+    } }
+    function signOut() { session = { accessToken: '', expiresAt: 0 }; authClient?.auth.signOut({ scope: 'local' }).catch(() => { }); return { ok: true }; }
+    async function jsonRequest(url, options = {}) {
+        if (qaBlocked())
+            return { ok: false, error: 'QA_NETWORK_BLOCKED' };
+        const controller = new AbortController(), timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+        try {
+            const response = await fetch(url, { ...options, signal: controller.signal }), text = await response.text();
+            let data = {};
+            try {
+                data = text ? JSON.parse(text) : {};
+            }
+            catch {
+                data = { error: 'BROKER_RESPONSE_INVALID' };
+            }
+            const body = record(data);
+            if (!response.ok)
+                return { ok: false, status: response.status, error: cleanCode(body.error) || `HTTP_${response.status}`, stage: cleanStage(body.stage), upstreamCode: cleanCode(body.upstreamCode) };
+            return { ok: true, status: response.status, data };
+        }
+        catch (error) {
+            return { ok: false, error: record(error).name === 'AbortError' ? 'BROKER_REQUEST_TIMEOUT' : 'BROKER_NETWORK_ERROR' };
+        }
+        finally {
+            clearTimeout(timer);
+        }
+    }
+    function publicHeaders(extra = {}) { return { 'content-type': 'application/json', apikey: config.publishableKey, ...extra }; }
+    async function requestOtp(email) {
+        if (qaBlocked())
+            return { ok: false, error: 'QA_NETWORK_BLOCKED' };
+        if (!configured())
+            return { ok: false, error: 'BROKER_NOT_CONFIGURED' };
+        const value = cleanText(email, 240);
+        if (!/^\S+@\S+\.\S+$/.test(value))
+            return { ok: false, error: 'EMAIL_INVALID' };
+        if (authClient) {
+            const { error } = await authClient.auth.signInWithOtp({ email: value, options: { shouldCreateUser: false, emailRedirectTo: config.redirectUrl || undefined } }), detail = record(error);
+            return error ? { ok: false, status: Number(detail.status) || 0, error: cleanText(detail.message || detail.code || 'AUTH_LINK_FAILED', 240) } : { ok: true };
+        }
+        const redirect = config.redirectUrl ? `?redirect_to=${encodeURIComponent(config.redirectUrl)}` : '';
+        const result = await jsonRequest(`${config.projectUrl}/auth/v1/otp${redirect}`, { method: 'POST', headers: publicHeaders(), body: JSON.stringify({ email: value, create_user: false }) });
+        return result.ok ? { ok: true } : { ok: false, status: result.status, error: result.error };
+    }
+    function consumeRedirect() {
+        if (qaBlocked())
+            return { ok: false, error: 'QA_NETWORK_BLOCKED' };
+        if (typeof location === 'undefined')
+            return { ok: false, error: 'BROKER_REDIRECT_UNAVAILABLE' };
+        const raw = String(location.hash || '');
+        if (!raw.includes('access_token='))
+            return { ok: false, error: 'BROKER_REDIRECT_EMPTY' };
+        const params = new URLSearchParams(raw.replace(/^#/, '')), accessToken = cleanText(params.get('access_token'), 6000), refreshToken = cleanText(params.get('refresh_token'), 6000), expiresIn = Math.max(0, Number(params.get('expires_in')) || 0);
+        if (!accessToken)
+            return { ok: false, error: 'AUTH_SESSION_MISSING' };
+        if (!accessTokenMatchesProject(accessToken))
+            return { ok: false, error: 'BROKER_REDIRECT_FOREIGN' };
+        session = { accessToken, expiresAt: Date.now() + expiresIn * 1000 };
+        if (authClient && refreshToken)
+            authClient.auth.setSession({ access_token: accessToken, refresh_token: refreshToken }).catch(() => { });
+        history.replaceState(null, '', `${location.pathname}${location.search}#/home`);
+        return { ok: true, expiresAt: session.expiresAt };
+    }
+    async function invoke(action, body = {}) {
+        if (qaBlocked())
+            return { ok: false, error: 'QA_NETWORK_BLOCKED' };
+        if (!configured())
+            return { ok: false, error: 'BROKER_NOT_CONFIGURED' };
+        if (!authState().signedIn)
+            return { ok: false, error: 'BROKER_AUTH_REQUIRED' };
+        const allowed = new Set(['balance', 'orders', 'rights', 'quote']), name = cleanText(action, 30);
+        if (!allowed.has(name))
+            return { ok: false, error: 'BROKER_ACTION_INVALID' };
+        const payload = name === 'quote' ? { action: name, quotes: Array.isArray(body.quotes) ? body.quotes : [] } : { action: name, accountKind: body.accountKind, from: body.from, to: body.to };
+        const result = await jsonRequest(`${config.projectUrl}/functions/v1/${config.functionName}`, { method: 'POST', headers: publicHeaders({ authorization: `Bearer ${session.accessToken}` }), body: JSON.stringify(payload) });
+        if (!result.ok)
+            return result;
+        const data = record(result.data);
+        if (data.ok !== true || data.action !== name || (name !== 'quote' && data.accountKind !== body.accountKind) || (name === 'quote' && !Array.isArray(data.quotes)))
+            return { ok: false, error: 'BROKER_RESPONSE_CONTRACT_INVALID' };
+        return { ok: true, data };
+    }
+    async function sync(action, accountKind, localAccountId, range = {}) {
+        const result = await invoke(action, { accountKind, from: range.from, to: range.to });
+        if (!result.ok)
+            return result;
+        const data = record(result.data), fetchedAt = data.fetchedAt || new Date().toISOString(), runtime = (typeof assetOsRuntimeApi !== 'undefined' && assetOsRuntimeApi) || window.__assetOS, api = runtime?.brokerKis;
+        if (!api)
+            return { ok: false, error: 'BROKER_STORE_UNAVAILABLE' };
+        if (action === 'balance')
+            return api.importBalance(data.balance || {}, accountKind, localAccountId, fetchedAt);
+        if (action === 'orders')
+            return api.importOrders(data.orders || [], accountKind, localAccountId, fetchedAt, range.to || '');
+        return api.importRights(data.rights || [], accountKind, localAccountId, fetchedAt);
+    }
+    async function quotes(items) { return invoke('quote', { quotes: items }); }
+    return { configure, authState, adoptSession, signOut, requestOtp, consumeRedirect, invoke, sync, quotes };
 })();
 ;
 /* asset-os source: data-defaults.js */
@@ -284,9 +392,9 @@ function buildIntegratedSeed(){return {mode:'live',label:'내 통합 거래기�
 const seed={
  settings:{theme:'light',accent:'blue',fab:false,haptics:true,selectedAccountId:'',txFilter:'all',compositionGroup:'',compositionFocus:'',dividendCompositionFocus:'',dividendPeriod:'month',dividendKey:'',policyTab:'isa',pensionGoalExpanded:false,pensionAssetScope:'all',pensionAssetLens:'assetClass',pensionAssetFocus:'',pensionTaxProfile:{},irpRiskClassifications:{},integratedMonth:'',integratedLedgerFilter:'all',monthlyLivingBudget:0,backupV04:{phoneEnabled:false,lastPhoneBackupAt:'',lastReleaseVersion:'',phonePermission:'unknown'}},
  policies:{
-  isa:{activePolicyId:'isa-policy-2026-official',versions:[{id:'isa-policy-2026-official',kind:'isa',name:'현행 ISA 2026',version:'2026.09',status:'current',sourceLabel:'금융회사 공식 ISA 안내',verifiedAt:'2026-09-24',userEdited:false,policySetId:'isa-policy-set-current',concurrentAccountLimit:1,coexistWithOtherIsa:false,annualLimitScope:'person',generalExemption:2000000,lowIncomeExemption:4000000,farmerExemption:4000000,taxRate:.099,annualLimit:20000000,totalContributionLimit:100000000,carryoverEnabled:true,withdrawalRestoresLimit:false,mandatoryYears:3,transferWindowDays:60,transferDeductionRate:.10,transferDeductionMax:3000000,taxCreditRate:.132,effectiveFrom:'2026-01-01'}]},
-  pension:{activePolicyId:'pension-policy-2026-official',versions:[{id:'pension-policy-2026-official',kind:'pension',name:'연금저축 제도 2026',version:'2026.08',status:'current',sourceLabel:'국가법령정보센터·국세청',verifiedAt:'2026-08-18',userEdited:false,annualContributionLimit:18000000,annualTaxCreditLimit:6000000,combinedTaxCreditLimit:9000000,taxCreditRate:.132,lowIncomeTaxCreditRate:.165,effectiveFrom:'2026-01-01'}]},
-  irp:{activePolicyId:'irp-policy-2026-official',versions:[{id:'irp-policy-2026-official',kind:'irp',name:'IRP 제도 2026',version:'2026.07',status:'current',sourceLabel:'법제처·국세청',verifiedAt:'2026-07-30',userEdited:false,combinedTaxCreditLimit:9000000,taxCreditRate:.132,lowIncomeTaxCreditRate:.165,riskyAssetLimit:.70,effectiveFrom:'2026-01-01'}]}
+  isa:{activePolicyId:'isa-policy-2026-official',versions:[{id:'isa-policy-2026-official',kind:'isa',name:'현행 ISA 2026',version:'2026.09',status:'current',sourceLabel:'금융회사 공식 ISA 안내·국가법령정보센터',sourceUrl:'https://www.law.go.kr/법령/조세특례제한법',verifiedAt:'2026-09-24',reviewAfter:'2027-03-23',userEdited:false,policySetId:'isa-policy-set-current',concurrentAccountLimit:1,coexistWithOtherIsa:false,annualLimitScope:'person',generalExemption:2000000,lowIncomeExemption:4000000,farmerExemption:4000000,taxRate:.099,annualLimit:20000000,totalContributionLimit:100000000,carryoverEnabled:true,withdrawalRestoresLimit:false,mandatoryYears:3,transferWindowDays:60,transferDeductionRate:.10,transferDeductionMax:3000000,taxCreditRate:.132,effectiveFrom:'2026-01-01'}]},
+  pension:{activePolicyId:'pension-policy-2026-official',versions:[{id:'pension-policy-2026-official',kind:'pension',name:'연금저축 제도 2026',version:'2026.08',status:'current',sourceLabel:'국가법령정보센터·국세청',sourceUrl:'https://www.law.go.kr/법령/소득세법',verifiedAt:'2026-08-18',reviewAfter:'2027-02-14',userEdited:false,annualContributionLimit:18000000,annualTaxCreditLimit:6000000,combinedTaxCreditLimit:9000000,taxCreditRate:.132,lowIncomeTaxCreditRate:.165,effectiveFrom:'2026-01-01'}]},
+  irp:{activePolicyId:'irp-policy-2026-official',versions:[{id:'irp-policy-2026-official',kind:'irp',name:'IRP 제도 2026',version:'2026.07',status:'current',sourceLabel:'국가법령정보센터·국세청',sourceUrl:'https://www.law.go.kr/법령/근로자퇴직급여보장법',verifiedAt:'2026-07-30',reviewAfter:'2027-01-26',userEdited:false,combinedTaxCreditLimit:9000000,taxCreditRate:.132,lowIncomeTaxCreditRate:.165,riskyAssetLimit:.70,effectiveFrom:'2026-01-01'}]}
  },
  accounts:[],
  pension:{
@@ -298,6 +406,76 @@ const seed={
  },
  financialProducts:{items:[],events:[]},financeSchedules:{items:[]},insurance:{policies:[]},sourceArchives:{records:[]},moduleVerification:{isa:false,pension:false,irp:false},brokerKis:brokerKisEmptyStore(),integrated:buildIntegratedSeed()
 };
+;
+/* asset-os source: src/domain/integrated-replay.js */
+'use strict';
+function compareIntegratedTransactions(a, b) {
+    const date = String(a.date || '').localeCompare(String(b.date || ''));
+    if (date)
+        return date;
+    const left = Number.isFinite(Number(a.sequence)) ? Number(a.sequence) : null, right = Number.isFinite(Number(b.sequence)) ? Number(b.sequence) : null;
+    if (left !== null && right !== null && left !== right)
+        return left - right;
+    const leftCreated = String(a.createdAt || ''), rightCreated = String(b.createdAt || '');
+    if (leftCreated && rightCreated && leftCreated !== rightCreated)
+        return leftCreated.localeCompare(rightCreated);
+    return 0;
+}
+function calculateIntegratedReplay(store, rows) {
+    const source = store || {}, assets = new Map((source.accounts || []).map(account => [account.id, 0])), liabilities = new Map((source.liabilities || []).map(liability => [liability.id, 0])), minAssets = new Map((source.accounts || []).map(account => [account.id, 0])), minLiabilities = new Map((source.liabilities || []).map(liability => [liability.id, 0])), ordered = [...(rows || [])].sort(compareIntegratedTransactions);
+    const addAsset = (id, delta) => { if (assets.has(id)) {
+        const next = (assets.get(id) || 0) + Number(delta || 0);
+        assets.set(id, next);
+        minAssets.set(id, Math.min(minAssets.get(id) || 0, next));
+    } };
+    const addLiability = (id, delta) => { if (liabilities.has(id)) {
+        const next = (liabilities.get(id) || 0) + Number(delta || 0);
+        liabilities.set(id, next);
+        minLiabilities.set(id, Math.min(minLiabilities.get(id) || 0, next));
+    } };
+    for (const transaction of ordered) {
+        const amount = Number(transaction.amount) || 0;
+        if (!amount && transaction.type !== 'adjustment')
+            continue;
+        switch (transaction.type) {
+            case 'openingAsset':
+                addAsset(transaction.toAccountId, amount);
+                break;
+            case 'openingLiability':
+                addLiability(transaction.liabilityId, amount);
+                break;
+            case 'refund':
+            case 'externalIncome':
+            case 'externalAssetIn':
+                addAsset(transaction.toAccountId, amount);
+                break;
+            case 'expense':
+            case 'debtInterest':
+            case 'externalWithdrawal':
+            case 'externalAssetOut':
+                addAsset(transaction.fromAccountId, -amount);
+                break;
+            case 'debtPrincipal':
+                addAsset(transaction.fromAccountId, -amount);
+                addLiability(transaction.liabilityId, -amount);
+                break;
+            case 'externalDebtPrincipal':
+                addLiability(transaction.liabilityId, -amount);
+                break;
+            case 'debtInterestExternal':
+            case 'externalExpense': break;
+            case 'internalTransfer':
+                addAsset(transaction.fromAccountId, -amount);
+                addAsset(transaction.toAccountId, amount);
+                break;
+            case 'adjustment':
+                addAsset(transaction.accountId, Number(transaction.delta) || 0);
+                break;
+        }
+    }
+    const totalAssets = [...assets.values()].reduce((left, right) => left + right, 0), totalDebt = [...liabilities.values()].reduce((left, right) => left + right, 0);
+    return { assets: Object.fromEntries(assets), liabilities: Object.fromEntries(liabilities), minAssets: Object.fromEntries(minAssets), minLiabilities: Object.fromEntries(minLiabilities), totalAssets, totalDebt, netAssets: totalAssets - totalDebt };
+}
 ;
 /* asset-os source: integrated-ledger-engine.js */
 'use strict';
@@ -328,7 +506,7 @@ function normalizeIntegrated(input){
 function integratedStore(){return state.integrated||seed.integrated}
 function integratedManualLedger(){return [...(integratedStore().ledger||[])]}
 function integratedLinkedLedger(){return []}
-function integratedTxOrder(a,b){const d=String(a.date||'').localeCompare(String(b.date||''));if(d)return d;const sa=Number.isFinite(Number(a.sequence))?Number(a.sequence):null,sb=Number.isFinite(Number(b.sequence))?Number(b.sequence):null;if(sa!==null&&sb!==null&&sa!==sb)return sa-sb;const ca=String(a.createdAt||''),cb=String(b.createdAt||'');if(ca&&cb&&ca!==cb)return ca.localeCompare(cb);return 0}
+function integratedTxOrder(a,b){return compareIntegratedTransactions(a,b)}
 function nextIntegratedSequence(date){let max=0;for(const t of integratedStore().ledger||[])if(String(t.date||'')===String(date)&&Number.isFinite(Number(t.sequence)))max=Math.max(max,Number(t.sequence));return max+1}
 function isQaIntegratedFixture(t){return !!t?.meta?.qaFixture}
 function integratedOperationalLedger(){return [...integratedManualLedger().filter(t=>!isQaIntegratedFixture(t)),...integratedLinkedLedger().filter(t=>!isQaIntegratedFixture(t))].sort(integratedTxOrder)}
@@ -339,10 +517,8 @@ function integratedBalanceLedger(){const start=String(integratedStore().startedA
 function integratedMonthKey(v){return String(v||'').slice(0,7)}
 function integratedLatestMonth(){const rows=integratedLedger().filter(t=>!['openingAsset','openingLiability'].includes(t.type));return rows.length?integratedMonthKey(rows[rows.length-1].date):localYmd().slice(0,7)}
 function integratedReplay(rows=null,store=integratedStore()){
- const source=store||integratedStore(),useRows=rows===null?integratedBalanceLedger():rows,assets=new Map((source.accounts||[]).map(a=>[a.id,0])),liabilities=new Map((source.liabilities||[]).map(x=>[x.id,0])),minAssets=new Map((source.accounts||[]).map(a=>[a.id,0])),minLiabilities=new Map((source.liabilities||[]).map(x=>[x.id,0])),ordered=[...(useRows||[])].sort(integratedTxOrder);
- const addAsset=(id,delta)=>{if(assets.has(id)){const next=(assets.get(id)||0)+Number(delta||0);assets.set(id,next);minAssets.set(id,Math.min(minAssets.get(id)||0,next))}},addLiability=(id,delta)=>{if(liabilities.has(id)){const next=(liabilities.get(id)||0)+Number(delta||0);liabilities.set(id,next);minLiabilities.set(id,Math.min(minLiabilities.get(id)||0,next))}};
- for(const t of ordered){const a=Number(t.amount)||0;if(!a&&t.type!=='adjustment')continue;switch(t.type){case'openingAsset':addAsset(t.toAccountId,a);break;case'openingLiability':addLiability(t.liabilityId,a);break;case'refund':case'externalIncome':case'externalAssetIn':addAsset(t.toAccountId,a);break;case'expense':case'debtInterest':case'externalWithdrawal':case'externalAssetOut':addAsset(t.fromAccountId,-a);break;case'debtPrincipal':addAsset(t.fromAccountId,-a);addLiability(t.liabilityId,-a);break;case'externalDebtPrincipal':addLiability(t.liabilityId,-a);break;case'debtInterestExternal':case'externalExpense':break;case'internalTransfer':addAsset(t.fromAccountId,-a);addAsset(t.toAccountId,a);break;case'adjustment':addAsset(t.accountId,Number(t.delta)||0);break}}
- const totalAssets=[...assets.values()].reduce((x,y)=>x+y,0),totalDebt=[...liabilities.values()].reduce((x,y)=>x+y,0);return {assets:Object.fromEntries(assets),liabilities:Object.fromEntries(liabilities),minAssets:Object.fromEntries(minAssets),minLiabilities:Object.fromEntries(minLiabilities),totalAssets,totalDebt,netAssets:totalAssets-totalDebt}
+ const source=store||integratedStore(),useRows=rows===null?integratedBalanceLedger():rows;
+ return calculateIntegratedReplay(source,useRows)
 }
 function moduleVerified(kind){return !!state.moduleVerification?.[kind]}
 function integratedFinancialModel(){const r=integratedReplay(),accounts=integratedStore().accounts,activeIds=new Set(activeFinancialProducts().map(p=>p.id)),verify={isa:moduleVerified('isa'),pension:moduleVerified('pension'),irp:moduleVerified('irp')};let cash=0,deposit=0,savings=0,other=0;for(const a of accounts){const v=Math.max(0,Number(r.assets[a.id]||0)),hasResidual=v>.005,productActive=!a.productId||activeIds.has(a.productId);if(a.kind==='cash')cash+=v;else if(a.kind==='parking'&&(productActive||hasResidual))cash+=v;else if(a.kind==='deposit'&&(productActive||hasResidual))deposit+=v;else if(a.kind==='savings'&&(productActive||hasResidual))savings+=v;else if(a.kind==='other')other+=v}const linkedIsa=Math.max(0,Number(r.assets['isa-link']||0)),linkedPension=Math.max(0,Number(r.assets['pension-link']||0)),linkedIrp=Math.max(0,Number(r.assets['irp-link']||0)),activePensionAccounts=pensionStore().accounts.filter(a=>a.status==='active'),kisPension=brokerKisCurrentKindTotal(state.brokerKis,'pension',activePensionAccounts.filter(a=>a.kind==='pension').map(a=>a.id)),kisIrp=brokerKisCurrentKindTotal(state.brokerKis,'irp',activePensionAccounts.filter(a=>a.kind==='irp').map(a=>a.id)),isaAccountMetrics=state.accounts.filter(isCurrentAccount).map(accountMetrics),isaMetrics={value:isaAccountMetrics.reduce((sum,m)=>sum+(Number(m.value)||0),0),cost:isaAccountMetrics.reduce((sum,m)=>sum+(Number(m.cost)||0),0)},isaRecorded=verify.isa||isaMetrics.value>.5||isaMetrics.cost>.5,isa=isaRecorded?Math.max(0,isaMetrics.value||0):linkedIsa,pensionMetrics=pensionAssetMetrics('pension'),irpMetrics=pensionAssetMetrics('irp'),localPension=Math.max(0,pensionMetrics.value||0),localIrp=Math.max(0,irpMetrics.value||0),useKisPension=!!kisPension&&(kisPension.authoritative===true||kisPension.totalValue>.5||localPension<=.5),useKisIrp=!!kisIrp&&(kisIrp.authoritative===true||kisIrp.totalValue>.5||localIrp<=.5),pension=useKisPension?kisPension.totalValue:localPension,irp=useKisIrp?kisIrp.totalValue:localIrp,available={isa:isaRecorded,pension:useKisPension||verify.pension||localPension>.5,irp:useKisIrp||verify.irp||localIrp>.5};let debt=0;for(const l of integratedStore().liabilities){const v=Math.max(0,Number(r.liabilities[l.id]||0)),p=l.productId?financialProduct(l.productId):null;if(p&&p.status!=='active'&&v<=.005)continue;debt+=v}const totalAssets=cash+deposit+savings+isa+pension+irp+other;return{cash,deposit,savings,isa,pension,irp,other,totalAssets,totalDebt:debt,netAssets:totalAssets-debt,replay:r,linked:{isa:linkedIsa,pension:linkedPension,irp:linkedIrp},verified:verify,available,currentSources:{isa:isaRecorded?'asset-os':'linked',pension:useKisPension?'kis':pensionMetrics.source||'asset-os',irp:useKisIrp?'kis':irpMetrics.source||'asset-os'},kis:{pension:kisPension,irp:kisIrp},isComplete:available.isa&&available.pension&&available.irp}}
@@ -399,12 +575,102 @@ function schedulePensionKind(sc){const linkedKind=integratedStore().accounts.fin
 function resolveSchedulePensionAccount(sc,explicit='',date=''){const kind=schedulePensionKind(sc);if(!kind)return'';const candidates=pensionAccountsForKind(kind,date||'');const requested=String(explicit||sc?.targetPensionAccountId||'');if(requested&&candidates.some(a=>a.id===requested))return requested;return candidates.length===1?candidates[0].id:''}
 function isaAccountsForDate(date=''){const d=String(date||localYmd()),today=localYmd();return state.accounts.filter(a=>{const open=String(a.openedAt||a.baselineDate||''),ends=[String(a.closedAt||''),String(a.maturityAt||'')].filter(Boolean).sort(),end=ends[0]||'';if(open&&d<open)return false;if(end&&d>end)return false;if(d>=today&&a.status!=='active')return false;return true})}
 function resolveScheduleIsaAccount(sc,explicit='',date=''){const candidates=isaAccountsForDate(date||''),requested=String(explicit||sc?.targetIsaAccountId||'');if(requested&&candidates.some(a=>a.id===requested))return requested;return candidates.length===1?candidates[0].id:''}
-function completeScheduleOccurrence(scheduleId,date,amountOverride=0,targetPensionAccountId='',targetIsaAccountId='',loanPrincipalOverride=0,loanInterestOverride=0){const sc=financeSchedules().find(x=>x.id===scheduleId);if(!sc){toast('일정을 찾지 못했습니다.');return false}const expectedDate=scheduleDateForMonth(sc,integratedMonthKey(date));if(expectedDate!==String(date)){toast('해당 일정의 예정일과 일치하지 않습니다.');return false}if(scheduleCompletionTx(scheduleId,date)){toast('이미 완료된 일정입니다.');return false}const dateError=postedDateError(date);if(dateError){toast(dateError);return false}if(sc.kind==='loan'){const principal=Math.max(0,Number(loanPrincipalOverride)||0),interest=Math.max(0,Number(loanInterestOverride)||0),amount=principal+interest;if(!amount){toast('실제 원금 또는 이자를 입력해 주세요.');return false}const cash=Number(integratedReplay().assets['cash-main']||0);if(cash+1e-8<amount){toast('생활현금이 부족합니다. 월급 또는 현금 유입을 먼저 완료로 기록해 주세요.');return false}const baseMeta={scheduleId:sc.id,scheduleDate:date,scheduledAmount:Number(sc.amount)||0,actualAmount:amount,loanPrincipal:principal,loanInterest:interest},rows=[];if(principal)rows.push({id:uid('igl'),date,type:'debtPrincipal',amount:principal,fromAccountId:'cash-main',liabilityId:sc.liabilityId,category:`${sc.name} 원금`,note:'금융 일정에서 완료 기록',productId:sc.productId,meta:{...baseMeta,component:'principal'}});if(interest)rows.push({id:uid('igl'),date,type:'debtInterest',amount:interest,fromAccountId:'cash-main',liabilityId:sc.liabilityId,category:`${sc.name} 이자`,note:'금융 일정에서 완료 기록',productId:sc.productId,meta:{...baseMeta,component:'interest'}});const test=clone(integratedStore());for(const row of rows){const err=integratedValidateCandidate(row,'');if(err){toast(err);return false}test.ledger.push(row)}const issues=integratedCandidateIssues(test);if(issues.length){toast(issues[0].replace('자산 잔액 음수:','잔액이 부족합니다:').replace('부채 잔액 음수:','대출잔액보다 많이 상환할 수 없습니다:'));return false}integratedStore().ledger.push(...rows);setting().integratedMonth=integratedMonthKey(date);if(!persist(false))return false;closeSheets();render();setTimeout(()=>openScheduleDay(date),60);toast('원금과 이자를 완료로 기록했습니다.');haptic('light');return true}const amount=Math.max(0,Number(amountOverride)||Number(sc.amount)||0);if(!amount){toast('금액을 확인해 주세요.');return false}const pensionKind=schedulePensionKind(sc),isIsa=sc.targetKind==='isa'||integratedStore().accounts.find(a=>a.id===scheduleTargetAccount(sc))?.kind==='isa',resolvedPension=pensionKind?resolveSchedulePensionAccount(sc,targetPensionAccountId,date):'',resolvedIsa=isIsa?resolveScheduleIsaAccount(sc,targetIsaAccountId,date):'',meta={scheduleId:sc.id,scheduleDate:date,scheduledAmount:Number(sc.amount)||0,actualAmount:amount};if(pensionKind){if(!resolvedPension){toast(`${pensionAccountKindLabel(pensionKind)} 납입 계좌를 선택해 주세요.`);return false}meta.targetPensionAccountId=resolvedPension}if(isIsa){if(!resolvedIsa){toast('실제 ISA 납입 계좌를 선택해 주세요.');return false}meta.targetIsaAccountId=resolvedIsa}let tx=null;if(sc.kind==='income')tx={id:uid('igl'),date,type:'externalIncome',amount,toAccountId:'cash-main',category:sc.name,note:'금융 일정에서 완료 기록',meta};else if(['investment','saving'].includes(sc.kind)){const to=scheduleTargetAccount(sc);if(!to){toast('연결 대상이 없습니다.');return false}const cash=Number(integratedReplay().assets['cash-main']||0);if(cash+1e-8<amount){toast('생활현금이 부족합니다. 월급 또는 현금 유입을 먼저 완료로 기록해 주세요.');return false}tx={id:uid('igl'),date,type:'internalTransfer',amount,fromAccountId:'cash-main',toAccountId:to,category:sc.name,note:'금융 일정에서 완료 기록',meta}}else if(['insurance','expense'].includes(sc.kind)){const cash=Number(integratedReplay().assets['cash-main']||0);if(cash+1e-8<amount){toast('생활현금이 부족합니다. 월급 또는 현금 유입을 먼저 완료로 기록해 주세요.');return false}tx={id:uid('igl'),date,type:'expense',fixed:true,amount,fromAccountId:'cash-main',category:sc.name,note:'금융 일정에서 완료 기록',meta}};if(!tx){toast('아직 자동 기록을 지원하지 않는 일정입니다.');return false}const err=integratedValidateCandidate(tx,'');if(err){toast(err);return false}if(pensionKind)sc.targetPensionAccountId=resolvedPension;if(isIsa)sc.targetIsaAccountId=resolvedIsa;integratedStore().ledger.push(tx);setting().integratedMonth=integratedMonthKey(date);if(!persist(false))return false;closeSheets();render();setTimeout(()=>openScheduleDay(date),60);toast('완료로 기록했습니다.');haptic('light');return true}
+function completeScheduleOccurrence(scheduleId,date,amountOverride=0,targetPensionAccountId='',targetIsaAccountId='',loanPrincipalOverride=0,loanInterestOverride=0){
+ const request=validateScheduleCompletionRequest(scheduleId,date);
+ if(!request.ok){toast(request.error);return false}
+ const draft=request.schedule.kind==='loan'?calculateLoanScheduleCompletion(request.schedule,date,loanPrincipalOverride,loanInterestOverride):calculateStandardScheduleCompletion(request.schedule,date,amountOverride,targetPensionAccountId,targetIsaAccountId);
+ if(!draft.ok){toast(draft.error);return false}
+ const validationError=validateScheduleCompletionDraft(draft);
+ if(validationError){toast(validationError);return false}
+ if(!commitScheduleCompletion(request.schedule,date,draft))return false;
+ renderScheduleCompletion(date,draft.successMessage);
+ return true
+}
 function centralPensionContributionRows(year=''){const rows=[];for(const t of integratedOperationalLedger()){if(t.meta?.analysisOnly)continue;if(!['internalTransfer','externalAssetIn'].includes(t.type))continue;const kind=integratedStore().accounts.find(a=>a.id===t.toAccountId)?.kind;if(!['pension','irp'].includes(kind))continue;if(year&&!String(t.date).startsWith(String(year)))continue;const explicit=String(t.meta?.pensionAccountId||t.meta?.targetPensionAccountId||''),dated=pensionStore().accounts.filter(a=>a.kind===kind&&pensionAccountActiveOnDate(a,t.date)),resolved=explicit&&pensionStore().accounts.some(a=>a.id===explicit&&a.kind===kind)?explicit:(dated.length===1?dated[0].id:'');rows.push({id:`central-${t.id}`,accountId:resolved,kind,type:t.meta?.isaTransfer?'isaTransfer':'contribution',date:String(t.date),amount:Number(t.amount)||0,sourceTxId:t.id,source:'integrated',unresolved:!resolved})}return rows}
 function centralIsaContributionRows(year=''){const rows=[];for(const t of integratedOperationalLedger()){if(t.meta?.analysisOnly)continue;if(!['internalTransfer','externalAssetIn'].includes(t.type))continue;if(integratedStore().accounts.find(a=>a.id===t.toAccountId)?.kind!=='isa')continue;if(year&&!String(t.date).startsWith(String(year)))continue;const dated=isaAccountsForDate(t.date),explicit=String(t.meta?.targetIsaAccountId||''),resolved=explicit&&dated.some(a=>a.id===explicit)?explicit:(dated.length===1?dated[0].id:'');rows.push({...t,accountId:resolved,unresolved:!resolved})}return rows}
 function centralIsaReplayRows(account,includeArchived=false){if(!account||(!includeArchived&&!isCurrentAccount(account)))return[];const localCounts=new Map();for(const t of account.transactions||[]){if(t.status==='cancelled'||!['deposit','internalTransferIn'].includes(t.type))continue;const key=`${txDate(t)}|${Number(t.amount)||0}`;localCounts.set(key,(localCounts.get(key)||0)+1)}const out=[];for(const t of centralIsaContributionRows().filter(t=>t.accountId===account.id&&!t.unresolved)){const key=`${String(t.date)}|${Number(t.amount)||0}`,remaining=localCounts.get(key)||0;if(remaining){localCounts.set(key,remaining-1);continue}out.push({id:`virtual-${t.id}`,type:'internalTransferIn',date:String(t.date),amount:Number(t.amount)||0,note:t.note||'통합 납입',status:'posted',sourceTxId:t.id,meta:{centralContribution:true,targetIsaAccountId:account.id}})}return out}
 
 /* v1.9.19 MODULE: financial product rules. Product terms are source-of-truth; balances come from transactions. */
+;
+/* asset-os source: src/app/schedule-completion.js */
+'use strict';
+
+function validateScheduleCompletionRequest(scheduleId,date){
+ const schedule=financeSchedules().find(item=>item.id===scheduleId);
+ if(!schedule)return{ok:false,error:'일정을 찾지 못했습니다.'};
+ const expectedDate=scheduleDateForMonth(schedule,integratedMonthKey(date));
+ if(expectedDate!==String(date))return{ok:false,error:'해당 일정의 예정일과 일치하지 않습니다.'};
+ if(scheduleCompletionTx(scheduleId,date))return{ok:false,error:'이미 완료된 일정입니다.'};
+ const dateError=postedDateError(date);
+ if(dateError)return{ok:false,error:dateError};
+ return{ok:true,schedule}
+}
+
+function scheduleCompletionCashError(amount){
+ const cash=Number(integratedReplay().assets['cash-main']||0);
+ return cash+1e-8<amount?'생활현금이 부족합니다. 월급 또는 현금 유입을 먼저 완료로 기록해 주세요.':''
+}
+
+function calculateLoanScheduleCompletion(schedule,date,principalOverride,interestOverride){
+ const principal=Math.max(0,Number(principalOverride)||0),interest=Math.max(0,Number(interestOverride)||0),amount=principal+interest;
+ if(!amount)return{ok:false,error:'실제 원금 또는 이자를 입력해 주세요.'};
+ const cashError=scheduleCompletionCashError(amount);
+ if(cashError)return{ok:false,error:cashError};
+ const baseMeta={scheduleId:schedule.id,scheduleDate:date,scheduledAmount:Number(schedule.amount)||0,actualAmount:amount,loanPrincipal:principal,loanInterest:interest},rows=[];
+ if(principal)rows.push({id:uid('igl'),date,type:'debtPrincipal',amount:principal,fromAccountId:'cash-main',liabilityId:schedule.liabilityId,category:`${schedule.name} 원금`,note:'금융 일정에서 완료 기록',productId:schedule.productId,meta:{...baseMeta,component:'principal'}});
+ if(interest)rows.push({id:uid('igl'),date,type:'debtInterest',amount:interest,fromAccountId:'cash-main',liabilityId:schedule.liabilityId,category:`${schedule.name} 이자`,note:'금융 일정에서 완료 기록',productId:schedule.productId,meta:{...baseMeta,component:'interest'}});
+ return{ok:true,rows,checkAggregate:true,successMessage:'원금과 이자를 완료로 기록했습니다.'}
+}
+
+function calculateStandardScheduleCompletion(schedule,date,amountOverride,targetPensionAccountId,targetIsaAccountId){
+ const amount=Math.max(0,Number(amountOverride)||Number(schedule.amount)||0);
+ if(!amount)return{ok:false,error:'금액을 확인해 주세요.'};
+ const pensionKind=schedulePensionKind(schedule),isIsa=schedule.targetKind==='isa'||integratedStore().accounts.find(account=>account.id===scheduleTargetAccount(schedule))?.kind==='isa';
+ const resolvedPension=pensionKind?resolveSchedulePensionAccount(schedule,targetPensionAccountId,date):'';
+ const resolvedIsa=isIsa?resolveScheduleIsaAccount(schedule,targetIsaAccountId,date):'';
+ const meta={scheduleId:schedule.id,scheduleDate:date,scheduledAmount:Number(schedule.amount)||0,actualAmount:amount};
+ if(pensionKind){if(!resolvedPension)return{ok:false,error:`${pensionAccountKindLabel(pensionKind)} 납입 계좌를 선택해 주세요.`};meta.targetPensionAccountId=resolvedPension}
+ if(isIsa){if(!resolvedIsa)return{ok:false,error:'실제 ISA 납입 계좌를 선택해 주세요.'};meta.targetIsaAccountId=resolvedIsa}
+ let transaction=null;
+ if(schedule.kind==='income')transaction={id:uid('igl'),date,type:'externalIncome',amount,toAccountId:'cash-main',category:schedule.name,note:'금융 일정에서 완료 기록',meta};
+ else if(['investment','saving'].includes(schedule.kind)){
+  const to=scheduleTargetAccount(schedule);
+  if(!to)return{ok:false,error:'연결 대상이 없습니다.'};
+  const cashError=scheduleCompletionCashError(amount);
+  if(cashError)return{ok:false,error:cashError};
+  transaction={id:uid('igl'),date,type:'internalTransfer',amount,fromAccountId:'cash-main',toAccountId:to,category:schedule.name,note:'금융 일정에서 완료 기록',meta}
+ }else if(['insurance','expense'].includes(schedule.kind)){
+  const cashError=scheduleCompletionCashError(amount);
+  if(cashError)return{ok:false,error:cashError};
+  transaction={id:uid('igl'),date,type:'expense',fixed:true,amount,fromAccountId:'cash-main',category:schedule.name,note:'금융 일정에서 완료 기록',meta}
+ }
+ if(!transaction)return{ok:false,error:'아직 자동 기록을 지원하지 않는 일정입니다.'};
+ return{ok:true,rows:[transaction],checkAggregate:false,targetPensionAccountId:resolvedPension,targetIsaAccountId:resolvedIsa,successMessage:'완료로 기록했습니다.'}
+}
+
+function validateScheduleCompletionDraft(draft){
+ const candidateStore=draft.checkAggregate?clone(integratedStore()):null;
+ for(const row of draft.rows){
+  const error=integratedValidateCandidate(row,'');
+  if(error)return error;
+  if(candidateStore)candidateStore.ledger.push(row)
+ }
+ if(!candidateStore)return'';
+ const issues=integratedCandidateIssues(candidateStore);
+ return issues.length?issues[0].replace('자산 잔액 음수:','잔액이 부족합니다:').replace('부채 잔액 음수:','대출잔액보다 많이 상환할 수 없습니다:'):''
+}
+
+function commitScheduleCompletion(schedule,date,draft){
+ if(draft.targetPensionAccountId)schedule.targetPensionAccountId=draft.targetPensionAccountId;
+ if(draft.targetIsaAccountId)schedule.targetIsaAccountId=draft.targetIsaAccountId;
+ integratedStore().ledger.push(...draft.rows);
+ setting().integratedMonth=integratedMonthKey(date);
+ return persist(false)
+}
+
+function renderScheduleCompletion(date,message){
+ closeSheets();render();setTimeout(()=>openScheduleDay(date),60);toast(message);haptic('light')
+}
 ;
 /* asset-os source: integrated-finance-engine.js */
 'use strict';
@@ -461,6 +727,7 @@ function normalizeState(data){
  const isaGroup=next.policies.isa||clone(seed.policies.isa);isaGroup.versions=Array.isArray(isaGroup.versions)?isaGroup.versions:[];
  isaGroup.versions.forEach((p,i)=>{if(!p.policySetId)p.policySetId=p.userEdited?`isa-policy-set-user-${i}`:'isa-policy-set-current';if(p.concurrentAccountLimit==null)p.concurrentAccountLimit=1;if(p.coexistWithOtherIsa==null)p.coexistWithOtherIsa=false;if(!p.annualLimitScope)p.annualLimitScope='person';if(p.totalContributionLimit==null)p.totalContributionLimit=100000000;if(p.carryoverEnabled==null)p.carryoverEnabled=true;if(p.withdrawalRestoresLimit==null)p.withdrawalRestoresLimit=false;if(p.transferWindowDays==null)p.transferWindowDays=60});next.policies.isa=isaGroup;
  const pensionGroup=next.policies.pension||clone(seed.policies.pension);pensionGroup.versions=Array.isArray(pensionGroup.versions)?pensionGroup.versions:clone(seed.policies.pension.versions);pensionGroup.versions.forEach(p=>{if(p.annualContributionLimit==null)p.annualContributionLimit=18000000});next.policies.pension=pensionGroup;
+ for(const kind of ['isa','pension','irp']){const group=next.policies[kind]||clone(seed.policies[kind]),fallback=seed.policies[kind].versions[0];group.versions=Array.isArray(group.versions)?group.versions:clone(seed.policies[kind].versions);group.versions.forEach(p=>{if(!p.version)p.version='기존';if(!p.verifiedAt)p.verifiedAt=String(p.effectiveFrom||fallback.verifiedAt);if(!p.reviewAfter&&typeof policyDateAddDays==='function')p.reviewAfter=policyDateAddDays(p.verifiedAt,180);if(!p.sourceLabel)p.sourceLabel=p.userEdited?'사용자 설정':fallback.sourceLabel;if(!p.sourceUrl&&!p.userEdited)p.sourceUrl=fallback.sourceUrl});next.policies[kind]=group}
  next.pension.accounts=next.pension.accounts.map((a,i)=>({...a,id:a.id||`pension-account-${i+1}`,kind:a.kind==='irp'?'irp':'pension',name:a.name||`${a.kind==='irp'?'IRP':'연금저축'} ${i+1}`,status:a.status||'active',openedAt:a.openedAt||'2025-01-01'}));
  next.pension.contributions=next.pension.contributions.map((x,i)=>({...x,id:x.id||`pension-contribution-${i+1}`,type:x.type==='isaTransfer'?'isaTransfer':'contribution',date:String(x.date||ymd()),amount:Number(x.amount)||0,createdAt:x.createdAt||`${String(x.date||ymd())}T00:00:${String(i%60).padStart(2,'0')}`}));next.pension.transactions=next.pension.transactions.map((t,i)=>({...t,id:String(t.id||`pension-tx-${i+1}`),accountId:String(t.accountId||''),holdingId:String(t.holdingId||''),type:['buy','sell','dividend','distribution','interest','other_right','adjustment'].includes(t.type)?t.type:'buy',date:String(t.date||ymd()),qty:Math.max(0,Number(t.qty)||0),price:Math.max(0,Number(t.price)||0),amount:Math.max(0,Number(t.amount)||0),fee:Math.max(0,Number(t.fee)||0),tax:Math.max(0,Number(t.tax)||0),setQty:Math.max(0,Number(t.setQty)||0),setAvg:Math.max(0,Number(t.setAvg)||0),note:String(t.note||''),createdAt:t.createdAt||`${String(t.date||ymd())}T00:00:${String(i%60).padStart(2,'0')}`}));next.pension.holdings=next.pension.holdings.map((h,i)=>{const legacyRole=['성장','배당','현금흐름','안정','현금'].includes(h.investmentRole)?h.investmentRole:({방어:'안정',테마:'성장','현금성 자산':'현금'})[h.assetClass]||(['성장','배당','현금흐름'].includes(h.assetClass)?h.assetClass:'성장'),risky=h.risky===true?true:h.risky===false?false:null;return{...h,id:h.id||`pension-holding-${i+1}`,accountId:String(h.accountId||''),name:String(h.name||`연금 종목 ${i+1}`),investmentRole:legacyRole,themeTag:String(h.themeTag||(/반도체|SOX/i.test(String(h.name||''))?'반도체':'')),assetClass:legacyRole,productType:h.productType||'ETF',baselineQty:Math.max(0,Number(h.baselineQty??h.qty)||0),baselineAvgPrice:Math.max(0,Number(h.baselineAvgPrice??h.avgPrice)||0),qty:Math.max(0,Number(h.qty)||0),avgPrice:Math.max(0,Number(h.avgPrice)||0),currentPrice:Math.max(0,Number(h.currentPrice)||0),risky,order:Number(h.order)||i+1}});next.pension.incomes=next.pension.incomes.map((x,i)=>({...x,id:x.id||`pension-income-${i+1}`,accountId:String(x.accountId||''),holdingId:String(x.holdingId||''),type:['dividend','distribution','interest','other_right'].includes(x.type)?x.type:'dividend',date:String(x.date||ymd()),amount:Math.max(0,Number(x.amount)||0)}));
  next.accounts.forEach(a=>{

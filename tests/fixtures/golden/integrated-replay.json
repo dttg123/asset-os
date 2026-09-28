@@ -1,0 +1,23 @@
+{
+  "store": {
+    "accounts": [{"id":"cash"},{"id":"savings"}],
+    "liabilities": [{"id":"loan"}]
+  },
+  "cases": [
+    {"name":"opening cash","rows":[{"date":"2026-01-01","type":"openingAsset","toAccountId":"cash","amount":1000}],"expected":{"cash":1000,"savings":0,"loan":0,"totalAssets":1000,"totalDebt":0,"netAssets":1000}},
+    {"name":"external income","rows":[{"date":"2026-01-01","type":"externalIncome","toAccountId":"cash","amount":500}],"expected":{"cash":500,"savings":0,"loan":0,"totalAssets":500,"totalDebt":0,"netAssets":500}},
+    {"name":"tracked expense","rows":[{"date":"2026-01-01","type":"openingAsset","toAccountId":"cash","amount":1000},{"date":"2026-01-02","type":"expense","fromAccountId":"cash","amount":200}],"expected":{"cash":800,"savings":0,"loan":0,"totalAssets":800,"totalDebt":0,"netAssets":800}},
+    {"name":"external asset in","rows":[{"date":"2026-01-01","type":"externalAssetIn","toAccountId":"savings","amount":300}],"expected":{"cash":0,"savings":300,"loan":0,"totalAssets":300,"totalDebt":0,"netAssets":300}},
+    {"name":"external asset out","rows":[{"date":"2026-01-01","type":"externalAssetIn","toAccountId":"savings","amount":300},{"date":"2026-01-02","type":"externalAssetOut","fromAccountId":"savings","amount":100}],"expected":{"cash":0,"savings":200,"loan":0,"totalAssets":200,"totalDebt":0,"netAssets":200}},
+    {"name":"opening liability","rows":[{"date":"2026-01-01","type":"openingLiability","liabilityId":"loan","amount":500}],"expected":{"cash":0,"savings":0,"loan":500,"totalAssets":0,"totalDebt":500,"netAssets":-500}},
+    {"name":"tracked principal preserves net","rows":[{"date":"2026-01-01","sequence":1,"type":"openingAsset","toAccountId":"cash","amount":1000},{"date":"2026-01-01","sequence":2,"type":"openingLiability","liabilityId":"loan","amount":500},{"date":"2026-01-02","type":"debtPrincipal","fromAccountId":"cash","liabilityId":"loan","amount":200}],"expected":{"cash":800,"savings":0,"loan":300,"totalAssets":800,"totalDebt":300,"netAssets":500}},
+    {"name":"external principal","rows":[{"date":"2026-01-01","type":"openingLiability","liabilityId":"loan","amount":500},{"date":"2026-01-02","type":"externalDebtPrincipal","liabilityId":"loan","amount":200}],"expected":{"cash":0,"savings":0,"loan":300,"totalAssets":0,"totalDebt":300,"netAssets":-300}},
+    {"name":"internal transfer preserves assets","rows":[{"date":"2026-01-01","type":"openingAsset","toAccountId":"cash","amount":1000},{"date":"2026-01-02","type":"internalTransfer","fromAccountId":"cash","toAccountId":"savings","amount":250}],"expected":{"cash":750,"savings":250,"loan":0,"totalAssets":1000,"totalDebt":0,"netAssets":1000}},
+    {"name":"positive adjustment","rows":[{"date":"2026-01-01","type":"adjustment","accountId":"cash","delta":200}],"expected":{"cash":200,"savings":0,"loan":0,"totalAssets":200,"totalDebt":0,"netAssets":200}},
+    {"name":"negative adjustment records minimum","rows":[{"date":"2026-01-01","type":"adjustment","accountId":"cash","delta":-100}],"expected":{"cash":-100,"savings":0,"loan":0,"totalAssets":-100,"totalDebt":0,"netAssets":-100,"minCash":-100}},
+    {"name":"outside expense is not double counted","rows":[{"date":"2026-01-01","type":"externalExpense","amount":100}],"expected":{"cash":0,"savings":0,"loan":0,"totalAssets":0,"totalDebt":0,"netAssets":0}},
+    {"name":"outside interest is not double counted","rows":[{"date":"2026-01-01","type":"debtInterestExternal","amount":100}],"expected":{"cash":0,"savings":0,"loan":0,"totalAssets":0,"totalDebt":0,"netAssets":0}},
+    {"name":"date ordering is independent of input order","rows":[{"date":"2026-01-02","type":"openingAsset","toAccountId":"cash","amount":100},{"date":"2026-01-01","type":"expense","fromAccountId":"cash","amount":50}],"expected":{"cash":50,"savings":0,"loan":0,"totalAssets":50,"totalDebt":0,"netAssets":50,"minCash":-50}},
+    {"name":"refund and income net against expense","rows":[{"date":"2026-01-01","type":"externalIncome","toAccountId":"cash","amount":200},{"date":"2026-01-02","type":"expense","fromAccountId":"cash","amount":100},{"date":"2026-01-03","type":"refund","toAccountId":"cash","amount":25}],"expected":{"cash":125,"savings":0,"loan":0,"totalAssets":125,"totalDebt":0,"netAssets":125}}
+  ]
+}

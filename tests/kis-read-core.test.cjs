@@ -67,7 +67,7 @@ assert.doesNotMatch(edge,/msg1[^\n]*response/,'한투 원문 메시지는 클라
 const accountConfigSource=edge.match(/function accountConfig\(accountKind: AccountKind\): AccountConfig \{[\s\S]*?\n\}/)?.[0]
   .replace('accountKind: AccountKind','accountKind').replace('): AccountConfig',')');
 assert.ok(accountConfigSource,'계좌 설정 함수를 검사할 수 있어야 한다');
-const secretValues={KIS_PENSION_APP_KEY:'pension-key',KIS_PENSION_APP_SECRET:'pension-secret',KIS_IRP_APP_KEY:'irp-key',KIS_IRP_APP_SECRET:'irp-secret',KIS_PENSION_CANO:'pension-cano',KIS_PENSION_ACNT_PRDT_CD:'29',KIS_IRP_CANO:'irp-cano',KIS_IRP_ACNT_PRDT_CD:'29'};
+const secretValues={KIS_PENSION_APP_KEY:'pension-key',KIS_PENSION_APP_SECRET:'pension-secret',KIS_IRP_APP_KEY:'irp-key',KIS_IRP_APP_SECRET:'irp-secret',KIS_PENSION_CANO:'pension-cano',KIS_PENSION_ACNT_PRDT_CD:'29',KIS_IRP_CANO:'irp-cano',KIS_IRP_ACNT_PRDT_CD:'29'}; // secret-scan:allow-test-placeholder
 const configContext=vm.createContext({Deno:{env:{get:name=>secretValues[name]}},env:name=>{if(!secretValues[name])throw new Error('missing');return secretValues[name]}});
 new vm.Script(`${accountConfigSource};this.accountConfig=accountConfig`).runInContext(configContext);
 const pensionConfig=configContext.accountConfig('pension'),irpConfig=configContext.accountConfig('irp');
@@ -76,7 +76,7 @@ assert.notEqual(pensionConfig.appsecret,irpConfig.appsecret,'별도 발급된 �
 assert.notEqual(pensionConfig.cano,irpConfig.cano,'두 계좌의 계좌번호는 절대 합치면 안 된다');
 assert.equal(pensionConfig.cano,'pension-cano');
 assert.equal(irpConfig.cano,'irp-cano');
-secretValues.KIS_APP_KEY='shared-key';secretValues.KIS_APP_SECRET='shared-secret';
+secretValues.KIS_APP_KEY='shared-key';secretValues.KIS_APP_SECRET='shared-secret'; // secret-scan:allow-test-placeholder
 const sharedPension=configContext.accountConfig('pension'),sharedIrp=configContext.accountConfig('irp');
 assert.equal(sharedPension.appkey,sharedIrp.appkey,'명시한 공용 앱키는 두 계좌가 함께 사용해야 한다');
 assert.equal(sharedPension.appsecret,sharedIrp.appsecret,'명시한 공용 앱시크릿은 두 계좌가 함께 사용해야 한다');

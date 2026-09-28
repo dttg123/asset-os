@@ -5,17 +5,20 @@ const fs=require('node:fs');
 const path=require('node:path');
 const root=path.join(__dirname,'..');
 const manifest=JSON.parse(fs.readFileSync(path.join(root,'runtime-bundles.json'),'utf8'));
+const typedSources=JSON.parse(fs.readFileSync(path.join(root,'typed-sources.json'),'utf8'));
 
 function assemble(files,kind){return files.map(name=>`/* asset-os source: ${name} */\n${fs.readFileSync(path.join(root,name),'utf8').replace(/^\uFEFF/,'').trimEnd()}`).join(kind==='scripts'?'\n;\n':'\n')+'\n'}
+function nestedScripts(directory,prefix){return fs.readdirSync(directory,{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?nestedScripts(path.join(directory,entry.name),`${prefix}/${entry.name}`):(entry.name.endsWith('.js')?[`${prefix}/${entry.name}`]:[]))}
 
 test('runtime bundles contain every production source exactly once and in declared order',()=>{
  const scriptSources=Object.values(manifest.scripts).flat(),styleSources=Object.values(manifest.styles).flat();
- const rootScripts=fs.readdirSync(root).filter(name=>name.endsWith('.js')&&name!=='service-worker.js').sort();
+ const rootScripts=[...fs.readdirSync(root).filter(name=>name.endsWith('.js')&&name!=='service-worker.js'),...nestedScripts(path.join(root,'src'),'src')].sort();
  const rootStyles=fs.readdirSync(root).filter(name=>name.endsWith('.css')).sort();
  assert.deepEqual([...scriptSources].sort(),rootScripts);
  assert.deepEqual([...styleSources].sort(),rootStyles);
  assert.equal(new Set(scriptSources).size,scriptSources.length);
  assert.equal(new Set(styleSources).size,styleSources.length);
+ for(const source of typedSources)assert.ok(scriptSources.includes(source.replace(/\.ts$/,'.js')),`${source} generated output is not bundled`);
  for(const [output,files] of Object.entries(manifest.scripts))assert.equal(fs.readFileSync(path.join(root,'dist',output),'utf8'),assemble(files,'scripts'),output);
  for(const [output,files] of Object.entries(manifest.styles))assert.equal(fs.readFileSync(path.join(root,'dist',output),'utf8'),assemble(files,'styles'),output);
 });

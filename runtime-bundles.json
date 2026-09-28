@@ -2,11 +2,15 @@
   "scripts": {
     "asset-core.js": [
       "core-config.js",
+      "policy-review.js",
+      "src/integrations/kis-normalization.js",
       "broker-kis.js",
       "broker-kis-client.js",
       "data-defaults.js",
+      "src/domain/integrated-replay.js",
       "integrated-ledger-engine.js",
       "integrated-schedule-engine.js",
+      "src/app/schedule-completion.js",
       "integrated-finance-engine.js",
       "store-state.js",
       "backup.js",
@@ -19,6 +23,7 @@
       "core-accessors.js"
     ],
     "asset-ledgers.js": [
+      "src/domain/investment-position.js",
       "pension-contributions.js",
       "pension-ledger.js",
       "pension-assets.js",
@@ -46,9 +51,12 @@
       "isa-maturity-policy.js",
       "integrated-finance-ui.js",
       "ui-settings.js",
+      "policy-review-ui.js",
       "release-v069.js"
     ],
     "asset-runtime.js": [
+      "src/storage/cloud-save-contract.js",
+      "src/domain/cloud-state-policy.js",
       "supabase-sync.js",
       "qa-mode.js",
       "pwa.js",

@@ -7,6 +7,7 @@ const path=require('node:path');
 
 test('debt-only history is never used as a comparable asset baseline',()=>{
  const context=vm.createContext({Date,Math,Number,String,Map,Set,console,QA_MODE:false});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'..','src/domain/integrated-replay.js'),'utf8'),context);
  vm.runInContext(fs.readFileSync(path.join(__dirname,'..','integrated-ledger-engine.js'),'utf8'),context);
  context.state={accounts:[{id:'isa',openedAt:'2025-01-01',status:'active',assetSnapshots:[{date:'2025-01-31',value:100,totalValue:100}]}],pension:{accounts:[],assetSnapshots:[]}};
  context.__ledger=[

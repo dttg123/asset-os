@@ -28,6 +28,7 @@ assert.equal(vm.runInContext("pensionArchiveTransactionRows('pension').length",c
 assert.equal(vm.runInContext("pensionArchiveTransactionRows('irp').length",context),4);
 
 vm.runInContext(fs.readFileSync(path.join(__dirname,'..','chart-asset-analysis.js'),'utf8'),context,{filename:'chart-asset-analysis.js'});
+assert.equal(vm.runInContext('pensionAnalysisTickIndexes(12,"1y").size',context),6,'1년 그래프의 12개월 라벨을 모두 표시해 모바일에서 겹치면 안 된다');
 assert.equal(vm.runInContext("pensionAnalysisDisplayRows('all','all').length",context),0,'한 점짜리 현재 스냅샷보다 여러 달의 과거 확정자료를 우선해야 한다');
 for(const scope of ['all','pension','irp']){
  const markup=vm.runInContext(`pensionAnalysisPeriod='all';pensionAnalysisChartMarkup('${scope}','trend','')`,context);

@@ -5,6 +5,7 @@ const vm=require('node:vm');
 const path=require('node:path');
 
 const context=vm.createContext({console,Date,Set,Map,URL,encodeURIComponent});
+vm.runInContext(fs.readFileSync(path.join(__dirname,'..','src/integrations/kis-normalization.js'),'utf8'),context,{filename:'kis-normalization.js'});
 vm.runInContext(fs.readFileSync(path.join(__dirname,'..','broker-kis.js'),'utf8'),context,{filename:'broker-kis.js'});
 const call=(name,...args)=>vm.runInContext(`${name}(...__args)`,Object.assign(context,{__args:args}));
 const plain=value=>JSON.parse(JSON.stringify(value));

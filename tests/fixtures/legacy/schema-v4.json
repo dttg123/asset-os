@@ -1,0 +1,12 @@
+{
+  "format":"asset-os-backup-v1",
+  "schemaVersion":4,
+  "appVersion":"v0.1",
+  "environment":"live",
+  "exportedAt":"2026-01-01T00:00:00.000Z",
+  "data":{
+    "accounts":[{"id":"legacy-isa","name":"과거 ISA","status":"active","openedAt":"2025-01-01","holdings":[],"transactions":[{"id":"legacy-deposit","type":"deposit","date":"2025-01-25","amount":1000000}],"assetSnapshots":[]}],
+    "pension":{"accounts":[{"id":"legacy-pension","kind":"pension","name":"과거 연금","openedAt":"2025-01-01","status":"active"}],"contributions":[{"id":"legacy-pension-2026","accountId":"legacy-pension","date":"2026-01-25","amount":500000}],"transactions":[],"holdings":[],"incomes":[],"assetSnapshots":[]},
+    "integrated":{"accounts":[{"id":"cash-main","kind":"cash","name":"현금·입출금"}],"liabilities":[],"ledger":[{"id":"legacy-income","date":"2025-01-21","type":"externalIncome","amount":4000000,"toAccountId":"cash-main"}]}
+  }
+}
