@@ -42,7 +42,7 @@ jobs:
           elif [ "${{ github.event_name }}" = "push" ]; then
             echo "name=full" >> "$GITHUB_OUTPUT"
           else
-            echo "name=core" >> "$GITHUB_OUTPUT"
+            echo "name=release" >> "$GITHUB_OUTPUT"
           fi
       - run: npx playwright install --with-deps chromium
       - run: npm run "qa:${{ steps.profile.outputs.name }}"
