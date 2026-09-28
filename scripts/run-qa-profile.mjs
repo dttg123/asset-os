@@ -32,7 +32,7 @@ if(profile==='full')selected=testFiles.filter(name=>!releaseOnly.has(name));
 run(process.execPath,['--test',...selected.map(name=>`tests/${name}`)]);
 
 if(profile!=='fast'){
- const grep=profile==='core'?'@smoke':profile==='full'?'@smoke|@core':'@smoke|@core|@release';
+ const grep=profile==='core'?'@smoke|@core':profile==='full'?'@smoke|@core':'@smoke|@core|@release';
  run(process.platform==='win32'?'npx.cmd':'npx',['playwright','test','--grep',grep]);
 }
 
