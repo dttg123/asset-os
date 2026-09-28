@@ -32,13 +32,13 @@
 | 보안 | PASS(정적·단위) | 비밀값 0건, `auth.uid()` RPC, 브라우저 직접 쓰기 차단, XSS 속성/선택자 검사 |
 | 서비스워커 | PASS(실행 회귀) | 셸 사전 캐시, Asset OS 구캐시만 삭제, 오프라인 내비게이션, 정적 파일 network-first 갱신 |
 | 의존성 | PASS | `npm audit --audit-level=high`: 취약점 0건 |
-| GitHub Actions | PASS | 원격 후보 `824d3a3`: `quality-gates #6`, `database-qa #4` 완료·성공 |
+| GitHub Actions | PASS | RELEASE `quality-gates #8`, 격리 DB `database-qa #6` 완료·성공 |
 
 ## 브라우저 점검
 
 현재 공개 운영 화면은 `Asset OS v0.6.7`로 열렸고 1363×936 데스크톱 뷰에서 브라우저 경고·오류 로그는 없었다.
 
-후보 브랜치는 Draft PR `#1`로 원격에 보존했다. 원격 후보 `3da5c1a`와 로컬 `6196c46`의 파일 트리가 동일함을 확인했고 GitHub Actions `quality-gates`가 성공했다. 공개 QA 주소에서 운영 동기화를 차단한 `?qa=1` 모드로 다음을 실제 실행했다.
+후보 브랜치는 Draft PR `#1`로 원격에 보존했다. 초기 브라우저 점검 당시 원격 후보 `3da5c1a`와 로컬 `6196c46`의 파일 트리가 동일함을 확인했고 GitHub Actions `quality-gates`가 성공했다. 공개 QA 주소에서 운영 동기화를 차단한 `?qa=1` 모드로 다음을 실제 실행했다.
 
 - QA 35년 데이터 생성: 2026~2060년, 7,740건, 저장용량 1.36MB(안전한도의 34%)
 - 홈 금액 렌더링: 총금융자산 1,342,937,642원
@@ -69,9 +69,9 @@
 
 로컬 실행 결과는 FAST **18/18 PASS**, 장기 RELEASE 파일을 제외한 Node 회귀 **120/120 PASS**, 30·35년을 포함한 전체 Node 회귀 **123/123 PASS**다. 기존 116개 기대값은 바꾸지 않았고 새 테스트 7개가 추가됐다.
 
-로컬 환경에서는 Playwright Chromium CDN이 0바이트 파일을 반환해 브라우저 바이너리 설치가 실패했다. 첫 CI는 테스트가 Supabase CDN을 가짜 응답으로 치환하면서 SRI 무결성 오류를 만든 것을 실패로 기록했고, 재시도도 같은 원인으로 실패했다. 테스트를 약화하지 않고 가짜 치환만 제거해 실제 CDN 무결성을 검사하도록 수정했다. 수정본 `quality-gates #6`은 Chromium 설치, CORE Node 회귀, 데스크톱·Galaxy 뷰포트의 스모크와 35년 핵심 E2E, 의존성 감사를 모두 실행해 PASS했다. 실패 artifact 업로드는 성공 실행이라 의도대로 생략됐다.
+로컬 환경에서는 Playwright Chromium CDN이 0바이트 파일을 반환해 브라우저 바이너리 설치가 실패했다. 첫 CI는 테스트가 Supabase CDN을 가짜 응답으로 치환하면서 SRI 무결성 오류를 만든 것을 실패로 기록했고, 재시도도 같은 원인으로 실패했다. 테스트를 약화하지 않고 가짜 치환만 제거해 실제 CDN 무결성을 검사하도록 수정했다. 수정본 CORE 실행에 이어 `quality-gates #8`은 Chromium 설치, 30·35년을 포함한 전체 Node 회귀, 데스크톱·Galaxy 뷰포트의 스모크·핵심·RELEASE E2E, 의존성 감사를 모두 실행해 PASS했다. 실패 artifact 업로드는 성공 실행이라 의도대로 생략됐다. 실행 후 PR 기본 프로필은 다시 CORE로 복구했다.
 
-`database-qa #4`는 원격 후보 `824d3a3`에서 깨끗한 Supabase 기동, 전체 마이그레이션, pgTAP RLS·권한 검사를 실제 실행해 PASS했다. 운영 DB에는 적용하지 않았다.
+`database-qa #6`은 RELEASE 후보에서 깨끗한 Supabase 기동, 전체 마이그레이션, pgTAP RLS·권한 검사를 실제 실행해 PASS했다. 운영 DB에는 적용하지 않았다.
 
 ## 아직 실행하지 않은 최종 게이트
 
@@ -83,8 +83,8 @@
 | 실제 KIS 전체·부분·토큰 실패 | 미실행 | QA 사용자 인증과 Edge Function 환경 |
 | 서비스워커 실제 업그레이드 | 실행 회귀 PASS / 실브라우저 미실행 | 구버전이 설치된 후보 URL |
 | Android 공유창 | 미실행 | Android 실기기 |
-| Playwright 자동 E2E | PASS(CI 에뮬레이션) | quality-gates #6, 데스크톱·Galaxy 스모크와 35년 핵심 흐름 성공 |
-| pgTAP 실제 DB/RLS | PASS(QA DB) | database-qa #4, 깨끗한 Supabase 전체 마이그레이션·권한 검사 성공 |
+| Playwright 자동 E2E | PASS(CI 에뮬레이션) | quality-gates #8 RELEASE, 데스크톱·Galaxy 전체 흐름 성공 |
+| pgTAP 실제 DB/RLS | PASS(QA DB) | database-qa #6, 깨끗한 Supabase 전체 마이그레이션·권한 검사 성공 |
 | 시각 기준 스크린샷 | 미구축 | 동일 CI 브라우저에서 최초 기준 검토·승인 필요 |
 
 ## 배포 전 안전 순서
