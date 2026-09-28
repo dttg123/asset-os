@@ -34,7 +34,17 @@ function cloudAuthGateMessage(){
  if(cloudSyncStatus==='동기화 오류')return'클라우드 원장 동기화 중 오류가 발생했습니다. 다시 확인해 주세요.';
  return'클라우드 원장을 확인하지 못했습니다. 네트워크를 확인해 주세요.'
 }
-async function startAssetAuthenticatedApp(){if(qaCloudBlocked()){cloudSetStatus('QA 로컬 전용','ok');assetAuthGateUnlock();return true}const callbackFailure=cloudAuthCallbackFailure();if(callbackFailure)return assetAuthGateState('error',callbackFailure);assetAuthGateState('loading');const initialized=await initSupabaseCloud();if(!initialized)return assetAuthGateState('error','Supabase 연결을 확인한 뒤 다시 시도해 주세요.');if(!cloudUser())return assetAuthGateState('login');const ok=await cloudReconcileState();if(ok)assetAuthGateUnlock();else assetAuthGateState(cloudSyncStatus==='동기화 충돌 확인 필요'?'conflict':'error',cloudAuthGateMessage())}
+async function startAssetAuthenticatedApp(){
+ if(qaCloudBlocked()){cloudSetStatus('QA 로컬 전용','ok');assetAuthGateUnlock();return true}
+ const callbackFailure=cloudAuthCallbackFailure();if(callbackFailure)return assetAuthGateState('error',callbackFailure);
+ assetAuthGateState('loading');const initialized=await initSupabaseCloud();if(!initialized)return assetAuthGateState('error','Supabase 연결을 확인한 뒤 다시 시도해 주세요.');if(!cloudUser())return assetAuthGateState('login');
+ const local=cloudLocalEnvelope(),canOpenLocal=local.stored&&cloudPayloadValid(local.envelope);
+ cloudSetStatus('클라우드 확인 중','wait');if(canOpenLocal)assetAuthGateUnlock();
+ const ok=await cloudReconcileState();if(ok){assetAuthGateUnlock();return true}
+ if(cloudSyncStatus==='동기화 충돌 확인 필요'){assetAuthGateState('conflict',cloudAuthGateMessage());return false}
+ if(canOpenLocal){cloudSetStatus('오프라인 · 재확인 필요','wait');return false}
+ assetAuthGateState('error',cloudAuthGateMessage());return false
+}
 
 function cloudUser(){return assetSupabaseSession?.user||null}
 function syncBrokerKisSessionFromCloud(session=assetSupabaseSession){
@@ -177,12 +187,16 @@ async function cloudReconcileState(force='auto'){
  if(!cloudUser()||!assetSupabaseClient||cloudSyncBusy)return false;
  cloudSyncBusy=true;
  try{
-  const local=cloudLocalEnvelope(),{row,error}=await cloudFetchStateRow();
+  let local=cloudLocalEnvelope();const startedFingerprint=cloudEnvelopeFingerprint(local.envelope),{row,error}=await cloudFetchStateRow();
   if(error){if(cloudTableMissing(error)||cloudAtomicSaveMissing(error))cloudSetStatus('DB 설정 필요','wait');else cloudSetStatus('동기화 확인 실패','wait');return false}
   if(!row){cloudBaseRevision=0;cloudBaseFingerprint='';cloudPendingWrite=null;cloudSyncBusy=false;return await cloudPushState(cloudCurrentEnvelope(),true)}
-  const remote=row.payload,plan=cloudReconcilePlan(local,row,force);
+  const remote=row.payload,remoteRevision=Number(row.revision)||1,latestLocal=cloudLocalEnvelope(),latestFingerprint=cloudEnvelopeFingerprint(latestLocal.envelope),remoteFingerprint=cloudEnvelopeFingerprint(remote);
+  if(latestLocal.stored&&latestFingerprint!==startedFingerprint){
+   if(remoteFingerprint!==startedFingerprint){cloudConflict={revision:remoteRevision};cloudPushPending=false;cloudSetStatus('동기화 충돌 확인 필요','wait');return false}
+   local=latestLocal
+  }
+  const plan=cloudReconcilePlan(local,row,force);
   if(plan.action==='reject-invalid'){cloudSetStatus('클라우드 데이터 확인 필요','wait');return false}
-  const remoteRevision=Number(row.revision)||1;
   if(plan.action==='pull'){cloudApplyRemoteEnvelope(remote,remoteRevision);cloudSetStatus('클라우드에서 복원됨','ok',row.updated_at||remote.savedAt);if(plan.notify)toast('Supabase에서 최신 데이터를 복원했습니다.');return true}
   if(plan.action==='protect-empty'){cloudSetStatus('빈 클라우드 자료 보호됨','wait');return false}
   if(plan.action==='push'){cloudBaseRevision=remoteRevision;cloudBaseFingerprint=cloudEnvelopeFingerprint(remote);cloudPendingWrite=null;cloudSyncBusy=false;return await cloudPushState(local.envelope,true)}
@@ -190,7 +204,7 @@ async function cloudReconcileState(force='auto'){
   cloudBaseRevision=remoteRevision;cloudBaseFingerprint=cloudEnvelopeFingerprint(remote);cloudPendingWrite=null;cloudConflict=null;
   cloudSetStatus('동기화됨','ok',row.updated_at||remote.savedAt);return true
  }catch(e){cloudSetStatus('동기화 오류','wait');return false}
- finally{cloudSyncBusy=false}
+ finally{cloudSyncBusy=false;if(cloudPushPending&&cloudSyncStatus!=='동기화 충돌 확인 필요'){clearTimeout(cloudSyncTimer);cloudSyncTimer=setTimeout(()=>cloudPushState(cloudCurrentEnvelope(),true).catch(()=>{}),250)}}
 }
 
 function renderCloudAccountSheet(){
