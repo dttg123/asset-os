@@ -4,7 +4,6 @@ const app='/index.html?qa=1#/home';
 const appErrors=[];
 const preparePage=async page=>{
  appErrors.length=0;
- await page.route('https://cdn.jsdelivr.net/**',route=>route.fulfill({status:200,contentType:'text/javascript',body:'window.supabase={createClient:()=>null};'}));
  page.on('pageerror',error=>appErrors.push(String(error)));
  page.on('console',message=>{if(message.type()==='error'&&!message.text().includes('browser metadata'))appErrors.push(message.text())});
 };
