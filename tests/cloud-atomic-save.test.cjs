@@ -14,7 +14,7 @@ function client(database,id){
  const elements=new Map();
  const element=key=>{if(!elements.has(key))elements.set(key,{hidden:false,disabled:false,textContent:'',className:'',classList:{add(){},remove(){}}});return elements.get(key)};
  const context=vm.createContext({
-  console,Date,Math,JSON,Promise,setTimeout:fn=>fn(),clearTimeout(){},globalThis:null,
+  console,Date,Math,JSON,Promise,URLSearchParams,setTimeout:fn=>fn(),clearTimeout(){},globalThis:null,
   QA_MODE:false,SCHEMA_VERSION:21,APP_VERSION:'v0.6.7',APP_ENV:'live',KEY:`asset-${id}`,BACKUP_FORMAT:'asset-os-backup-v1',
   seed:{accounts:[]},state:{accounts:[]},clone:value=>JSON.parse(JSON.stringify(value)),normalizeState:value=>value,
   localStorage:{getItem:()=>null,setItem(){},removeItem(){}},storeRecoveryCopy(){},pruneRecoveryKeys(){},render(){},toast(){},formatDateTime:value=>value,localYmd:()=> '2026-09-28',
@@ -78,6 +78,28 @@ test('conflict recovery hides the auth gate when the app was already open',()=>{
  vm.runInContext(`assetAppUnlocked=true;$ ('#assetAuthGate').hidden=false;assetAuthGateUnlock()`,openApp);
  assert.equal(vm.runInContext(`$ ('#assetAuthGate').hidden`,openApp),true);
  assert.equal(vm.runInContext('assetAppUnlocked',openApp),true);
+});
+
+test('a signed-in device opens local data before a slow cloud check finishes',async()=>{
+ const database={revision:2,lastRequestId:'',payload:null,failAfterCommit:false};
+ const fast=client(database,'owner');
+ vm.runInContext(`__unlocks=0;__resolved=false;initSupabaseCloud=async()=>true;cloudLocalEnvelope=()=>({stored:true,envelope:{savedAt:'2026-09-28T00:00:00Z',data:{accounts:[]}}});assetAuthGateUnlock=()=>{__unlocks+=1};cloudReconcileState=()=>new Promise(resolve=>{__finishCloud=()=>{__resolved=true;resolve(true)}})`,fast);
+ const startup=vm.runInContext('startAssetAuthenticatedApp()',fast);
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(fast.__unlocks,1,'local UI must unlock without waiting for the network');
+ assert.equal(fast.__resolved,false,'cloud verification should still be running');
+ fast.__finishCloud();
+ assert.equal(await startup,true);
+});
+
+test('a background cloud failure keeps valid local data open',async()=>{
+ const database={revision:2,lastRequestId:'',payload:null,failAfterCommit:false};
+ const offline=client(database,'owner');
+ vm.runInContext(`__unlocks=0;__gateModes=[];initSupabaseCloud=async()=>true;cloudLocalEnvelope=()=>({stored:true,envelope:{savedAt:'2026-09-28T00:00:00Z',data:{accounts:[]}}});assetAuthGateUnlock=()=>{__unlocks+=1};assetAuthGateState=mode=>{__gateModes.push(mode)};cloudReconcileState=async()=>{cloudSyncStatus='동기화 확인 실패';return false}`,offline);
+ assert.equal(await vm.runInContext('startAssetAuthenticatedApp()',offline),false);
+ assert.equal(offline.__unlocks,1);
+ assert.equal(JSON.stringify(offline.__gateModes),JSON.stringify(['loading']),'a transient network failure must not relock a valid local ledger');
+ assert.equal(vm.runInContext('cloudSyncStatus',offline),'오프라인 · 재확인 필요');
 });
 
 test('migration enforces authenticated atomic writes',()=>{
