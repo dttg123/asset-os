@@ -69,7 +69,9 @@
 
 로컬 실행 결과는 FAST **18/18 PASS**, 장기 RELEASE 파일을 제외한 Node 회귀 **120/120 PASS**, 30·35년을 포함한 전체 Node 회귀 **123/123 PASS**다. 기존 116개 기대값은 바꾸지 않았고 새 테스트 7개가 추가됐다.
 
-로컬 환경에서는 Playwright Chromium CDN이 0바이트 파일을 반환해 브라우저 바이너리 설치가 실패했다. E2E 6개의 구성·구문·목록은 검증했으며 실제 실행은 후보 브랜치의 GitHub Actions에서 판정한다. pgTAP도 로컬 Supabase/Docker가 없어 GitHub Actions에서 실제 실행한다. 실행되지 않은 두 영역은 PASS로 기록하지 않는다.
+로컬 환경에서는 Playwright Chromium CDN이 0바이트 파일을 반환해 브라우저 바이너리 설치가 실패했다. E2E 6개의 구성·구문·목록은 검증했으며 실제 실행은 후보 브랜치의 GitHub Actions에서 판정한다. 첫 CI는 테스트가 Supabase CDN을 가짜 응답으로 치환하면서 SRI 무결성 오류를 만든 것을 실패로 기록했고, 재시도도 같은 원인으로 실패했다. 테스트를 약화하지 않고 가짜 치환만 제거해 실제 CDN 무결성을 검사하도록 수정했다.
+
+`database-qa` run 1은 깨끗한 Supabase 기동, 전체 마이그레이션, pgTAP RLS·권한 검사를 실제 실행해 PASS했다. 운영 DB에는 적용하지 않았다.
 
 ## 아직 실행하지 않은 최종 게이트
 
@@ -81,8 +83,8 @@
 | 실제 KIS 전체·부분·토큰 실패 | 미실행 | QA 사용자 인증과 Edge Function 환경 |
 | 서비스워커 실제 업그레이드 | 실행 회귀 PASS / 실브라우저 미실행 | 구버전이 설치된 후보 URL |
 | Android 공유창 | 미실행 | Android 실기기 |
-| Playwright 자동 E2E | CI 실행 대기 | 로컬 Chromium CDN 차단, 후보 Actions에서 실행 |
-| pgTAP 실제 DB/RLS | CI 실행 대기 | 로컬 Supabase/Docker 없음, database-qa Actions에서 실행 |
+| Playwright 자동 E2E | 수정본 CI 재실행 대기 | 첫 실패 원인 SRI 가짜 응답 제거, 실제 CDN으로 재검증 |
+| pgTAP 실제 DB/RLS | PASS(QA DB) | database-qa run 1, 깨끗한 Supabase 전체 마이그레이션·권한 검사 성공 |
 | 시각 기준 스크린샷 | 미구축 | 동일 CI 브라우저에서 최초 기준 검토·승인 필요 |
 
 ## 배포 전 안전 순서
