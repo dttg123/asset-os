@@ -59,11 +59,19 @@ test('a lost response retries the same request without a second revision',async(
 });
 
 test('migration enforces authenticated atomic writes',()=>{
+ const baseline=fs.readFileSync(path.join(root,'supabase/migrations/202609240001_prepare_asset_os_state.sql'),'utf8');
  const sql=fs.readFileSync(path.join(root,'supabase/migrations/202609280001_atomic_asset_os_state.sql'),'utf8');
+ assert.match(baseline,/create table if not exists public\.asset_os_state/);
+ assert.match(baseline,/enable row level security/);
+ assert.match(baseline,/auth\.uid\(\)\) = user_id/);
  assert.match(sql,/select s\.revision[\s\S]*for update/);
  assert.match(sql,/v_user_id uuid := auth\.uid\(\)/);
  assert.match(sql,/v_last_request_id = p_request_id/);
  assert.match(sql,/coalesce\(p_expected_revision, 0\) <> v_current_revision/);
  assert.match(sql,/revoke insert, update, delete on table public\.asset_os_state from authenticated/);
  assert.match(sql,/grant execute on function public\.save_asset_os_state[\s\S]*to authenticated/);
+ const pgTap=fs.readFileSync(path.join(root,'supabase/tests/asset_os_state_rls_test.sql'),'utf8');
+ assert.match(pgTap,/has_table_privilege\('authenticated','public\.asset_os_state','SELECT'\)/);
+ assert.match(pgTap,/not has_table_privilege\('authenticated','public\.asset_os_state','UPDATE'\)/);
+ assert.match(pgTap,/not has_function_privilege\('anon','public\.save_asset_os_state/);
 });

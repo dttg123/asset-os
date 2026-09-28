@@ -25,6 +25,13 @@ function legacyData(){
  };
 }
 
+context.__payload=JSON.parse(fs.readFileSync(path.join(root,'tests/fixtures/legacy/schema-v4.json'),'utf8'));
+const physicalLegacy=plain(run('validateBackupPayload(__payload)'));
+assert.equal(physicalLegacy.accounts[0].transactions[0].id,'legacy-deposit','physical schema v4 fixture ISA ledger');
+assert.equal(physicalLegacy.pension.contributions[0].amount,500000,'physical schema v4 fixture pension contribution');
+assert.equal(physicalLegacy.integrated.ledger[0].amount,4000000,'physical schema v4 fixture integrated ledger');
+assert.throws(()=>JSON.parse(fs.readFileSync(path.join(root,'tests/fixtures/legacy/truncated-backup.json'),'utf8')),SyntaxError);
+
 for(let schema=4;schema<=21;schema++){
  context.__payload={format:'asset-os-backup-v1',schemaVersion:schema,appVersion:schema===4?'v0.1':'v0.6.4',environment:'live',exportedAt:'2026-09-02T00:00:00.000Z',data:legacyData()};
  const normalized=plain(run('validateBackupPayload(__payload)'));

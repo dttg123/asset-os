@@ -49,6 +49,28 @@
 
 브라우저 콘솔에는 클라우드 브라우저 확장 프로그램의 메타데이터 전송 오류만 있었고 후보 앱 URL에서 발생한 오류는 없었다. 이 결과는 **후보 데스크톱 실화면 PASS**이며, 브라우저 뷰포트가 1363×936으로 고정되어 실제 Galaxy 모바일 PASS로 대체하지 않는다.
 
+## QA POLICY FINAL v3 실제 구현
+
+첨부된 `ASSET_OS_QA_POLICY_2026-09-28.txt`를 `docs/QA_POLICY.txt`에 원문 그대로 보존하고 문서만 저장하지 않고 다음 실행 기반을 후보 코드에 추가했다.
+
+- `qa:fast`, `qa:core`, `qa:full`, `qa:release` 실행 프로필
+- PR은 CORE, `main` push는 FULL, 수동 실행은 FAST~RELEASE를 선택하는 GitHub Actions
+- 실패한 Playwright 실행만 trace·스크린샷·영상을 보존하는 14일 CI artifact
+- Chromium 데스크톱과 Galaxy 412×915 모바일 프로젝트
+- 운영 동기화를 차단한 QA 모드의 로그인 셸, 35년 생성, 홈·ISA·연금·통합·새로고침 흐름
+- 독립 검산한 통합 원장 golden 15개
+- schema v4 실제 형식 fixture와 손상 백업 fixture
+- 성공·빈 결과·부분 실패·401·429·500·계약 오류 KIS fixture
+- seed·시작연도·기간·SHA-256 해시를 고정한 1·5·10·30년 generator
+- 3개 불변식 property 테스트, 고정 seed 총 500회 무작위 검증
+- 깨끗한 QA DB에서도 처음부터 실행되는 멱등 `asset_os_state` 기준 마이그레이션
+- 실제 PostgreSQL에서 RLS·테이블 권한·RPC·KIS 토큰 권한을 검사하는 pgTAP workflow
+- Node 24와 lockfile·직접 의존성 일치 검사
+
+로컬 실행 결과는 FAST **18/18 PASS**, 장기 RELEASE 파일을 제외한 Node 회귀 **120/120 PASS**, 30·35년을 포함한 전체 Node 회귀 **123/123 PASS**다. 기존 116개 기대값은 바꾸지 않았고 새 테스트 7개가 추가됐다.
+
+로컬 환경에서는 Playwright Chromium CDN이 0바이트 파일을 반환해 브라우저 바이너리 설치가 실패했다. E2E 6개의 구성·구문·목록은 검증했으며 실제 실행은 후보 브랜치의 GitHub Actions에서 판정한다. pgTAP도 로컬 Supabase/Docker가 없어 GitHub Actions에서 실제 실행한다. 실행되지 않은 두 영역은 PASS로 기록하지 않는다.
+
 ## 아직 실행하지 않은 최종 게이트
 
 | 항목 | 상태 | 필요한 조건 |
@@ -59,6 +81,9 @@
 | 실제 KIS 전체·부분·토큰 실패 | 미실행 | QA 사용자 인증과 Edge Function 환경 |
 | 서비스워커 실제 업그레이드 | 실행 회귀 PASS / 실브라우저 미실행 | 구버전이 설치된 후보 URL |
 | Android 공유창 | 미실행 | Android 실기기 |
+| Playwright 자동 E2E | CI 실행 대기 | 로컬 Chromium CDN 차단, 후보 Actions에서 실행 |
+| pgTAP 실제 DB/RLS | CI 실행 대기 | 로컬 Supabase/Docker 없음, database-qa Actions에서 실행 |
+| 시각 기준 스크린샷 | 미구축 | 동일 CI 브라우저에서 최초 기준 검토·승인 필요 |
 
 ## 배포 전 안전 순서
 

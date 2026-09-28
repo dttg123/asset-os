@@ -5,6 +5,13 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      profile:
+        description: QA profile
+        required: true
+        default: core
+        type: choice
+        options: [fast, core, full, release]
 
 permissions:
   contents: read
@@ -27,4 +34,23 @@ jobs:
           cache: npm
           package-manager-cache: true
       - run: npm ci --ignore-scripts
-      - run: npm run ci
+      - id: profile
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "name=${{ inputs.profile }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            echo "name=full" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=core" >> "$GITHUB_OUTPUT"
+          fi
+      - run: npx playwright install --with-deps chromium
+      - run: npm run "qa:${{ steps.profile.outputs.name }}"
+      - run: npm run audit
+      - if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: asset-os-qa-failure-${{ github.run_id }}
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 14

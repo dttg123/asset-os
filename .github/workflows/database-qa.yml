@@ -1,0 +1,27 @@
+name: database-qa
+
+on:
+  pull_request:
+    paths:
+      - "supabase/**"
+      - ".github/workflows/database-qa.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pg-tap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: supabase start -x studio,imgproxy,inbucket,edge-runtime,logflare,vector
+      - run: supabase test db
+      - if: always()
+        run: supabase stop --no-backup

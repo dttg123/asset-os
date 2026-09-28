@@ -1,0 +1,9 @@
+{
+  "success":{"ok":true,"action":"balance","accountKind":"pension","fetchedAt":"2026-09-28T00:00:00.000Z","balance":{"totalValue":"1234567"},"orders":[],"rights":[]},
+  "empty":{"ok":true,"action":"orders","accountKind":"irp","fetchedAt":"2026-09-28T00:00:00.000Z","orders":[]},
+  "partial":{"ok":false,"error":"KIS_PARTIAL_FAILURE","stage":"orders","upstreamCode":"PARTIAL_TEST"},
+  "unauthorized":{"ok":false,"status":401,"error":"KIS_TOKEN_EXPIRED","stage":"balance"},
+  "rateLimited":{"ok":false,"status":429,"error":"KIS_RATE_LIMITED","stage":"quote"},
+  "serverError":{"ok":false,"status":500,"error":"KIS_UPSTREAM_FAILED","stage":"rights"},
+  "invalid":{"ok":true,"action":"balance","accountKind":"wrong-kind","balance":null}
+}
