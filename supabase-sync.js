@@ -25,7 +25,7 @@ function assetAuthGateState(mode,message=''){
  else if(mode==='conflict'){status.className='asset-auth-status error';status.textContent=message||'두 기기의 변경이 겹쳤습니다. 어느 원장을 유지할지 선택해 주세요.'}
  else{button.disabled=false;button.textContent='다시 확인';status.textContent=message||'연결을 확인하지 못했습니다.'}
 }
-function assetAuthGateUnlock(){if(assetAppUnlocked)return;assetAppUnlocked=true;const gate=$('#assetAuthGate');if(gate)gate.hidden=true;document.documentElement.classList.remove('asset-auth-locked');if(!location.hash)location.hash='#/home';render();refreshCloudProfileUI();if(state.system?.loadWarning)setTimeout(()=>toast('저장 데이터 확인이 필요합니다.'),100)}
+function assetAuthGateUnlock(){const gate=$('#assetAuthGate');if(gate)gate.hidden=true;document.documentElement.classList.remove('asset-auth-locked');if(assetAppUnlocked){refreshCloudProfileUI();return}assetAppUnlocked=true;if(!location.hash)location.hash='#/home';render();refreshCloudProfileUI();if(state.system?.loadWarning)setTimeout(()=>toast('저장 데이터 확인이 필요합니다.'),100)}
 function cloudAuthGateMessage(){
  if(cloudSyncStatus==='동기화 충돌 확인 필요')return'클라우드와 이 기기의 원장이 동시에 변경되어 자동으로 열지 않았습니다. 자료 충돌을 확인해 주세요.';
  if(cloudSyncStatus==='빈 클라우드 자료 보호됨')return'빈 클라우드 자료가 이 기기의 원장을 덮지 않도록 앱을 잠갔습니다.';

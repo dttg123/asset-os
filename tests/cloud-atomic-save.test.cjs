@@ -72,6 +72,14 @@ test('conflict pull cancels a stale busy save before applying the remote state',
  assert.equal(stale.__unlocked,1);
 });
 
+test('conflict recovery hides the auth gate when the app was already open',()=>{
+ const database={revision:2,lastRequestId:'',payload:null,failAfterCommit:false};
+ const openApp=client(database,'owner');
+ vm.runInContext(`assetAppUnlocked=true;$ ('#assetAuthGate').hidden=false;assetAuthGateUnlock()`,openApp);
+ assert.equal(vm.runInContext(`$ ('#assetAuthGate').hidden`,openApp),true);
+ assert.equal(vm.runInContext('assetAppUnlocked',openApp),true);
+});
+
 test('migration enforces authenticated atomic writes',()=>{
  const baseline=fs.readFileSync(path.join(root,'supabase/migrations/202609240001_prepare_asset_os_state.sql'),'utf8');
  const sql=fs.readFileSync(path.join(root,'supabase/migrations/202609280001_atomic_asset_os_state.sql'),'utf8');
