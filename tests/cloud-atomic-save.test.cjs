@@ -58,6 +58,20 @@ test('a lost response retries the same request without a second revision',async(
  assert.equal(database.revision,2,'idempotent retry must not increment twice');
 });
 
+test('conflict pull cancels a stale busy save before applying the remote state',async()=>{
+ const database={revision:2,lastRequestId:'other-session',payload:{savedAt:'2026-09-28T00:00:00Z',data:{accounts:[]}},failAfterCommit:false};
+ const stale=client(database,'owner');
+ vm.runInContext(`cloudSyncBusy=true;cloudPushPending=true;cloudSyncTimer=99;cloudPendingWrite={requestId:'stale'};__pullForce='';__unlocked=0;clearTimeout=id=>{__cleared=id};cloudReconcileState=async force=>{__pullForce=force;return true};assetAuthGateUnlock=()=>{__unlocked+=1}`,stale);
+ assert.equal(await vm.runInContext('cloudResolveConflictPull()',stale),true);
+ assert.equal(vm.runInContext('cloudSyncBusy',stale),false);
+ assert.equal(vm.runInContext('cloudPushPending',stale),false);
+ assert.equal(vm.runInContext('cloudSyncTimer',stale),0);
+ assert.equal(vm.runInContext('cloudPendingWrite',stale),null);
+ assert.equal(stale.__cleared,99);
+ assert.equal(stale.__pullForce,'pull');
+ assert.equal(stale.__unlocked,1);
+});
+
 test('migration enforces authenticated atomic writes',()=>{
  const baseline=fs.readFileSync(path.join(root,'supabase/migrations/202609240001_prepare_asset_os_state.sql'),'utf8');
  const sql=fs.readFileSync(path.join(root,'supabase/migrations/202609280001_atomic_asset_os_state.sql'),'utf8');

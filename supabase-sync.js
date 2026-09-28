@@ -160,12 +160,15 @@ function cloudBackupLocalConflict(){
  const payload={format:BACKUP_FORMAT,schemaVersion:Number(local.envelope.schemaVersion)||SCHEMA_VERSION,appVersion:String(local.envelope.appVersion||APP_VERSION),environment:APP_ENV,exportedAt:new Date().toISOString(),data:clone(local.envelope.data)};
  const name=`AssetOS_conflict_local_${localYmd().replaceAll('-','')}_${APP_VERSION}.zip`;downloadBytes(createBackupZipBytes(payload),name);return true
 }
+function cloudPrepareConflictResolution(){
+ clearTimeout(cloudSyncTimer);cloudSyncTimer=0;cloudPushPending=false;cloudSyncBusy=false;cloudPendingWrite=null
+}
 async function cloudResolveConflictPull(){
- cloudPendingWrite=null;const ok=await cloudReconcileState('pull');if(ok)assetAuthGateUnlock();else assetAuthGateState('conflict',cloudAuthGateMessage());return ok
+ cloudPrepareConflictResolution();const ok=await cloudReconcileState('pull');if(ok)assetAuthGateUnlock();else assetAuthGateState('conflict',cloudAuthGateMessage());return ok
 }
 async function cloudResolveConflictOverwrite(){
  try{cloudBackupLocalConflict()}catch(error){cloudSetStatus('충돌 백업 실패','wait');assetAuthGateState('conflict',`이 기기 원장을 백업하지 못해 덮어쓰기를 중단했습니다: ${error?.message||error}`);return false}
- const local=cloudLocalEnvelope(),expected=Number(cloudConflict?.revision);if(!local.stored||!Number.isFinite(expected)){cloudSetStatus('동기화 충돌 확인 필요','wait');return false}
+ cloudPrepareConflictResolution();const local=cloudLocalEnvelope(),expected=Number(cloudConflict?.revision);if(!local.stored||!Number.isFinite(expected)){cloudSetStatus('동기화 충돌 확인 필요','wait');return false}
  cloudBaseRevision=expected;cloudPendingWrite=null;const ok=await cloudPushState(local.envelope,false);if(ok)assetAuthGateUnlock();return ok
 }
 
