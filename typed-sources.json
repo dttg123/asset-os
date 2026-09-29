@@ -6,6 +6,7 @@
   "core-accessors.ts",
   "initial-import.ts",
   "initial-import-ui.ts",
+  "integrated-finance-engine.ts",
   "integrated-forms.ts",
   "isa-validation.ts",
   "src/app/schedule-completion.ts",
