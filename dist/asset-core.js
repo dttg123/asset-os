@@ -1346,67 +1346,132 @@ function persist(notify=true){
 ;
 /* asset-os source: backup.js */
 'use strict';
-const BACKUP_FORMAT='asset-os-backup-v1',SUPPORTED_SCHEMAS=new Set([4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]);
-const MAX_IMPORT_FILE_BYTES=8*1024*1024;
-function assertImportFileSize(file,label='백업'){const size=Number(file?.size);if(Number.isFinite(size)&&size>MAX_IMPORT_FILE_BYTES)throw new Error(`${label} 파일은 8MB 이하만 열 수 있습니다.`)}
-let crcTable=null;function crc32(bytes){if(!crcTable){crcTable=Array.from({length:256},(_,n)=>{let c=n;for(let k=0;k<8;k++)c=(c&1)?0xedb88320^(c>>>1):c>>>1;return c>>>0})}let c=0xffffffff;for(const b of bytes)c=crcTable[(c^b)&255]^(c>>>8);return(c^0xffffffff)>>>0}
-function zipDosStamp(d=new Date()){let year=Math.max(1980,d.getFullYear()),date=((year-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate(),time=(d.getHours()<<11)|(d.getMinutes()<<5)|Math.floor(d.getSeconds()/2);return{date,time}}
-function backupPayload(){return{format:BACKUP_FORMAT,schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,environment:APP_ENV,exportedAt:new Date().toISOString(),data:clone(state)}}
-function createBackupZipBytes(payload=backupPayload()){const enc=new TextEncoder(),json=enc.encode(JSON.stringify(payload)),name=enc.encode('asset-os-backup.json'),crc=crc32(json),stamp=zipDosStamp(),localSize=30+name.length+json.length,centralSize=46+name.length,total=localSize+centralSize+22,out=new Uint8Array(total),v=new DataView(out.buffer);let o=0;const u16=n=>{v.setUint16(o,n,true);o+=2},u32=n=>{v.setUint32(o,n>>>0,true);o+=4},put=b=>{out.set(b,o);o+=b.length};u32(0x04034b50);u16(20);u16(0);u16(0);u16(stamp.time);u16(stamp.date);u32(crc);u32(json.length);u32(json.length);u16(name.length);u16(0);put(name);put(json);const centralOffset=o;u32(0x02014b50);u16(20);u16(20);u16(0);u16(0);u16(stamp.time);u16(stamp.date);u32(crc);u32(json.length);u32(json.length);u16(name.length);u16(0);u16(0);u16(0);u16(0);u32(0);u32(0);put(name);const centralLength=o-centralOffset;u32(0x06054b50);u16(0);u16(0);u16(1);u16(1);u32(centralLength);u32(centralOffset);u16(0);return out}
-function parseBackupZipBytes(bytes){const src=bytes instanceof Uint8Array?bytes:new Uint8Array(bytes);if(src.length>MAX_IMPORT_FILE_BYTES)throw new Error('백업 파일은 8MB 이하만 열 수 있습니다.');const v=new DataView(src.buffer,src.byteOffset,src.byteLength);if(src.length<30||v.getUint32(0,true)!==0x04034b50)throw new Error('Asset OS ZIP 형식이 아닙니다.');const method=v.getUint16(8,true),expected=v.getUint32(14,true),size=v.getUint32(18,true),nameLen=v.getUint16(26,true),extraLen=v.getUint16(28,true),start=30+nameLen+extraLen;if(method!==0)throw new Error('지원하지 않는 압축 방식입니다. Asset OS에서 만든 ZIP을 선택해 주세요.');if(size>MAX_IMPORT_FILE_BYTES)throw new Error('백업 내부 데이터는 8MB 이하만 열 수 있습니다.');if(start+size>src.length)throw new Error('ZIP 데이터가 잘렸습니다.');const data=src.slice(start,start+size);if(crc32(data)!==expected)throw new Error('ZIP CRC 검증에 실패했습니다.');return JSON.parse(new TextDecoder().decode(data))}
-function backupContainsQaFixtures(payload){const d=payload?.data||{},accounts=d.accounts||[],p=d.pension||{},ledger=d.integrated?.ledger||[];return /(?:^|\s)QA(?:\s|$)/i.test(String(payload?.appVersion||''))||ledger.some(x=>x?.meta?.qaFixture)||accounts.some(a=>(a.assetSnapshots||[]).some(x=>x?.meta?.qaFixture)||(a.transactions||[]).some(x=>x?.meta?.qaFixture)||a.qaDividendHistory)||(p.incomes||[]).some(x=>x?.meta?.qaFixture)||(p.assetSnapshots||[]).some(x=>x?.meta?.qaFixture)}
-function backupEnvironment(payload){if(['live','qa'].includes(payload?.environment))return payload.environment;return backupContainsQaFixtures(payload)?'qa':'live'}
-function validateBackupPayload(payload){if(!payload||payload.format!==BACKUP_FORMAT)throw new Error('Asset OS 백업 파일이 아닙니다.');if(!SUPPORTED_SCHEMAS.has(Number(payload.schemaVersion)))throw new Error(`지원하지 않는 데이터 구조 ${payload.schemaVersion}`);if(!payload.data||typeof payload.data!=='object')throw new Error('백업 데이터가 없습니다.');const sourceEnv=backupEnvironment(payload);if(sourceEnv!==APP_ENV)throw new Error(`${sourceEnv==='qa'?'QA':'운영'} 백업은 ${APP_ENV==='qa'?'QA':'운영'} 화면에 복원할 수 없습니다.`);const migrated=migrateStateData(payload.data,Number(payload.schemaVersion)),next=normalizeState(migrated.data);if(sourceEnv==='qa')next.moduleVerification={isa:false,pension:false,irp:false};return next}
-function downloadBytes(bytes,name,type='application/zip'){const blob=new Blob([bytes],{type}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1200)}
-function backupFileName(){return typeof assetManagedBackupName==='function'?assetManagedBackupName():`AssetOS_${localYmd().replaceAll('-','').slice(2)}_${APP_VERSION}.zip`}
-async function saveZipBackup(){
- const name=backupFileName();
- try{
-  if(typeof window.showSaveFilePicker==='function'&&window.isSecureContext){
-   const handle=await window.showSaveFilePicker({suggestedName:name,types:[{description:'Asset OS ZIP 백업',accept:{'application/zip':['.zip']}}],excludeAcceptAllOption:false});
-   const bytes=createBackupZipBytes(),writable=await handle.createWritable();
-   await writable.write(new Blob([bytes],{type:'application/zip'}));
-   await writable.close();
-   toast(`ZIP 저장 완료: ${handle.name||name}`);
-   return true
-  }
-  const bytes=createBackupZipBytes();
-  downloadBytes(bytes,name);
-  showNotice('ZIP은 Downloads에 저장했습니다.','현재 실행 주소는 보안 컨텍스트가 아니어서 저장 위치 선택창을 강제로 열 수 없습니다. GitHub Pages HTTPS 배포판에서는 ZIP 백업을 누를 때마다 저장 위치 선택창을 먼저 엽니다.');
-  return true
- }catch(e){
-  if(String(e?.name)==='AbortError'){toast('ZIP 저장을 취소했습니다.');return false}
-  try{
-   const bytes=createBackupZipBytes();downloadBytes(bytes,name);
-   showNotice('저장 위치 선택을 열지 못했습니다.','기본 다운로드 위치로 백업 파일을 내려받았습니다. 다운로드 목록에서 파일을 확인해 주세요.');
-   return true
-  }catch(f){toast(`백업 실패: ${f.message||e.message}`);return false}
- }
+const BACKUP_FORMAT = 'asset-os-backup-v1', SUPPORTED_SCHEMAS = new Set([4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]);
+const MAX_IMPORT_FILE_BYTES = 8 * 1024 * 1024;
+function backupErrorName(error) { return error && typeof error === 'object' && 'name' in error ? String(error.name) : ''; }
+function backupErrorMessage(error) { return error instanceof Error ? error.message : String(error || ''); }
+function assertImportFileSize(file, label = '백업') { const size = Number(file?.size); if (Number.isFinite(size) && size > MAX_IMPORT_FILE_BYTES)
+    throw new Error(`${label} 파일은 8MB 이하만 열 수 있습니다.`); }
+let crcTable = null;
+function crc32(bytes) { if (!crcTable) {
+    crcTable = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++)
+        c = (c & 1) ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+} let c = 0xffffffff; for (const b of bytes)
+    c = crcTable[(c ^ b) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
+function zipDosStamp(d = new Date()) { const year = Math.max(1980, d.getFullYear()), date = ((year - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate(), time = (d.getHours() << 11) | (d.getMinutes() << 5) | Math.floor(d.getSeconds() / 2); return { date, time }; }
+function backupPayload() { return { format: BACKUP_FORMAT, schemaVersion: SCHEMA_VERSION, appVersion: APP_VERSION, environment: APP_ENV, exportedAt: new Date().toISOString(), data: clone(state) }; }
+function createBackupZipBytes(payload = backupPayload()) { const enc = new TextEncoder(), json = enc.encode(JSON.stringify(payload)), name = enc.encode('asset-os-backup.json'), crc = crc32(json), stamp = zipDosStamp(), localSize = 30 + name.length + json.length, centralSize = 46 + name.length, total = localSize + centralSize + 22, out = new Uint8Array(total), v = new DataView(out.buffer); let o = 0; const u16 = (n) => { v.setUint16(o, n, true); o += 2; }, u32 = (n) => { v.setUint32(o, n >>> 0, true); o += 4; }, put = (b) => { out.set(b, o); o += b.length; }; u32(0x04034b50); u16(20); u16(0); u16(0); u16(stamp.time); u16(stamp.date); u32(crc); u32(json.length); u32(json.length); u16(name.length); u16(0); put(name); put(json); const centralOffset = o; u32(0x02014b50); u16(20); u16(20); u16(0); u16(0); u16(stamp.time); u16(stamp.date); u32(crc); u32(json.length); u32(json.length); u16(name.length); u16(0); u16(0); u16(0); u16(0); u32(0); u32(0); put(name); const centralLength = o - centralOffset; u32(0x06054b50); u16(0); u16(0); u16(1); u16(1); u32(centralLength); u32(centralOffset); u16(0); return out; }
+function parseBackupZipBytes(bytes) { const src = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes); if (src.length > MAX_IMPORT_FILE_BYTES)
+    throw new Error('백업 파일은 8MB 이하만 열 수 있습니다.'); const v = new DataView(src.buffer, src.byteOffset, src.byteLength); if (src.length < 30 || v.getUint32(0, true) !== 0x04034b50)
+    throw new Error('Asset OS ZIP 형식이 아닙니다.'); const method = v.getUint16(8, true), expected = v.getUint32(14, true), size = v.getUint32(18, true), nameLen = v.getUint16(26, true), extraLen = v.getUint16(28, true), start = 30 + nameLen + extraLen; if (method !== 0)
+    throw new Error('지원하지 않는 압축 방식입니다. Asset OS에서 만든 ZIP을 선택해 주세요.'); if (size > MAX_IMPORT_FILE_BYTES)
+    throw new Error('백업 내부 데이터는 8MB 이하만 열 수 있습니다.'); if (start + size > src.length)
+    throw new Error('ZIP 데이터가 잘렸습니다.'); const data = src.slice(start, start + size); if (crc32(data) !== expected)
+    throw new Error('ZIP CRC 검증에 실패했습니다.'); return JSON.parse(new TextDecoder().decode(data)); }
+function backupContainsQaFixtures(payload) { const d = payload.data || {}, accounts = d.accounts || [], p = d.pension || {}, ledger = d.integrated?.ledger || []; return /(?:^|\s)QA(?:\s|$)/i.test(String(payload.appVersion || '')) || ledger.some((x) => x?.meta?.qaFixture) || accounts.some((a) => (a.assetSnapshots || []).some((x) => x?.meta?.qaFixture) || (a.transactions || []).some((x) => x?.meta?.qaFixture) || a.qaDividendHistory) || (p.incomes || []).some((x) => x?.meta?.qaFixture) || (p.assetSnapshots || []).some((x) => x?.meta?.qaFixture); }
+function backupEnvironment(payload) { if (['live', 'qa'].includes(String(payload.environment || '')))
+    return payload.environment; return backupContainsQaFixtures(payload) ? 'qa' : 'live'; }
+function validateBackupPayload(payload) { if (!payload || payload.format !== BACKUP_FORMAT)
+    throw new Error('Asset OS 백업 파일이 아닙니다.'); if (!SUPPORTED_SCHEMAS.has(Number(payload.schemaVersion)))
+    throw new Error(`지원하지 않는 데이터 구조 ${payload.schemaVersion}`); if (!payload.data || typeof payload.data !== 'object')
+    throw new Error('백업 데이터가 없습니다.'); const sourceEnv = backupEnvironment(payload); if (sourceEnv !== APP_ENV)
+    throw new Error(`${sourceEnv === 'qa' ? 'QA' : '운영'} 백업은 ${APP_ENV === 'qa' ? 'QA' : '운영'} 화면에 복원할 수 없습니다.`); const migrated = migrateStateData(payload.data, Number(payload.schemaVersion)), next = normalizeState(migrated.data); if (sourceEnv === 'qa')
+    next.moduleVerification = { isa: false, pension: false, irp: false }; return next; }
+function downloadBytes(bytes, name, type = 'application/zip') { const blob = new Blob([bytes], { type }), url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1200); }
+function backupFileName() { return typeof assetManagedBackupName === 'function' ? assetManagedBackupName() : `AssetOS_${localYmd().replaceAll('-', '').slice(2)}_${APP_VERSION}.zip`; }
+async function saveZipBackup() {
+    const name = backupFileName();
+    try {
+        const pickerWindow = window;
+        if (typeof pickerWindow.showSaveFilePicker === 'function' && window.isSecureContext) {
+            const handle = await pickerWindow.showSaveFilePicker({ suggestedName: name, types: [{ description: 'Asset OS ZIP 백업', accept: { 'application/zip': ['.zip'] } }], excludeAcceptAllOption: false });
+            const bytes = createBackupZipBytes(), writable = await handle.createWritable();
+            await writable.write(new Blob([bytes], { type: 'application/zip' }));
+            await writable.close();
+            toast(`ZIP 저장 완료: ${handle.name || name}`);
+            return true;
+        }
+        const bytes = createBackupZipBytes();
+        downloadBytes(bytes, name);
+        showNotice('ZIP은 Downloads에 저장했습니다.', '현재 실행 주소는 보안 컨텍스트가 아니어서 저장 위치 선택창을 강제로 열 수 없습니다. GitHub Pages HTTPS 배포판에서는 ZIP 백업을 누를 때마다 저장 위치 선택창을 먼저 엽니다.');
+        return true;
+    }
+    catch (e) {
+        if (backupErrorName(e) === 'AbortError') {
+            toast('ZIP 저장을 취소했습니다.');
+            return false;
+        }
+        try {
+            const bytes = createBackupZipBytes();
+            downloadBytes(bytes, name);
+            showNotice('저장 위치 선택을 열지 못했습니다.', '기본 다운로드 위치로 백업 파일을 내려받았습니다. 다운로드 목록에서 파일을 확인해 주세요.');
+            return true;
+        }
+        catch (f) {
+            toast(`백업 실패: ${backupErrorMessage(f) || backupErrorMessage(e)}`);
+            return false;
+        }
+    }
 }
-async function shareDriveBackup(){
- const payload=backupPayload(),bytes=createBackupZipBytes(payload),name=backupFileName(),shareName=name.replace(/\.zip$/i,'.txt'),file=new File([JSON.stringify(payload)],shareName,{type:'text/plain'});
- try{
-  if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))){
-   await navigator.share({title:'Asset OS 백업',text:'Google Drive를 선택해 백업 TXT를 저장하세요.',files:[file]});
-   toast('공유창으로 백업을 보냈습니다.');
-   return true
-  }
- }catch(e){if(String(e?.name)==='AbortError')return false}
- downloadBytes(bytes,name);
- showNotice('공유 대신 ZIP을 저장했습니다.','공유 권한을 사용할 수 없어 Downloads에 백업했습니다. Google Drive 앱에서 이 ZIP을 업로드해 주세요.');
- return true
+async function shareDriveBackup() {
+    const payload = backupPayload(), bytes = createBackupZipBytes(payload), name = backupFileName(), shareName = name.replace(/\.zip$/i, '.txt'), file = new File([JSON.stringify(payload)], shareName, { type: 'text/plain' });
+    try {
+        if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+            await navigator.share({ title: 'Asset OS 백업', text: 'Google Drive를 선택해 백업 TXT를 저장하세요.', files: [file] });
+            toast('공유창으로 백업을 보냈습니다.');
+            return true;
+        }
+    }
+    catch (e) {
+        if (backupErrorName(e) === 'AbortError')
+            return false;
+    }
+    downloadBytes(bytes, name);
+    showNotice('공유 대신 ZIP을 저장했습니다.', '공유 권한을 사용할 수 없어 Downloads에 백업했습니다. Google Drive 앱에서 이 ZIP을 업로드해 주세요.');
+    return true;
 }
-async function parseBackupFile(file){assertImportFileSize(file);const bytes=new Uint8Array(await file.arrayBuffer()),name=String(file.name||'').toLowerCase();if(bytes.length>MAX_IMPORT_FILE_BYTES)throw new Error('백업 파일은 8MB 이하만 열 수 있습니다.');if(name.endsWith('.json')||name.endsWith('.txt'))return JSON.parse(new TextDecoder().decode(bytes));return parseBackupZipBytes(bytes)}
-async function restoreBackupFile(file){let payload,next;try{payload=await parseBackupFile(file);next=validateBackupPayload(payload)}catch(e){showNotice('복원하지 않았습니다.',`백업 파일 검증 실패: ${e.message}`);return false}showDialog({title:'백업으로 복원할까요?',message:`백업 시각 ${formatDateTime(payload.exportedAt)}\n현재 데이터는 복구용 사본을 먼저 남긴 뒤 교체합니다.`,confirmText:'복원',cancelText:'취소'},()=>{try{const recovery=stateEnvelopeJson(state);storeRecoveryCopy(`${KEY}-pre-restore-${Date.now()}`,recovery);state=next;if(!persist(false))throw new Error(state.system.saveError||'저장 실패');applyTheme();closeSheets();render();toast('백업을 복원했습니다.')}catch(e){showNotice('복원 실패',e.message)}});return true}
-function openBackupHub(){
- const size=new Blob([JSON.stringify(backupPayload())]).size,securePicker=typeof window.showSaveFilePicker==='function'&&window.isSecureContext,folderApi=typeof window.showDirectoryPicker==='function'&&window.isSecureContext,managed=typeof assetBackupSettings==='function'?assetBackupSettings():{phoneEnabled:false,lastPhoneBackupAt:'',phonePermission:'unknown'};
- $('#sheetEyebrow').textContent='데이터 보호';$('#sheetTitle').textContent='백업·복원';
- $('#sheetBody').innerHTML=`<div class=backup-grid><button class="backup-action primary" data-phone-folder><strong>휴대폰 백업 폴더 ${managed.phoneEnabled?'변경':'지정'}</strong><small>${folderApi?'한 번 지정하면 같은 폴더에 자동 저장합니다.':'이 브라우저는 고정 폴더를 지원하지 않아 일반 ZIP 저장을 사용합니다.'}</small></button><button class=backup-action data-phone-now ${managed.phoneEnabled?'':'disabled'}><strong>휴대폰 자동백업 지금 실행</strong><small>${managed.lastPhoneBackupAt?`마지막 ${formatDateTime(managed.lastPhoneBackupAt)}`:'아직 자동백업 없음'} · 같은 날짜 파일은 교체</small></button><button class=backup-action data-backup-zip><strong>ZIP 백업 · 저장 위치 선택</strong><small>${securePicker?'저장 위치를 직접 선택합니다.':'Downloads에 저장합니다.'}</small></button><button class=backup-action data-backup-drive><strong>Google Drive로 보내기</strong><small>공유 가능한 백업 TXT를 Drive로 보냅니다.</small></button><button class=backup-action data-backup-keep><strong>영구보관 ZIP</strong><small>자동 정리에서 제외되는 _keep 파일을 만듭니다.</small></button><button class=backup-action data-backup-restore><strong>ZIP / JSON / TXT 복원</strong><small>schema 4~${SCHEMA_VERSION} 파일을 검증하고 정상일 때만 교체합니다.</small></button></div><div class=backup-status-note>현재 원본 약 ${Math.max(1,Math.round(size/1024))}KB · schema ${SCHEMA_VERSION}<br>백업 파일은 최근 30일 일별·이전 월 1개를 보관하고, _pre / _keep은 삭제하지 않습니다.<br>앱 잔고는 최근 6개월 일별·이전 월별로 보존합니다.</div>`;
- if(typeof appendInitialImportBackupAction==='function')appendInitialImportBackupAction($('#sheetBody .backup-grid'));
- openSheet('#detailSheet');
- $('[data-phone-folder]').onclick=async()=>{if(await assetConnectPhoneBackup())openBackupHub()};$('[data-phone-now]').onclick=()=>assetWritePhoneBackup();$('[data-backup-zip]').onclick=saveZipBackup;$('[data-backup-drive]').onclick=shareDriveBackup;$('[data-backup-keep]').onclick=assetCreateKeepBackup;$('[data-backup-restore]').onclick=()=>$('#backupInput').click()
+async function parseBackupFile(file) { assertImportFileSize(file); const bytes = new Uint8Array(await file.arrayBuffer()), name = String(file.name || '').toLowerCase(); if (bytes.length > MAX_IMPORT_FILE_BYTES)
+    throw new Error('백업 파일은 8MB 이하만 열 수 있습니다.'); if (name.endsWith('.json') || name.endsWith('.txt'))
+    return JSON.parse(new TextDecoder().decode(bytes)); return parseBackupZipBytes(bytes); }
+async function restoreBackupFile(file) { let payload, next; try {
+    payload = await parseBackupFile(file);
+    next = validateBackupPayload(payload);
 }
-function resetLiveData(){state=normalizeState(seed);if(!persist())return false;applyTheme();render();toast('초기 실사용 상태로 초기화했습니다.');return true}
+catch (e) {
+    showNotice('복원하지 않았습니다.', `백업 파일 검증 실패: ${backupErrorMessage(e)}`);
+    return false;
+} showDialog({ title: '백업으로 복원할까요?', message: `백업 시각 ${formatDateTime(payload.exportedAt)}\n현재 데이터는 복구용 사본을 먼저 남긴 뒤 교체합니다.`, confirmText: '복원', cancelText: '취소' }, () => { try {
+    const recovery = stateEnvelopeJson(state);
+    storeRecoveryCopy(`${KEY}-pre-restore-${Date.now()}`, recovery);
+    state = next;
+    if (!persist(false))
+        throw new Error(state.system.saveError || '저장 실패');
+    applyTheme();
+    closeSheets();
+    render();
+    toast('백업을 복원했습니다.');
+}
+catch (e) {
+    showNotice('복원 실패', backupErrorMessage(e));
+} }); return true; }
+function openBackupHub() {
+    const pickerWindow = window, size = new Blob([JSON.stringify(backupPayload())]).size, securePicker = typeof pickerWindow.showSaveFilePicker === 'function' && window.isSecureContext, folderApi = typeof pickerWindow.showDirectoryPicker === 'function' && window.isSecureContext, managed = typeof assetBackupSettings === 'function' ? assetBackupSettings() : { phoneEnabled: false, lastPhoneBackupAt: '', phonePermission: 'unknown' };
+    $('#sheetEyebrow').textContent = '데이터 보호';
+    $('#sheetTitle').textContent = '백업·복원';
+    $('#sheetBody').innerHTML = `<div class=backup-grid><button class="backup-action primary" data-phone-folder><strong>휴대폰 백업 폴더 ${managed.phoneEnabled ? '변경' : '지정'}</strong><small>${folderApi ? '한 번 지정하면 같은 폴더에 자동 저장합니다.' : '이 브라우저는 고정 폴더를 지원하지 않아 일반 ZIP 저장을 사용합니다.'}</small></button><button class=backup-action data-phone-now ${managed.phoneEnabled ? '' : 'disabled'}><strong>휴대폰 자동백업 지금 실행</strong><small>${managed.lastPhoneBackupAt ? `마지막 ${formatDateTime(managed.lastPhoneBackupAt)}` : '아직 자동백업 없음'} · 같은 날짜 파일은 교체</small></button><button class=backup-action data-backup-zip><strong>ZIP 백업 · 저장 위치 선택</strong><small>${securePicker ? '저장 위치를 직접 선택합니다.' : 'Downloads에 저장합니다.'}</small></button><button class=backup-action data-backup-drive><strong>Google Drive로 보내기</strong><small>공유 가능한 백업 TXT를 Drive로 보냅니다.</small></button><button class=backup-action data-backup-keep><strong>영구보관 ZIP</strong><small>자동 정리에서 제외되는 _keep 파일을 만듭니다.</small></button><button class=backup-action data-backup-restore><strong>ZIP / JSON / TXT 복원</strong><small>schema 4~${SCHEMA_VERSION} 파일을 검증하고 정상일 때만 교체합니다.</small></button></div><div class=backup-status-note>현재 원본 약 ${Math.max(1, Math.round(size / 1024))}KB · schema ${SCHEMA_VERSION}<br>백업 파일은 최근 30일 일별·이전 월 1개를 보관하고, _pre / _keep은 삭제하지 않습니다.<br>앱 잔고는 최근 6개월 일별·이전 월별로 보존합니다.</div>`;
+    if (typeof appendInitialImportBackupAction === 'function')
+        appendInitialImportBackupAction($('#sheetBody .backup-grid'));
+    openSheet('#detailSheet');
+    $('[data-phone-folder]').onclick = async () => { if (await assetConnectPhoneBackup())
+        openBackupHub(); };
+    $('[data-phone-now]').onclick = () => assetWritePhoneBackup();
+    $('[data-backup-zip]').onclick = saveZipBackup;
+    $('[data-backup-drive]').onclick = shareDriveBackup;
+    $('[data-backup-keep]').onclick = assetCreateKeepBackup;
+    $('[data-backup-restore]').onclick = () => $('#backupInput').click();
+}
+function resetLiveData() { state = normalizeState(seed); if (!persist())
+    return false; applyTheme(); render(); toast('초기 실사용 상태로 초기화했습니다.'); return true; }
 ;
 /* asset-os source: export-csv.js */
 'use strict';

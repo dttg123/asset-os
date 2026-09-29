@@ -13,7 +13,13 @@ export function runtimeJavaScriptName(sourceName){
 export function compileRuntimeTypeScript(root,sourceNames){
  const outputRoot=fs.mkdtempSync(path.join(os.tmpdir(),'asset-os-runtime-ts-'));
  try{
-  execFileSync(path.join(root,'node_modules','.bin','tsc'),['--ignoreConfig','--target','ES2024','--module','preserve','--strict','--skipLibCheck','--outDir',outputRoot,...sourceNames],{cwd:root,stdio:'pipe'});
-  return Object.fromEntries(sourceNames.map(sourceName=>[sourceName,fs.readFileSync(path.join(outputRoot,runtimeJavaScriptName(sourceName)),'utf8')]));
+  /** @type {Record<string,string>} */
+  const compiled={};
+  for(const [index,sourceName] of sourceNames.entries()){
+   const sourceOutputRoot=path.join(outputRoot,String(index));
+   execFileSync(path.join(root,'node_modules','.bin','tsc'),['--ignoreConfig','--target','ES2024','--module','preserve','--strict','--skipLibCheck','--outDir',sourceOutputRoot,sourceName],{cwd:root,stdio:'pipe'});
+   compiled[sourceName]=fs.readFileSync(path.join(sourceOutputRoot,path.basename(runtimeJavaScriptName(sourceName))),'utf8');
+  }
+  return compiled;
  }finally{fs.rmSync(outputRoot,{recursive:true,force:true})}
 }
