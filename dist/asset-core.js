@@ -477,82 +477,506 @@ function calculateIntegratedReplay(store, rows) {
     return { assets: Object.fromEntries(assets), liabilities: Object.fromEntries(liabilities), minAssets: Object.fromEntries(minAssets), minLiabilities: Object.fromEntries(minLiabilities), totalAssets, totalDebt, netAssets: totalAssets - totalDebt };
 }
 ;
-/* asset-os source: integrated-ledger-engine.js */
+/* asset-os source: src/domain/integrated-ledger-core.js */
 'use strict';
-function rebuildLedgerIndexes(a){
- const ids={contribution:[],cash:[],security:[],adjustment:[],income:[],corporateAction:[]};
- for(const t of a.transactions||[]){
-  if(['deposit','internalTransferIn','depositReversal'].includes(t.type))ids.contribution.push(t.id);
-  if(['deposit','internalTransferIn','depositReversal','withdrawal','internalTransferOut','buy','sell','openingAllocation','dividend','distribution','interest','feeRefund','taxRefund'].includes(t.type))ids.cash.push(t.id);
-  if(['buy','sell','openingAllocation','securityTransferIn','securityTransferOut'].includes(t.type))ids.security.push(t.id);
-  if(t.type==='adjustment')ids.adjustment.push(t.id);
-  if(['dividend','distribution','interest'].includes(t.type))ids.income.push(t.id);
-  if(['split','reverseSplit','merger','delisting'].includes(t.type))ids.corporateAction.push(t.id);
- }
- a.ledgerIndex=ids;
- a.contributionLedger=[...ids.contribution];a.cashLedger=[...ids.cash];a.securityLedger=[...ids.security];a.adjustmentLedger=[...ids.adjustment];
- return a
+function rebuildLedgerIndexes(a) {
+    const ids = { contribution: [], cash: [], security: [], adjustment: [], income: [], corporateAction: [] };
+    for (const t of a.transactions || []) {
+        if (['deposit', 'internalTransferIn', 'depositReversal'].includes(t.type))
+            ids.contribution.push(t.id);
+        if (['deposit', 'internalTransferIn', 'depositReversal', 'withdrawal', 'internalTransferOut', 'buy', 'sell', 'openingAllocation', 'dividend', 'distribution', 'interest', 'feeRefund', 'taxRefund'].includes(t.type))
+            ids.cash.push(t.id);
+        if (['buy', 'sell', 'openingAllocation', 'securityTransferIn', 'securityTransferOut'].includes(t.type))
+            ids.security.push(t.id);
+        if (t.type === 'adjustment')
+            ids.adjustment.push(t.id);
+        if (['dividend', 'distribution', 'interest'].includes(t.type))
+            ids.income.push(t.id);
+        if (['split', 'reverseSplit', 'merger', 'delisting'].includes(t.type))
+            ids.corporateAction.push(t.id);
+    }
+    a.ledgerIndex = ids;
+    a.contributionLedger = [...ids.contribution];
+    a.cashLedger = [...ids.cash];
+    a.securityLedger = [...ids.security];
+    a.adjustmentLedger = [...ids.adjustment];
+    return a;
 }
-function normalizeIntegrated(input){
- let src=input&&typeof input==='object'?clone(input):clone(seed.integrated),base=clone(seed.integrated);
- const out={mode:'live',label:String(src.label||base.label),startedAt:/^\d{4}-\d{2}-\d{2}$/.test(String(src.startedAt||''))?String(src.startedAt):'',accounts:Array.isArray(src.accounts)?src.accounts:base.accounts,liabilities:Array.isArray(src.liabilities)?src.liabilities:base.liabilities,ledger:Array.isArray(src.ledger)?src.ledger:base.ledger};
- const allowedKinds=new Set(['cash','deposit','savings','parking','isa','pension','irp','other']);
- out.accounts=out.accounts.map((a,i)=>({...a,id:String(a.id||`integrated-account-${i+1}`),kind:allowedKinds.has(a.kind)?a.kind:'other',name:String(a.name||`자산 ${i+1}`),productId:String(a.productId||'')}));
- out.liabilities=out.liabilities.map((x,i)=>({...x,id:String(x.id||`integrated-liability-${i+1}`),kind:x.kind==='loan'?'loan':'other',name:String(x.name||`부채 ${i+1}`),productId:String(x.productId||'')}));
- const perDate={};out.ledger=out.ledger.map((t,i)=>{const date=String(t.date||ymd());perDate[date]=(perDate[date]||0)+1;const sequence=Number.isFinite(Number(t.sequence))?Number(t.sequence):perDate[date],createdAt=String(t.createdAt||`${date}T00:00:00.${String(Math.min(999,perDate[date])).padStart(3,'0')}`);return{...t,id:String(t.id||`integrated-ledger-${i+1}`),date,type:String(t.type||''),amount:Number(t.amount)||0,fixed:!!t.fixed,category:String(t.category||''),note:String(t.note||''),sourceModule:String(t.sourceModule||''),sourceId:String(t.sourceId||''),productId:String(t.productId||''),sequence,createdAt,meta:t.meta&&typeof t.meta==='object'?clone(t.meta):{}}});
- for(const link of base.accounts.filter(a=>['cash','isa','pension','irp'].includes(a.kind)))if(!out.accounts.some(a=>a.id===link.id))out.accounts.push(clone(link));
- return out
+function normalizeIntegrated(input) {
+    const src = input && typeof input === 'object' ? clone(input) : clone(seed.integrated), base = clone(seed.integrated);
+    const out = { mode: 'live', label: String(src.label || base.label), startedAt: /^\d{4}-\d{2}-\d{2}$/.test(String(src.startedAt || '')) ? String(src.startedAt) : '', accounts: Array.isArray(src.accounts) ? src.accounts : base.accounts, liabilities: Array.isArray(src.liabilities) ? src.liabilities : base.liabilities, ledger: Array.isArray(src.ledger) ? src.ledger : base.ledger };
+    const allowedKinds = new Set(['cash', 'deposit', 'savings', 'parking', 'isa', 'pension', 'irp', 'other']);
+    out.accounts = out.accounts.map((a, i) => ({ ...a, id: String(a.id || `integrated-account-${i + 1}`), kind: allowedKinds.has(a.kind) ? a.kind : 'other', name: String(a.name || `자산 ${i + 1}`), productId: String(a.productId || '') }));
+    out.liabilities = out.liabilities.map((x, i) => ({ ...x, id: String(x.id || `integrated-liability-${i + 1}`), kind: x.kind === 'loan' ? 'loan' : 'other', name: String(x.name || `부채 ${i + 1}`), productId: String(x.productId || '') }));
+    const perDate = {};
+    out.ledger = out.ledger.map((t, i) => { const date = String(t.date || ymd()); perDate[date] = (perDate[date] || 0) + 1; const sequence = Number.isFinite(Number(t.sequence)) ? Number(t.sequence) : perDate[date], createdAt = String(t.createdAt || `${date}T00:00:00.${String(Math.min(999, perDate[date])).padStart(3, '0')}`); return { ...t, id: String(t.id || `integrated-ledger-${i + 1}`), date, type: String(t.type || ''), amount: Number(t.amount) || 0, fixed: !!t.fixed, category: String(t.category || ''), note: String(t.note || ''), sourceModule: String(t.sourceModule || ''), sourceId: String(t.sourceId || ''), productId: String(t.productId || ''), sequence, createdAt, meta: t.meta && typeof t.meta === 'object' ? clone(t.meta) : {} }; });
+    for (const link of base.accounts.filter(a => ['cash', 'isa', 'pension', 'irp'].includes(a.kind)))
+        if (!out.accounts.some(a => a.id === link.id))
+            out.accounts.push(clone(link));
+    return out;
 }
-function integratedStore(){return state.integrated||seed.integrated}
-function integratedManualLedger(){return [...(integratedStore().ledger||[])]}
-function integratedLinkedLedger(){return []}
-function integratedTxOrder(a,b){return compareIntegratedTransactions(a,b)}
-function nextIntegratedSequence(date){let max=0;for(const t of integratedStore().ledger||[])if(String(t.date||'')===String(date)&&Number.isFinite(Number(t.sequence)))max=Math.max(max,Number(t.sequence));return max+1}
-function isQaIntegratedFixture(t){return !!t?.meta?.qaFixture}
-function integratedOperationalLedger(){return [...integratedManualLedger().filter(t=>!isQaIntegratedFixture(t)),...integratedLinkedLedger().filter(t=>!isQaIntegratedFixture(t))].sort(integratedTxOrder)}
-function integratedAnalysisBalanceLedger(){const start=String(integratedStore().startedAt||''),manual=integratedManualLedger().filter(t=>!isQaIntegratedFixture(t)),linked=(start?integratedLinkedLedger().filter(t=>String(t.date)>=start):[]).filter(t=>!isQaIntegratedFixture(t));return [...manual,...linked].sort(integratedTxOrder)}
-function isaCurrentMonthContribution(month=localYmd().slice(0,7)){return centralIsaContributionRows().filter(t=>integratedMonthKey(t.date)===month).reduce((n,t)=>n+(Number(t.amount)||0),0)}
-function integratedLedger(){return integratedOperationalLedger()}
-function integratedBalanceLedger(){const start=String(integratedStore().startedAt||''),manual=integratedManualLedger().filter(t=>!isQaIntegratedFixture(t)),linked=(start?integratedLinkedLedger().filter(t=>String(t.date)>=start):[]).filter(t=>!isQaIntegratedFixture(t));return [...manual,...linked].sort(integratedTxOrder)}
-function integratedMonthKey(v){return String(v||'').slice(0,7)}
-function integratedLatestMonth(){const rows=integratedLedger().filter(t=>!['openingAsset','openingLiability'].includes(t.type));return rows.length?integratedMonthKey(rows[rows.length-1].date):localYmd().slice(0,7)}
-function integratedReplay(rows=null,store=integratedStore()){
- const source=store||integratedStore(),useRows=rows===null?integratedBalanceLedger():rows;
- return calculateIntegratedReplay(source,useRows)
+;
+/* asset-os source: src/domain/integrated-ledger.js */
+'use strict';
+function ledgerState() {
+    // @ts-ignore runtime global supplied by store-state.js
+    return state;
 }
-function moduleVerified(kind){return !!state.moduleVerification?.[kind]}
-function integratedFinancialModel(){const r=integratedReplay(),accounts=integratedStore().accounts,activeIds=new Set(activeFinancialProducts().map(p=>p.id)),verify={isa:moduleVerified('isa'),pension:moduleVerified('pension'),irp:moduleVerified('irp')};let cash=0,deposit=0,savings=0,other=0;for(const a of accounts){const v=Math.max(0,Number(r.assets[a.id]||0)),hasResidual=v>.005,productActive=!a.productId||activeIds.has(a.productId);if(a.kind==='cash')cash+=v;else if(a.kind==='parking'&&(productActive||hasResidual))cash+=v;else if(a.kind==='deposit'&&(productActive||hasResidual))deposit+=v;else if(a.kind==='savings'&&(productActive||hasResidual))savings+=v;else if(a.kind==='other')other+=v}const linkedIsa=Math.max(0,Number(r.assets['isa-link']||0)),linkedPension=Math.max(0,Number(r.assets['pension-link']||0)),linkedIrp=Math.max(0,Number(r.assets['irp-link']||0)),activePensionAccounts=pensionStore().accounts.filter(a=>a.status==='active'),kisPension=brokerKisCurrentKindTotal(state.brokerKis,'pension',activePensionAccounts.filter(a=>a.kind==='pension').map(a=>a.id)),kisIrp=brokerKisCurrentKindTotal(state.brokerKis,'irp',activePensionAccounts.filter(a=>a.kind==='irp').map(a=>a.id)),isaAccountMetrics=state.accounts.filter(isCurrentAccount).map(accountMetrics),isaMetrics={value:isaAccountMetrics.reduce((sum,m)=>sum+(Number(m.value)||0),0),cost:isaAccountMetrics.reduce((sum,m)=>sum+(Number(m.cost)||0),0)},isaRecorded=verify.isa||isaMetrics.value>.5||isaMetrics.cost>.5,isa=isaRecorded?Math.max(0,isaMetrics.value||0):linkedIsa,pensionMetrics=pensionAssetMetrics('pension'),irpMetrics=pensionAssetMetrics('irp'),localPension=Math.max(0,pensionMetrics.value||0),localIrp=Math.max(0,irpMetrics.value||0),useKisPension=!!kisPension&&(kisPension.authoritative===true||kisPension.totalValue>.5||localPension<=.5),useKisIrp=!!kisIrp&&(kisIrp.authoritative===true||kisIrp.totalValue>.5||localIrp<=.5),pension=useKisPension?kisPension.totalValue:localPension,irp=useKisIrp?kisIrp.totalValue:localIrp,available={isa:isaRecorded,pension:useKisPension||verify.pension||localPension>.5,irp:useKisIrp||verify.irp||localIrp>.5};let debt=0;for(const l of integratedStore().liabilities){const v=Math.max(0,Number(r.liabilities[l.id]||0)),p=l.productId?financialProduct(l.productId):null;if(p&&p.status!=='active'&&v<=.005)continue;debt+=v}const totalAssets=cash+deposit+savings+isa+pension+irp+other;return{cash,deposit,savings,isa,pension,irp,other,totalAssets,totalDebt:debt,netAssets:totalAssets-debt,replay:r,linked:{isa:linkedIsa,pension:linkedPension,irp:linkedIrp},verified:verify,available,currentSources:{isa:isaRecorded?'asset-os':'linked',pension:useKisPension?'kis':pensionMetrics.source||'asset-os',irp:useKisIrp?'kis':irpMetrics.source||'asset-os'},kis:{pension:kisPension,irp:kisIrp},isComplete:available.isa&&available.pension&&available.irp}}
-function financialProductActiveOnDate(p,asOf){if(!p)return true;const d=String(asOf||localYmd()),end=String(p.endedAt||p.settlement?.date||((p.status==='ended'||p.status==='closed')?p.maturityDate:'')||'');if(p.startDate&&d<String(p.startDate))return false;if(end&&d>end)return false;return true}
-function latestSnapshotAt(list,asOf){return [...(Array.isArray(list)?list:[])].filter(x=>(!x?.meta?.qaFixture||QA_MODE)&&String(x.date||'')<=String(asOf||localYmd())).sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))).at(-1)||null}
-function isaAccountActiveOnDate(a,asOf){if(!a)return false;const d=String(asOf||localYmd()),open=String(a.openedAt||a.baselineDate||'0000-01-01'),close=String(a.closedAt||'');return open<=d&&(!close||d<=close)}
-function historicalIsaValue(asOf,replayed){const linked=Math.max(0,Number(replayed?.assets?.['isa-link']||0)),active=state.accounts.filter(a=>isaAccountActiveOnDate(a,asOf));if(!active.length)return linked;let sum=0,covered=0;for(const a of active){const s=latestSnapshotAt(a.assetSnapshots,asOf);if(s){sum+=Math.max(0,Number(s.totalValue??s.value)||0);covered++}}return covered===active.length?sum:linked}
-function historicalPensionValue(kind,asOf,replayed){const linkId=kind==='irp'?'irp-link':'pension-link',linked=Math.max(0,Number(replayed?.assets?.[linkId]||0)),s=latestSnapshotAt(state.pension?.assetSnapshots,asOf);if(!s)return linked;const row=kind==='irp'?s.irp:s.pension;if(!row)return linked;return Math.max(0,Number(row.value)||0)}
-function historicalFinancialCoverage(asOf,rowsAtDate=null){const d=String(asOf||localYmd()).slice(0,10),ledger=rowsAtDate||integratedAnalysisBalanceLedger().filter(t=>String(t.date||'')<=d),assetEvidence=ledger.some(t=>['openingAsset','externalIncome','externalAssetIn','internalTransfer','adjustment'].includes(t.type)),missing=[];for(const a of state.accounts||[]){if(!isaAccountActiveOnDate(a,d))continue;if(!latestSnapshotAt(a.assetSnapshots,d))missing.push(`ISA:${a.id}`)}const snap=latestSnapshotAt(state.pension?.assetSnapshots,d);for(const account of pensionStore().accounts||[]){if(!pensionAccountActiveOnDate(account,d))continue;const row=account.kind==='irp'?snap?.irp:snap?.pension;if(!row)missing.push(`${account.kind}:${account.id}`)}return{complete:assetEvidence&&!missing.length,assetEvidence,missing}}
-function historicalFinancialModel(asOf=localYmd()){const d=String(asOf||localYmd()).slice(0,10),rows=integratedAnalysisBalanceLedger().filter(t=>String(t.date||'')<=d),store=integratedStore(),r=integratedReplay(rows,store);let cash=0,deposit=0,savings=0,other=0;for(const a of store.accounts||[]){const v=Math.max(0,Number(r.assets[a.id]||0)),p=a.productId?financialProduct(a.productId):null;if(p&&!financialProductActiveOnDate(p,d)&&v<=.005)continue;if(a.kind==='cash'||a.kind==='parking')cash+=v;else if(a.kind==='deposit')deposit+=v;else if(a.kind==='savings')savings+=v;else if(a.kind==='other')other+=v}const isa=historicalIsaValue(d,r),pension=historicalPensionValue('pension',d,r),irp=historicalPensionValue('irp',d,r);let totalDebt=0;for(const l of store.liabilities||[]){const v=Math.max(0,Number(r.liabilities[l.id]||0)),p=l.productId?financialProduct(l.productId):null;if(p&&!financialProductActiveOnDate(p,d)&&v<=.005)continue;totalDebt+=v}const totalAssets=cash+deposit+savings+isa+pension+irp+other,coverage=historicalFinancialCoverage(d,rows);return{asOf:d,cash,deposit,savings,isa,pension,irp,other,totalAssets,totalDebt,netAssets:totalAssets-totalDebt,replay:r,coverage,isComplete:coverage.complete}}
-function financialGrowthBreakdown(startDate,endDate){const earliest=financialAnalysisEarliestDate(),effectiveStart=String(startDate)<earliest?earliest:String(startDate),start=historicalFinancialModel(effectiveStart),end=historicalFinancialModel(endDate),rows=integratedAnalysisBalanceLedger().filter(t=>String(t.date||'')>String(start.asOf)&&String(t.date||'')<=String(end.asOf));let externalNet=0,adjustment=0;for(const t of rows){const a=Number(t.amount)||0;if(['externalIncome','externalAssetIn','externalDebtPrincipal'].includes(t.type)||(t.type==='refund'&&t.toAccountId))externalNet+=a;else if(['expense','externalWithdrawal','externalAssetOut','debtInterest'].includes(t.type))externalNet-=a;else if(t.type==='adjustment')adjustment+=Number(t.delta)||0}const netChange=end.netAssets-start.netAssets,assetChange=end.totalAssets-start.totalAssets,debtReduction=start.totalDebt-end.totalDebt,residual=netChange-externalNet-adjustment,rate=start.coverage.complete&&end.coverage.complete&&start.netAssets>0?netChange/start.netAssets*100:null;return{start,end,netChange,assetChange,debtReduction,rate,externalNet,adjustment,residual,reconciled:Math.abs(netChange-(externalNet+adjustment+residual))<.01}}
-function integratedSpendingRows(month){return integratedLedger().filter(t=>integratedMonthKey(t.date)===month&&['expense','externalExpense','refund'].includes(t.type)).map(t=>t.type==='refund'?{...t,amount:-Number(t.amount)}:t)}
-function integratedSpendingMonthShift(month,delta){const [year,value]=String(month).split('-').map(Number),date=new Date(year,value-1+delta,1);return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`}
-function integratedSpendingAnalysis(month=integratedLatestMonth()){const rows=integratedSpendingRows(month),amount=list=>list.reduce((sum,row)=>sum+(Number(row.amount)||0),0),fixedRows=rows.filter(row=>row.fixed),variableRows=rows.filter(row=>!row.fixed),categories=new Map();for(const row of rows){const key=String(row.category||'기타').trim()||'기타',entry=categories.get(key)||{key,amount:0,count:0};entry.amount+=Number(row.amount)||0;entry.count++;categories.set(key,entry)}const total=amount(rows),previousMonth=integratedSpendingMonthShift(month,-1),previousTotal=amount(integratedSpendingRows(previousMonth)),change=total-previousTotal,changeRate=previousTotal?change/previousTotal*100:null,trend=[];for(let offset=-5;offset<=0;offset++){const key=integratedSpendingMonthShift(month,offset),value=amount(integratedSpendingRows(key));trend.push({month:key,label:`${Number(key.slice(5))}월`,amount:value})}return{month,rows,total,fixed:amount(fixedRows),variable:amount(variableRows),fixedRows,variableRows,categories:[...categories.values()].sort((a,b)=>b.amount-a.amount||a.key.localeCompare(b.key,'ko')),previousMonth,previousTotal,change,changeRate,trend}}
-function financialAnalysisEarliestDate(){const ledger=integratedAnalysisBalanceLedger(),assetStart=ledger.filter(t=>['openingAsset','externalIncome','externalAssetIn','internalTransfer','adjustment'].includes(t.type)&&t.date).map(t=>String(t.date).slice(0,10)).sort()[0];if(!assetStart)return localYmd();const dates=[assetStart,localYmd()];for(const a of state.accounts||[])for(const s of a.assetSnapshots||[])if((!s?.meta?.qaFixture||QA_MODE)&&s.date&&String(s.date)>=assetStart)dates.push(String(s.date).slice(0,10));for(const s of state.pension?.assetSnapshots||[])if((!s?.meta?.qaFixture||QA_MODE)&&s.date&&String(s.date)>=assetStart)dates.push(String(s.date).slice(0,10));return[...new Set(dates)].sort().find(d=>historicalFinancialCoverage(d).complete)||localYmd()}
-function shiftMonthsYmd(date,delta){const m=String(date||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!m)return String(date||'');const total=Number(m[1])*12+(Number(m[2])-1)+Math.trunc(Number(delta)||0),y=Math.floor(total/12),mi=total-y*12,day=Math.min(Number(m[3]),new Date(y,mi+1,0).getDate());return `${y}-${String(mi+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`}
-function financialAnalysisStart(period,end=localYmd()){return period==='3m'?shiftMonthsYmd(end,-3):period==='6m'?shiftMonthsYmd(end,-6):period==='1y'?shiftMonthsYmd(end,-12):period==='3y'?shiftMonthsYmd(end,-36):financialAnalysisEarliestDate()}
-function monthEndYmd(year,monthIndex){const d=new Date(Number(year),Number(monthIndex)+1,0,12);return localYmd(d)}
-function financialGrowthSeries(period='6m'){const end=localYmd(),requested=financialAnalysisStart(period,end),earliest=financialAnalysisEarliestDate(),start=requested<earliest?earliest:requested,sd=new Date(start+'T12:00:00'),ed=new Date(end+'T12:00:00'),raw=[];let y=sd.getFullYear(),m=sd.getMonth();while(y<ed.getFullYear()||(y===ed.getFullYear()&&m<=ed.getMonth())){const d=monthEndYmd(y,m),asOf=d>end?end:d,model=historicalFinancialModel(asOf);if(asOf>=start&&model.coverage.complete)raw.push({...model,label:`${String(y).slice(-2)}.${String(m+1).padStart(2,'0')}`});m++;if(m>11){m=0;y++}}if(!raw.length){const model=historicalFinancialModel(end);raw.push({...model,label:end.slice(2,7).replace('-','.')})}const months=raw.length;if(months<=18)return raw;const grain=months>60?'year':'quarter',map=new Map();for(const r of raw){const d=new Date(r.asOf+'T12:00:00'),key=grain==='year'?String(d.getFullYear()):`${d.getFullYear()}-Q${Math.floor(d.getMonth()/3)+1}`,label=grain==='year'?String(d.getFullYear()):`${String(d.getFullYear()).slice(-2)} Q${Math.floor(d.getMonth()/3)+1}`;map.set(key,{...r,label})}return [...map.values()]}
-function integratedProductSavingAmount(rows){const accountMap=new Map(integratedStore().accounts.map(a=>[a.id,a]));return rows.filter(t=>t.type==='internalTransfer'&&['deposit','savings'].includes(accountMap.get(t.toAccountId)?.kind)).reduce((n,t)=>n+(Number(t.amount)||0),0)}
-
-function integratedSummary(month=integratedLatestMonth(),currentModel=null,sourceRows=null){const rows=(sourceRows||integratedLedger()).filter(t=>integratedMonthKey(t.date)===month),accountMap=new Map(integratedStore().accounts.map(a=>[a.id,a])),sum=fn=>rows.filter(fn).reduce((n,t)=>n+(Number(t.amount)||0),0),income=sum(t=>t.type==='externalIncome'),fixed=sum(t=>(['expense','externalExpense'].includes(t.type)&&t.fixed)||['debtInterest','debtInterestExternal'].includes(t.type)),variable=sum(t=>['expense','externalExpense'].includes(t.type)&&!t.fixed),principal=sum(t=>['debtPrincipal','externalDebtPrincipal'].includes(t.type)),externalOut=sum(t=>t.type==='externalWithdrawal'),linkedInvest=sum(t=>['internalTransfer','externalAssetIn'].includes(t.type)&&['isa','pension','irp'].includes(accountMap.get(t.toAccountId)?.kind)),productSaving=integratedProductSavingAmount(rows)+sum(t=>t.type==='externalAssetIn'&&['deposit','savings'].includes(accountMap.get(t.toAccountId)?.kind)),invest=linkedInvest+productSaving,otherTransfers=sum(t=>t.type==='internalTransfer'&&!['isa','pension','irp','deposit','savings','parking','cash'].includes(accountMap.get(t.toAccountId)?.kind)),trackedInvest=sum(t=>t.type==='internalTransfer'&&t.fromAccountId==='cash-main'&&['isa','pension','irp','deposit','savings'].includes(accountMap.get(t.toAccountId)?.kind)),operatingCashDelta=income+sum(t=>t.type==='refund'&&t.toAccountId==='cash-main')-sum(t=>(t.type==='expense'||t.type==='debtInterest')&&t.fromAccountId==='cash-main')-sum(t=>t.type==='debtPrincipal'&&t.fromAccountId==='cash-main')-trackedInvest-sum(t=>t.type==='externalWithdrawal'&&t.fromAccountId==='cash-main'),model=currentModel||integratedFinancialModel();return{month,rows,income,fixed:fixed-sum(t=>t.type==='refund'&&t.fixed),variable:variable-sum(t=>t.type==='refund'&&!t.fixed),principal,invest,linkedInvest,productSaving,externalOut,otherTransfers,trackedInvest,operatingCashDelta,...model,replay:model.replay}}
-function integratedIssues(store=integratedStore()){
- const issues=[],accountIds=new Set(),liabilityIds=new Set(),txIds=new Set();
- for(const a of store.accounts||[]){if(!a.id||accountIds.has(a.id))issues.push(`자산 계좌 ID 중복/누락: ${a.id||'-'}`);accountIds.add(a.id)}
- for(const x of store.liabilities||[]){if(!x.id||liabilityIds.has(x.id))issues.push(`부채 ID 중복/누락: ${x.id||'-'}`);liabilityIds.add(x.id)}
- const allowed=new Set(['refund','openingAsset','openingLiability','externalIncome','expense','externalExpense','debtInterest','debtInterestExternal','debtPrincipal','externalDebtPrincipal','externalAssetIn','externalAssetOut','internalTransfer','externalWithdrawal','adjustment']);
- for(const t of store.ledger||[]){if(!t.id||txIds.has(t.id))issues.push(`원장 ID 중복/누락: ${t.id||'-'}`);txIds.add(t.id);const dateError=postedDateError(t.date);if(dateError)issues.push(`${dateError}: ${t.id}`);if(!allowed.has(t.type))issues.push(`거래유형 오류: ${t.id}`);if(t.type==='adjustment'){if(!Number.isFinite(Number(t.delta))||Number(t.delta)===0)issues.push(`보정금액 오류: ${t.id}`)}else if(!Number.isFinite(Number(t.amount))||Number(t.amount)<=0)issues.push(`금액 오류: ${t.id}`);if(t.fromAccountId&&!accountIds.has(t.fromAccountId))issues.push(`출금계좌 없음: ${t.id}`);if(t.toAccountId&&!accountIds.has(t.toAccountId))issues.push(`입금계좌 없음: ${t.id}`);if(t.accountId&&!accountIds.has(t.accountId))issues.push(`보정계좌 없음: ${t.id}`);if(t.liabilityId&&!liabilityIds.has(t.liabilityId))issues.push(`부채 없음: ${t.id}`);if(t.type==='internalTransfer'&&t.fromAccountId===t.toAccountId)issues.push(`동일계좌 이체: ${t.id}`);const targetKind=(store.accounts||[]).find(a=>a.id===t.toAccountId)?.kind||'';if(!t.meta?.analysisOnly&&['internalTransfer','externalAssetIn'].includes(t.type)&&targetKind==='isa'){const eligible=isaAccountsForDate(t.date),explicit=String(t.meta?.targetIsaAccountId||'');if(eligible.length>1&&!explicit)issues.push(`ISA 납입 대상 미지정: ${t.id}`);else if(explicit&&!eligible.some(a=>a.id===explicit))issues.push(`ISA 납입 대상 날짜 불일치: ${t.id}`)}if(!t.meta?.analysisOnly&&['internalTransfer','externalAssetIn'].includes(t.type)&&['pension','irp'].includes(targetKind)){const eligible=pensionAccountsForKind(targetKind,t.date),explicit=String(t.meta?.targetPensionAccountId||''),dated=pensionAccountsForKind(targetKind,t.date);if(dated.length>1&&!explicit)issues.push(`연금 납입 대상 미지정: ${t.id}`);else if(explicit&&!dated.some(a=>a.id===explicit))issues.push(`연금 납입 대상 날짜 불일치: ${t.id}`)}}
- const refunds=new Map();for(const t of store.ledger||[])if(t.type==='refund'){const original=(store.ledger||[]).find(r=>r.id===t.meta?.refundOf);if(!original||!['expense','externalExpense'].includes(original.type)||t.date<original.date||t.toAccountId!==(original.type==='expense'?original.fromAccountId:''))issues.push(`환불 원거래 또는 날짜 오류: ${t.id}`);else{const total=(refunds.get(original.id)||0)+Number(t.amount);refunds.set(original.id,total);if(total>Number(original.amount))issues.push(`환불 누계가 원거래 금액을 초과합니다: ${original.id}`)}}
- const operationalRows=(store.ledger||[]).filter(t=>!isQaIntegratedFixture(t)),replay=integratedReplay(operationalRows,store);for(const [id,v] of Object.entries(replay.minAssets||replay.assets))if(v<-.0000001)issues.push(`자산 잔액 음수: ${id}`);for(const [id,v] of Object.entries(replay.minLiabilities||replay.liabilities))if(v<-.0000001)issues.push(`부채 잔액 음수: ${id}`);for(const p of financialProducts()){if(p.status==='active')continue;const id=p.type==='loan'?financeProductLiabilityId(p.id):financeProductAccountId(p.id),v=Math.max(0,Number(p.type==='loan'?replay.liabilities[id]:replay.assets[id])||0);if(v>.005)issues.push(`종료상품 잔액 잔존: ${p.name} ${won(v)}`)}return issues
+function ledgerSeed() {
+    // @ts-ignore runtime global supplied by data-defaults.js
+    return seed;
 }
-
-
-/* v1.9.22 MODULE: finance schedules. All recurring cash-flow input starts in integrated schedule. */
+function ledgerCompare(left, right) {
+    // @ts-ignore runtime global supplied by integrated-replay.js
+    return compareIntegratedTransactions(left, right);
+}
+function ledgerCalculateReplay(store, rows) {
+    // @ts-ignore runtime global supplied by integrated-replay.js
+    return calculateIntegratedReplay(store, rows);
+}
+function ledgerLocalYmd() {
+    // @ts-ignore runtime global supplied by core-config.js
+    return localYmd();
+}
+function ledgerCentralIsaRows() {
+    // @ts-ignore runtime global supplied by isa-ledger.js
+    return centralIsaContributionRows();
+}
+function integratedStore() { return ledgerState().integrated || ledgerSeed().integrated; }
+function integratedManualLedger() { return [...(integratedStore().ledger || [])]; }
+function integratedLinkedLedger() { return []; }
+function integratedTxOrder(left, right) { return ledgerCompare(left, right); }
+function nextIntegratedSequence(date) { let max = 0; for (const transaction of integratedStore().ledger || [])
+    if (String(transaction.date || '') === String(date) && Number.isFinite(Number(transaction.sequence)))
+        max = Math.max(max, Number(transaction.sequence)); return max + 1; }
+function isQaIntegratedFixture(transaction) { return !!transaction?.meta?.qaFixture; }
+function integratedOperationalLedger() { return [...integratedManualLedger().filter(transaction => !isQaIntegratedFixture(transaction)), ...integratedLinkedLedger().filter(transaction => !isQaIntegratedFixture(transaction))].sort(integratedTxOrder); }
+function integratedAnalysisBalanceLedger() { const start = String(integratedStore().startedAt || ''), manual = integratedManualLedger().filter(transaction => !isQaIntegratedFixture(transaction)), linked = (start ? integratedLinkedLedger().filter(transaction => String(transaction.date) >= start) : []).filter(transaction => !isQaIntegratedFixture(transaction)); return [...manual, ...linked].sort(integratedTxOrder); }
+function isaCurrentMonthContribution(month = ledgerLocalYmd().slice(0, 7)) { return ledgerCentralIsaRows().filter(transaction => integratedMonthKey(transaction.date) === month).reduce((sum, transaction) => sum + (Number(transaction.amount) || 0), 0); }
+function integratedLedger() { return integratedOperationalLedger(); }
+function integratedBalanceLedger() { const start = String(integratedStore().startedAt || ''), manual = integratedManualLedger().filter(transaction => !isQaIntegratedFixture(transaction)), linked = (start ? integratedLinkedLedger().filter(transaction => String(transaction.date) >= start) : []).filter(transaction => !isQaIntegratedFixture(transaction)); return [...manual, ...linked].sort(integratedTxOrder); }
+function integratedMonthKey(value) { return String(value || '').slice(0, 7); }
+function integratedLatestMonth() { const rows = integratedLedger().filter(transaction => !['openingAsset', 'openingLiability'].includes(transaction.type || '')); return rows.length ? integratedMonthKey(rows[rows.length - 1].date) : ledgerLocalYmd().slice(0, 7); }
+function integratedReplay(rows = null, store = integratedStore()) {
+    const source = store || integratedStore(), useRows = rows === null ? integratedBalanceLedger() : rows;
+    return ledgerCalculateReplay(source, useRows);
+}
+;
+/* asset-os source: src/domain/integrated-ledger-validation.js */
+'use strict';
+function validationIntegratedStore() {
+    // @ts-ignore runtime global supplied by integrated-ledger.js
+    return integratedStore();
+}
+function validationPostedDateError(date) {
+    // @ts-ignore runtime global supplied by core-config.js
+    return postedDateError(date);
+}
+function validationIsaAccounts(date) {
+    // @ts-ignore runtime global supplied by isa-ledger.js
+    return isaAccountsForDate(date);
+}
+function validationPensionAccounts(kind, date) {
+    // @ts-ignore runtime global supplied by pension-ledger.js
+    return pensionAccountsForKind(kind, date);
+}
+function validationIsQaFixture(transaction) {
+    // @ts-ignore runtime global supplied by integrated-ledger.js
+    return isQaIntegratedFixture(transaction);
+}
+function validationReplay(rows, store) {
+    // @ts-ignore runtime global supplied by integrated-ledger.js
+    return integratedReplay(rows, store);
+}
+function validationFinancialProducts() {
+    // @ts-ignore runtime global supplied by integrated-finance-engine.js
+    return financialProducts();
+}
+function validationProductAccountId(id) {
+    // @ts-ignore runtime global supplied by integrated-finance-engine.js
+    return financeProductAccountId(id);
+}
+function validationProductLiabilityId(id) {
+    // @ts-ignore runtime global supplied by integrated-finance-engine.js
+    return financeProductLiabilityId(id);
+}
+function validationWon(value) {
+    // @ts-ignore runtime global supplied by core-visual-utils.js
+    return won(value);
+}
+function integratedIssues(store = validationIntegratedStore()) {
+    const issues = [], accountIds = new Set(), liabilityIds = new Set(), transactionIds = new Set();
+    for (const account of store.accounts || []) {
+        if (!account.id || accountIds.has(account.id))
+            issues.push(`자산 계좌 ID 중복/누락: ${account.id || '-'}`);
+        accountIds.add(account.id);
+    }
+    for (const liability of store.liabilities || []) {
+        if (!liability.id || liabilityIds.has(liability.id))
+            issues.push(`부채 ID 중복/누락: ${liability.id || '-'}`);
+        liabilityIds.add(liability.id);
+    }
+    const allowed = new Set(['refund', 'openingAsset', 'openingLiability', 'externalIncome', 'expense', 'externalExpense', 'debtInterest', 'debtInterestExternal', 'debtPrincipal', 'externalDebtPrincipal', 'externalAssetIn', 'externalAssetOut', 'internalTransfer', 'externalWithdrawal', 'adjustment']);
+    for (const transaction of store.ledger || []) {
+        if (!transaction.id || transactionIds.has(transaction.id))
+            issues.push(`원장 ID 중복/누락: ${transaction.id || '-'}`);
+        transactionIds.add(transaction.id);
+        const dateError = validationPostedDateError(transaction.date);
+        if (dateError)
+            issues.push(`${dateError}: ${transaction.id}`);
+        if (!allowed.has(transaction.type || ''))
+            issues.push(`거래유형 오류: ${transaction.id}`);
+        if (transaction.type === 'adjustment') {
+            if (!Number.isFinite(Number(transaction.delta)) || Number(transaction.delta) === 0)
+                issues.push(`보정금액 오류: ${transaction.id}`);
+        }
+        else if (!Number.isFinite(Number(transaction.amount)) || Number(transaction.amount) <= 0)
+            issues.push(`금액 오류: ${transaction.id}`);
+        if (transaction.fromAccountId && !accountIds.has(transaction.fromAccountId))
+            issues.push(`출금계좌 없음: ${transaction.id}`);
+        if (transaction.toAccountId && !accountIds.has(transaction.toAccountId))
+            issues.push(`입금계좌 없음: ${transaction.id}`);
+        if (transaction.accountId && !accountIds.has(transaction.accountId))
+            issues.push(`보정계좌 없음: ${transaction.id}`);
+        if (transaction.liabilityId && !liabilityIds.has(transaction.liabilityId))
+            issues.push(`부채 없음: ${transaction.id}`);
+        if (transaction.type === 'internalTransfer' && transaction.fromAccountId === transaction.toAccountId)
+            issues.push(`동일계좌 이체: ${transaction.id}`);
+        const targetKind = (store.accounts || []).find(account => account.id === transaction.toAccountId)?.kind || '';
+        if (!transaction.meta?.analysisOnly && ['internalTransfer', 'externalAssetIn'].includes(transaction.type || '') && targetKind === 'isa') {
+            const eligible = validationIsaAccounts(transaction.date), explicit = String(transaction.meta?.targetIsaAccountId || '');
+            if (eligible.length > 1 && !explicit)
+                issues.push(`ISA 납입 대상 미지정: ${transaction.id}`);
+            else if (explicit && !eligible.some(account => account.id === explicit))
+                issues.push(`ISA 납입 대상 날짜 불일치: ${transaction.id}`);
+        }
+        if (!transaction.meta?.analysisOnly && ['internalTransfer', 'externalAssetIn'].includes(transaction.type || '') && ['pension', 'irp'].includes(targetKind)) {
+            const explicit = String(transaction.meta?.targetPensionAccountId || ''), dated = validationPensionAccounts(targetKind, transaction.date);
+            if (dated.length > 1 && !explicit)
+                issues.push(`연금 납입 대상 미지정: ${transaction.id}`);
+            else if (explicit && !dated.some(account => account.id === explicit))
+                issues.push(`연금 납입 대상 날짜 불일치: ${transaction.id}`);
+        }
+    }
+    const refunds = new Map();
+    for (const transaction of store.ledger || [])
+        if (transaction.type === 'refund') {
+            const original = (store.ledger || []).find(candidate => candidate.id === transaction.meta?.refundOf);
+            if (!original || !['expense', 'externalExpense'].includes(original.type || '') || transaction.date < original.date || transaction.toAccountId !== (original.type === 'expense' ? original.fromAccountId : ''))
+                issues.push(`환불 원거래 또는 날짜 오류: ${transaction.id}`);
+            else {
+                const originalId = String(original.id), total = (refunds.get(originalId) || 0) + Number(transaction.amount);
+                refunds.set(originalId, total);
+                if (total > Number(original.amount))
+                    issues.push(`환불 누계가 원거래 금액을 초과합니다: ${original.id}`);
+            }
+        }
+    const operationalRows = (store.ledger || []).filter(transaction => !validationIsQaFixture(transaction)), replay = validationReplay(operationalRows, store);
+    for (const [id, value] of Object.entries(replay.minAssets || replay.assets))
+        if (value < -.0000001)
+            issues.push(`자산 잔액 음수: ${id}`);
+    for (const [id, value] of Object.entries(replay.minLiabilities || replay.liabilities))
+        if (value < -.0000001)
+            issues.push(`부채 잔액 음수: ${id}`);
+    for (const product of validationFinancialProducts()) {
+        if (product.status === 'active')
+            continue;
+        const id = product.type === 'loan' ? validationProductLiabilityId(product.id) : validationProductAccountId(product.id), value = Math.max(0, Number(product.type === 'loan' ? replay.liabilities[id] : replay.assets[id]) || 0);
+        if (value > .005)
+            issues.push(`종료상품 잔액 잔존: ${product.name} ${validationWon(value)}`);
+    }
+    return issues;
+}
+;
+/* asset-os source: src/domain/financial-current.js */
+'use strict';
+function currentFinancialState() {
+    // @ts-ignore runtime global supplied by store-state.js
+    return state;
+}
+function currentIntegratedStore() {
+    // @ts-ignore runtime global supplied by integrated-ledger.js
+    return integratedStore();
+}
+function currentIntegratedReplay() {
+    // @ts-ignore runtime global supplied by integrated-ledger.js
+    return integratedReplay();
+}
+function currentActiveProducts() {
+    // @ts-ignore runtime global supplied by integrated-finance-engine.js
+    return activeFinancialProducts();
+}
+function currentPensionStore() {
+    // @ts-ignore runtime global supplied by pension-ledger.js
+    return pensionStore();
+}
+function currentKisKindTotal(kind, accountIds) {
+    // @ts-ignore runtime global supplied by broker-kis.js
+    return brokerKisCurrentKindTotal(currentFinancialState().brokerKis, kind, accountIds);
+}
+function currentIsaAccount(account) {
+    // @ts-ignore runtime global supplied by isa-ledger.js
+    return isCurrentAccount(account);
+}
+function currentIsaMetrics(account) {
+    // @ts-ignore runtime global supplied by isa-ledger.js
+    return accountMetrics(account);
+}
+function currentPensionMetrics(kind) {
+    // @ts-ignore runtime global supplied by pension-assets.js
+    return pensionAssetMetrics(kind);
+}
+function currentFinancialProduct(id) {
+    // @ts-ignore runtime global supplied by integrated-finance-engine.js
+    return financialProduct(id);
+}
+function currentIntegratedLedger() {
+    // @ts-ignore runtime global supplied by integrated-ledger.js
+    return integratedLedger();
+}
+function currentIntegratedMonthKey(date) {
+    // @ts-ignore runtime global supplied by integrated-ledger.js
+    return integratedMonthKey(date);
+}
+function currentIntegratedLatestMonth() {
+    // @ts-ignore runtime global supplied by integrated-ledger.js
+    return integratedLatestMonth();
+}
+function moduleVerified(kind) { return !!currentFinancialState().moduleVerification?.[kind]; }
+function integratedFinancialModel() {
+    const replay = currentIntegratedReplay(), store = currentIntegratedStore(), accounts = store.accounts, activeIds = new Set(currentActiveProducts().map(product => product.id)), verify = { isa: moduleVerified('isa'), pension: moduleVerified('pension'), irp: moduleVerified('irp') };
+    let cash = 0, deposit = 0, savings = 0, other = 0;
+    for (const account of accounts) {
+        const value = Math.max(0, Number(replay.assets[account.id] || 0)), hasResidual = value > .005, productActive = !account.productId || activeIds.has(account.productId);
+        if (account.kind === 'cash')
+            cash += value;
+        else if (account.kind === 'parking' && (productActive || hasResidual))
+            cash += value;
+        else if (account.kind === 'deposit' && (productActive || hasResidual))
+            deposit += value;
+        else if (account.kind === 'savings' && (productActive || hasResidual))
+            savings += value;
+        else if (account.kind === 'other')
+            other += value;
+    }
+    const linkedIsa = Math.max(0, Number(replay.assets['isa-link'] || 0)), linkedPension = Math.max(0, Number(replay.assets['pension-link'] || 0)), linkedIrp = Math.max(0, Number(replay.assets['irp-link'] || 0)), activePensionAccounts = currentPensionStore().accounts.filter(account => account.status === 'active'), kisPension = currentKisKindTotal('pension', activePensionAccounts.filter(account => account.kind === 'pension').map(account => account.id)), kisIrp = currentKisKindTotal('irp', activePensionAccounts.filter(account => account.kind === 'irp').map(account => account.id)), isaAccountMetrics = (currentFinancialState().accounts || []).filter((account) => currentIsaAccount(account)).map((account) => currentIsaMetrics(account)), isaMetrics = { value: isaAccountMetrics.reduce((sum, metrics) => sum + (Number(metrics.value) || 0), 0), cost: isaAccountMetrics.reduce((sum, metrics) => sum + (Number(metrics.cost) || 0), 0) }, isaRecorded = verify.isa || isaMetrics.value > .5 || isaMetrics.cost > .5, isa = isaRecorded ? Math.max(0, isaMetrics.value || 0) : linkedIsa, pensionMetrics = currentPensionMetrics('pension'), irpMetrics = currentPensionMetrics('irp'), localPension = Math.max(0, pensionMetrics.value || 0), localIrp = Math.max(0, irpMetrics.value || 0), useKisPension = !!kisPension && (kisPension.authoritative === true || kisPension.totalValue > .5 || localPension <= .5), useKisIrp = !!kisIrp && (kisIrp.authoritative === true || kisIrp.totalValue > .5 || localIrp <= .5), pension = useKisPension ? kisPension.totalValue : localPension, irp = useKisIrp ? kisIrp.totalValue : localIrp, available = { isa: isaRecorded, pension: useKisPension || verify.pension || localPension > .5, irp: useKisIrp || verify.irp || localIrp > .5 };
+    let debt = 0;
+    for (const liability of store.liabilities) {
+        const value = Math.max(0, Number(replay.liabilities[liability.id] || 0)), product = liability.productId ? currentFinancialProduct(liability.productId) : null;
+        if (product && product.status !== 'active' && value <= .005)
+            continue;
+        debt += value;
+    }
+    const totalAssets = cash + deposit + savings + isa + pension + irp + other;
+    return { cash, deposit, savings, isa, pension, irp, other, totalAssets, totalDebt: debt, netAssets: totalAssets - debt, replay, linked: { isa: linkedIsa, pension: linkedPension, irp: linkedIrp }, verified: verify, available, currentSources: { isa: isaRecorded ? 'asset-os' : 'linked', pension: useKisPension ? 'kis' : pensionMetrics.source || 'asset-os', irp: useKisIrp ? 'kis' : irpMetrics.source || 'asset-os' }, kis: { pension: kisPension, irp: kisIrp }, isComplete: available.isa && available.pension && available.irp };
+}
+function integratedProductSavingAmount(rows) {
+    const accountMap = new Map(currentIntegratedStore().accounts.map(account => [account.id, account]));
+    return rows.filter(transaction => transaction.type === 'internalTransfer' && ['deposit', 'savings'].includes(accountMap.get(transaction.toAccountId || '')?.kind || '')).reduce((sum, transaction) => sum + (Number(transaction.amount) || 0), 0);
+}
+function integratedSummary(month = currentIntegratedLatestMonth(), currentModel = null, sourceRows = null) {
+    const rows = (sourceRows || currentIntegratedLedger()).filter(transaction => currentIntegratedMonthKey(transaction.date) === month), accountMap = new Map(currentIntegratedStore().accounts.map(account => [account.id, account])), sum = (predicate) => rows.filter(predicate).reduce((total, transaction) => total + (Number(transaction.amount) || 0), 0), income = sum(transaction => transaction.type === 'externalIncome'), fixed = sum(transaction => (['expense', 'externalExpense'].includes(transaction.type) && !!transaction.fixed) || ['debtInterest', 'debtInterestExternal'].includes(transaction.type)), variable = sum(transaction => ['expense', 'externalExpense'].includes(transaction.type) && !transaction.fixed), principal = sum(transaction => ['debtPrincipal', 'externalDebtPrincipal'].includes(transaction.type)), externalOut = sum(transaction => transaction.type === 'externalWithdrawal'), linkedInvest = sum(transaction => ['internalTransfer', 'externalAssetIn'].includes(transaction.type) && ['isa', 'pension', 'irp'].includes(accountMap.get(transaction.toAccountId || '')?.kind || '')), productSaving = integratedProductSavingAmount(rows) + sum(transaction => transaction.type === 'externalAssetIn' && ['deposit', 'savings'].includes(accountMap.get(transaction.toAccountId || '')?.kind || '')), invest = linkedInvest + productSaving, otherTransfers = sum(transaction => transaction.type === 'internalTransfer' && !['isa', 'pension', 'irp', 'deposit', 'savings', 'parking', 'cash'].includes(accountMap.get(transaction.toAccountId || '')?.kind || '')), trackedInvest = sum(transaction => transaction.type === 'internalTransfer' && transaction.fromAccountId === 'cash-main' && ['isa', 'pension', 'irp', 'deposit', 'savings'].includes(accountMap.get(transaction.toAccountId || '')?.kind || '')), operatingCashDelta = income + sum(transaction => transaction.type === 'refund' && transaction.toAccountId === 'cash-main') - sum(transaction => (transaction.type === 'expense' || transaction.type === 'debtInterest') && transaction.fromAccountId === 'cash-main') - sum(transaction => transaction.type === 'debtPrincipal' && transaction.fromAccountId === 'cash-main') - trackedInvest - sum(transaction => transaction.type === 'externalWithdrawal' && transaction.fromAccountId === 'cash-main'), model = currentModel || integratedFinancialModel();
+    return { month, rows, income, fixed: fixed - sum(transaction => transaction.type === 'refund' && !!transaction.fixed), variable: variable - sum(transaction => transaction.type === 'refund' && !transaction.fixed), principal, invest, linkedInvest, productSaving, externalOut, otherTransfers, trackedInvest, operatingCashDelta, ...model, replay: model.replay };
+}
+;
+/* asset-os source: src/domain/financial-history.js */
+'use strict';
+// The runtime is assembled as ordered classic scripts; these names are supplied by earlier bundles.
+function financialHistoryState() {
+    // @ts-ignore runtime global supplied by store-state.js
+    return state;
+}
+function financialHistoryStore() {
+    // @ts-ignore runtime global supplied by integrated-ledger.js
+    return integratedStore();
+}
+function financialHistoryReplay(rows, store) {
+    // @ts-ignore runtime global supplied by integrated-ledger.js
+    return integratedReplay(rows, store);
+}
+function financialHistoryQaMode() {
+    // @ts-ignore runtime global supplied by core-config.js
+    return QA_MODE;
+}
+function financialProductActiveOnDate(product, asOf) {
+    if (!product)
+        return true;
+    const date = String(asOf || localYmd()), end = String(product.endedAt || product.settlement?.date || ((product.status === 'ended' || product.status === 'closed') ? product.maturityDate : '') || '');
+    if (product.startDate && date < String(product.startDate))
+        return false;
+    if (end && date > end)
+        return false;
+    return true;
+}
+function latestSnapshotAt(list, asOf) {
+    return [...(Array.isArray(list) ? list : [])].filter(snapshot => (!snapshot?.meta?.qaFixture || financialHistoryQaMode()) && String(snapshot.date || '') <= String(asOf || localYmd())).sort((left, right) => String(left.date || '').localeCompare(String(right.date || ''))).at(-1) || null;
+}
+function isaAccountActiveOnDate(account, asOf) {
+    if (!account)
+        return false;
+    const date = String(asOf || localYmd()), open = String(account.openedAt || account.baselineDate || '0000-01-01'), close = String(account.closedAt || '');
+    return open <= date && (!close || date <= close);
+}
+function historicalIsaValue(asOf, replayed) {
+    const linked = Math.max(0, Number(replayed?.assets?.['isa-link'] || 0)), active = (financialHistoryState().accounts || []).filter((account) => isaAccountActiveOnDate(account, asOf));
+    if (!active.length)
+        return linked;
+    let sum = 0, covered = 0;
+    for (const account of active) {
+        const snapshot = latestSnapshotAt(account.assetSnapshots, asOf);
+        if (snapshot) {
+            sum += Math.max(0, Number(snapshot.totalValue ?? snapshot.value) || 0);
+            covered++;
+        }
+    }
+    return covered === active.length ? sum : linked;
+}
+function historicalPensionValue(kind, asOf, replayed) {
+    const linkId = kind === 'irp' ? 'irp-link' : 'pension-link', linked = Math.max(0, Number(replayed?.assets?.[linkId] || 0)), snapshot = latestSnapshotAt(financialHistoryState().pension?.assetSnapshots, asOf);
+    if (!snapshot)
+        return linked;
+    const row = kind === 'irp' ? snapshot.irp : snapshot.pension;
+    if (!row)
+        return linked;
+    return Math.max(0, Number(row.value) || 0);
+}
+function historicalFinancialCoverage(asOf, rowsAtDate = null) {
+    const date = String(asOf || localYmd()).slice(0, 10), ledger = rowsAtDate || integratedAnalysisBalanceLedger().filter(transaction => String(transaction.date || '') <= date), assetEvidence = ledger.some(transaction => ['openingAsset', 'externalIncome', 'externalAssetIn', 'internalTransfer', 'adjustment'].includes(transaction.type)), missing = [];
+    for (const account of financialHistoryState().accounts || []) {
+        if (!isaAccountActiveOnDate(account, date))
+            continue;
+        if (!latestSnapshotAt(account.assetSnapshots, date))
+            missing.push(`ISA:${account.id}`);
+    }
+    const snapshot = latestSnapshotAt(financialHistoryState().pension?.assetSnapshots, date);
+    for (const account of pensionStore().accounts || []) {
+        if (!pensionAccountActiveOnDate(account, date))
+            continue;
+        const row = account.kind === 'irp' ? snapshot?.irp : snapshot?.pension;
+        if (!row)
+            missing.push(`${account.kind}:${account.id}`);
+    }
+    return { complete: assetEvidence && !missing.length, assetEvidence, missing };
+}
+function historicalFinancialModel(asOf = localYmd()) {
+    const date = String(asOf || localYmd()).slice(0, 10), rows = integratedAnalysisBalanceLedger().filter(transaction => String(transaction.date || '') <= date), store = financialHistoryStore(), replay = financialHistoryReplay(rows, store);
+    let cash = 0, deposit = 0, savings = 0, other = 0;
+    for (const account of store.accounts || []) {
+        const value = Math.max(0, Number(replay.assets[account.id] || 0)), product = account.productId ? financialProduct(account.productId) : null;
+        if (product && !financialProductActiveOnDate(product, date) && value <= .005)
+            continue;
+        if (account.kind === 'cash' || account.kind === 'parking')
+            cash += value;
+        else if (account.kind === 'deposit')
+            deposit += value;
+        else if (account.kind === 'savings')
+            savings += value;
+        else if (account.kind === 'other')
+            other += value;
+    }
+    const isa = historicalIsaValue(date, replay), pension = historicalPensionValue('pension', date, replay), irp = historicalPensionValue('irp', date, replay);
+    let totalDebt = 0;
+    for (const liability of store.liabilities || []) {
+        const value = Math.max(0, Number(replay.liabilities[liability.id] || 0)), product = liability.productId ? financialProduct(liability.productId) : null;
+        if (product && !financialProductActiveOnDate(product, date) && value <= .005)
+            continue;
+        totalDebt += value;
+    }
+    const totalAssets = cash + deposit + savings + isa + pension + irp + other, coverage = historicalFinancialCoverage(date, rows);
+    return { asOf: date, cash, deposit, savings, isa, pension, irp, other, totalAssets, totalDebt, netAssets: totalAssets - totalDebt, replay, coverage, isComplete: coverage.complete };
+}
+function financialGrowthBreakdown(startDate, endDate) {
+    const earliest = financialAnalysisEarliestDate(), effectiveStart = String(startDate) < earliest ? earliest : String(startDate), start = historicalFinancialModel(effectiveStart), end = historicalFinancialModel(endDate), rows = integratedAnalysisBalanceLedger().filter(transaction => String(transaction.date || '') > String(start.asOf) && String(transaction.date || '') <= String(end.asOf));
+    let externalNet = 0, adjustment = 0;
+    for (const transaction of rows) {
+        const amount = Number(transaction.amount) || 0;
+        if (['externalIncome', 'externalAssetIn', 'externalDebtPrincipal'].includes(transaction.type) || (transaction.type === 'refund' && transaction.toAccountId))
+            externalNet += amount;
+        else if (['expense', 'externalWithdrawal', 'externalAssetOut', 'debtInterest'].includes(transaction.type))
+            externalNet -= amount;
+        else if (transaction.type === 'adjustment')
+            adjustment += Number(transaction.delta) || 0;
+    }
+    const netChange = end.netAssets - start.netAssets, assetChange = end.totalAssets - start.totalAssets, debtReduction = start.totalDebt - end.totalDebt, residual = netChange - externalNet - adjustment, rate = start.coverage.complete && end.coverage.complete && start.netAssets > 0 ? netChange / start.netAssets * 100 : null;
+    return { start, end, netChange, assetChange, debtReduction, rate, externalNet, adjustment, residual, reconciled: Math.abs(netChange - (externalNet + adjustment + residual)) < .01 };
+}
+function financialAnalysisEarliestDate() {
+    const ledger = integratedAnalysisBalanceLedger(), assetStart = ledger.filter(transaction => ['openingAsset', 'externalIncome', 'externalAssetIn', 'internalTransfer', 'adjustment'].includes(transaction.type) && transaction.date).map(transaction => String(transaction.date).slice(0, 10)).sort()[0];
+    if (!assetStart)
+        return localYmd();
+    const dates = [assetStart, localYmd()];
+    for (const account of financialHistoryState().accounts || [])
+        for (const snapshot of account.assetSnapshots || [])
+            if ((!snapshot?.meta?.qaFixture || financialHistoryQaMode()) && snapshot.date && String(snapshot.date) >= assetStart)
+                dates.push(String(snapshot.date).slice(0, 10));
+    for (const snapshot of financialHistoryState().pension?.assetSnapshots || [])
+        if ((!snapshot?.meta?.qaFixture || financialHistoryQaMode()) && snapshot.date && String(snapshot.date) >= assetStart)
+            dates.push(String(snapshot.date).slice(0, 10));
+    return [...new Set(dates)].sort().find(date => historicalFinancialCoverage(date).complete) || localYmd();
+}
+function shiftMonthsYmd(date, delta) {
+    const match = String(date || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match)
+        return String(date || '');
+    const total = Number(match[1]) * 12 + (Number(match[2]) - 1) + Math.trunc(Number(delta) || 0), year = Math.floor(total / 12), monthIndex = total - year * 12, day = Math.min(Number(match[3]), new Date(year, monthIndex + 1, 0).getDate());
+    return `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+function financialAnalysisStart(period, end = localYmd()) {
+    return period === '3m' ? shiftMonthsYmd(end, -3) : period === '6m' ? shiftMonthsYmd(end, -6) : period === '1y' ? shiftMonthsYmd(end, -12) : period === '3y' ? shiftMonthsYmd(end, -36) : financialAnalysisEarliestDate();
+}
+function monthEndYmd(year, monthIndex) { return localYmd(new Date(Number(year), Number(monthIndex) + 1, 0, 12)); }
+function financialGrowthSeries(period = '6m') {
+    const end = localYmd(), requested = financialAnalysisStart(period, end), earliest = financialAnalysisEarliestDate(), start = requested < earliest ? earliest : requested, startDate = new Date(start + 'T12:00:00'), endDate = new Date(end + 'T12:00:00'), raw = [];
+    let year = startDate.getFullYear(), month = startDate.getMonth();
+    while (year < endDate.getFullYear() || (year === endDate.getFullYear() && month <= endDate.getMonth())) {
+        const date = monthEndYmd(year, month), asOf = date > end ? end : date, model = historicalFinancialModel(asOf);
+        if (asOf >= start && model.coverage.complete)
+            raw.push({ ...model, label: `${String(year).slice(-2)}.${String(month + 1).padStart(2, '0')}` });
+        month++;
+        if (month > 11) {
+            month = 0;
+            year++;
+        }
+    }
+    if (!raw.length) {
+        const model = historicalFinancialModel(end);
+        raw.push({ ...model, label: end.slice(2, 7).replace('-', '.') });
+    }
+    const months = raw.length;
+    if (months <= 18)
+        return raw;
+    const grain = months > 60 ? 'year' : 'quarter', map = new Map();
+    for (const row of raw) {
+        const date = new Date(row.asOf + 'T12:00:00'), key = grain === 'year' ? String(date.getFullYear()) : `${date.getFullYear()}-Q${Math.floor(date.getMonth() / 3) + 1}`, label = grain === 'year' ? String(date.getFullYear()) : `${String(date.getFullYear()).slice(-2)} Q${Math.floor(date.getMonth() / 3) + 1}`;
+        map.set(key, { ...row, label });
+    }
+    return [...map.values()];
+}
+;
+/* asset-os source: src/domain/integrated-spending.js */
+'use strict';
+function integratedSpendingRows(month) {
+    return integratedLedger().filter(transaction => integratedMonthKey(transaction.date) === month && ['expense', 'externalExpense', 'refund'].includes(transaction.type)).map(transaction => transaction.type === 'refund' ? { ...transaction, amount: -Number(transaction.amount) } : transaction);
+}
+function integratedSpendingMonthShift(month, delta) {
+    const [year, value] = String(month).split('-').map(Number), date = new Date(year, value - 1 + delta, 1);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+function integratedSpendingAnalysis(month = integratedLatestMonth()) {
+    const rows = integratedSpendingRows(month), amount = (list) => list.reduce((sum, row) => sum + (Number(row.amount) || 0), 0), fixedRows = rows.filter(row => row.fixed), variableRows = rows.filter(row => !row.fixed), categories = new Map();
+    for (const row of rows) {
+        const key = String(row.category || '기타').trim() || '기타', entry = categories.get(key) || { key, amount: 0, count: 0 };
+        entry.amount += Number(row.amount) || 0;
+        entry.count++;
+        categories.set(key, entry);
+    }
+    const total = amount(rows), previousMonth = integratedSpendingMonthShift(month, -1), previousTotal = amount(integratedSpendingRows(previousMonth)), change = total - previousTotal, changeRate = previousTotal ? change / previousTotal * 100 : null, trend = [];
+    for (let offset = -5; offset <= 0; offset++) {
+        const key = integratedSpendingMonthShift(month, offset), value = amount(integratedSpendingRows(key));
+        trend.push({ month: key, label: `${Number(key.slice(5))}월`, amount: value });
+    }
+    return { month, rows, total, fixed: amount(fixedRows), variable: amount(variableRows), fixedRows, variableRows, categories: [...categories.values()].sort((left, right) => right.amount - left.amount || left.key.localeCompare(right.key, 'ko')), previousMonth, previousTotal, change, changeRate, trend };
+}
 ;
 /* asset-os source: integrated-schedule-engine.js */
 'use strict';
@@ -594,82 +1018,107 @@ function centralIsaReplayRows(account,includeArchived=false){if(!account||(!incl
 ;
 /* asset-os source: src/app/schedule-completion.js */
 'use strict';
-
-function validateScheduleCompletionRequest(scheduleId,date){
- const schedule=financeSchedules().find(item=>item.id===scheduleId);
- if(!schedule)return{ok:false,error:'일정을 찾지 못했습니다.'};
- const expectedDate=scheduleDateForMonth(schedule,integratedMonthKey(date));
- if(expectedDate!==String(date))return{ok:false,error:'해당 일정의 예정일과 일치하지 않습니다.'};
- if(scheduleCompletionTx(scheduleId,date))return{ok:false,error:'이미 완료된 일정입니다.'};
- const dateError=postedDateError(date);
- if(dateError)return{ok:false,error:dateError};
- return{ok:true,schedule}
+function validateScheduleCompletionRequest(scheduleId, date) {
+    const schedule = financeSchedules().find(item => item.id === scheduleId);
+    if (!schedule)
+        return { ok: false, error: '일정을 찾지 못했습니다.' };
+    const expectedDate = scheduleDateForMonth(schedule, integratedMonthKey(date));
+    if (expectedDate !== String(date))
+        return { ok: false, error: '해당 일정의 예정일과 일치하지 않습니다.' };
+    if (scheduleCompletionTx(scheduleId, date))
+        return { ok: false, error: '이미 완료된 일정입니다.' };
+    const dateError = postedDateError(date);
+    if (dateError)
+        return { ok: false, error: dateError };
+    return { ok: true, schedule };
 }
-
-function scheduleCompletionCashError(amount){
- const cash=Number(integratedReplay().assets['cash-main']||0);
- return cash+1e-8<amount?'생활현금이 부족합니다. 월급 또는 현금 유입을 먼저 완료로 기록해 주세요.':''
+function scheduleCompletionCashError(amount) {
+    const cash = Number(integratedReplay().assets['cash-main'] || 0);
+    return cash + 1e-8 < amount ? '생활현금이 부족합니다. 월급 또는 현금 유입을 먼저 완료로 기록해 주세요.' : '';
 }
-
-function calculateLoanScheduleCompletion(schedule,date,principalOverride,interestOverride){
- const principal=Math.max(0,Number(principalOverride)||0),interest=Math.max(0,Number(interestOverride)||0),amount=principal+interest;
- if(!amount)return{ok:false,error:'실제 원금 또는 이자를 입력해 주세요.'};
- const cashError=scheduleCompletionCashError(amount);
- if(cashError)return{ok:false,error:cashError};
- const baseMeta={scheduleId:schedule.id,scheduleDate:date,scheduledAmount:Number(schedule.amount)||0,actualAmount:amount,loanPrincipal:principal,loanInterest:interest},rows=[];
- if(principal)rows.push({id:uid('igl'),date,type:'debtPrincipal',amount:principal,fromAccountId:'cash-main',liabilityId:schedule.liabilityId,category:`${schedule.name} 원금`,note:'금융 일정에서 완료 기록',productId:schedule.productId,meta:{...baseMeta,component:'principal'}});
- if(interest)rows.push({id:uid('igl'),date,type:'debtInterest',amount:interest,fromAccountId:'cash-main',liabilityId:schedule.liabilityId,category:`${schedule.name} 이자`,note:'금융 일정에서 완료 기록',productId:schedule.productId,meta:{...baseMeta,component:'interest'}});
- return{ok:true,rows,checkAggregate:true,successMessage:'원금과 이자를 완료로 기록했습니다.'}
+function calculateLoanScheduleCompletion(schedule, date, principalOverride, interestOverride) {
+    const principal = Math.max(0, Number(principalOverride) || 0), interest = Math.max(0, Number(interestOverride) || 0), amount = principal + interest;
+    if (!amount)
+        return { ok: false, error: '실제 원금 또는 이자를 입력해 주세요.' };
+    const cashError = scheduleCompletionCashError(amount);
+    if (cashError)
+        return { ok: false, error: cashError };
+    const baseMeta = { scheduleId: schedule.id, scheduleDate: date, scheduledAmount: Number(schedule.amount) || 0, actualAmount: amount, loanPrincipal: principal, loanInterest: interest }, rows = [];
+    if (principal)
+        rows.push({ id: uid('igl'), date, type: 'debtPrincipal', amount: principal, fromAccountId: 'cash-main', liabilityId: schedule.liabilityId, category: `${schedule.name} 원금`, note: '금융 일정에서 완료 기록', productId: schedule.productId, meta: { ...baseMeta, component: 'principal' } });
+    if (interest)
+        rows.push({ id: uid('igl'), date, type: 'debtInterest', amount: interest, fromAccountId: 'cash-main', liabilityId: schedule.liabilityId, category: `${schedule.name} 이자`, note: '금융 일정에서 완료 기록', productId: schedule.productId, meta: { ...baseMeta, component: 'interest' } });
+    return { ok: true, rows, checkAggregate: true, successMessage: '원금과 이자를 완료로 기록했습니다.' };
 }
-
-function calculateStandardScheduleCompletion(schedule,date,amountOverride,targetPensionAccountId,targetIsaAccountId){
- const amount=Math.max(0,Number(amountOverride)||Number(schedule.amount)||0);
- if(!amount)return{ok:false,error:'금액을 확인해 주세요.'};
- const pensionKind=schedulePensionKind(schedule),isIsa=schedule.targetKind==='isa'||integratedStore().accounts.find(account=>account.id===scheduleTargetAccount(schedule))?.kind==='isa';
- const resolvedPension=pensionKind?resolveSchedulePensionAccount(schedule,targetPensionAccountId,date):'';
- const resolvedIsa=isIsa?resolveScheduleIsaAccount(schedule,targetIsaAccountId,date):'';
- const meta={scheduleId:schedule.id,scheduleDate:date,scheduledAmount:Number(schedule.amount)||0,actualAmount:amount};
- if(pensionKind){if(!resolvedPension)return{ok:false,error:`${pensionAccountKindLabel(pensionKind)} 납입 계좌를 선택해 주세요.`};meta.targetPensionAccountId=resolvedPension}
- if(isIsa){if(!resolvedIsa)return{ok:false,error:'실제 ISA 납입 계좌를 선택해 주세요.'};meta.targetIsaAccountId=resolvedIsa}
- let transaction=null;
- if(schedule.kind==='income')transaction={id:uid('igl'),date,type:'externalIncome',amount,toAccountId:'cash-main',category:schedule.name,note:'금융 일정에서 완료 기록',meta};
- else if(['investment','saving'].includes(schedule.kind)){
-  const to=scheduleTargetAccount(schedule);
-  if(!to)return{ok:false,error:'연결 대상이 없습니다.'};
-  const cashError=scheduleCompletionCashError(amount);
-  if(cashError)return{ok:false,error:cashError};
-  transaction={id:uid('igl'),date,type:'internalTransfer',amount,fromAccountId:'cash-main',toAccountId:to,category:schedule.name,note:'금융 일정에서 완료 기록',meta}
- }else if(['insurance','expense'].includes(schedule.kind)){
-  const cashError=scheduleCompletionCashError(amount);
-  if(cashError)return{ok:false,error:cashError};
-  transaction={id:uid('igl'),date,type:'expense',fixed:true,amount,fromAccountId:'cash-main',category:schedule.name,note:'금융 일정에서 완료 기록',meta}
- }
- if(!transaction)return{ok:false,error:'아직 자동 기록을 지원하지 않는 일정입니다.'};
- return{ok:true,rows:[transaction],checkAggregate:false,targetPensionAccountId:resolvedPension,targetIsaAccountId:resolvedIsa,successMessage:'완료로 기록했습니다.'}
+function calculateStandardScheduleCompletion(schedule, date, amountOverride, targetPensionAccountId, targetIsaAccountId) {
+    const amount = Math.max(0, Number(amountOverride) || Number(schedule.amount) || 0);
+    if (!amount)
+        return { ok: false, error: '금액을 확인해 주세요.' };
+    const pensionKind = schedulePensionKind(schedule), isIsa = schedule.targetKind === 'isa' || integratedStore().accounts.find(account => account.id === scheduleTargetAccount(schedule))?.kind === 'isa';
+    const resolvedPension = pensionKind ? resolveSchedulePensionAccount(schedule, targetPensionAccountId, date) : '';
+    const resolvedIsa = isIsa ? resolveScheduleIsaAccount(schedule, targetIsaAccountId, date) : '';
+    const meta = { scheduleId: schedule.id, scheduleDate: date, scheduledAmount: Number(schedule.amount) || 0, actualAmount: amount };
+    if (pensionKind) {
+        if (!resolvedPension)
+            return { ok: false, error: `${pensionAccountKindLabel(pensionKind)} 납입 계좌를 선택해 주세요.` };
+        meta.targetPensionAccountId = resolvedPension;
+    }
+    if (isIsa) {
+        if (!resolvedIsa)
+            return { ok: false, error: '실제 ISA 납입 계좌를 선택해 주세요.' };
+        meta.targetIsaAccountId = resolvedIsa;
+    }
+    let transaction = null;
+    if (schedule.kind === 'income')
+        transaction = { id: uid('igl'), date, type: 'externalIncome', amount, toAccountId: 'cash-main', category: schedule.name, note: '금융 일정에서 완료 기록', meta };
+    else if (['investment', 'saving'].includes(schedule.kind)) {
+        const to = scheduleTargetAccount(schedule);
+        if (!to)
+            return { ok: false, error: '연결 대상이 없습니다.' };
+        const cashError = scheduleCompletionCashError(amount);
+        if (cashError)
+            return { ok: false, error: cashError };
+        transaction = { id: uid('igl'), date, type: 'internalTransfer', amount, fromAccountId: 'cash-main', toAccountId: to, category: schedule.name, note: '금융 일정에서 완료 기록', meta };
+    }
+    else if (['insurance', 'expense'].includes(schedule.kind)) {
+        const cashError = scheduleCompletionCashError(amount);
+        if (cashError)
+            return { ok: false, error: cashError };
+        transaction = { id: uid('igl'), date, type: 'expense', fixed: true, amount, fromAccountId: 'cash-main', category: schedule.name, note: '금융 일정에서 완료 기록', meta };
+    }
+    if (!transaction)
+        return { ok: false, error: '아직 자동 기록을 지원하지 않는 일정입니다.' };
+    return { ok: true, rows: [transaction], checkAggregate: false, targetPensionAccountId: resolvedPension, targetIsaAccountId: resolvedIsa, successMessage: '완료로 기록했습니다.' };
 }
-
-function validateScheduleCompletionDraft(draft){
- const candidateStore=draft.checkAggregate?clone(integratedStore()):null;
- for(const row of draft.rows){
-  const error=integratedValidateCandidate(row,'');
-  if(error)return error;
-  if(candidateStore)candidateStore.ledger.push(row)
- }
- if(!candidateStore)return'';
- const issues=integratedCandidateIssues(candidateStore);
- return issues.length?issues[0].replace('자산 잔액 음수:','잔액이 부족합니다:').replace('부채 잔액 음수:','대출잔액보다 많이 상환할 수 없습니다:'):''
+function validateScheduleCompletionDraft(draft) {
+    const candidateStore = draft.checkAggregate ? clone(integratedStore()) : null;
+    for (const row of draft.rows) {
+        const error = integratedValidateCandidate(row, '');
+        if (error)
+            return error;
+        if (candidateStore)
+            candidateStore.ledger.push(row);
+    }
+    if (!candidateStore)
+        return '';
+    const issues = integratedCandidateIssues(candidateStore);
+    return issues.length ? issues[0].replace('자산 잔액 음수:', '잔액이 부족합니다:').replace('부채 잔액 음수:', '대출잔액보다 많이 상환할 수 없습니다:') : '';
 }
-
-function commitScheduleCompletion(schedule,date,draft){
- if(draft.targetPensionAccountId)schedule.targetPensionAccountId=draft.targetPensionAccountId;
- if(draft.targetIsaAccountId)schedule.targetIsaAccountId=draft.targetIsaAccountId;
- integratedStore().ledger.push(...draft.rows);
- setting().integratedMonth=integratedMonthKey(date);
- return persist(false)
+function commitScheduleCompletion(schedule, date, draft) {
+    if (draft.targetPensionAccountId)
+        schedule.targetPensionAccountId = draft.targetPensionAccountId;
+    if (draft.targetIsaAccountId)
+        schedule.targetIsaAccountId = draft.targetIsaAccountId;
+    integratedStore().ledger.push(...draft.rows);
+    setting().integratedMonth = integratedMonthKey(date);
+    return persist(false);
 }
-
-function renderScheduleCompletion(date,message){
- closeSheets();render();setTimeout(()=>openScheduleDay(date),60);toast(message);haptic('light')
+function renderScheduleCompletion(date, message) {
+    closeSheets();
+    render();
+    setTimeout(() => openScheduleDay(date), 60);
+    toast(message);
+    haptic('light');
 }
 ;
 /* asset-os source: integrated-finance-engine.js */
@@ -715,6 +1164,109 @@ function financeProductInterestEstimate(p,asOf=''){
  },0)),tax=Math.max(0,gross*financeTaxRate(p));return{gross,tax,net:gross-tax,target}
 }
 ;
+/* asset-os source: src/storage/state-migrations.js */
+'use strict';
+function migrationRecord(value) { return value && typeof value === 'object' && !Array.isArray(value) ? value : {}; }
+function migrationRows(value) { return Array.isArray(value) ? value : []; }
+function migrationClone(value) { return JSON.parse(JSON.stringify(migrationRecord(value))); }
+function migrateStateStep(data, fromVersion) {
+    const next = data;
+    if (fromVersion === 4) {
+        next.settings = migrationRecord(next.settings);
+        next.pension = migrationRecord(next.pension);
+        for (const key of ['accounts', 'contributions', 'transactions', 'holdings', 'incomes', 'assetSnapshots'])
+            next.pension[key] = migrationRows(next.pension[key]);
+        next.integrated = migrationRecord(next.integrated);
+        for (const key of ['accounts', 'liabilities', 'ledger'])
+            next.integrated[key] = migrationRows(next.integrated[key]);
+    }
+    if (fromVersion === 5) {
+        next.financialProducts = migrationRecord(next.financialProducts);
+        next.financialProducts.items = migrationRows(next.financialProducts.items);
+        next.financialProducts.events = migrationRows(next.financialProducts.events);
+    }
+    if (fromVersion === 6) {
+        next.financeSchedules = migrationRecord(next.financeSchedules);
+        next.financeSchedules.items = migrationRows(next.financeSchedules.items);
+    }
+    if (fromVersion === 7) {
+        next.insurance = migrationRecord(next.insurance);
+        next.insurance.policies = migrationRows(next.insurance.policies);
+    }
+    if (fromVersion === 8) {
+        next.sourceArchives = migrationRecord(next.sourceArchives);
+        next.sourceArchives.records = migrationRows(next.sourceArchives.records);
+    }
+    if (fromVersion === 9)
+        next.moduleVerification = { isa: false, pension: false, irp: false, ...migrationRecord(next.moduleVerification) };
+    if (fromVersion === 10)
+        for (const account of migrationRows(next.accounts)) {
+            account.holdings = migrationRows(account.holdings);
+            account.transactions = migrationRows(account.transactions);
+            account.assetSnapshots = migrationRows(account.assetSnapshots);
+        }
+    if (fromVersion === 11) {
+        next.policies = migrationRecord(next.policies);
+        next.system = migrationRecord(next.system);
+    }
+    if (fromVersion === 12) {
+        next.brokerKis = migrationRecord(next.brokerKis);
+        for (const key of ['balanceSnapshots', 'orders', 'rights'])
+            next.brokerKis[key] = migrationRows(next.brokerKis[key]);
+    }
+    if (fromVersion === 13)
+        for (const account of migrationRows(next.accounts)) {
+            account.reconciliations = migrationRows(account.reconciliations);
+            account.corporateActions = migrationRows(account.corporateActions);
+        }
+    if (fromVersion === 14)
+        for (const account of migrationRows(next.accounts))
+            for (const tx of migrationRows(account.transactions))
+                tx.revisions = migrationRows(tx.revisions);
+    if (fromVersion === 15)
+        for (const account of migrationRows(next.accounts))
+            account.policyHistory = migrationRows(account.policyHistory);
+    if (fromVersion === 16) {
+        next.pension = migrationRecord(next.pension);
+        next.pension.projection = migrationRecord(next.pension.projection);
+        next.pension.goal = migrationRecord(next.pension.goal);
+    }
+    if (fromVersion === 17) {
+        next.settings = migrationRecord(next.settings);
+        next.settings.pensionTaxProfile = migrationRecord(next.settings.pensionTaxProfile);
+        next.settings.irpRiskClassifications = migrationRecord(next.settings.irpRiskClassifications);
+    }
+    if (fromVersion === 18) {
+        next.integrated = migrationRecord(next.integrated);
+        for (const row of migrationRows(next.integrated.ledger))
+            row.meta = migrationRecord(row.meta);
+    }
+    if (fromVersion === 19) {
+        next.settings = migrationRecord(next.settings);
+        if (typeof next.settings.integratedLedgerFilter !== 'string')
+            next.settings.integratedLedgerFilter = 'all';
+    }
+    if (fromVersion === 20) {
+        next.system = migrationRecord(next.system);
+        if (typeof next.system.loadWarning !== 'string')
+            next.system.loadWarning = '';
+        if (typeof next.system.saveError !== 'string')
+            next.system.saveError = '';
+    }
+    return next;
+}
+function migrateStateData(data, fromVersion, toVersion = SCHEMA_VERSION) {
+    const source = Number(fromVersion), target = Number(toVersion);
+    if (!Number.isInteger(source) || !Number.isInteger(target) || source < 4 || target > SCHEMA_VERSION || source > target)
+        throw new Error(`지원하지 않는 저장 형식 ${fromVersion}`);
+    const next = migrationClone(data), applied = [];
+    for (let version = source; version < target; version++) {
+        migrateStateStep(next, version);
+        applied.push(version + 1);
+    }
+    return { data: next, applied };
+}
+;
 /* asset-os source: store-state.js */
 'use strict';
 function normalizeState(data){
@@ -758,7 +1310,7 @@ function loadState(){
  let currentBroken=false,recoveryStored=false;
  for(const key of (QA_MODE?[KEY]:[KEY,...LEGACY_KEYS])){
   const raw=localStorage.getItem(key);if(!raw)continue;
-  try{const parsed=JSON.parse(raw);if(!parsed?.data||![4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21].includes(Number(parsed.schemaVersion)))throw new Error('지원하지 않는 저장 형식');const loaded=normalizeState(parsed.data);if(key!==KEY){loaded.system.loadWarning='';try{localStorage.setItem(KEY,JSON.stringify({schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,savedAt:new Date().toISOString(),data:loaded}))}catch{}}return loaded}
+  try{const parsed=JSON.parse(raw);if(!parsed?.data||![4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21].includes(Number(parsed.schemaVersion)))throw new Error('지원하지 않는 저장 형식');const migrated=migrateStateData(parsed.data,Number(parsed.schemaVersion)),loaded=normalizeState(migrated.data);if(key!==KEY||migrated.applied.length){loaded.system.loadWarning='';try{localStorage.setItem(KEY,JSON.stringify({schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,savedAt:new Date().toISOString(),data:loaded}))}catch{}}return loaded}
   catch(e){loadIssue=`저장 데이터 손상 또는 형식 오류: ${e.message}`;try{recoveryStored=storeRecoveryCopy(`${KEY}-recovery-${Date.now()}`,raw)}catch{};if(key===KEY){currentBroken=true;break}}
  }
  const fresh=normalizeState(seed);if(loadIssue){fresh.system.loadWarning=loadIssue+(recoveryStored?' 원본은 복구용으로 보관했고 초기 데이터로 열었습니다.':' 복구용 사본을 저장하지 못해 원본 저장값은 덮어쓰지 않았습니다.');if(recoveryStored&&!currentBroken)try{localStorage.setItem(KEY,JSON.stringify({schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,environment:APP_ENV,savedAt:new Date().toISOString(),data:fresh}))}catch{}}return fresh
@@ -804,7 +1356,7 @@ function createBackupZipBytes(payload=backupPayload()){const enc=new TextEncoder
 function parseBackupZipBytes(bytes){const src=bytes instanceof Uint8Array?bytes:new Uint8Array(bytes);if(src.length>MAX_IMPORT_FILE_BYTES)throw new Error('백업 파일은 8MB 이하만 열 수 있습니다.');const v=new DataView(src.buffer,src.byteOffset,src.byteLength);if(src.length<30||v.getUint32(0,true)!==0x04034b50)throw new Error('Asset OS ZIP 형식이 아닙니다.');const method=v.getUint16(8,true),expected=v.getUint32(14,true),size=v.getUint32(18,true),nameLen=v.getUint16(26,true),extraLen=v.getUint16(28,true),start=30+nameLen+extraLen;if(method!==0)throw new Error('지원하지 않는 압축 방식입니다. Asset OS에서 만든 ZIP을 선택해 주세요.');if(size>MAX_IMPORT_FILE_BYTES)throw new Error('백업 내부 데이터는 8MB 이하만 열 수 있습니다.');if(start+size>src.length)throw new Error('ZIP 데이터가 잘렸습니다.');const data=src.slice(start,start+size);if(crc32(data)!==expected)throw new Error('ZIP CRC 검증에 실패했습니다.');return JSON.parse(new TextDecoder().decode(data))}
 function backupContainsQaFixtures(payload){const d=payload?.data||{},accounts=d.accounts||[],p=d.pension||{},ledger=d.integrated?.ledger||[];return /(?:^|\s)QA(?:\s|$)/i.test(String(payload?.appVersion||''))||ledger.some(x=>x?.meta?.qaFixture)||accounts.some(a=>(a.assetSnapshots||[]).some(x=>x?.meta?.qaFixture)||(a.transactions||[]).some(x=>x?.meta?.qaFixture)||a.qaDividendHistory)||(p.incomes||[]).some(x=>x?.meta?.qaFixture)||(p.assetSnapshots||[]).some(x=>x?.meta?.qaFixture)}
 function backupEnvironment(payload){if(['live','qa'].includes(payload?.environment))return payload.environment;return backupContainsQaFixtures(payload)?'qa':'live'}
-function validateBackupPayload(payload){if(!payload||payload.format!==BACKUP_FORMAT)throw new Error('Asset OS 백업 파일이 아닙니다.');if(!SUPPORTED_SCHEMAS.has(Number(payload.schemaVersion)))throw new Error(`지원하지 않는 데이터 구조 ${payload.schemaVersion}`);if(!payload.data||typeof payload.data!=='object')throw new Error('백업 데이터가 없습니다.');const sourceEnv=backupEnvironment(payload);if(sourceEnv!==APP_ENV)throw new Error(`${sourceEnv==='qa'?'QA':'운영'} 백업은 ${APP_ENV==='qa'?'QA':'운영'} 화면에 복원할 수 없습니다.`);const next=normalizeState(payload.data);if(sourceEnv==='qa')next.moduleVerification={isa:false,pension:false,irp:false};return next}
+function validateBackupPayload(payload){if(!payload||payload.format!==BACKUP_FORMAT)throw new Error('Asset OS 백업 파일이 아닙니다.');if(!SUPPORTED_SCHEMAS.has(Number(payload.schemaVersion)))throw new Error(`지원하지 않는 데이터 구조 ${payload.schemaVersion}`);if(!payload.data||typeof payload.data!=='object')throw new Error('백업 데이터가 없습니다.');const sourceEnv=backupEnvironment(payload);if(sourceEnv!==APP_ENV)throw new Error(`${sourceEnv==='qa'?'QA':'운영'} 백업은 ${APP_ENV==='qa'?'QA':'운영'} 화면에 복원할 수 없습니다.`);const migrated=migrateStateData(payload.data,Number(payload.schemaVersion)),next=normalizeState(migrated.data);if(sourceEnv==='qa')next.moduleVerification={isa:false,pension:false,irp:false};return next}
 function downloadBytes(bytes,name,type='application/zip'){const blob=new Blob([bytes],{type}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1200)}
 function backupFileName(){return typeof assetManagedBackupName==='function'?assetManagedBackupName():`AssetOS_${localYmd().replaceAll('-','').slice(2)}_${APP_VERSION}.zip`}
 async function saveZipBackup(){
@@ -971,16 +1523,34 @@ function openPensionArchiveRecord(id){const r=sourceArchiveRecords().find(x=>Str
 ;
 /* asset-os source: core-accessors.js */
 'use strict';
-function setting(){return state.settings}
-function currentAccount(){return state.accounts.find(a=>a.id===setting().selectedAccountId)||state.accounts[0]}
-function policy(kind='isa',account='current'){const group=state.policies[kind];if(!group)return{};if(Array.isArray(group.versions)){let targetId=group.activePolicyId;if(kind==='isa'){if(account===null)targetId=group.activePolicyId;else if(account==='current')targetId=currentAccount()?.policyId||group.activePolicyId;else targetId=account?.policyId||group.activePolicyId}else if(account&&typeof account==='object')targetId=account.policyId||group.activePolicyId;return group.versions.find(v=>v.id===targetId)||group.versions.find(v=>v.id===group.activePolicyId)||group.versions[0]||{}}return group}
-function policyForYear(kind,year){
- const group=state.policies[kind];if(!group?.versions?.length)return policy(kind);
- const y=Number(year)||businessYear(),end=`${y}-12-31`,allowed=v=>!['proposal','retired'].includes(String(v.status||''))&&(!v.effectiveFrom||String(v.effectiveFrom)<=end);
- const history=kind==='isa'?[]:(group.applicationHistory||[]),applied=[...history].filter(h=>h.effectiveFrom<=end).sort((a,b)=>a.effectiveFrom.localeCompare(b.effectiveFrom)).at(-1),historic=applied&&group.versions.find(v=>v.id===applied.policyId&&allowed(v));if(historic)return historic;
- const isaApplied=new Set(kind==='isa'?state.accounts.flatMap(a=>(a.policyHistory||[]).filter(h=>h.effectiveFrom<=end).map(h=>h.policyId)):[]);
- const eligible=group.versions.filter(v=>allowed(v)&&(!v.userEdited||(!history.length&&v.id===group.activePolicyId)||isaApplied.has(v.id))).sort((a,b)=>String(a.effectiveFrom||'').localeCompare(String(b.effectiveFrom||'')));
- return eligible.at(-1)||group.versions.find(v=>!v.userEdited&&!['proposal','retired'].includes(String(v.status||'')))||{}
+function setting() { return state.settings; }
+function currentAccount() { return state.accounts.find(a => a.id === setting().selectedAccountId) || state.accounts[0]; }
+function policy(kind = 'isa', account = 'current') { const group = state.policies[kind]; if (!group)
+    return {}; if (Array.isArray(group.versions)) {
+    let targetId = group.activePolicyId;
+    if (kind === 'isa') {
+        if (account === null)
+            targetId = group.activePolicyId;
+        else if (account === 'current')
+            targetId = currentAccount()?.policyId || group.activePolicyId;
+        else
+            targetId = account?.policyId || group.activePolicyId;
+    }
+    else if (account && typeof account === 'object')
+        targetId = account.policyId || group.activePolicyId;
+    return group.versions.find(v => v.id === targetId) || group.versions.find(v => v.id === group.activePolicyId) || group.versions[0] || {};
+} return group; }
+function policyForYear(kind, year) {
+    const group = state.policies[kind];
+    if (!group?.versions?.length)
+        return policy(kind);
+    const y = Number(year) || businessYear(), end = `${y}-12-31`, allowed = (v) => !['proposal', 'retired'].includes(String(v.status || '')) && (!v.effectiveFrom || String(v.effectiveFrom) <= end);
+    const history = kind === 'isa' ? [] : (group.applicationHistory || []), applied = [...history].filter(h => h.effectiveFrom <= end).sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom)).at(-1), historic = applied && group.versions.find(v => v.id === applied.policyId && allowed(v));
+    if (historic)
+        return historic;
+    const isaApplied = new Set(kind === 'isa' ? state.accounts.flatMap(a => (a.policyHistory || []).filter(h => h.effectiveFrom <= end).map(h => h.policyId)) : []);
+    const eligible = group.versions.filter(v => allowed(v) && (!v.userEdited || (!history.length && v.id === group.activePolicyId) || isaApplied.has(v.id || ''))).sort((a, b) => String(a.effectiveFrom || '').localeCompare(String(b.effectiveFrom || '')));
+    return eligible.at(-1) || group.versions.find(v => !v.userEdited && !['proposal', 'retired'].includes(String(v.status || ''))) || {};
 }
-function policyGroup(kind){return state.policies[kind]||{activePolicyId:'',versions:[]}}
-function policyStatus(p){return p?.userEdited?'사용자 설정':p?.status==='current'?'현행':'보관'}
+function policyGroup(kind) { return (state.policies[kind] || { activePolicyId: '', versions: [] }); }
+function policyStatus(p) { return p?.userEdited ? '사용자 설정' : p?.status === 'current' ? '현행' : '보관'; }

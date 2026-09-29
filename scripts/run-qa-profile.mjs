@@ -16,7 +16,7 @@ const run=(command,args,extra={})=>{
 /** @param {string} name */
 const npmScript=name=>run(process.platform==='win32'?'npm.cmd':'npm',['run',name]);
 
-for(const gate of ['check:runtime','check:syntax','check:types','check:secrets','check:generated','build'])npmScript(gate);
+for(const gate of ['check:runtime','check:release','check:syntax','check:types','check:secrets','check:generated','build'])npmScript(gate);
 
 const testFiles=readdirSync(resolve(root,'tests')).filter(name=>name.endsWith('.test.cjs')).sort();
 const fastFiles=new Set([

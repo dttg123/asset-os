@@ -18,7 +18,7 @@ const context=vm.createContext({
  toast:message=>notices.push(String(message)),closeSheets(){},render(){},haptic(){},nav(rootName,tab){context.location.hash=`#/${rootName}/${tab||''}`}
 });
 vm.runInContext('let integratedAssetsExpanded=false',context);
-const files=['core-config.js','src/integrations/kis-normalization.js','broker-kis.js','data-defaults.js','src/domain/integrated-replay.js','integrated-ledger-engine.js','integrated-schedule-engine.js','integrated-finance-engine.js','store-state.js','core-accessors.js','core-visual-utils.js','src/domain/investment-position.js','pension-contributions.js','pension-ledger.js','pension-assets.js','isa-validation.js','isa-ledger.js','isa-registration.js','integrated-forms.js','integrated-pages.js','home.js'];
+const files=['core-config.js','src/integrations/kis-normalization.js','broker-kis.js','data-defaults.js','src/domain/integrated-replay.js','src/domain/integrated-ledger-core.js','src/domain/integrated-ledger.js','src/domain/integrated-ledger-validation.js','src/domain/financial-current.js','src/domain/financial-history.js','src/domain/integrated-spending.js','integrated-schedule-engine.js','integrated-finance-engine.js','src/storage/state-migrations.js','store-state.js','core-accessors.js','core-visual-utils.js','src/domain/investment-position.js','pension-contributions.js','pension-ledger.js','pension-assets.js','isa-validation.js','isa-ledger.js','isa-registration.js','integrated-forms.js','integrated-pages.js','home.js'];
 for(const file of files)vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),context,{filename:file});
 const run=(source,args=[])=>vm.runInContext(source,Object.assign(context,{__args:args})),plain=value=>JSON.parse(JSON.stringify(value));
 

@@ -1,7 +1,7 @@
 'use strict';
-const CACHE='asset-os-v0.6.7-build20260926-3';
+const CACHE='asset-os-v0.6.7-build20260929-1';
 const ASSETS=['dist/asset-core.js','dist/asset-ledgers.js','dist/asset-ui.js','dist/asset-runtime.js','dist/asset-os.css','service-worker.js'];
-const SHELL=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png',...ASSETS.map(name=>`./${name}?v=0.6.7&build=20260926-3`)];
+const SHELL=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png',...ASSETS.map(name=>`./${name}?v=0.6.7&build=20260929-1`)];
 const STATIC_PATHS=new Set([...ASSETS,'manifest.webmanifest','icon-192.png','icon-512.png'].map(name=>new URL(name,self.registration.scope).pathname));
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE&&key.startsWith('asset-os-')).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
