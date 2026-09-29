@@ -18,6 +18,7 @@
       "src/app/schedule-completion.js",
       "integrated-finance-engine.js",
       "src/storage/state-migrations.js",
+      "src/storage/snapshot-retention.js",
       "store-state.js",
       "backup.js",
       "export-csv.js",

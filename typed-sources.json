@@ -19,6 +19,7 @@
   "src/domain/integrated-ledger-validation.ts",
   "src/domain/investment-position.ts",
   "src/storage/cloud-save-contract.ts",
+  "src/storage/snapshot-retention.ts",
   "src/storage/state-migrations.ts",
   "src/integrations/kis-normalization.ts"
 ]
