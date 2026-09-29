@@ -4,6 +4,7 @@
   "broker-kis-client.ts",
   "backup.ts",
   "core-accessors.ts",
+  "integrated-forms.ts",
   "isa-validation.ts",
   "src/app/schedule-completion.ts",
   "src/domain/cloud-state-policy.ts",
