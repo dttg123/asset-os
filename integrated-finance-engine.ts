@@ -1,0 +1,75 @@
+'use strict';
+
+type FinanceRuntimeRecord=Record<string,any>;
+type FinanceProductType='deposit'|'savings'|'parking'|'loan';
+type FinanceRateType='fixed'|'variable'|'unknown';
+type FinanceInterestMethod='simple'|'compound'|'unknown';
+type FinanceTaxMode='general'|'taxfree'|'custom'|'unknown';
+type FinanceProduct=FinanceRuntimeRecord&{id:string;type:FinanceProductType;name:string;status:'active'|'ended';startDate:string;maturityDate:string;annualRate:number;rateType:FinanceRateType;interestMethod:FinanceInterestMethod;taxMode:FinanceTaxMode;taxRate:number;rateHistory:{effectiveFrom:string;rate:number}[]};
+type FinanceEvent=FinanceRuntimeRecord&{id:string;productId:string;date:string;type:string;amount:number;label:string;note:string;meta:FinanceRuntimeRecord};
+type FinanceRuntimeState={financialProducts?:{items?:FinanceProduct[];events?:FinanceEvent[]};integrated?:FinanceRuntimeRecord;brokerKis?:FinanceRuntimeRecord;[key:string]:any};
+type FinanceReplay={assets:Record<string,number>;liabilities:Record<string,number>};
+type FinanceInterestEstimate={gross:number;tax:number;net:number;target:string;unknown?:boolean};
+
+declare let state:FinanceRuntimeState;
+declare function clone<T>(value:T):T;
+declare function uid(prefix:string):string;
+declare function ymd():string;
+declare function localYmd():string;
+declare function integratedTxOrder(a:FinanceRuntimeRecord,b:FinanceRuntimeRecord):number;
+declare function postedDateError(date:string):string;
+declare function financialProductActiveOnDate(product:FinanceRuntimeRecord,date:string):boolean;
+declare function integratedFinancialModel():FinanceRuntimeRecord;
+declare function pensionStore():{accounts:FinanceRuntimeRecord[]};
+declare function pensionAccountView(account:FinanceRuntimeRecord):FinanceRuntimeRecord;
+declare function pensionRiskMetrics():FinanceRuntimeRecord;
+declare function won(value:number):string;
+declare const allIsaIssues:(()=>any[])|undefined;
+declare const pensionTransactionIssues:(()=>any[])|undefined;
+declare const integratedPolicyLimitIssues:(()=>string[])|undefined;
+declare function integratedIssues():string[];
+declare function brokerKisIssues(store:unknown):string[];
+declare function buildIntegratedSeed():FinanceRuntimeRecord;
+declare function integratedReplay():FinanceReplay;
+declare const integratedOperationalLedger:(()=>FinanceRuntimeRecord[])|undefined;
+
+function financeProductAccountId(id:unknown):string{return `finance-asset-${id}`}
+function financeProductLiabilityId(id:unknown):string{return `finance-debt-${id}`}
+function financeProductTypeLabel(type:unknown):string{return ({deposit:'예금',savings:'적금',parking:'파킹·CMA',loan:'대출'} as Record<string,string>)[String(type)]||'기타'}
+function normalizeFinancialProducts(input:unknown):{items:FinanceProduct[];events:FinanceEvent[]}{
+ const src:FinanceRuntimeRecord=input&&typeof input==='object'?clone(input as FinanceRuntimeRecord):{items:[],events:[]},items:Array<FinanceRuntimeRecord>=Array.isArray(src.items)?src.items:[],events:Array<FinanceRuntimeRecord>=Array.isArray(src.events)?src.events:[];
+ return {items:items.map((p,i)=>{const type:FinanceProductType=(['deposit','savings','parking','loan'] as string[]).includes(String(p.type))?p.type as FinanceProductType:'deposit',status:'active'|'ended'=(p.status==='ended'||p.status==='closed'||p.status==='archived')?'ended':'active',startDate=/^\d{4}-\d{2}-\d{2}$/.test(String(p.startDate||''))?String(p.startDate):'',maturityDate=/^\d{4}-\d{2}-\d{2}$/.test(String(p.maturityDate||''))?String(p.maturityDate):'',rateHistory:FinanceRuntimeRecord[]=Array.isArray(p.rateHistory)?p.rateHistory:[];return {...p,id:String(p.id||uid('finance-product')),type,name:String(p.name||`${financeProductTypeLabel(type)} ${i+1}`),institution:String(p.institution||''),status,startDate,maturityDate,termMonths:Math.max(0,Number(p.termMonths)||0),annualRate:Math.max(0,Number(p.annualRate)||0),rateType:((['fixed','variable','unknown'] as string[]).includes(String(p.rateType))?p.rateType:'unknown') as FinanceRateType,interestMethod:((['simple','compound','unknown'] as string[]).includes(String(p.interestMethod))?p.interestMethod:'unknown') as FinanceInterestMethod,taxMode:((['general','taxfree','custom','unknown'] as string[]).includes(String(p.taxMode))?p.taxMode:'unknown') as FinanceTaxMode,taxRate:Math.max(0,Number(p.taxRate??0)||0),paymentStyle:['lump','monthly','free'].includes(p.paymentStyle)?p.paymentStyle:(type==='savings'?'monthly':'lump'),scheduledAmount:Math.max(0,Number(p.scheduledAmount)||0),paymentDay:Math.min(31,Math.max(0,Number(p.paymentDay)||0)),contributionStatus:['active','paused','free'].includes(p.contributionStatus)?p.contributionStatus:(p.paymentStyle==='free'?'free':'active'),productSubtype:String(p.productSubtype||''),governmentSupport:!!p.governmentSupport,interestPayment:['maturity','monthly','daily'].includes(p.interestPayment)?p.interestPayment:'maturity',repaymentMethod:['equalPayment','equalPrincipal','bullet','interestOnly','custom','unknown'].includes(p.repaymentMethod)?p.repaymentMethod:'unknown',graceMonths:Math.max(0,Number(p.graceMonths)||0),rateChangeMonths:Math.max(0,Number(p.rateChangeMonths)||0),prepaymentFeeRate:Math.max(0,Number(p.prepaymentFeeRate)||0),prepaymentFeeUntil:String(p.prepaymentFeeUntil||''),contractPrincipal:Math.max(0,Number(p.contractPrincipal)||0),memo:String(p.memo||''),endedAt:String(p.endedAt||''),endReason:String(p.endReason||''),settlement:p.settlement&&typeof p.settlement==='object'?clone(p.settlement):null,rateHistory:rateHistory.map(r=>({effectiveFrom:String(r.effectiveFrom||startDate||ymd()),rate:Math.max(0,Number(r.rate)||0)})).sort((a,b)=>a.effectiveFrom.localeCompare(b.effectiveFrom))}}),events:events.map((e,i)=>({id:String(e.id||`finance-event-${i+1}`),productId:String(e.productId||''),date:String(e.date||''),type:String(e.type||'note'),amount:Number(e.amount)||0,label:String(e.label||''),note:String(e.note||''),meta:e.meta&&typeof e.meta==='object'?clone(e.meta):{}}))}
+}
+function financeProductEvents(id:unknown,type=''):FinanceEvent[]{return (state.financialProducts?.events||[]).filter(e=>e.productId===id&&(!type||e.type===type)).sort(integratedTxOrder)}
+function financeEventDateError(p:FinanceRuntimeRecord|null|undefined,date:unknown):string{const d=String(date||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(d))return'날짜를 확인해 주세요.';const err=postedDateError(d);if(err)return err;if(p&&!financialProductActiveOnDate(p,d))return'상품 운영기간 밖 날짜입니다.';return''}
+function financeProductEventError(e:FinanceEvent|null|undefined,p:FinanceProduct|null=financialProduct(e?.productId)):string{if(!e)return'이벤트 데이터가 없습니다.';if(!p)return'연결 상품을 찾을 수 없습니다.';const type=String(e.type||'note'),allowed=new Set(['governmentContribution','interestObserved','note']);if(!allowed.has(type))return'지원하지 않는 이벤트 유형입니다.';const dateError=financeEventDateError(p,e.date);if(dateError)return dateError;if(['governmentContribution','interestObserved'].includes(type)&&(!Number.isFinite(Number(e.amount))||Number(e.amount)<=0))return'금액은 1원 이상이어야 합니다.';if(type==='governmentContribution'&&!p.governmentSupport)return'정부지원 상품이 아닌데 기여금 기록이 있습니다.';if(type==='interestObserved'){const ps=String(e.meta?.periodStart||''),pe=String(e.meta?.periodEnd||'');if(ps&&!/^\d{4}-\d{2}-\d{2}$/.test(ps))return'이자기간 시작일 형식이 잘못되었습니다.';if(pe&&!/^\d{4}-\d{2}-\d{2}$/.test(pe))return'이자기간 종료일 형식이 잘못되었습니다.';if(ps&&pe&&ps>pe)return'이자기간 시작일이 종료일보다 늦습니다.';if(ps&&!financialProductActiveOnDate(p,ps))return'이자기간 시작일이 상품 운영기간 밖입니다.';if(pe&&!financialProductActiveOnDate(p,pe))return'이자기간 종료일이 상품 운영기간 밖입니다.';if(pe&&pe>String(e.date||''))return'이자기간 종료일이 확인일보다 늦습니다.'}return''}
+function financialProductEventIssues():string[]{const issues:string[]=[],ids=new Set<string>();for(const e of state.financialProducts?.events||[]){const id=String(e.id||'');if(!id||ids.has(id))issues.push(`금융상품 이벤트 ID 중복/누락: ${id||'-'}`);ids.add(id);const err=financeProductEventError(e);if(err)issues.push(`금융상품 이벤트 오류: ${e.label||e.type||id||'-'} · ${err}`)}return issues}
+function validFinanceProductEvents(id:unknown,type=''):FinanceEvent[]{return financeProductEvents(id,type).filter(e=>!financeProductEventError(e))}
+function financialCrossCheckIssues():string[]{const issues:string[]=[],model=integratedFinancialModel();if(Math.abs(model.totalAssets-(model.cash+model.deposit+model.savings+model.isa+model.pension+model.irp+model.other))>.5)issues.push('통합 총자산과 구성 합계가 일치하지 않습니다.');for(const account of pensionStore().accounts.filter(a=>a.status==='active')){const view=pensionAccountView(account),label=account.kind==='irp'?'IRP':'연금저축';if(view.kis&&view.componentDelta<-.5)issues.push(`${label} ${account.name}의 조회 총액이 현금·종목 합계보다 ${won(Math.abs(view.componentDelta))} 작습니다.`);if(view.kis&&!view.cashStatus.confirmed)issues.push(`${label} 당일 체결 후 사용 가능 현금이 확정되지 않았습니다.`)}const risk=pensionRiskMetrics();if(!risk.classificationComplete)issues.push(`IRP 위험자산 미분류 금액 ${Math.round(risk.unknown).toLocaleString('ko-KR')}원이 있습니다.`);for(const kind of ['pension','irp']){const connection=state.brokerKis?.connections?.[kind];if(connection?.accountId&&connection.lastError)issues.push(`${kind==='irp'?'IRP':'연금저축'} 한투 갱신이 부분 완료 상태입니다.`)}return issues}
+function systemIntegrityIssues():string[]{const isa=typeof allIsaIssues==='function'?allIsaIssues().map(x=>`ISA: ${x.title||x.detail||x}`):[],pension=typeof pensionTransactionIssues==='function'?pensionTransactionIssues().map(x=>`연금: ${x}`):[],limits=typeof integratedPolicyLimitIssues==='function'?integratedPolicyLimitIssues():[];return [...integratedIssues(),...limits,...isa,...pension,...financialProductEventIssues(),...brokerKisIssues(state.brokerKis),...financialCrossCheckIssues()]}
+function financeProductBenefitBalance(p:FinanceRuntimeRecord|null|undefined):number{return p?validFinanceProductEvents(p.id,'governmentContribution').reduce((n,e)=>n+(Number(e.amount)||0),0):0}
+function financeProductRecentInterest(p:FinanceProduct|null|undefined):FinanceEvent|null{if(!p)return null;return [...validFinanceProductEvents(p.id,'interestObserved')].reverse()[0]||null}
+function financeRateTypeLabel(p:FinanceRuntimeRecord):string{return p.rateType==='fixed'?'고정금리':p.rateType==='variable'?'변동금리':'방식 미확인'}
+function financeInterestMethodLabel(p:FinanceRuntimeRecord):string{return p.interestMethod==='simple'?'단리':p.interestMethod==='compound'?'복리':'이자계산 미확인'}
+function financeTaxLabel(p:FinanceRuntimeRecord):string{return p.taxMode==='taxfree'?'비과세':p.taxMode==='general'?`일반과세 ${Number(p.taxRate||15.4).toFixed(1)}%`:p.taxMode==='custom'?`세율 ${Number(p.taxRate||0).toFixed(1)}%`:'과세 미확인'}
+function financeContributionLabel(p:FinanceRuntimeRecord):string{if(p.type!=='savings')return'';if(p.contributionStatus==='paused')return'납입 중단';if(p.paymentStyle==='free'||p.contributionStatus==='free')return'자유납입';return p.scheduledAmount?`월 ${won(p.scheduledAmount)}`:'정기납입'}
+function financeSubtypeLabel(p:FinanceRuntimeRecord):string{if(p.productSubtype==='youthLeap')return'청년도약';if(p.productSubtype==='housingSubscription')return'주택청약';return''}
+function financeEndReasonLabel(v:unknown):string{return ({maturity:'만기수령',earlyCancel:'중도해지',closed:'해지',paidOff:'완납'} as Record<string,string>)[String(v)]||'종료'}
+function syncFinancialProductStructures(target:FinanceRuntimeRecord):FinanceRuntimeRecord{const fp=target.financialProducts||{items:[]},store=target.integrated||buildIntegratedSeed();for(const p of fp.items){if(p.type==='loan'){const id=financeProductLiabilityId(p.id),row=store.liabilities.find((x:FinanceRuntimeRecord)=>x.id===id);if(row){row.name=p.name;row.kind='loan';row.productId=p.id}else store.liabilities.push({id,kind:'loan',name:p.name,productId:p.id})}else{const id=financeProductAccountId(p.id),row=store.accounts.find((x:FinanceRuntimeRecord)=>x.id===id);if(row){row.name=p.name;row.kind=p.type;row.productId=p.id}else store.accounts.push({id,kind:p.type,name:p.name,productId:p.id})}}target.integrated=store;return target}
+function financialProducts():FinanceProduct[]{return state.financialProducts?.items||[]}
+function financialProduct(id:unknown):FinanceProduct|null{return financialProducts().find(p=>p.id===id)||null}
+function activeFinancialProducts(type=''):FinanceProduct[]{return financialProducts().filter(p=>p.status==='active'&&(!type||p.type===type))}
+function financeTaxRate(p:FinanceProduct|null|undefined):number{if(!p||p.taxMode==='unknown')return 0;if(p.taxMode==='taxfree')return 0;const rate=p.taxMode==='general'&&!(Number(p.taxRate)>0)?15.4:Number(p.taxRate)||0;return Math.max(0,rate)/100}
+function financeProductBalance(p:FinanceProduct|null|undefined):number{if(!p)return 0;const r=integratedReplay();return p.type==='loan'?Math.max(0,Number(r.liabilities[financeProductLiabilityId(p.id)]||0)):Math.max(0,Number(r.assets[financeProductAccountId(p.id)]||0))}
+function financeProductPrincipalFlows(p:FinanceProduct|null|undefined,target=''):{date:string;delta:number}[]{if(!p||p.type==='loan'||typeof integratedOperationalLedger!=='function')return[];const accountId=financeProductAccountId(p.id),end=String(target||p.maturityDate||localYmd()),rows:{date:string;delta:number}[]=[];for(const tx of integratedOperationalLedger()){const date=String(tx.date||'');if(!date||date>end)continue;let delta=0;if(tx.type==='adjustment'&&tx.accountId===accountId)delta=Number(tx.delta)||0;else{if(tx.toAccountId===accountId)delta+=Number(tx.amount)||0;if(tx.fromAccountId===accountId)delta-=Number(tx.amount)||0}if(delta)rows.push({date,delta})}return rows.sort((a,b)=>a.date.localeCompare(b.date))}
+function financeProductInterestEstimate(p:FinanceProduct|null|undefined,asOf=''):FinanceInterestEstimate{
+ if(!p||p.type==='loan')return{gross:0,tax:0,net:0,target:''};
+ const bal=financeProductBalance(p),today=localYmd(),target=asOf||p.maturityDate||today,history:FinanceRuntimeRecord[]=[...(p.rateHistory||[])].filter((r:FinanceRuntimeRecord)=>/^\d{4}-\d{2}-\d{2}$/.test(r.effectiveFrom)&&Number.isFinite(Number(r.rate))).sort((a:FinanceRuntimeRecord,b:FinanceRuntimeRecord)=>a.effectiveFrom.localeCompare(b.effectiveFrom));
+ if(!bal||(!history.length&&!p.annualRate)||p.interestMethod==='unknown'||p.taxMode==='unknown')return{gross:0,tax:0,net:0,target,unknown:true};
+ const start=p.startDate||today,end=target<start?start:target,flows=financeProductPrincipalFlows(p,end),rateAt=(date:string)=>Number(history.filter(r=>r.effectiveFrom<=date).at(-1)?.rate??history[0]?.rate??p.annualRate)/100;
+ const gross=Math.max(0,(flows.length?flows:[{date:start,delta:bal}]).reduce((sum,flow)=>{
+  const from=String(flow.date||start)<start?start:String(flow.date||start),cuts=[from,...new Set<string>(history.map(r=>r.effectiveFrom).filter(d=>d>from&&d<end)),end];let factor=1,simple=0;
+  for(let i=1;i<cuts.length;i++){const years=Math.max(0,(Date.parse(cuts[i]+'T00:00:00Z')-Date.parse(cuts[i-1]+'T00:00:00Z'))/86400000)/365,rate=rateAt(cuts[i-1]);simple+=rate*years;factor*=Math.pow(1+rate,years)}
+  return sum+flow.delta*(p.interestMethod==='compound'?factor-1:simple)
+ },0)),tax=Math.max(0,gross*financeTaxRate(p));return{gross,tax,net:gross-tax,target}
+}
