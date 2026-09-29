@@ -84,9 +84,9 @@ test('ISA balance registrations appear in adjustment filter and linked details u
 
 test('successful integrated save clears hidden search and filter state',()=>{
  const source=read('integrated-forms.js');
- assert.match(source,/integratedLedgerSearch=''/);
- assert.match(source,/integratedSearchDisplayLimit=50/);
- assert.match(source,/integratedLedgerFilter='all'/);
+ assert.match(source,/integratedLedgerSearch\s*=\s*''/);
+ assert.match(source,/integratedSearchDisplayLimit\s*=\s*50/);
+ assert.match(source,/integratedLedgerFilter\s*=\s*'all'/);
 });
 
 test('the global duplicate-submit guard does not cancel the first ISA save',()=>{
