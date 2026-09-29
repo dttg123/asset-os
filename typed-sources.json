@@ -4,6 +4,8 @@
   "broker-kis-client.ts",
   "backup.ts",
   "core-accessors.ts",
+  "initial-import.ts",
+  "initial-import-ui.ts",
   "integrated-forms.ts",
   "isa-validation.ts",
   "src/app/schedule-completion.ts",
