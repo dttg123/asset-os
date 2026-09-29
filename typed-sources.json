@@ -2,6 +2,7 @@
   "policy-review.ts",
   "policy-review-ui.ts",
   "broker-kis-client.ts",
+  "backup.ts",
   "core-accessors.ts",
   "isa-validation.ts",
   "src/app/schedule-completion.ts",
