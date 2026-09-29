@@ -7,6 +7,9 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const root = path.join(__dirname, '..');
+const releaseMeta = JSON.parse(fs.readFileSync(path.join(root, 'release-meta.json'), 'utf8'));
+const releaseQuery = `v=${releaseMeta.version}&build=${releaseMeta.build}`;
+const releaseCache = `asset-os-v${releaseMeta.version}-build${releaseMeta.build}`;
 const workerSource = fs.readFileSync(path.join(root, 'service-worker.js'), 'utf8');
 
 function workerEnvironment() {
@@ -88,9 +91,9 @@ test('service worker precaches the shell and removes only stale Asset OS caches'
 
   await env.dispatch('install');
   assert.equal(env.flags().skipped, true);
-  const current = env.stores.get('asset-os-v0.6.7-build20260926-3');
+  const current = env.stores.get(releaseCache);
   assert.ok(current.has('https://example.test/app/index.html'));
-  assert.ok(current.has('https://example.test/app/dist/asset-runtime.js?v=0.6.7&build=20260926-3'));
+  assert.ok(current.has(`https://example.test/app/dist/asset-runtime.js?${releaseQuery}`));
 
   await env.dispatch('activate');
   assert.equal(env.flags().claimed, true);
@@ -108,9 +111,9 @@ test('service worker serves the offline shell and cached static files without ca
   const navigationResponse = await env.dispatch('fetch', navigation);
   assert.equal(await navigationResponse.text(), 'precache:./index.html');
 
-  const staticRequest = new Request('https://example.test/app/dist/asset-ui.js?v=0.6.7&build=20260926-3');
+  const staticRequest = new Request(`https://example.test/app/dist/asset-ui.js?${releaseQuery}`);
   const staticResponse = await env.dispatch('fetch', staticRequest);
-  assert.equal(await staticResponse.text(), 'precache:./dist/asset-ui.js?v=0.6.7&build=20260926-3');
+  assert.equal(await staticResponse.text(), `precache:./dist/asset-ui.js?${releaseQuery}`);
 
   const before = [...env.stores.values()].reduce((sum, entries) => sum + entries.size, 0);
   const unknown = new Request('https://example.test/app/private-api');
@@ -123,10 +126,10 @@ test('service worker refreshes an allowlisted static response from the network',
   const env = workerEnvironment();
   await env.dispatch('install');
   env.setFetch(async () => new Response('fresh-runtime', { status: 200 }));
-  const request = new Request('https://example.test/app/dist/asset-runtime.js?v=0.6.7&build=20260926-3');
+  const request = new Request(`https://example.test/app/dist/asset-runtime.js?${releaseQuery}`);
   const response = await env.dispatch('fetch', request);
   assert.equal(await response.text(), 'fresh-runtime');
   await new Promise(resolve => setImmediate(resolve));
-  const cached = env.stores.get('asset-os-v0.6.7-build20260926-3').get(request.url);
+  const cached = env.stores.get(releaseCache).get(request.url);
   assert.equal(await cached.text(), 'fresh-runtime');
 });

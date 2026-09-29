@@ -5,8 +5,10 @@ const vm=require('node:vm');
 const path=require('node:path');
 const root=path.join(__dirname,'..');
 const read=name=>fs.readFileSync(path.join(root,name),'utf8');
+const releaseMeta=JSON.parse(read('release-meta.json')),releaseQuery=`v=${releaseMeta.version}&build=${releaseMeta.build}`,releaseCache=`asset-os-v${releaseMeta.version}-build${releaseMeta.build}`;
+const regexEscape=value=>String(value).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 
-test('v0.6.7 final views and export assets are shipped in the PWA shell',()=>{
+test('current release views and export assets are shipped in the PWA shell',()=>{
  const html=read('index.html'),worker=read('service-worker.js'),pwa=read('pwa.js'),release=read('release-v069.js'),home=read('home.js');
  const bundles=JSON.parse(read('runtime-bundles.json'));
  assert.ok(bundles.scripts['asset-core.js'].includes('export-csv.js'));
@@ -20,10 +22,10 @@ test('v0.6.7 final views and export assets are shipped in the PWA shell',()=>{
  assert.match(release,/ai-review-actions/);
  assert.match(releaseCss,/ai-account-scopes/);
  assert.match(releaseCss,/ai-review-actions/);
- assert.match(html,/dist\/asset-runtime\.js\?v=0\.6\.7&build=20260926-3/);
- assert.match(worker,/asset-os-v0\.6\.7-build20260926-3/);
- assert.match(worker,/v=0\.6\.7&build=20260926-3/);
- assert.match(pwa,/service-worker\.js\?v=0\.6\.7&build=20260926-3/);
+ assert.match(html,new RegExp(`dist/asset-runtime\\.js\\?${regexEscape(releaseQuery)}`));
+ assert.match(worker,new RegExp(regexEscape(releaseCache)));
+ assert.match(worker,new RegExp(regexEscape(releaseQuery)));
+ assert.match(pwa,new RegExp(`service-worker\\.js\\?${regexEscape(releaseQuery)}`));
  assert.match(home,/function openAlertsCenter\(\)\{const isaReady=homeSample\(\)\.isaSource==='asset-os'/);
  assert.match(home,/homeInvestmentRefreshMarkup\(\)/);
  assert.match(home,/data-investment-refresh-all/);

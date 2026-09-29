@@ -403,7 +403,7 @@ function initQaMode(){if(!QA_MODE)return;document.documentElement.classList.add(
 ;
 /* asset-os source: pwa.js */
 'use strict';
-if('serviceWorker'in navigator)window.addEventListener('load',async()=>{try{const reg=await navigator.serviceWorker.register('./service-worker.js?v=0.6.7&build=20260926-3',{scope:'./',updateViaCache:'none'});await reg.update();let refreshing=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(refreshing)return;refreshing=true;const key='asset-os-sw-reload-0.6.7-build20260926-3';if(sessionStorage.getItem(key))return;sessionStorage.setItem(key,'1');location.reload()})}catch{}});
+if('serviceWorker'in navigator)window.addEventListener('load',async()=>{try{const reg=await navigator.serviceWorker.register('./service-worker.js?v=0.6.7&build=20260929-1',{scope:'./',updateViaCache:'none'});await reg.update();let refreshing=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(refreshing)return;refreshing=true;const key='asset-os-sw-reload-0.6.7-build20260929-1';if(sessionStorage.getItem(key))return;sessionStorage.setItem(key,'1');location.reload()})}catch{}});
 ;
 /* asset-os source: boot.js */
 'use strict';

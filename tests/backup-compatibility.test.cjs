@@ -13,7 +13,7 @@ const context=vm.createContext({
  window:{addEventListener(){},isSecureContext:false},navigator:{},URL:{createObjectURL:()=>'',revokeObjectURL(){}},Blob:class{},
  localStorage:{get length(){return storage.size},key:i=>[...storage.keys()][i]??null,getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(String(k),String(v)),removeItem:k=>storage.delete(String(k))}
 });
-const files=['core-config.js','src/integrations/kis-normalization.js','broker-kis.js','src/domain/integrated-replay.js','integrated-ledger-engine.js','data-defaults.js','integrated-schedule-engine.js','integrated-finance-engine.js','isa-validation.js','store-state.js','backup.js'];
+const files=['core-config.js','src/integrations/kis-normalization.js','broker-kis.js','src/domain/integrated-replay.js','src/domain/integrated-ledger-core.js','src/domain/integrated-ledger.js','src/domain/integrated-ledger-validation.js','src/domain/financial-current.js','src/domain/financial-history.js','src/domain/integrated-spending.js','data-defaults.js','integrated-schedule-engine.js','integrated-finance-engine.js','isa-validation.js','src/storage/state-migrations.js','store-state.js','backup.js'];
 for(const file of files)vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),context,{filename:file});
 const run=code=>vm.runInContext(code,context),plain=value=>JSON.parse(JSON.stringify(value));
 
@@ -30,11 +30,19 @@ const physicalLegacy=plain(run('validateBackupPayload(__payload)'));
 assert.equal(physicalLegacy.accounts[0].transactions[0].id,'legacy-deposit','physical schema v4 fixture ISA ledger');
 assert.equal(physicalLegacy.pension.contributions[0].amount,500000,'physical schema v4 fixture pension contribution');
 assert.equal(physicalLegacy.integrated.ledger[0].amount,4000000,'physical schema v4 fixture integrated ledger');
+for(const schema of [8,12,16,20]){
+ context.__payload=JSON.parse(fs.readFileSync(path.join(root,`tests/fixtures/legacy/schema-v${schema}.json`),'utf8'));
+ const migrated=plain(run('validateBackupPayload(__payload)'));
+ assert.equal(migrated.accounts[0].transactions[0].id,`v${schema}-deposit`,`physical schema v${schema} fixture transaction`);
+ assert.equal(migrated.accounts[0].transactions[0].amount,schema*100000,`physical schema v${schema} amount preservation`);
+}
 assert.throws(()=>JSON.parse(fs.readFileSync(path.join(root,'tests/fixtures/legacy/truncated-backup.json'),'utf8')),SyntaxError);
 
 for(let schema=4;schema<=21;schema++){
  context.__payload={format:'asset-os-backup-v1',schemaVersion:schema,appVersion:schema===4?'v0.1':'v0.6.4',environment:'live',exportedAt:'2026-09-02T00:00:00.000Z',data:legacyData()};
  const normalized=plain(run('validateBackupPayload(__payload)'));
+ const migration=plain(run(`migrateStateData(__payload.data,${schema})`));
+ assert.deepEqual(migration.applied,Array.from({length:21-schema},(_,index)=>schema+index+1),`schema ${schema} 순차 마이그레이션`);
  assert.equal(normalized.accounts[0].transactions[0].id,'legacy-deposit',`schema ${schema} ISA 원장 보존`);
  assert.equal(normalized.pension.contributions[0].id,'pc-2026-01-ps',`schema ${schema} 연금 납입 보존`);
  assert.equal(normalized.integrated.ledger[0].id,'demo-salary-2025',`schema ${schema} 통합 원장 보존`);

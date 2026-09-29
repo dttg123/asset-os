@@ -40,7 +40,7 @@ function loadState(){
  let currentBroken=false,recoveryStored=false;
  for(const key of (QA_MODE?[KEY]:[KEY,...LEGACY_KEYS])){
   const raw=localStorage.getItem(key);if(!raw)continue;
-  try{const parsed=JSON.parse(raw);if(!parsed?.data||![4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21].includes(Number(parsed.schemaVersion)))throw new Error('지원하지 않는 저장 형식');const loaded=normalizeState(parsed.data);if(key!==KEY){loaded.system.loadWarning='';try{localStorage.setItem(KEY,JSON.stringify({schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,savedAt:new Date().toISOString(),data:loaded}))}catch{}}return loaded}
+  try{const parsed=JSON.parse(raw);if(!parsed?.data||![4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21].includes(Number(parsed.schemaVersion)))throw new Error('지원하지 않는 저장 형식');const migrated=migrateStateData(parsed.data,Number(parsed.schemaVersion)),loaded=normalizeState(migrated.data);if(key!==KEY||migrated.applied.length){loaded.system.loadWarning='';try{localStorage.setItem(KEY,JSON.stringify({schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,savedAt:new Date().toISOString(),data:loaded}))}catch{}}return loaded}
   catch(e){loadIssue=`저장 데이터 손상 또는 형식 오류: ${e.message}`;try{recoveryStored=storeRecoveryCopy(`${KEY}-recovery-${Date.now()}`,raw)}catch{};if(key===KEY){currentBroken=true;break}}
  }
  const fresh=normalizeState(seed);if(loadIssue){fresh.system.loadWarning=loadIssue+(recoveryStored?' 원본은 복구용으로 보관했고 초기 데이터로 열었습니다.':' 복구용 사본을 저장하지 못해 원본 저장값은 덮어쓰지 않았습니다.');if(recoveryStored&&!currentBroken)try{localStorage.setItem(KEY,JSON.stringify({schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,environment:APP_ENV,savedAt:new Date().toISOString(),data:fresh}))}catch{}}return fresh

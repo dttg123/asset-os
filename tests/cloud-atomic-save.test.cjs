@@ -3,6 +3,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
+const releaseVersion=`v${JSON.parse(fs.readFileSync(path.join(__dirname,'..','release-meta.json'),'utf8')).version}`;
 const vm=require('node:vm');
 
 const root=path.join(__dirname,'..');
@@ -15,7 +16,7 @@ function client(database,id){
  const element=key=>{if(!elements.has(key))elements.set(key,{hidden:false,disabled:false,textContent:'',className:'',classList:{add(){},remove(){}}});return elements.get(key)};
  const context=vm.createContext({
   console,Date,Math,JSON,Promise,URLSearchParams,setTimeout:fn=>fn(),clearTimeout(){},globalThis:null,
-  QA_MODE:false,SCHEMA_VERSION:21,APP_VERSION:'v0.6.7',APP_ENV:'live',KEY:`asset-${id}`,BACKUP_FORMAT:'asset-os-backup-v1',
+  QA_MODE:false,SCHEMA_VERSION:21,APP_VERSION:releaseVersion,APP_ENV:'live',KEY:`asset-${id}`,BACKUP_FORMAT:'asset-os-backup-v1',
   seed:{accounts:[]},state:{accounts:[]},clone:value=>JSON.parse(JSON.stringify(value)),normalizeState:value=>value,
   localStorage:{getItem:()=>null,setItem(){},removeItem(){}},storeRecoveryCopy(){},pruneRecoveryKeys(){},render(){},toast(){},formatDateTime:value=>value,localYmd:()=> '2026-09-28',
   createBackupZipBytes:()=>new Uint8Array([1]),downloadBytes(){},document:{documentElement:{classList:{add(){},remove(){}}}},location:{hash:'#/home',search:'',pathname:'/'},history:{replaceState(){}},window:{},

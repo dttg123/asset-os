@@ -25,6 +25,16 @@ test('generated-output gate detects a changed source without editing dist',()=>{
  assert.doesNotMatch(script,/writeFileSync/);
 });
 
+test('release metadata gate keeps package, UI, runtime and PWA cache aligned',()=>{
+ const script=fs.readFileSync(path.join(root,'scripts/sync-release-meta.mjs'),'utf8');
+ assert.match(script,/release-meta\.json/);
+ assert.match(script,/package-lock\.json/);
+ assert.match(script,/core-config\.js/);
+ assert.match(script,/service-worker\.js/);
+ const result=spawnSync(process.execPath,['scripts/sync-release-meta.mjs','--check'],{cwd:root,encoding:'utf8'});
+ assert.equal(result.status,0,result.stdout+result.stderr);
+});
+
 test('strict TypeScript gate rejects an invalid financial amount type',()=>{
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'asset-os-types-')),source=path.join(directory,'invalid.ts');
  fs.writeFileSync(source,"const financialAmount: number = '1000';\n");

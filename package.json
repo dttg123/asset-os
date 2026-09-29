@@ -7,6 +7,8 @@
     "node": ">=24 <25"
   },
   "scripts": {
+    "sync:release": "node scripts/sync-release-meta.mjs",
+    "check:release": "node scripts/sync-release-meta.mjs --check",
     "build": "node scripts/build-runtime-bundles.mjs",
     "check:syntax": "node scripts/check-syntax.mjs",
     "check:runtime": "node scripts/check-runtime.mjs",
