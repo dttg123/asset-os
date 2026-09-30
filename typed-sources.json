@@ -23,5 +23,6 @@
   "src/storage/snapshot-retention.ts",
   "src/storage/state-migrations.ts",
   "store-state.ts",
+  "supabase-sync.ts",
   "src/integrations/kis-normalization.ts"
 ]
