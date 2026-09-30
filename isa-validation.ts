@@ -34,13 +34,15 @@ function pensionTransactionDateError(a:AssetAccount|undefined|null,date:unknown)
 function isCurrentAccount(a:AssetAccount|undefined|null):boolean{return !!a&&['active','maturity_pending'].includes(a.status||'')}
 function isTradeableAccount(a:AssetAccount|undefined|null):boolean{return !!a&&a.status==='active'}
 function isPastAccount(a:AssetAccount|undefined|null):boolean{return !!a&&['closed','transferred','archived'].includes(a.status||'')}
+function financialNumberInRange(value:unknown):boolean{const number=Number(value);return Number.isFinite(number)&&Math.abs(number)<=Number.MAX_SAFE_INTEGER}
+function financialCalculationInRange(...values:number[]):boolean{return values.every(financialNumberInRange)}
 function transactionNumericError(tx:AssetTransaction):string{
- const finite=(v:unknown):boolean=>Number.isFinite(Number(v)),fee=Number(tx.fee??0),tax=Number(tx.tax??0);
- if(!finite(fee)||!finite(tax)||fee<0||tax<0)return '수수료와 세금은 0 이상의 올바른 숫자여야 합니다.';
- if(['buy','sell','openingAllocation'].includes(tx.type)){const q=Number(tx.qty),p=Number(tx.price);if(!finite(q)||q<=0)return '수량은 0보다 커야 합니다.';if(!finite(p)||p<=0)return '단가는 0보다 커야 합니다.';if(tx.type==='sell'&&fee+tax>q*p+1e-8)return '매도 수수료와 세금 합계가 매도금액을 초과할 수 없습니다.'}
- if(['securityTransferIn','securityTransferOut'].includes(tx.type)){const q=Number(tx.qty);if(!finite(q)||q<=0)return '이전 수량은 0보다 커야 합니다.'}
- if(['deposit','internalTransferIn','depositReversal','withdrawal','internalTransferOut','dividend','distribution','interest','feeRefund','taxRefund'].includes(tx.type)){const amount=Number(tx.amount);if(!finite(amount)||amount<=0)return '금액은 0보다 커야 합니다.';if(['dividend','distribution','interest'].includes(tx.type)&&fee+tax>amount+1e-8)return '수수료와 세금 합계가 세전 수령액을 초과할 수 없습니다.'}
- if(tx.type==='adjustment'){for(const key of ['setQty','setAvg','cashDelta'])if(tx[key]!=null&&tx[key]!==''&&!finite(tx[key]))return '잔고 조정값은 올바른 숫자여야 합니다.';if(tx.setQty!=null&&Number(tx.setQty)<0)return '조정 수량은 음수가 될 수 없습니다.';if(tx.setAvg!=null&&Number(tx.setAvg)<0)return '조정 평균단가는 음수가 될 수 없습니다.'}
+ const fee=Number(tx.fee??0),tax=Number(tx.tax??0),charges=fee+tax;
+ if(!financialCalculationInRange(fee,tax,charges)||fee<0||tax<0)return '수수료와 세금은 정확히 저장 가능한 0 이상의 숫자여야 합니다.';
+ if(['buy','sell','openingAllocation'].includes(tx.type)){const q=Number(tx.qty),p=Number(tx.price),gross=q*p,total=gross+charges;if(!financialNumberInRange(q)||q<=0)return '수량은 0보다 큰 정확한 숫자여야 합니다.';if(!financialNumberInRange(p)||p<=0)return '단가는 0보다 큰 정확한 숫자여야 합니다.';if(!financialCalculationInRange(gross,total))return '거래 금액이 너무 커 정확하게 저장할 수 없습니다.';if(tx.type==='sell'&&charges>gross+1e-8)return '매도 수수료와 세금 합계가 매도금액을 초과할 수 없습니다.'}
+ if(['securityTransferIn','securityTransferOut'].includes(tx.type)){const q=Number(tx.qty);if(!financialNumberInRange(q)||q<=0)return '이전 수량은 0보다 큰 정확한 숫자여야 합니다.'}
+ if(['deposit','internalTransferIn','depositReversal','withdrawal','internalTransferOut','dividend','distribution','interest','feeRefund','taxRefund'].includes(tx.type)){const amount=Number(tx.amount);if(!financialNumberInRange(amount)||amount<=0)return '금액은 0보다 크고 정확히 저장 가능한 숫자여야 합니다.';if(['dividend','distribution','interest'].includes(tx.type)&&charges>amount+1e-8)return '수수료와 세금 합계가 세전 수령액을 초과할 수 없습니다.'}
+ if(tx.type==='adjustment'){for(const key of ['setQty','setAvg','cashDelta'])if(tx[key]!=null&&tx[key]!==''&&!financialNumberInRange(tx[key]))return '잔고 조정값은 정확히 저장 가능한 숫자여야 합니다.';if(tx.setQty!=null&&Number(tx.setQty)<0)return '조정 수량은 음수가 될 수 없습니다.';if(tx.setAvg!=null&&Number(tx.setAvg)<0)return '조정 평균단가는 음수가 될 수 없습니다.'}
  return ''
 }
 function typeText(t:string):string{return ({buy:'매수',sell:'매도',openingAllocation:'기초자금 매수반영',dividend:'배당',distribution:'ETF 분배금',interest:'예수금 이자',deposit:'외부 입금',internalTransferIn:'통합→ISA 이체',depositReversal:'입금 취소·반환',withdrawal:'일반 출금',internalTransferOut:'ISA→통합 이체',adjustment:'잔고 조정',split:'액면분할',reverseSplit:'병합',merger:'합병',delisting:'상장폐지',feeRefund:'수수료 환급',taxRefund:'세금 환급'} as Record<string,string>)[t]||t}

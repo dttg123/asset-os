@@ -113,6 +113,11 @@ assert.match(run('integratedValidateCandidate({id:"bad-same",date:"2060-12-30",t
 assert.match(run('integratedValidateCandidate({id:"bad-over",date:"2060-12-30",type:"expense",amount:1e12,fromAccountId:"cash-main"})'),/잔액이 부족/);
 assert.ok(run('integratedValidateCandidate({id:"bad-loan",date:"2060-12-30",type:"debtPrincipal",amount:1e12,fromAccountId:"cash-main",liabilityId:"finance-debt-qa-home-loan"})'));
 assert.match(run('pensionTransactionSave({accountId:"qa-irp",holdingId:"qa-irp-h",type:"sell",date:"2060-12-30",qty:999999,price:100000,fee:0,tax:0}).error'),/초과매도/);
+assert.match(run('integratedValidateCandidate({id:"bad-unsafe",date:"2060-12-30",type:"income",amount:Number.MAX_SAFE_INTEGER+1,toAccountId:"cash-main"})'),/정확하게 저장/);
+assert.match(run('pensionTransactionSave({accountId:"qa-irp",type:"interest",date:"2060-12-30",amount:Number.MAX_SAFE_INTEGER+1,fee:0,tax:0}).error'),/수령액 오류/);
+assert.match(run('transactionNumericError({type:"buy",qty:Number.MAX_SAFE_INTEGER,price:2,fee:0,tax:0})'),/너무 커/);
+assert.match(run('transactionNumericError({type:"interest",amount:1000,fee:Number.MAX_SAFE_INTEGER+1,tax:0})'),/수수료와 세금/);
+assert.match(run('transactionNumericError({type:"adjustment",setQty:Number.MAX_SAFE_INTEGER+1,setAvg:1,cashDelta:0})'),/잔고 조정값/);
 assert.deepEqual(plain(run('({integrated:state.integrated.ledger.length,pension:state.pension.transactions.length})')),mistakeCounts,'차단된 실수는 원장을 바꾸면 안 됨');
 assert.equal(run('qaRunMistakes()'),true);
 
