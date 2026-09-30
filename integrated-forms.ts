@@ -27,6 +27,7 @@ declare function pensionAccountsForKind(kind:string,date:string):IntegratedRecor
 declare function isaAccountsForDate(date:string):IntegratedRecord[];
 declare function integratedAccountName(id:string):string;
 declare function postedDateError(date:string):string;
+declare function financialNumberInRange(value:unknown):boolean;
 declare function formatDate(value:unknown):string;
 declare function financialProduct(id:string):IntegratedRecord|null;
 declare function financialProductActiveOnDate(product:IntegratedRecord,date:string):boolean;
@@ -154,8 +155,14 @@ function integratedValidateCandidate(candidate:IntegratedRecord,editingId=''):st
   if(liability&&product&&!financialProductActiveOnDate(product,candidate.date))return`${liability.name} 대출의 운영기간 밖 거래는 저장할 수 없습니다.`;
  }
  if(candidate.type==='adjustment'){
-  if(!Number.isFinite(Number(candidate.delta))||Number(candidate.delta)===0)return'보정금액은 0원이 될 수 없습니다.';
- }else if(!Number.isFinite(Number(candidate.amount))||Number(candidate.amount)<=0)return'금액은 1원 이상 입력해 주세요.';
+  if(!Number.isFinite(Number(candidate.delta)))return'보정금액은 올바른 숫자여야 합니다.';
+  if(!financialNumberInRange(candidate.delta))return'보정금액이 너무 커 정확하게 저장할 수 없습니다.';
+  if(Number(candidate.delta)===0)return'보정금액은 0원이 될 수 없습니다.';
+ }else{
+  if(!Number.isFinite(Number(candidate.amount)))return'금액은 1원 이상 입력해 주세요.';
+  if(!financialNumberInRange(candidate.amount))return'금액이 너무 커 정확하게 저장할 수 없습니다.';
+  if(Number(candidate.amount)<=0)return'금액은 1원 이상 입력해 주세요.';
+ }
  if(candidate.type==='internalTransfer'&&candidate.fromAccountId===candidate.toAccountId)return'같은 계좌로는 이체할 수 없습니다.';
  const test=clone(integratedStore());test.ledger=(test.ledger||[]).filter(t=>t.id!==editingId&&!isQaIntegratedFixture(t));test.ledger.push(candidate);
  const issues=[...integratedCandidateIssues(test),...integratedPolicyLimitIssues(test)];

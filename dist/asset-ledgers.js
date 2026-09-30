@@ -130,16 +130,16 @@ function pensionTransactionIssues(transactions=pensionStore().transactions){
   if(ev.kind==='contribution'){cashByAccount.set(ev.accountId,(cashByAccount.get(ev.accountId)||0)+ev.amount);continue}
   const t=ev.tx,a=pensionAccount(t.accountId);if(!a){issues.push(`${t.id}: 계좌 없음`);continue}
   const dateError=pensionTransactionDateError(a,t.date);if(dateError){issues.push(`${t.id}: ${dateError}`);continue}
-  const fee=Number(t.fee??0),tax=Number(t.tax??0);if(!Number.isFinite(fee)||!Number.isFinite(tax)||fee<0||tax<0){issues.push(`${t.id}: 수수료/세금 오류`);continue}
+  const fee=Number(t.fee??0),tax=Number(t.tax??0),charges=fee+tax;if(!financialCalculationInRange(fee,tax,charges)||fee<0||tax<0){issues.push(`${t.id}: 수수료/세금 오류`);continue}
   if(['buy','sell','adjustment'].includes(t.type)){
    const h=pensionStore().holdings.find(x=>x.id===t.holdingId),pos=byHolding.get(t.holdingId);if(!h||!pos||h.accountId!==t.accountId){issues.push(`${t.id}: 종목/계좌 연결 오류`);continue}
    if(t.type==='buy'){
-    if(!(Number(t.qty)>0&&Number(t.price)>0))issues.push(`${t.id}: 매수 수량/단가 오류`);else{const q=Number(t.qty),need=q*Number(t.price)+(Number(t.fee)||0)+(Number(t.tax)||0),cash=cashByAccount.get(t.accountId)||0;if(need>cash+1e-8){issues.push(`${t.id}: 계좌 현금 부족`);continue}const oldCost=pos.qty*pos.avg;pos.qty+=q;pos.avg=pos.qty?(oldCost+need)/pos.qty:0;cashByAccount.set(t.accountId,cash-need)}
+    {const q=Number(t.qty),price=Number(t.price),gross=q*price,need=gross+charges;if(!financialNumberInRange(q)||q<=0||!financialNumberInRange(price)||price<=0)issues.push(`${t.id}: 매수 수량/단가 오류`);else if(!financialCalculationInRange(gross,need)){issues.push(`${t.id}: 매수금액 범위 오류`);continue}else{const cash=cashByAccount.get(t.accountId)||0;if(need>cash+1e-8){issues.push(`${t.id}: 계좌 현금 부족`);continue}const oldCost=pos.qty*pos.avg;pos.qty+=q;pos.avg=pos.qty?(oldCost+need)/pos.qty:0;cashByAccount.set(t.accountId,cash-need)}}
    }else if(t.type==='sell'){
-    if(!(Number(t.qty)>0&&Number(t.price)>0))issues.push(`${t.id}: 매도 수량/단가 오류`);else if(Number(t.qty)>pos.qty+1e-8)issues.push(`${t.id}: 보유수량 초과매도`);else if(fee+tax>Number(t.qty)*Number(t.price)+1e-8)issues.push(`${t.id}: 매도 수수료와 세금이 매도대금을 초과`);else{const q=Number(t.qty),cash=(cashByAccount.get(t.accountId)||0)+q*Number(t.price)-fee-tax;if(cash<-1e-8){issues.push(`${t.id}: 매도 비용으로 계좌 현금 음수`);continue}pos.qty-=q;if(pos.qty<=1e-9){pos.qty=0;pos.avg=0}cashByAccount.set(t.accountId,cash)}
-   }else{if(Number(t.setQty)<0||Number(t.setAvg)<0)issues.push(`${t.id}: 보정값 오류`);else{pos.qty=Number(t.setQty)||0;pos.avg=pos.qty?(Number(t.setAvg)||0):0}}
+    {const q=Number(t.qty),price=Number(t.price),gross=q*price;if(!financialNumberInRange(q)||q<=0||!financialNumberInRange(price)||price<=0)issues.push(`${t.id}: 매도 수량/단가 오류`);else if(!financialNumberInRange(gross)){issues.push(`${t.id}: 매도금액 범위 오류`);continue}else if(q>pos.qty+1e-8)issues.push(`${t.id}: 보유수량 초과매도`);else if(charges>gross+1e-8)issues.push(`${t.id}: 매도 수수료와 세금이 매도대금을 초과`);else{const cash=(cashByAccount.get(t.accountId)||0)+gross-charges;if(!financialNumberInRange(cash)){issues.push(`${t.id}: 매도 후 현금 범위 오류`);continue}if(cash<-1e-8){issues.push(`${t.id}: 매도 비용으로 계좌 현금 음수`);continue}pos.qty-=q;if(pos.qty<=1e-9){pos.qty=0;pos.avg=0}cashByAccount.set(t.accountId,cash)}}
+   }else{const setQty=Number(t.setQty)||0,setAvg=Number(t.setAvg)||0;if(!financialCalculationInRange(setQty,setAvg)||setQty<0||setAvg<0)issues.push(`${t.id}: 보정값 오류`);else{pos.qty=setQty;pos.avg=pos.qty?setAvg:0}}
   }else if(['dividend','distribution','interest','other_right'].includes(t.type)){
-   if(!(Number(t.amount)>0)){issues.push(`${t.id}: 수령액 오류`);continue}if(fee+tax>Number(t.amount)+1e-8){issues.push(`${t.id}: 수수료와 세금이 세전 수령액을 초과`);continue}if(t.holdingId){const h=pensionStore().holdings.find(x=>x.id===t.holdingId);if(!h||h.accountId!==t.accountId){issues.push(`${t.id}: 수령 종목 연결 오류`);continue}}const cash=(cashByAccount.get(t.accountId)||0)+(Number(t.amount)||0)-fee-tax;if(cash<-1e-8){issues.push(`${t.id}: 수령 비용으로 계좌 현금 음수`);continue}cashByAccount.set(t.accountId,cash)
+   const amount=Number(t.amount);if(!financialNumberInRange(amount)||amount<=0){issues.push(`${t.id}: 수령액 오류`);continue}if(charges>amount+1e-8){issues.push(`${t.id}: 수수료와 세금이 세전 수령액을 초과`);continue}if(t.holdingId){const h=pensionStore().holdings.find(x=>x.id===t.holdingId);if(!h||h.accountId!==t.accountId){issues.push(`${t.id}: 수령 종목 연결 오류`);continue}}const cash=(cashByAccount.get(t.accountId)||0)+amount-charges;if(!financialNumberInRange(cash)){issues.push(`${t.id}: 수령 후 현금 범위 오류`);continue}if(cash<-1e-8){issues.push(`${t.id}: 수령 비용으로 계좌 현금 음수`);continue}cashByAccount.set(t.accountId,cash)
   }
  }
  return issues
@@ -256,35 +256,39 @@ function pensionTransactionDateError(a, date) { const d = String(date || ''), ba
 function isCurrentAccount(a) { return !!a && ['active', 'maturity_pending'].includes(a.status || ''); }
 function isTradeableAccount(a) { return !!a && a.status === 'active'; }
 function isPastAccount(a) { return !!a && ['closed', 'transferred', 'archived'].includes(a.status || ''); }
+function financialNumberInRange(value) { const number = Number(value); return Number.isFinite(number) && Math.abs(number) <= Number.MAX_SAFE_INTEGER; }
+function financialCalculationInRange(...values) { return values.every(financialNumberInRange); }
 function transactionNumericError(tx) {
-    const finite = (v) => Number.isFinite(Number(v)), fee = Number(tx.fee ?? 0), tax = Number(tx.tax ?? 0);
-    if (!finite(fee) || !finite(tax) || fee < 0 || tax < 0)
-        return '수수료와 세금은 0 이상의 올바른 숫자여야 합니다.';
+    const fee = Number(tx.fee ?? 0), tax = Number(tx.tax ?? 0), charges = fee + tax;
+    if (!financialCalculationInRange(fee, tax, charges) || fee < 0 || tax < 0)
+        return '수수료와 세금은 정확히 저장 가능한 0 이상의 숫자여야 합니다.';
     if (['buy', 'sell', 'openingAllocation'].includes(tx.type)) {
-        const q = Number(tx.qty), p = Number(tx.price);
-        if (!finite(q) || q <= 0)
-            return '수량은 0보다 커야 합니다.';
-        if (!finite(p) || p <= 0)
-            return '단가는 0보다 커야 합니다.';
-        if (tx.type === 'sell' && fee + tax > q * p + 1e-8)
+        const q = Number(tx.qty), p = Number(tx.price), gross = q * p, total = gross + charges;
+        if (!financialNumberInRange(q) || q <= 0)
+            return '수량은 0보다 큰 정확한 숫자여야 합니다.';
+        if (!financialNumberInRange(p) || p <= 0)
+            return '단가는 0보다 큰 정확한 숫자여야 합니다.';
+        if (!financialCalculationInRange(gross, total))
+            return '거래 금액이 너무 커 정확하게 저장할 수 없습니다.';
+        if (tx.type === 'sell' && charges > gross + 1e-8)
             return '매도 수수료와 세금 합계가 매도금액을 초과할 수 없습니다.';
     }
     if (['securityTransferIn', 'securityTransferOut'].includes(tx.type)) {
         const q = Number(tx.qty);
-        if (!finite(q) || q <= 0)
-            return '이전 수량은 0보다 커야 합니다.';
+        if (!financialNumberInRange(q) || q <= 0)
+            return '이전 수량은 0보다 큰 정확한 숫자여야 합니다.';
     }
     if (['deposit', 'internalTransferIn', 'depositReversal', 'withdrawal', 'internalTransferOut', 'dividend', 'distribution', 'interest', 'feeRefund', 'taxRefund'].includes(tx.type)) {
         const amount = Number(tx.amount);
-        if (!finite(amount) || amount <= 0)
-            return '금액은 0보다 커야 합니다.';
-        if (['dividend', 'distribution', 'interest'].includes(tx.type) && fee + tax > amount + 1e-8)
+        if (!financialNumberInRange(amount) || amount <= 0)
+            return '금액은 0보다 크고 정확히 저장 가능한 숫자여야 합니다.';
+        if (['dividend', 'distribution', 'interest'].includes(tx.type) && charges > amount + 1e-8)
             return '수수료와 세금 합계가 세전 수령액을 초과할 수 없습니다.';
     }
     if (tx.type === 'adjustment') {
         for (const key of ['setQty', 'setAvg', 'cashDelta'])
-            if (tx[key] != null && tx[key] !== '' && !finite(tx[key]))
-                return '잔고 조정값은 올바른 숫자여야 합니다.';
+            if (tx[key] != null && tx[key] !== '' && !financialNumberInRange(tx[key]))
+                return '잔고 조정값은 정확히 저장 가능한 숫자여야 합니다.';
         if (tx.setQty != null && Number(tx.setQty) < 0)
             return '조정 수량은 음수가 될 수 없습니다.';
         if (tx.setAvg != null && Number(tx.setAvg) < 0)
