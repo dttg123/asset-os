@@ -38,7 +38,7 @@ assert.match(html,new RegExp(`dist/asset-os\\.css\\?${regexEscape(releaseQuery)}
 assert.match(isaSummary,/year=localYmd\(\)\.slice\(0,4\)/,'ISA dividend year must follow the app date');
 assert.doesNotMatch(isaSummary,/year=String\(new Date\(\)\.getFullYear\(\)\)/);
 assert.match(integratedForms,/closeSheets\(\{\s*all:\s*true\s*\}\)/,'saved integrated edits must not reopen a stale parent detail');
-assert.match(storeState,/typeof qaRenderStats==='function'/,'QA banner must refresh after every successful persist');
+assert.match(storeState,/typeof\s+qaRenderStats\s*===\s*'function'/,'QA banner must refresh after every successful persist');
 assert.match(storeState,/\$\{KEY\}-pre-import-/,'initial-import recovery copies must share the bounded retention policy');
 assert.match(initialImport,/storeRecoveryCopy\(/,'initial import must verify a recovery copy before replacing state');
 assert.match(backup,/appendInitialImportBackupAction/,'backup hub must expose the initial-import action without replacing its global function');

@@ -22,5 +22,6 @@
   "src/storage/cloud-save-contract.ts",
   "src/storage/snapshot-retention.ts",
   "src/storage/state-migrations.ts",
+  "store-state.ts",
   "src/integrations/kis-normalization.ts"
 ]
