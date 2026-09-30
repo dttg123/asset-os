@@ -1,6 +1,7 @@
 [
   "policy-review.ts",
   "policy-review-ui.ts",
+  "broker-kis.ts",
   "broker-kis-client.ts",
   "backup.ts",
   "core-accessors.ts",
