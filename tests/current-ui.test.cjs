@@ -48,7 +48,7 @@ test('spending adds one quick expense action and one optional monthly living bud
  assert.match(pages,/data-spending-budget/);
  assert.match(render,/openIntegratedTransactionForm\('',\{uiType:'lifeExpense'\}\)/);
  assert.match(defaults,/monthlyLivingBudget:0/);
- assert.match(store,/monthlyLivingBudget=Math\.max\(0,Math\.round/);
+ assert.match(store,/monthlyLivingBudget\s*=\s*Math\.max\(\s*0\s*,\s*Math\.round/);
 });
 
 test('AI export includes six-month cash flow and names stale accounts by Korean trading-day time',()=>{
