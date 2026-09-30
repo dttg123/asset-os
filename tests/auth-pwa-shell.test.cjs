@@ -17,7 +17,7 @@ assert.match(boot,/if\(QA_MODE\)window\.__assetOS=assetOsRuntimeApi/,'the test A
 assert.match(boot,/else try\{delete window\.__assetOS\}/,'live mode must remove a stale debug API');
 assert.match(html,new RegExp(`Asset OS ${regexEscape(releaseVersion)}`));
 assert.match(html,/<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/@supabase\/supabase-js@2\.112\.4" integrity="sha384-yiVMs0R\/Jyz7OhoXa\/DsEMUSBLjEhr\/QJta2ONO\+zB6I8\/GmNg\/7AUFrZmAJV7KV" crossorigin="anonymous" referrerpolicy="no-referrer"><\/script>/,'Supabase dependency must be version-pinned and protected by SRI');
-const brokerProjectUrl=core.match(/projectUrl:'([^']+)'/)?.[1],cloudProjectUrl=cloud.match(/SUPABASE_URL='([^']+)'/)?.[1];
+const brokerProjectUrl=core.match(/projectUrl\s*:\s*'([^']+)'/)?.[1],cloudProjectUrl=cloud.match(/SUPABASE_URL\s*=\s*'([^']+)'/)?.[1];
 assert.equal(cloudProjectUrl,brokerProjectUrl,'Google cloud and KIS auth must use the configured Supabase project URL');
 assert.match(cloud,/function cloudAuthCallbackFailure/);
 assert.match(cloud,/OAuth Client Secret/);

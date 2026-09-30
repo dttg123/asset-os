@@ -1,221 +1,523 @@
 'use strict';
-const SUPABASE_URL='https://wjrzukoofscmvwicmoey.supabase.co';
-const SUPABASE_PUBLISHABLE_KEY='sb_publishable_mZa3v8Ekw08_5tHQMNSPWQ_uMcioPDM';
-const SUPABASE_STATE_TABLE='asset_os_state';
-const SUPABASE_REDIRECT_URL='https://dttg123.github.io/asset-os/';
-let assetSupabaseClient=null,assetSupabaseSession=null,cloudSyncTimer=0,cloudSyncBusy=false,cloudPushPending=false,cloudSyncStatus='로그인 필요',cloudSyncTone='wait',cloudLastSyncAt='',cloudBaseFingerprint='',cloudBaseRevision=0,cloudPendingWrite=null,cloudConflict=null,assetAppUnlocked=false;
-const qaCloudBlocked=()=>typeof QA_MODE!=='undefined'&&QA_MODE;
-
-function cloudAuthCallbackFailure(){
- const sources=[new URLSearchParams(String(location.search||'').replace(/^\?/,'')),new URLSearchParams(String(location.hash||'').replace(/^#/,''))];
- const get=key=>sources.map(x=>x.get(key)).find(Boolean)||'',code=get('error_code'),error=get('error');if(!code&&!error)return'';
- const rawDescription=String(get('error_description')||'').replace(/\+/g,' ');let description=rawDescription;try{description=decodeURIComponent(rawDescription)}catch{}
- try{history.replaceState(null,'',location.pathname||'/')}catch{}
- if(code==='bad_oauth_state')return'Google 로그인 링크가 만료됐습니다. 다시 로그인해 주세요.';
- if(code==='unexpected_failure'||/exchange external code|invalid_client/i.test(description))return'Google 인증 서버 설정 오류입니다. OAuth Client Secret을 확인해 주세요.';
- return`Google 로그인 오류: ${description||code||error}`
+const SUPABASE_URL = 'https://wjrzukoofscmvwicmoey.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_mZa3v8Ekw08_5tHQMNSPWQ_uMcioPDM';
+const SUPABASE_STATE_TABLE = 'asset_os_state';
+const SUPABASE_REDIRECT_URL = 'https://dttg123.github.io/asset-os/';
+let assetSupabaseClient = null, assetSupabaseSession = null, cloudSyncTimer = 0, cloudSyncBusy = false, cloudPushPending = false, cloudSyncStatus = '로그인 필요', cloudSyncTone = 'wait', cloudLastSyncAt = '', cloudBaseFingerprint = '', cloudBaseRevision = 0, cloudPendingWrite = null, cloudConflict = null, assetAppUnlocked = false;
+const qaCloudBlocked = () => typeof QA_MODE !== 'undefined' && QA_MODE;
+function cloudAuthCallbackFailure() {
+    const sources = [new URLSearchParams(String(location.search || '').replace(/^\?/, '')), new URLSearchParams(String(location.hash || '').replace(/^#/, ''))];
+    const get = (key) => sources.map(x => x.get(key)).find(Boolean) || '', code = get('error_code'), error = get('error');
+    if (!code && !error)
+        return '';
+    const rawDescription = String(get('error_description') || '').replace(/\+/g, ' ');
+    let description = rawDescription;
+    try {
+        description = decodeURIComponent(rawDescription);
+    }
+    catch { }
+    try {
+        history.replaceState(null, '', location.pathname || '/');
+    }
+    catch { }
+    if (code === 'bad_oauth_state')
+        return 'Google 로그인 링크가 만료됐습니다. 다시 로그인해 주세요.';
+    if (code === 'unexpected_failure' || /exchange external code|invalid_client/i.test(description))
+        return 'Google 인증 서버 설정 오류입니다. OAuth Client Secret을 확인해 주세요.';
+    return `Google 로그인 오류: ${description || code || error}`;
 }
-
-function assetAuthGateState(mode,message=''){
- const gate=$('#assetAuthGate'),button=$('#assetAuthButton'),status=$('#assetAuthStatus'),conflict=$('#assetAuthConflict');if(!gate||!button||!status)return;
- gate.hidden=false;document.documentElement.classList.add('asset-auth-locked');status.className=`asset-auth-status ${mode==='error'?'error':''}`;
- button.hidden=mode==='conflict';if(conflict)conflict.hidden=mode!=='conflict';
- if(mode==='loading'){button.disabled=true;button.textContent='연결 확인 중';status.textContent=message||'Supabase 세션을 확인하고 있습니다.'}
- else if(mode==='login'){button.disabled=false;button.textContent='Google로 로그인';status.textContent=message||'로그인 후 클라우드 원장을 확인하고 앱을 엽니다.'}
- else if(mode==='conflict'){status.className='asset-auth-status error';status.textContent=message||'두 기기의 변경이 겹쳤습니다. 어느 원장을 유지할지 선택해 주세요.'}
- else{button.disabled=false;button.textContent='다시 확인';status.textContent=message||'연결을 확인하지 못했습니다.'}
+function assetAuthGateState(mode, message = '') {
+    const gate = $('#assetAuthGate'), button = $('#assetAuthButton'), status = $('#assetAuthStatus'), conflict = $('#assetAuthConflict');
+    if (!gate || !button || !status)
+        return;
+    gate.hidden = false;
+    document.documentElement.classList.add('asset-auth-locked');
+    status.className = `asset-auth-status ${mode === 'error' ? 'error' : ''}`;
+    button.hidden = mode === 'conflict';
+    if (conflict)
+        conflict.hidden = mode !== 'conflict';
+    if (mode === 'loading') {
+        button.disabled = true;
+        button.textContent = '연결 확인 중';
+        status.textContent = message || 'Supabase 세션을 확인하고 있습니다.';
+    }
+    else if (mode === 'login') {
+        button.disabled = false;
+        button.textContent = 'Google로 로그인';
+        status.textContent = message || '로그인 후 클라우드 원장을 확인하고 앱을 엽니다.';
+    }
+    else if (mode === 'conflict') {
+        status.className = 'asset-auth-status error';
+        status.textContent = message || '두 기기의 변경이 겹쳤습니다. 어느 원장을 유지할지 선택해 주세요.';
+    }
+    else {
+        button.disabled = false;
+        button.textContent = '다시 확인';
+        status.textContent = message || '연결을 확인하지 못했습니다.';
+    }
 }
-function assetAuthGateUnlock(){const gate=$('#assetAuthGate');if(gate)gate.hidden=true;document.documentElement.classList.remove('asset-auth-locked');if(assetAppUnlocked){refreshCloudProfileUI();return}assetAppUnlocked=true;if(!location.hash)location.hash='#/home';render();refreshCloudProfileUI();if(state.system?.loadWarning)setTimeout(()=>toast('저장 데이터 확인이 필요합니다.'),100)}
-function cloudAuthGateMessage(){
- if(cloudSyncStatus==='동기화 충돌 확인 필요')return'클라우드와 이 기기의 원장이 동시에 변경되어 자동으로 열지 않았습니다. 자료 충돌을 확인해 주세요.';
- if(cloudSyncStatus==='빈 클라우드 자료 보호됨')return'빈 클라우드 자료가 이 기기의 원장을 덮지 않도록 앱을 잠갔습니다.';
- if(cloudSyncStatus==='클라우드 데이터 확인 필요')return'클라우드 원장 형식을 확인하지 못해 앱을 열지 않았습니다.';
- if(cloudSyncStatus==='DB 설정 필요')return'Supabase DB 설정을 확인해 주세요.';
- if(cloudSyncStatus==='동기화 오류')return'클라우드 원장 동기화 중 오류가 발생했습니다. 다시 확인해 주세요.';
- return'클라우드 원장을 확인하지 못했습니다. 네트워크를 확인해 주세요.'
+function assetAuthGateUnlock() { const gate = $('#assetAuthGate'); if (gate)
+    gate.hidden = true; document.documentElement.classList.remove('asset-auth-locked'); if (assetAppUnlocked) {
+    refreshCloudProfileUI();
+    return;
+} assetAppUnlocked = true; if (!location.hash)
+    location.hash = '#/home'; render(); refreshCloudProfileUI(); if (state.system?.loadWarning)
+    setTimeout(() => toast('저장 데이터 확인이 필요합니다.'), 100); }
+function cloudAuthGateMessage() {
+    if (cloudSyncStatus === '동기화 충돌 확인 필요')
+        return '클라우드와 이 기기의 원장이 동시에 변경되어 자동으로 열지 않았습니다. 자료 충돌을 확인해 주세요.';
+    if (cloudSyncStatus === '빈 클라우드 자료 보호됨')
+        return '빈 클라우드 자료가 이 기기의 원장을 덮지 않도록 앱을 잠갔습니다.';
+    if (cloudSyncStatus === '클라우드 데이터 확인 필요')
+        return '클라우드 원장 형식을 확인하지 못해 앱을 열지 않았습니다.';
+    if (cloudSyncStatus === 'DB 설정 필요')
+        return 'Supabase DB 설정을 확인해 주세요.';
+    if (cloudSyncStatus === '동기화 오류')
+        return '클라우드 원장 동기화 중 오류가 발생했습니다. 다시 확인해 주세요.';
+    return '클라우드 원장을 확인하지 못했습니다. 네트워크를 확인해 주세요.';
 }
-async function startAssetAuthenticatedApp(){
- if(qaCloudBlocked()){cloudSetStatus('QA 로컬 전용','ok');assetAuthGateUnlock();return true}
- const callbackFailure=cloudAuthCallbackFailure();if(callbackFailure)return assetAuthGateState('error',callbackFailure);
- assetAuthGateState('loading');const initialized=await initSupabaseCloud();if(!initialized)return assetAuthGateState('error','Supabase 연결을 확인한 뒤 다시 시도해 주세요.');if(!cloudUser())return assetAuthGateState('login');
- const local=cloudLocalEnvelope(),canOpenLocal=local.stored&&cloudPayloadValid(local.envelope);
- cloudSetStatus('클라우드 확인 중','wait');if(canOpenLocal)assetAuthGateUnlock();
- const ok=await cloudReconcileState();if(ok){assetAuthGateUnlock();return true}
- if(cloudSyncStatus==='동기화 충돌 확인 필요'){assetAuthGateState('conflict',cloudAuthGateMessage());return false}
- if(canOpenLocal){cloudSetStatus('오프라인 · 재확인 필요','wait');return false}
- assetAuthGateState('error',cloudAuthGateMessage());return false
+async function startAssetAuthenticatedApp() {
+    if (qaCloudBlocked()) {
+        cloudSetStatus('QA 로컬 전용', 'ok');
+        assetAuthGateUnlock();
+        return true;
+    }
+    const callbackFailure = cloudAuthCallbackFailure();
+    if (callbackFailure)
+        return assetAuthGateState('error', callbackFailure);
+    assetAuthGateState('loading');
+    const initialized = await initSupabaseCloud();
+    if (!initialized)
+        return assetAuthGateState('error', 'Supabase 연결을 확인한 뒤 다시 시도해 주세요.');
+    if (!cloudUser())
+        return assetAuthGateState('login');
+    const local = cloudLocalEnvelope(), canOpenLocal = local.stored && cloudPayloadValid(local.envelope);
+    cloudSetStatus('클라우드 확인 중', 'wait');
+    if (canOpenLocal)
+        assetAuthGateUnlock();
+    const ok = await cloudReconcileState();
+    if (ok) {
+        assetAuthGateUnlock();
+        return true;
+    }
+    if (cloudSyncStatus === '동기화 충돌 확인 필요') {
+        assetAuthGateState('conflict', cloudAuthGateMessage());
+        return false;
+    }
+    if (canOpenLocal) {
+        cloudSetStatus('오프라인 · 재확인 필요', 'wait');
+        return false;
+    }
+    assetAuthGateState('error', cloudAuthGateMessage());
+    return false;
 }
-
-function cloudUser(){return assetSupabaseSession?.user||null}
-function syncBrokerKisSessionFromCloud(session=assetSupabaseSession){
- if(qaCloudBlocked())return false;
- if(!session?.access_token||typeof brokerKisClient==='undefined'||typeof brokerKisClient.adoptSession!=='function')return false;
- return brokerKisClient.adoptSession(session)?.ok===true
+function cloudUser() { return assetSupabaseSession?.user || null; }
+function syncBrokerKisSessionFromCloud(session = assetSupabaseSession) {
+    if (qaCloudBlocked())
+        return false;
+    if (!session?.access_token || typeof brokerKisClient === 'undefined' || typeof brokerKisClient.adoptSession !== 'function')
+        return false;
+    return brokerKisClient.adoptSession(session)?.ok === true;
 }
-function cloudUserLabel(){const u=cloudUser();return String(u?.user_metadata?.full_name||u?.user_metadata?.name||u?.email||'Google 사용자')}
-function cloudUserEmail(){return String(cloudUser()?.email||'')}
-function cloudTimeLabel(v){return v?formatDateTime(v):'-'}
-function cloudSetStatus(text,tone='wait',when=''){cloudSyncStatus=String(text||'');cloudSyncTone=tone;cloudLastSyncAt=when||cloudLastSyncAt;refreshCloudProfileUI()}
-function cloudLocalEnvelope(){
- let raw='';try{raw=localStorage.getItem(KEY)||''}catch{}
- if(raw){try{const parsed=JSON.parse(raw);if(parsed?.data)return{envelope:parsed,raw,stored:true}}catch{}}
- return{envelope:{schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,savedAt:'',data:clone(state||seed)},raw:'',stored:false}
+function cloudUserLabel() { const u = cloudUser(); return String(u?.user_metadata?.full_name || u?.user_metadata?.name || u?.email || 'Google 사용자'); }
+function cloudUserEmail() { return String(cloudUser()?.email || ''); }
+function cloudTimeLabel(v) { return v ? formatDateTime(v) : '-'; }
+function cloudSetStatus(text, tone = 'wait', when = '') { cloudSyncStatus = String(text || ''); cloudSyncTone = tone; cloudLastSyncAt = when || cloudLastSyncAt; refreshCloudProfileUI(); }
+function cloudLocalEnvelope() {
+    let raw = '';
+    try {
+        raw = localStorage.getItem(KEY) || '';
+    }
+    catch { }
+    if (raw) {
+        try {
+            const parsed = JSON.parse(raw);
+            if (parsed?.data)
+                return { envelope: parsed, raw, stored: true };
+        }
+        catch { }
+    }
+    return { envelope: { schemaVersion: SCHEMA_VERSION, appVersion: APP_VERSION, savedAt: '', data: clone(state || seed) }, raw: '', stored: false };
 }
-function cloudCurrentEnvelope(){const local=cloudLocalEnvelope();if(local.stored)return local.envelope;return{schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,savedAt:new Date().toISOString(),data:clone(state)}}
-function cloudTableMissing(error){const msg=String(error?.message||'');return error?.code==='42P01'||/asset_os_state|relation .* does not exist/i.test(msg)}
-function cloudAtomicSaveMissing(error){const msg=String(error?.message||'');return ['42883','PGRST202','PGRST204'].includes(String(error?.code||''))||/save_asset_os_state|revision/i.test(msg)}
-function cloudRequestId(){const native=globalThis.crypto?.randomUUID?.();if(native)return native;return'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const n=Math.floor(Math.random()*16);return(c==='x'?n:(n&3)|8).toString(16)})}
-
-function refreshCloudProfileUI(){
- const u=cloudUser(),menu=$('#cloudAuthMenuStatus'),avatar=$('#profileAvatar'),name=$('#profileName'),sub=$('#profileSub'),diag=$('#cloudDiagStatus');
- if(qaCloudBlocked()){if(menu)menu.textContent='QA 로컬 전용 · 동기화 차단';if(avatar)avatar.textContent='Q';if(name)name.textContent='QA 테스트 사용자';if(sub)sub.textContent='운영 데이터와 완전히 분리된 브라우저 저장소';if(diag){diag.textContent='차단됨';diag.className='diagnostic-value ok'}if($('#cloudSheet')?.classList.contains('open'))renderCloudAccountSheet();return}
- if(menu)menu.textContent=u?`${cloudUserEmail()||cloudUserLabel()} · ${cloudSyncStatus}`:'Google 로그인 · Supabase 자동 복원';
- if(avatar)avatar.textContent=u?(cloudUserLabel().trim().charAt(0)||'G').toUpperCase():'A';
- if(name)name.textContent=u?cloudUserLabel():'개인 자산 시스템';
- if(sub)sub.textContent=u?(cloudUserEmail()||'Google 계정 연결됨'):'공통 원장 엔진 + ISA + 개인연금·IRP 거래원장 + 통합 관리';
- if(diag){diag.textContent=u?cloudSyncStatus:'로그인 필요';diag.className=`diagnostic-value ${u&&cloudSyncTone==='ok'?'ok':'wait'}`}
- if($('#cloudSheet')?.classList.contains('open'))renderCloudAccountSheet();
+function cloudCurrentEnvelope() { const local = cloudLocalEnvelope(); if (local.stored)
+    return local.envelope; return { schemaVersion: SCHEMA_VERSION, appVersion: APP_VERSION, savedAt: new Date().toISOString(), data: clone(state) }; }
+function cloudTableMissing(error) { const msg = String(error?.message || ''); return error?.code === '42P01' || /asset_os_state|relation .* does not exist/i.test(msg); }
+function cloudAtomicSaveMissing(error) { const msg = String(error?.message || ''); return ['42883', 'PGRST202', 'PGRST204'].includes(String(error?.code || '')) || /save_asset_os_state|revision/i.test(msg); }
+function cloudRequestId() { const native = globalThis.crypto?.randomUUID?.(); if (native)
+    return native; return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const n = Math.floor(Math.random() * 16); return (c === 'x' ? n : (n & 3) | 8).toString(16); }); }
+function refreshCloudProfileUI() {
+    const u = cloudUser(), menu = $('#cloudAuthMenuStatus'), avatar = $('#profileAvatar'), name = $('#profileName'), sub = $('#profileSub'), diag = $('#cloudDiagStatus');
+    if (qaCloudBlocked()) {
+        if (menu)
+            menu.textContent = 'QA 로컬 전용 · 동기화 차단';
+        if (avatar)
+            avatar.textContent = 'Q';
+        if (name)
+            name.textContent = 'QA 테스트 사용자';
+        if (sub)
+            sub.textContent = '운영 데이터와 완전히 분리된 브라우저 저장소';
+        if (diag) {
+            diag.textContent = '차단됨';
+            diag.className = 'diagnostic-value ok';
+        }
+        if ($('#cloudSheet')?.classList.contains('open'))
+            renderCloudAccountSheet();
+        return;
+    }
+    if (menu)
+        menu.textContent = u ? `${cloudUserEmail() || cloudUserLabel()} · ${cloudSyncStatus}` : 'Google 로그인 · Supabase 자동 복원';
+    if (avatar)
+        avatar.textContent = u ? (cloudUserLabel().trim().charAt(0) || 'G').toUpperCase() : 'A';
+    if (name)
+        name.textContent = u ? cloudUserLabel() : '개인 자산 시스템';
+    if (sub)
+        sub.textContent = u ? (cloudUserEmail() || 'Google 계정 연결됨') : '공통 원장 엔진 + ISA + 개인연금·IRP 거래원장 + 통합 관리';
+    if (diag) {
+        diag.textContent = u ? cloudSyncStatus : '로그인 필요';
+        diag.className = `diagnostic-value ${u && cloudSyncTone === 'ok' ? 'ok' : 'wait'}`;
+    }
+    if ($('#cloudSheet')?.classList.contains('open'))
+        renderCloudAccountSheet();
 }
-
-async function initSupabaseCloud(){
- if(qaCloudBlocked())return false;
- if(assetSupabaseClient)return true;
- if(!window.supabase?.createClient){cloudSetStatus('클라우드 모듈 로드 실패','wait');return false}
- try{
-  assetSupabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{autoRefreshToken:true,persistSession:true,detectSessionInUrl:true}});
-  assetSupabaseClient.auth.onAuthStateChange((event,session)=>{assetSupabaseSession=session||null;if(session)syncBrokerKisSessionFromCloud(session);if(event==='INITIAL_SESSION')return;setTimeout(()=>handleCloudAuthState(event,session).catch(()=>{}),0)});
-  const {data,error}=await assetSupabaseClient.auth.getSession();
-  if(error)throw error;
-  assetSupabaseSession=data?.session||null;if(assetSupabaseSession)syncBrokerKisSessionFromCloud(assetSupabaseSession);
-  return true
- }catch(e){cloudSetStatus(`연결 확인 필요: ${e.message||'초기화 실패'}`,'wait');return false}
+async function initSupabaseCloud() {
+    if (qaCloudBlocked())
+        return false;
+    if (assetSupabaseClient)
+        return true;
+    const cloudWindow = window;
+    if (!cloudWindow.supabase?.createClient) {
+        cloudSetStatus('클라우드 모듈 로드 실패', 'wait');
+        return false;
+    }
+    try {
+        assetSupabaseClient = cloudWindow.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, { auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true } });
+        assetSupabaseClient.auth.onAuthStateChange((event, session) => { assetSupabaseSession = session || null; if (session)
+            syncBrokerKisSessionFromCloud(session); if (event === 'INITIAL_SESSION')
+            return; setTimeout(() => handleCloudAuthState(event, session).catch(() => { }), 0); });
+        const { data, error } = await assetSupabaseClient.auth.getSession();
+        if (error)
+            throw error;
+        assetSupabaseSession = data?.session || null;
+        if (assetSupabaseSession)
+            syncBrokerKisSessionFromCloud(assetSupabaseSession);
+        return true;
+    }
+    catch (e) {
+        cloudSetStatus(`연결 확인 필요: ${e?.message || '초기화 실패'}`, 'wait');
+        return false;
+    }
 }
-
-async function handleCloudAuthState(event,session){
- if(qaCloudBlocked())return false;
- assetSupabaseSession=session||null;if(session)syncBrokerKisSessionFromCloud(session);refreshCloudProfileUI();
- if(!session){cloudSetStatus('로그인 필요','wait');assetAppUnlocked=false;assetAuthGateState('login');return false}
- if(['INITIAL_SESSION','SIGNED_IN','TOKEN_REFRESHED','USER_UPDATED'].includes(String(event||''))){
-  cloudSetStatus('동기화 확인 중','wait');
-  const ok=await cloudReconcileState();if(ok)assetAuthGateUnlock();else if(!assetAppUnlocked)assetAuthGateState(cloudSyncStatus==='동기화 충돌 확인 필요'?'conflict':'error',cloudAuthGateMessage());return ok
- }
- return true
+async function handleCloudAuthState(event, session) {
+    if (qaCloudBlocked())
+        return false;
+    assetSupabaseSession = session || null;
+    if (session)
+        syncBrokerKisSessionFromCloud(session);
+    refreshCloudProfileUI();
+    if (!session) {
+        cloudSetStatus('로그인 필요', 'wait');
+        assetAppUnlocked = false;
+        assetAuthGateState('login');
+        return false;
+    }
+    if (['INITIAL_SESSION', 'SIGNED_IN', 'TOKEN_REFRESHED', 'USER_UPDATED'].includes(String(event || ''))) {
+        cloudSetStatus('동기화 확인 중', 'wait');
+        const ok = await cloudReconcileState();
+        if (ok)
+            assetAuthGateUnlock();
+        else if (!assetAppUnlocked)
+            assetAuthGateState(cloudSyncStatus === '동기화 충돌 확인 필요' ? 'conflict' : 'error', cloudAuthGateMessage());
+        return ok;
+    }
+    return true;
 }
-
-async function signInAssetGoogle(){
- if(qaCloudBlocked()){toast('QA 모드에서는 Google 로그인이 차단됩니다.');return false}
- if(!assetSupabaseClient&&!(await initSupabaseCloud()))return false;
- cloudSetStatus('Google 로그인 이동 중','wait');
- const {error}=await assetSupabaseClient.auth.signInWithOAuth({provider:'google',options:{redirectTo:SUPABASE_REDIRECT_URL}});
- if(error){cloudSetStatus(`로그인 실패: ${error.message}`,'wait');toast('Google 로그인을 시작하지 못했습니다.');return false}
- return true
+async function signInAssetGoogle() {
+    if (qaCloudBlocked()) {
+        toast('QA 모드에서는 Google 로그인이 차단됩니다.');
+        return false;
+    }
+    if (!assetSupabaseClient && !(await initSupabaseCloud()))
+        return false;
+    cloudSetStatus('Google 로그인 이동 중', 'wait');
+    const { error } = await assetSupabaseClient.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: SUPABASE_REDIRECT_URL } });
+    if (error) {
+        cloudSetStatus(`로그인 실패: ${error.message}`, 'wait');
+        toast('Google 로그인을 시작하지 못했습니다.');
+        return false;
+    }
+    return true;
 }
-async function signOutAssetGoogle(){
- if(qaCloudBlocked())return false;
- if(!assetSupabaseClient)return false;
- const {error}=await assetSupabaseClient.auth.signOut();
- if(error){toast('로그아웃에 실패했습니다.');return false}
- brokerKisClient?.signOut();assetSupabaseSession=null;assetAppUnlocked=false;cloudBaseRevision=0;cloudBaseFingerprint='';cloudPendingWrite=null;cloudConflict=null;assetAuthGateState('login');cloudSetStatus('로그인 필요','wait');closeSheets();toast('Google 계정에서 로그아웃했습니다.');return true
+async function signOutAssetGoogle() {
+    if (qaCloudBlocked())
+        return false;
+    if (!assetSupabaseClient)
+        return false;
+    const { error } = await assetSupabaseClient.auth.signOut();
+    if (error) {
+        toast('로그아웃에 실패했습니다.');
+        return false;
+    }
+    brokerKisClient?.signOut();
+    assetSupabaseSession = null;
+    assetAppUnlocked = false;
+    cloudBaseRevision = 0;
+    cloudBaseFingerprint = '';
+    cloudPendingWrite = null;
+    cloudConflict = null;
+    assetAuthGateState('login');
+    cloudSetStatus('로그인 필요', 'wait');
+    closeSheets();
+    toast('Google 계정에서 로그아웃했습니다.');
+    return true;
 }
-
-async function cloudFetchStateRow(){
- if(qaCloudBlocked())return{row:null,error:{message:'QA_CLOUD_BLOCKED'}};
- const u=cloudUser();if(!u)return{row:null,error:null};
- const {data,error}=await assetSupabaseClient.from(SUPABASE_STATE_TABLE).select('payload,updated_at,revision').eq('user_id',u.id).maybeSingle();
- return{row:data||null,error:error||null}
+async function cloudFetchStateRow() {
+    if (qaCloudBlocked())
+        return { row: null, error: { message: 'QA_CLOUD_BLOCKED' } };
+    const u = cloudUser();
+    if (!u)
+        return { row: null, error: null };
+    const { data, error } = await assetSupabaseClient.from(SUPABASE_STATE_TABLE).select('payload,updated_at,revision').eq('user_id', u.id).maybeSingle();
+    return { row: data || null, error: error || null };
 }
-async function cloudPushState(envelope=cloudCurrentEnvelope(),quiet=false){
- if(qaCloudBlocked())return false;
- if(!cloudUser()||!assetSupabaseClient)return false;if(cloudSyncBusy){cloudPushPending=true;return false}
- cloudPushPending=false;
- cloudSyncBusy=true;
- try{
- const payload={...clone(envelope),schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION};
- if(!payload.savedAt)payload.savedAt=new Date().toISOString();
-  const payloadFingerprint=cloudEnvelopeFingerprint(payload);
-  cloudPendingWrite=cloudPendingWriteFor(cloudPendingWrite,payloadFingerprint,cloudBaseRevision,cloudRequestId);
-  const pending=cloudPendingWrite,{data,error}=await assetSupabaseClient.rpc('save_asset_os_state',cloudSaveRpcArguments(pending,payload));
-  if(error){if(cloudTableMissing(error)||cloudAtomicSaveMissing(error))cloudSetStatus('DB 설정 필요','wait');else cloudSetStatus('클라우드 저장 실패','wait');if(!quiet)toast(cloudTableMissing(error)||cloudAtomicSaveMissing(error)?'원자 저장 DB 설정이 아직 필요합니다.':'클라우드 저장을 확인해 주세요.');return false}
-  const result=cloudRpcResult(data);
-  if(!result){cloudSetStatus('클라우드 저장 실패','wait');return false}
-  if(result.outcome==='conflict'){
-   cloudConflict={revision:Number(result.new_revision)||0};cloudSetStatus('동기화 충돌 확인 필요','wait');assetAuthGateState('conflict',cloudAuthGateMessage());
-   if(!quiet)toast('다른 기기에서 원장이 변경됐습니다. 덮어쓰지 않고 충돌로 보호했습니다.');return false
-  }
-  if(result.outcome!=='saved'){cloudSetStatus('클라우드 저장 실패','wait');return false}
-  cloudBaseRevision=Number(result.new_revision)||pending.expectedRevision+1;cloudBaseFingerprint=payloadFingerprint;cloudPendingWrite=null;cloudConflict=null;const now=String(result.saved_at||new Date().toISOString());cloudSetStatus('동기화됨','ok',now);return true
- }finally{cloudSyncBusy=false;if(cloudPushPending){clearTimeout(cloudSyncTimer);cloudSyncTimer=setTimeout(()=>cloudPushState(cloudCurrentEnvelope(),true).catch(()=>{}),250)}}
+async function cloudPushState(envelope = cloudCurrentEnvelope(), quiet = false) {
+    if (qaCloudBlocked())
+        return false;
+    if (!cloudUser() || !assetSupabaseClient)
+        return false;
+    if (cloudSyncBusy) {
+        cloudPushPending = true;
+        return false;
+    }
+    cloudPushPending = false;
+    cloudSyncBusy = true;
+    try {
+        const payload = { ...clone(envelope), schemaVersion: SCHEMA_VERSION, appVersion: APP_VERSION };
+        if (!payload.savedAt)
+            payload.savedAt = new Date().toISOString();
+        const payloadFingerprint = cloudEnvelopeFingerprint(payload);
+        cloudPendingWrite = cloudPendingWriteFor(cloudPendingWrite, payloadFingerprint, cloudBaseRevision, cloudRequestId);
+        const pending = cloudPendingWrite, { data, error } = await assetSupabaseClient.rpc('save_asset_os_state', cloudSaveRpcArguments(pending, payload));
+        if (error) {
+            if (cloudTableMissing(error) || cloudAtomicSaveMissing(error))
+                cloudSetStatus('DB 설정 필요', 'wait');
+            else
+                cloudSetStatus('클라우드 저장 실패', 'wait');
+            if (!quiet)
+                toast(cloudTableMissing(error) || cloudAtomicSaveMissing(error) ? '원자 저장 DB 설정이 아직 필요합니다.' : '클라우드 저장을 확인해 주세요.');
+            return false;
+        }
+        const result = cloudRpcResult(data);
+        if (!result) {
+            cloudSetStatus('클라우드 저장 실패', 'wait');
+            return false;
+        }
+        if (result.outcome === 'conflict') {
+            cloudConflict = { revision: Number(result.new_revision) || 0 };
+            cloudSetStatus('동기화 충돌 확인 필요', 'wait');
+            assetAuthGateState('conflict', cloudAuthGateMessage());
+            if (!quiet)
+                toast('다른 기기에서 원장이 변경됐습니다. 덮어쓰지 않고 충돌로 보호했습니다.');
+            return false;
+        }
+        if (result.outcome !== 'saved') {
+            cloudSetStatus('클라우드 저장 실패', 'wait');
+            return false;
+        }
+        cloudBaseRevision = Number(result.new_revision) || pending.expectedRevision + 1;
+        cloudBaseFingerprint = payloadFingerprint;
+        cloudPendingWrite = null;
+        cloudConflict = null;
+        const now = String(result.saved_at || new Date().toISOString());
+        cloudSetStatus('동기화됨', 'ok', now);
+        return true;
+    }
+    finally {
+        cloudSyncBusy = false;
+        if (cloudPushPending) {
+            clearTimeout(cloudSyncTimer);
+            cloudSyncTimer = setTimeout(() => cloudPushState(cloudCurrentEnvelope(), true).catch(() => { }), 250);
+        }
+    }
 }
-function queueCloudStatePush(){
- if(qaCloudBlocked())return;
- if(!cloudUser()||!assetSupabaseClient)return;
- if(cloudSyncBusy){cloudPushPending=true;return}
- clearTimeout(cloudSyncTimer);cloudSyncTimer=setTimeout(()=>cloudPushState(cloudCurrentEnvelope(),true).catch(()=>{}),1200)
+function queueCloudStatePush() {
+    if (qaCloudBlocked())
+        return;
+    if (!cloudUser() || !assetSupabaseClient)
+        return;
+    if (cloudSyncBusy) {
+        cloudPushPending = true;
+        return;
+    }
+    clearTimeout(cloudSyncTimer);
+    cloudSyncTimer = setTimeout(() => cloudPushState(cloudCurrentEnvelope(), true).catch(() => { }), 1200);
 }
-
-function cloudApplyRemoteEnvelope(payload,revision=cloudBaseRevision){
- if(!cloudPayloadValid(payload))throw new Error('클라우드 데이터 형식 오류');
- const local=cloudLocalEnvelope();
- if(local.raw)storeRecoveryCopy(`${KEY}-pre-cloud-${Date.now()}`,local.raw);
- const normalized=normalizeState(clone(payload.data));
- state=normalized;lastPersistedState=clone(normalized);
- const savedAt=String(payload.savedAt||new Date().toISOString());
- localStorage.setItem(KEY,JSON.stringify({schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,environment:APP_ENV,savedAt,data:normalized}));
- cloudBaseFingerprint=cloudEnvelopeFingerprint(payload);cloudBaseRevision=Number(revision)||0;cloudPendingWrite=null;cloudConflict=null;pruneRecoveryKeys();if(assetAppUnlocked)render();
+function cloudApplyRemoteEnvelope(payload, revision = cloudBaseRevision) {
+    if (!cloudPayloadValid(payload))
+        throw new Error('클라우드 데이터 형식 오류');
+    const local = cloudLocalEnvelope();
+    if (local.raw)
+        storeRecoveryCopy(`${KEY}-pre-cloud-${Date.now()}`, local.raw);
+    const normalized = normalizeState(clone(payload.data));
+    state = normalized;
+    lastPersistedState = clone(normalized);
+    const savedAt = String(payload.savedAt || new Date().toISOString());
+    localStorage.setItem(KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, appVersion: APP_VERSION, environment: APP_ENV, savedAt, data: normalized }));
+    cloudBaseFingerprint = cloudEnvelopeFingerprint(payload);
+    cloudBaseRevision = Number(revision) || 0;
+    cloudPendingWrite = null;
+    cloudConflict = null;
+    pruneRecoveryKeys();
+    if (assetAppUnlocked)
+        render();
 }
-
-function cloudBackupLocalConflict(){
- const local=cloudLocalEnvelope();if(!local.stored||!cloudPayloadValid(local.envelope))throw new Error('이 기기 백업 데이터가 없습니다.');
- const raw=local.raw||JSON.stringify(local.envelope);storeRecoveryCopy(`${KEY}-pre-cloud-conflict-${Date.now()}`,raw);
- const payload={format:BACKUP_FORMAT,schemaVersion:Number(local.envelope.schemaVersion)||SCHEMA_VERSION,appVersion:String(local.envelope.appVersion||APP_VERSION),environment:APP_ENV,exportedAt:new Date().toISOString(),data:clone(local.envelope.data)};
- const name=`AssetOS_conflict_local_${localYmd().replaceAll('-','')}_${APP_VERSION}.zip`;downloadBytes(createBackupZipBytes(payload),name);return true
+function cloudBackupLocalConflict() {
+    const local = cloudLocalEnvelope();
+    if (!local.stored || !cloudPayloadValid(local.envelope))
+        throw new Error('이 기기 백업 데이터가 없습니다.');
+    const raw = local.raw || JSON.stringify(local.envelope);
+    storeRecoveryCopy(`${KEY}-pre-cloud-conflict-${Date.now()}`, raw);
+    const payload = { format: BACKUP_FORMAT, schemaVersion: Number(local.envelope.schemaVersion) || SCHEMA_VERSION, appVersion: String(local.envelope.appVersion || APP_VERSION), environment: APP_ENV, exportedAt: new Date().toISOString(), data: clone(local.envelope.data) };
+    const name = `AssetOS_conflict_local_${localYmd().replaceAll('-', '')}_${APP_VERSION}.zip`;
+    downloadBytes(createBackupZipBytes(payload), name);
+    return true;
 }
-function cloudPrepareConflictResolution(){
- clearTimeout(cloudSyncTimer);cloudSyncTimer=0;cloudPushPending=false;cloudSyncBusy=false;cloudPendingWrite=null
+function cloudPrepareConflictResolution() {
+    clearTimeout(cloudSyncTimer);
+    cloudSyncTimer = 0;
+    cloudPushPending = false;
+    cloudSyncBusy = false;
+    cloudPendingWrite = null;
 }
-async function cloudResolveConflictPull(){
- cloudPrepareConflictResolution();const ok=await cloudReconcileState('pull');if(ok)assetAuthGateUnlock();else assetAuthGateState('conflict',cloudAuthGateMessage());return ok
+async function cloudResolveConflictPull() {
+    cloudPrepareConflictResolution();
+    const ok = await cloudReconcileState('pull');
+    if (ok)
+        assetAuthGateUnlock();
+    else
+        assetAuthGateState('conflict', cloudAuthGateMessage());
+    return ok;
 }
-async function cloudResolveConflictOverwrite(){
- try{cloudBackupLocalConflict()}catch(error){cloudSetStatus('충돌 백업 실패','wait');assetAuthGateState('conflict',`이 기기 원장을 백업하지 못해 덮어쓰기를 중단했습니다: ${error?.message||error}`);return false}
- cloudPrepareConflictResolution();const local=cloudLocalEnvelope(),expected=Number(cloudConflict?.revision);if(!local.stored||!Number.isFinite(expected)){cloudSetStatus('동기화 충돌 확인 필요','wait');return false}
- cloudBaseRevision=expected;cloudPendingWrite=null;const ok=await cloudPushState(local.envelope,false);if(ok)assetAuthGateUnlock();return ok
+async function cloudResolveConflictOverwrite() {
+    try {
+        cloudBackupLocalConflict();
+    }
+    catch (error) {
+        cloudSetStatus('충돌 백업 실패', 'wait');
+        assetAuthGateState('conflict', `이 기기 원장을 백업하지 못해 덮어쓰기를 중단했습니다: ${error?.message || error}`);
+        return false;
+    }
+    cloudPrepareConflictResolution();
+    const local = cloudLocalEnvelope(), expected = Number(cloudConflict?.revision);
+    if (!local.stored || !Number.isFinite(expected)) {
+        cloudSetStatus('동기화 충돌 확인 필요', 'wait');
+        return false;
+    }
+    cloudBaseRevision = expected;
+    cloudPendingWrite = null;
+    const ok = await cloudPushState(local.envelope, false);
+    if (ok)
+        assetAuthGateUnlock();
+    return ok;
 }
-
-async function cloudReconcileState(force='auto'){
- if(qaCloudBlocked())return false;
- if(!cloudUser()||!assetSupabaseClient||cloudSyncBusy)return false;
- cloudSyncBusy=true;
- try{
-  let local=cloudLocalEnvelope();const startedFingerprint=cloudEnvelopeFingerprint(local.envelope),{row,error}=await cloudFetchStateRow();
-  if(error){if(cloudTableMissing(error)||cloudAtomicSaveMissing(error))cloudSetStatus('DB 설정 필요','wait');else cloudSetStatus('동기화 확인 실패','wait');return false}
-  if(!row){cloudBaseRevision=0;cloudBaseFingerprint='';cloudPendingWrite=null;cloudSyncBusy=false;return await cloudPushState(cloudCurrentEnvelope(),true)}
-  const remote=row.payload,remoteRevision=Number(row.revision)||1,latestLocal=cloudLocalEnvelope(),latestFingerprint=cloudEnvelopeFingerprint(latestLocal.envelope),remoteFingerprint=cloudEnvelopeFingerprint(remote);
-  if(latestLocal.stored&&latestFingerprint!==startedFingerprint){
-   if(remoteFingerprint!==startedFingerprint){cloudConflict={revision:remoteRevision};cloudPushPending=false;cloudSetStatus('동기화 충돌 확인 필요','wait');return false}
-   local=latestLocal
-  }
-  const plan=cloudReconcilePlan(local,row,force);
-  if(plan.action==='reject-invalid'){cloudSetStatus('클라우드 데이터 확인 필요','wait');return false}
-  if(plan.action==='pull'){cloudApplyRemoteEnvelope(remote,remoteRevision);cloudSetStatus('클라우드에서 복원됨','ok',row.updated_at||remote.savedAt);if(plan.notify)toast('Supabase에서 최신 데이터를 복원했습니다.');return true}
-  if(plan.action==='protect-empty'){cloudSetStatus('빈 클라우드 자료 보호됨','wait');return false}
-  if(plan.action==='push'){cloudBaseRevision=remoteRevision;cloudBaseFingerprint=cloudEnvelopeFingerprint(remote);cloudPendingWrite=null;cloudSyncBusy=false;return await cloudPushState(local.envelope,true)}
-  if(plan.action==='conflict'){cloudConflict={revision:remoteRevision};cloudSetStatus('동기화 충돌 확인 필요','wait');return false}
-  cloudBaseRevision=remoteRevision;cloudBaseFingerprint=cloudEnvelopeFingerprint(remote);cloudPendingWrite=null;cloudConflict=null;
-  cloudSetStatus('동기화됨','ok',row.updated_at||remote.savedAt);return true
- }catch(e){cloudSetStatus('동기화 오류','wait');return false}
- finally{cloudSyncBusy=false;if(cloudPushPending&&cloudSyncStatus!=='동기화 충돌 확인 필요'){clearTimeout(cloudSyncTimer);cloudSyncTimer=setTimeout(()=>cloudPushState(cloudCurrentEnvelope(),true).catch(()=>{}),250)}}
+async function cloudReconcileState(force = 'auto') {
+    if (qaCloudBlocked())
+        return false;
+    if (!cloudUser() || !assetSupabaseClient || cloudSyncBusy)
+        return false;
+    cloudSyncBusy = true;
+    try {
+        let local = cloudLocalEnvelope();
+        const startedFingerprint = cloudEnvelopeFingerprint(local.envelope), { row, error } = await cloudFetchStateRow();
+        if (error) {
+            if (cloudTableMissing(error) || cloudAtomicSaveMissing(error))
+                cloudSetStatus('DB 설정 필요', 'wait');
+            else
+                cloudSetStatus('동기화 확인 실패', 'wait');
+            return false;
+        }
+        if (!row) {
+            cloudBaseRevision = 0;
+            cloudBaseFingerprint = '';
+            cloudPendingWrite = null;
+            cloudSyncBusy = false;
+            return await cloudPushState(cloudCurrentEnvelope(), true);
+        }
+        const remote = row.payload, remoteRevision = Number(row.revision) || 1, latestLocal = cloudLocalEnvelope(), latestFingerprint = cloudEnvelopeFingerprint(latestLocal.envelope), remoteFingerprint = cloudEnvelopeFingerprint(remote);
+        if (latestLocal.stored && latestFingerprint !== startedFingerprint) {
+            if (remoteFingerprint !== startedFingerprint) {
+                cloudConflict = { revision: remoteRevision };
+                cloudPushPending = false;
+                cloudSetStatus('동기화 충돌 확인 필요', 'wait');
+                return false;
+            }
+            local = latestLocal;
+        }
+        const plan = cloudReconcilePlan(local, row, force);
+        if (plan.action === 'reject-invalid') {
+            cloudSetStatus('클라우드 데이터 확인 필요', 'wait');
+            return false;
+        }
+        if (plan.action === 'pull') {
+            cloudApplyRemoteEnvelope(remote, remoteRevision);
+            cloudSetStatus('클라우드에서 복원됨', 'ok', row.updated_at || remote.savedAt);
+            if (plan.notify)
+                toast('Supabase에서 최신 데이터를 복원했습니다.');
+            return true;
+        }
+        if (plan.action === 'protect-empty') {
+            cloudSetStatus('빈 클라우드 자료 보호됨', 'wait');
+            return false;
+        }
+        if (plan.action === 'push') {
+            cloudBaseRevision = remoteRevision;
+            cloudBaseFingerprint = cloudEnvelopeFingerprint(remote);
+            cloudPendingWrite = null;
+            cloudSyncBusy = false;
+            return await cloudPushState(local.envelope, true);
+        }
+        if (plan.action === 'conflict') {
+            cloudConflict = { revision: remoteRevision };
+            cloudSetStatus('동기화 충돌 확인 필요', 'wait');
+            return false;
+        }
+        cloudBaseRevision = remoteRevision;
+        cloudBaseFingerprint = cloudEnvelopeFingerprint(remote);
+        cloudPendingWrite = null;
+        cloudConflict = null;
+        cloudSetStatus('동기화됨', 'ok', row.updated_at || remote.savedAt);
+        return true;
+    }
+    catch (e) {
+        cloudSetStatus('동기화 오류', 'wait');
+        return false;
+    }
+    finally {
+        cloudSyncBusy = false;
+        if (cloudPushPending && cloudSyncStatus !== '동기화 충돌 확인 필요') {
+            clearTimeout(cloudSyncTimer);
+            cloudSyncTimer = setTimeout(() => cloudPushState(cloudCurrentEnvelope(), true).catch(() => { }), 250);
+        }
+    }
 }
-
-function renderCloudAccountSheet(){
- const body=$('#cloudBody');if(!body)return;
- if(qaCloudBlocked()){body.innerHTML='<div class="cloud-account-card"><div class="cloud-account-icon">Q</div><div><strong>QA 로컬 전용</strong><small>Supabase 로그인·복원·업로드가 모두 차단되어 있습니다.</small></div></div><div class="cloud-note">이 화면의 데이터는 운영 원장과 다른 localStorage 키에만 저장됩니다.</div>';return}
- const u=cloudUser();
- if(!u){body.innerHTML=`<div class="cloud-account-card"><div class="cloud-account-icon">G</div><div><strong>Google 계정으로 연결</strong><small>로그인하면 Supabase에 원장을 보관하고 새 기기에서도 복원할 수 있습니다.</small></div></div><button id="cloudGoogleLogin" class="diagnostic-action cloud-primary">Google로 로그인</button><div class="cloud-note">로그인과 클라우드 원장 확인이 끝나야 Asset OS를 사용할 수 있습니다.</div>`;$('#cloudGoogleLogin').onclick=()=>signInAssetGoogle();return}
- const conflictActions=cloudSyncStatus==='동기화 충돌 확인 필요'?'<button id="cloudPullLatest" class="diagnostic-action cloud-primary">클라우드 최신본 불러오기</button><button id="cloudOverwriteAfterBackup" class="diagnostic-action cloud-secondary">이 기기 백업 후 덮어쓰기</button>':'';
- body.innerHTML=`<div class="cloud-account-card"><div class="cloud-account-icon">${escapeHtml((cloudUserLabel().charAt(0)||'G').toUpperCase())}</div><div><strong>${escapeHtml(cloudUserLabel())}</strong><small>${escapeHtml(cloudUserEmail())}</small></div></div><div class="diagnostic-list cloud-diagnostics"><div class="diagnostic-row"><span class="diagnostic-copy"><strong>Supabase</strong><small>revision ${cloudBaseRevision||'-'} · 자동 로그인 · 기기간 원장 복원</small></span><span class="diagnostic-value ${cloudSyncTone==='ok'?'ok':'wait'}">${escapeHtml(cloudSyncStatus)}</span></div><div class="diagnostic-row"><span class="diagnostic-copy"><strong>최근 동기화</strong><small>localStorage와 클라우드 중 최신본 사용</small></span><span class="diagnostic-value">${escapeHtml(cloudTimeLabel(cloudLastSyncAt))}</span></div></div><div class="cloud-actions">${conflictActions}<button id="cloudSyncNow" class="diagnostic-action cloud-primary">지금 동기화</button><button id="cloudLogout" class="diagnostic-action cloud-secondary">로그아웃</button></div><div class="cloud-note">충돌 시 자동 병합하지 않습니다. 덮어쓰기는 이 기기 ZIP 백업을 먼저 저장한 뒤에만 실행됩니다.</div>`;
- $('#cloudSyncNow').onclick=async()=>{cloudSetStatus('동기화 확인 중','wait');const ok=await cloudReconcileState();toast(ok?'클라우드 동기화를 확인했습니다.':'클라우드 동기화를 확인해 주세요.')};
- $('#cloudPullLatest')?.addEventListener('click',cloudResolveConflictPull);$('#cloudOverwriteAfterBackup')?.addEventListener('click',cloudResolveConflictOverwrite);
- $('#cloudLogout').onclick=()=>showDialog({title:'Google 로그아웃',message:'이 기기의 Asset OS 데이터는 유지됩니다. Google 계정 연결만 해제할까요?',confirmText:'로그아웃',cancelText:'취소'},()=>signOutAssetGoogle());
+function renderCloudAccountSheet() {
+    const body = $('#cloudBody');
+    if (!body)
+        return;
+    if (qaCloudBlocked()) {
+        body.innerHTML = '<div class="cloud-account-card"><div class="cloud-account-icon">Q</div><div><strong>QA 로컬 전용</strong><small>Supabase 로그인·복원·업로드가 모두 차단되어 있습니다.</small></div></div><div class="cloud-note">이 화면의 데이터는 운영 원장과 다른 localStorage 키에만 저장됩니다.</div>';
+        return;
+    }
+    const u = cloudUser();
+    if (!u) {
+        body.innerHTML = `<div class="cloud-account-card"><div class="cloud-account-icon">G</div><div><strong>Google 계정으로 연결</strong><small>로그인하면 Supabase에 원장을 보관하고 새 기기에서도 복원할 수 있습니다.</small></div></div><button id="cloudGoogleLogin" class="diagnostic-action cloud-primary">Google로 로그인</button><div class="cloud-note">로그인과 클라우드 원장 확인이 끝나야 Asset OS를 사용할 수 있습니다.</div>`;
+        $('#cloudGoogleLogin').onclick = () => signInAssetGoogle();
+        return;
+    }
+    const conflictActions = cloudSyncStatus === '동기화 충돌 확인 필요' ? '<button id="cloudPullLatest" class="diagnostic-action cloud-primary">클라우드 최신본 불러오기</button><button id="cloudOverwriteAfterBackup" class="diagnostic-action cloud-secondary">이 기기 백업 후 덮어쓰기</button>' : '';
+    body.innerHTML = `<div class="cloud-account-card"><div class="cloud-account-icon">${escapeHtml((cloudUserLabel().charAt(0) || 'G').toUpperCase())}</div><div><strong>${escapeHtml(cloudUserLabel())}</strong><small>${escapeHtml(cloudUserEmail())}</small></div></div><div class="diagnostic-list cloud-diagnostics"><div class="diagnostic-row"><span class="diagnostic-copy"><strong>Supabase</strong><small>revision ${cloudBaseRevision || '-'} · 자동 로그인 · 기기간 원장 복원</small></span><span class="diagnostic-value ${cloudSyncTone === 'ok' ? 'ok' : 'wait'}">${escapeHtml(cloudSyncStatus)}</span></div><div class="diagnostic-row"><span class="diagnostic-copy"><strong>최근 동기화</strong><small>localStorage와 클라우드 중 최신본 사용</small></span><span class="diagnostic-value">${escapeHtml(cloudTimeLabel(cloudLastSyncAt))}</span></div></div><div class="cloud-actions">${conflictActions}<button id="cloudSyncNow" class="diagnostic-action cloud-primary">지금 동기화</button><button id="cloudLogout" class="diagnostic-action cloud-secondary">로그아웃</button></div><div class="cloud-note">충돌 시 자동 병합하지 않습니다. 덮어쓰기는 이 기기 ZIP 백업을 먼저 저장한 뒤에만 실행됩니다.</div>`;
+    $('#cloudSyncNow').onclick = async () => { cloudSetStatus('동기화 확인 중', 'wait'); const ok = await cloudReconcileState(); toast(ok ? '클라우드 동기화를 확인했습니다.' : '클라우드 동기화를 확인해 주세요.'); };
+    $('#cloudPullLatest')?.addEventListener('click', cloudResolveConflictPull);
+    $('#cloudOverwriteAfterBackup')?.addEventListener('click', cloudResolveConflictOverwrite);
+    $('#cloudLogout').onclick = () => showDialog({ title: 'Google 로그아웃', message: '이 기기의 Asset OS 데이터는 유지됩니다. Google 계정 연결만 해제할까요?', confirmText: '로그아웃', cancelText: '취소' }, () => signOutAssetGoogle());
 }
-function openCloudAccountSheet(){renderCloudAccountSheet();openSheet('#cloudSheet')}
+function openCloudAccountSheet() { renderCloudAccountSheet(); openSheet('#cloudSheet'); }
