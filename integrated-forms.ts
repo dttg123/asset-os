@@ -28,6 +28,8 @@ declare function isaAccountsForDate(date:string):IntegratedRecord[];
 declare function integratedAccountName(id:string):string;
 declare function postedDateError(date:string):string;
 declare function financialNumberInRange(value:unknown):boolean;
+declare function formShowError(form:HTMLFormElement,message?:string,fieldName?:string):boolean;
+declare function formClearError(form:HTMLFormElement):boolean;
 declare function formatDate(value:unknown):string;
 declare function financialProduct(id:string):IntegratedRecord|null;
 declare function financialProductActiveOnDate(product:IntegratedRecord,date:string):boolean;
@@ -92,11 +94,28 @@ function openIntegratedTransactionForm(id='',preset:IntegratedRecord={}):void{
  openSheet('#formSheet',{mode:'input'});syncIntegratedFormFields();
  const form=$('#integratedTxForm') as HTMLFormElement&{elements:any};
  if(form.elements.category)form.elements.category.dataset.auto=tx||formPreset.category?'0':'1';
- form.elements.uiType?.addEventListener('change',()=>{if(form.elements.category)form.elements.category.dataset.auto='1';syncIntegratedFormFields();sheetDirty=true});
- form.elements.toAccountId?.addEventListener('change',()=>{syncIntegratedFormFields();sheetDirty=true});
+ form.elements.uiType?.addEventListener('change',()=>{if(form.elements.category)form.elements.category.dataset.auto='1';syncIntegratedFormFields();formClearError(form);sheetDirty=true});
+ form.elements.toAccountId?.addEventListener('change',()=>{syncIntegratedFormFields();formClearError(form);sheetDirty=true});
  form.elements.date?.addEventListener('change',()=>{syncIntegratedFormFields();sheetDirty=true});
- form.addEventListener('input',()=>{sheetDirty=true});
+ form.addEventListener('input',(event:Event)=>{sheetDirty=true;const name=(event.target as HTMLInputElement)?.name;if(['amount','principal','interest','date','targetPensionAccountId','targetIsaAccountId'].includes(name)){const error=integratedFormLiveError(form);if(error)formShowError(form,error);else formClearError(form)}});
  form.addEventListener('submit',(event:SubmitEvent)=>{event.preventDefault();saveIntegratedTransaction(event.currentTarget as HTMLFormElement)});
+}
+
+function integratedFormLiveError(form:HTMLFormElement):string{
+ const data=new FormData(form),type=String(data.get('uiType')||''),systemType=form.dataset.systemType||'';
+ if(type==='loanPayment'){
+  const principalRaw=String(data.get('principal')??''),interestRaw=String(data.get('interest')??''),principal=Number(principalRaw),interest=Number(interestRaw);
+  if(!financialNumberInRange(principal)||!financialNumberInRange(interest))return'원금과 이자는 정확하게 저장 가능한 숫자여야 합니다.';
+  if(principal<0||interest<0)return'원금과 이자는 0원 이상 입력해 주세요.';
+  if(principal<=0&&interest<=0)return'원금 또는 이자를 1원 이상 입력해 주세요.';
+ }else{
+  const raw=String(data.get('amount')??'');if(!raw)return'';const amount=Number(raw);
+  if(!Number.isFinite(amount)||amount<=0)return'금액은 1원 이상 입력해 주세요.';
+  if(!financialNumberInRange(amount))return'금액이 너무 커 정확하게 저장할 수 없습니다.';
+ }
+ const rows=integratedCandidatesFromForm(form);if(!rows.length&&!systemType)return'';
+ for(const row of rows){const error=integratedValidateCandidate(row,form.dataset.editId||'');if(error)return error}
+ return'';
 }
 
 function integratedCandidatesFromForm(form:HTMLFormElement):IntegratedRecord[]{
@@ -171,11 +190,11 @@ function integratedValidateCandidate(candidate:IntegratedRecord,editingId=''):st
 
 function saveIntegratedTransaction(form:HTMLFormElement):void{
  const rows=integratedCandidatesFromForm(form),editingId=form.dataset.editId||'';
- if(!rows.length){toast('기록할 금액을 입력해 주세요.');return}
+ if(!rows.length){const message='기록할 금액을 입력해 주세요.',isLoan=String(new FormData(form).get('uiType')||'')==='loanPayment';formShowError(form,message,isLoan?'principal':'amount');toast(message);return}
  const test=clone(integratedStore());if(editingId)test.ledger=(test.ledger||[]).filter(t=>t.id!==editingId);
- for(const row of rows){const error=integratedValidateCandidate(row,editingId);if(error){toast(error);return}test.ledger.push(row)}
+ for(const row of rows){const error=integratedValidateCandidate(row,editingId);if(error){formShowError(form,error);toast(error);return}test.ledger.push(row)}
  const combinedIssues=[...integratedCandidateIssues(test),...integratedPolicyLimitIssues(test)];
- if(combinedIssues.length){toast(combinedIssues[0].replace('자산 잔액 음수:','잔액이 부족합니다:').replace('부채 잔액 음수:','대출잔액보다 많이 상환할 수 없습니다:'));return}
+ if(combinedIssues.length){const message=combinedIssues[0].replace('자산 잔액 음수:','잔액이 부족합니다:').replace('부채 잔액 음수:','대출잔액보다 많이 상환할 수 없습니다:'),isLoan=rows.some(row=>row.type==='loanPayment');formShowError(form,message,isLoan?'principal':'amount');toast(message);return}
  if(editingId)integratedStore().ledger=integratedStore().ledger.filter(t=>t.id!==editingId);
  integratedStore().ledger.push(...rows);integratedStore().mode='live';integratedStore().label='내 통합 거래기록';setting().integratedMonth=integratedMonthKey(rows[0].date);integratedLedgerSearch='';integratedSearchDisplayLimit=50;setting().integratedLedgerFilter='all';
  if(!persist())return;sheetDirty=false;closeSheets({all:true});nav('integrated','ledger');toast('거래를 저장했습니다.');haptic('light');

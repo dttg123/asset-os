@@ -66,11 +66,48 @@ function openIntegratedTransactionForm(id = '', preset = {}) {
     if (form.elements.category)
         form.elements.category.dataset.auto = tx || formPreset.category ? '0' : '1';
     form.elements.uiType?.addEventListener('change', () => { if (form.elements.category)
-        form.elements.category.dataset.auto = '1'; syncIntegratedFormFields(); sheetDirty = true; });
-    form.elements.toAccountId?.addEventListener('change', () => { syncIntegratedFormFields(); sheetDirty = true; });
+        form.elements.category.dataset.auto = '1'; syncIntegratedFormFields(); formClearError(form); sheetDirty = true; });
+    form.elements.toAccountId?.addEventListener('change', () => { syncIntegratedFormFields(); formClearError(form); sheetDirty = true; });
     form.elements.date?.addEventListener('change', () => { syncIntegratedFormFields(); sheetDirty = true; });
-    form.addEventListener('input', () => { sheetDirty = true; });
+    form.addEventListener('input', (event) => { sheetDirty = true; const name = event.target?.name; if (['amount', 'principal', 'interest', 'date', 'targetPensionAccountId', 'targetIsaAccountId'].includes(name)) {
+        const error = integratedFormLiveError(form);
+        if (error)
+            formShowError(form, error);
+        else
+            formClearError(form);
+    } });
     form.addEventListener('submit', (event) => { event.preventDefault(); saveIntegratedTransaction(event.currentTarget); });
+}
+function integratedFormLiveError(form) {
+    const data = new FormData(form), type = String(data.get('uiType') || ''), systemType = form.dataset.systemType || '';
+    if (type === 'loanPayment') {
+        const principalRaw = String(data.get('principal') ?? ''), interestRaw = String(data.get('interest') ?? ''), principal = Number(principalRaw), interest = Number(interestRaw);
+        if (!financialNumberInRange(principal) || !financialNumberInRange(interest))
+            return '원금과 이자는 정확하게 저장 가능한 숫자여야 합니다.';
+        if (principal < 0 || interest < 0)
+            return '원금과 이자는 0원 이상 입력해 주세요.';
+        if (principal <= 0 && interest <= 0)
+            return '원금 또는 이자를 1원 이상 입력해 주세요.';
+    }
+    else {
+        const raw = String(data.get('amount') ?? '');
+        if (!raw)
+            return '';
+        const amount = Number(raw);
+        if (!Number.isFinite(amount) || amount <= 0)
+            return '금액은 1원 이상 입력해 주세요.';
+        if (!financialNumberInRange(amount))
+            return '금액이 너무 커 정확하게 저장할 수 없습니다.';
+    }
+    const rows = integratedCandidatesFromForm(form);
+    if (!rows.length && !systemType)
+        return '';
+    for (const row of rows) {
+        const error = integratedValidateCandidate(row, form.dataset.editId || '');
+        if (error)
+            return error;
+    }
+    return '';
 }
 function integratedCandidatesFromForm(form) {
     const data = new FormData(form), systemType = form.dataset.systemType || '', editingId = String(form.dataset.editId || ''), existing = editingId ? (integratedStore().ledger || []).find(t => t.id === editingId) : null;
@@ -172,7 +209,9 @@ function integratedValidateCandidate(candidate, editingId = '') {
 function saveIntegratedTransaction(form) {
     const rows = integratedCandidatesFromForm(form), editingId = form.dataset.editId || '';
     if (!rows.length) {
-        toast('기록할 금액을 입력해 주세요.');
+        const message = '기록할 금액을 입력해 주세요.', isLoan = String(new FormData(form).get('uiType') || '') === 'loanPayment';
+        formShowError(form, message, isLoan ? 'principal' : 'amount');
+        toast(message);
         return;
     }
     const test = clone(integratedStore());
@@ -181,6 +220,7 @@ function saveIntegratedTransaction(form) {
     for (const row of rows) {
         const error = integratedValidateCandidate(row, editingId);
         if (error) {
+            formShowError(form, error);
             toast(error);
             return;
         }
@@ -188,7 +228,9 @@ function saveIntegratedTransaction(form) {
     }
     const combinedIssues = [...integratedCandidateIssues(test), ...integratedPolicyLimitIssues(test)];
     if (combinedIssues.length) {
-        toast(combinedIssues[0].replace('자산 잔액 음수:', '잔액이 부족합니다:').replace('부채 잔액 음수:', '대출잔액보다 많이 상환할 수 없습니다:'));
+        const message = combinedIssues[0].replace('자산 잔액 음수:', '잔액이 부족합니다:').replace('부채 잔액 음수:', '대출잔액보다 많이 상환할 수 없습니다:'), isLoan = rows.some(row => row.type === 'loanPayment');
+        formShowError(form, message, isLoan ? 'principal' : 'amount');
+        toast(message);
         return;
     }
     if (editingId)
