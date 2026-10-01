@@ -16,6 +16,7 @@ const context=vm.createContext({
  URL:{createObjectURL:()=>'',revokeObjectURL:()=>{}},document:{createElement:()=>({href:'',set download(value){downloaded=value},click(){},remove(){}}),body:{appendChild(){}}},
  setTimeout:()=>{},normalizeState:value=>value,$:()=>null
 });
+vm.runInContext(fs.readFileSync(path.resolve(__dirname,'..','src/storage/state-migrations.js'),'utf8'),context);
 const source=fs.readFileSync(path.resolve(__dirname,'..','backup.js'),'utf8');
 vm.runInContext(`${source}\nthis.__shareDriveBackup=shareDriveBackup;this.__parseBackupFile=parseBackupFile;`,context);
 
