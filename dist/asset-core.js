@@ -1,43 +1,81 @@
 /* asset-os source: core-config.js */
 'use strict';
-const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const BROKER_KIS_PUBLIC_CONFIG=Object.freeze({projectUrl:'https://wjrzukoofscmvwicmoey.supabase.co',publishableKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indqcnp1a29vZnNjbXZ3aWNtb2V5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgxNTk0NjcsImV4cCI6MjEwMzczNTQ2N30.DEYttJ7nXU9Z67NY3WXzIjiVFHUEMQ04qPd3JktVYz4',functionName:'kis-read',redirectUrl:'https://dttg123.github.io/asset-os/'});
-const QA_MODE=typeof location!=='undefined'&&/(?:^|[?&])qa=1(?:&|$)/.test(String(location.search||''));
-const QA_STORAGE_KEY='asset-os-qa-v0.5',LIVE_STORAGE_KEY='asset-os-v1.9.45-live';
-const DEFAULT_FINANCE_DAY=25; const APP_VERSION='v0.6.7',APP_ENV=QA_MODE?'qa':'live',SCHEMA_VERSION=21,KEY=QA_MODE?QA_STORAGE_KEY:LIVE_STORAGE_KEY,LEGACY_KEYS=['asset-os-v1.9.22-central-schedule','asset-os-v1.9.20-real-finance','asset-os-v1.9.19-finance-linked','asset-os-v1.9.18-integrated-ui-refine','asset-os-v1.9.17-integrated-complete-stage1','asset-os-v1.9.16-integrated-ledger-stage2','asset-os-v1.9.9-pension-step2-analysis','asset-os-v1.9.7-pension-step2-precision','asset-os-v1.9.6-pension-step2-refine','asset-os-v1.9.5-pension-step2','asset-os-v1.9.4-pension-step1','asset-os-v1.9.3-pension-step1','asset-os-v1.9.2-isa-review','asset-os-v1.9.1-isa-review','asset-os-v1.9-isa-review','asset-os-v1.8-isa-review','asset-os-v1.7-isa-review','asset-os-v1.6.1-isa-review','asset-os-v1.6-isa-review','asset-os-v1.5-isa-review','asset-os-v1.4-isa-review','asset-os-v1.3-isa-review'];
-const nf=new Intl.NumberFormat('ko-KR');
-const clone=v=>JSON.parse(JSON.stringify(v));
-const INVESTMENT_ROLES=['성장','배당','현금흐름','안정','현금'];
-function localYmd(d){if(d===undefined&&QA_MODE)return'2060-12-31';const value=d===undefined?new Date():d,y=value.getFullYear(),m=String(value.getMonth()+1).padStart(2,'0'),day=String(value.getDate()).padStart(2,'0');return `${y}-${m}-${day}`}
-const ymd=()=>localYmd();
-const businessYear=()=>Number(localYmd().slice(0,4));
-const normalizeName=s=>String(s||'').normalize('NFKC').replace(/\s+/g,'').replace(/[()（）·._-]/g,'').toUpperCase();
-const txDate=t=>String(t.tradeDate||t.date||'');
-const txSequence=t=>Number.isFinite(Number(t.sequence))?Number(t.sequence):0;
-const sortTxs=txs=>[...txs].sort((a,b)=>txDate(a).localeCompare(txDate(b))||txSequence(a)-txSequence(b)||String(a.createdAt||'').localeCompare(String(b.createdAt||''))||String(a.id).localeCompare(String(b.id)));
-const stableTxKey=t=>[(['buy','openingAllocation'].includes(t.type)?'buy':t.type),txDate(t),txSequence(t),t.holdingId||'',Number(t.qty||0).toFixed(8),Number(t.price||0).toFixed(4),Number(t.amount||0).toFixed(2),Number(t.fee||0).toFixed(2),Number(t.tax||0).toFixed(2),t.transferId||'',t.reversesTransactionId||''].join('|');
-const won=n=>nf.format(Math.round(Number(n)||0))+'원';
-function displayWon(n){n=Math.round(Number(n)||0);const sign=n<0?'-':'',v=Math.abs(n);if(v<100000000)return sign+nf.format(v)+'원';let jo=Math.floor(v/1000000000000),rem=v%1000000000000,eok=Math.floor(rem/100000000),man=Math.round((rem%100000000)/10000);if(man>=10000){man=0;eok++}if(eok>=10000){eok=0;jo++}const parts=[];if(jo)parts.push(`${nf.format(jo)}조`);if(eok)parts.push(`${nf.format(eok)}억`);if(man)parts.push(`${nf.format(man)}만원`);return sign+(parts.length?parts.join(' '):'0원')}
-function amountClass(v){const len=displayWon(v).replace(/\s/g,'').length;return len>=16?'amount-xxlong':len>=12?'amount-xlong':len>=9?'amount-long':''}
-const num=n=>nf.format(Math.round(Number(n)||0));
-const signed=n=>(Number(n)>=0?'+':'-')+won(Math.abs(Number(n)||0));
-const pct=n=>(Number(n)>=0?'+':'')+(Number(n)||0).toFixed(1)+'%';
-const uid=p=>(p+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7));
-const formatDateTime=v=>{if(!v)return '-';const d=new Date(v);return Number.isNaN(d.getTime())?String(v):new Intl.DateTimeFormat('ko-KR',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'Asia/Seoul'}).format(d)};
-const transactionSnapshot=t=>{const keys=['id','type','tradeDate','date','settlementDate','sequence','createdAt','holdingId','qty','price','amount','fee','tax','note','transferId','reversesTransactionId','linkedBuyId','sourceDividendId','setQty','setAvg','cashDelta','ratio','status','cancelledAt'];const out={};for(const k of keys)if(t?.[k]!==undefined)out[k]=clone(t[k]);return out};
-const transactionRevision=(before,after,action,reason)=>({id:uid('revision'),action,changedAt:new Date().toISOString(),reason:String(reason||'').trim()||(action==='cancel'?'사용자 취소':'사용자 수정'),before:transactionSnapshot(before),after:transactionSnapshot(after)});
-const revisionLabel=r=>r.action==='cancel'?'취소 처리':'수정 저장';
-
-const escapeHtml=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-function findDataElement(root,attribute,value){if(!root||!/^[a-z][a-z0-9-]*$/i.test(String(attribute||'')))return null;return[...root.querySelectorAll(`[${attribute}]`)].find(element=>element.getAttribute(attribute)===String(value??''))||null}
-let assetOsRuntimeApi=null;
-let runtimeErrors=0;window.addEventListener('error',()=>runtimeErrors++);window.addEventListener('unhandledrejection',()=>runtimeErrors++);
-let scrollRestoreToken=0;
-function restoreScrollY(y){const target=Math.max(0,Number(y)||0),token=++scrollRestoreToken,apply=()=>{if(token!==scrollRestoreToken)return false;window.scrollTo(0,target);return true};apply();requestAnimationFrame(()=>{if(!apply())return;requestAnimationFrame(apply)});setTimeout(apply,80)}
-function clearScrollGuard(guard){if(!guard)return;if(guard._releaseScrollHandler){window.removeEventListener('scroll',guard._releaseScrollHandler);guard._releaseScrollHandler=null}guard.style.height='0px'}
-function holdScrollGuard(guard,height,targetY){if(!guard)return;clearScrollGuard(guard);const h=Math.max(0,Number(height)||0);if(!h)return;guard.style.height=`${h}px`;const release=()=>{const kept=guard.getBoundingClientRect().height,naturalMax=Math.max(0,document.documentElement.scrollHeight-kept-innerHeight);if(window.scrollY<=naturalMax+1){clearScrollGuard(guard);restoreScrollY(Math.min(Math.max(0,targetY),naturalMax));return true}return false};requestAnimationFrame(()=>{if(release())return;const onScroll=()=>requestAnimationFrame(release);guard._releaseScrollHandler=onScroll;window.addEventListener('scroll',onScroll,{passive:true})})}
-function renderKeepingScroll(){const y=window.scrollY;render();restoreScrollY(y)}
-function stableInlineToggle(anchor,panel,guard,expand,fill){if(!anchor||!panel)return;const y=window.scrollY,beforeH=panel.hidden?0:panel.getBoundingClientRect().height,globalGuard=$('#globalScrollGuard');clearScrollGuard(guard);clearScrollGuard(globalGuard);if(expand){if(typeof fill==='function')fill();panel.hidden=false;panel.classList.add('open');restoreScrollY(y);return}panel.hidden=true;panel.classList.remove('open');requestAnimationFrame(()=>{holdScrollGuard(globalGuard||guard,beforeH,y);restoreScrollY(y)})}
+const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
+const BROKER_KIS_PUBLIC_CONFIG = Object.freeze({ projectUrl: 'https://wjrzukoofscmvwicmoey.supabase.co', publishableKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indqcnp1a29vZnNjbXZ3aWNtb2V5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgxNTk0NjcsImV4cCI6MjEwMzczNTQ2N30.DEYttJ7nXU9Z67NY3WXzIjiVFHUEMQ04qPd3JktVYz4', functionName: 'kis-read', redirectUrl: 'https://dttg123.github.io/asset-os/' });
+const QA_MODE = typeof location !== 'undefined' && /(?:^|[?&])qa=1(?:&|$)/.test(String(location.search || ''));
+const QA_STORAGE_KEY = 'asset-os-qa-v0.5', LIVE_STORAGE_KEY = 'asset-os-v1.9.45-live';
+const DEFAULT_FINANCE_DAY = 25;
+const APP_VERSION = 'v0.6.7', APP_ENV = QA_MODE ? 'qa' : 'live', SCHEMA_VERSION = 21, KEY = QA_MODE ? QA_STORAGE_KEY : LIVE_STORAGE_KEY, LEGACY_KEYS = ['asset-os-v1.9.22-central-schedule', 'asset-os-v1.9.20-real-finance', 'asset-os-v1.9.19-finance-linked', 'asset-os-v1.9.18-integrated-ui-refine', 'asset-os-v1.9.17-integrated-complete-stage1', 'asset-os-v1.9.16-integrated-ledger-stage2', 'asset-os-v1.9.9-pension-step2-analysis', 'asset-os-v1.9.7-pension-step2-precision', 'asset-os-v1.9.6-pension-step2-refine', 'asset-os-v1.9.5-pension-step2', 'asset-os-v1.9.4-pension-step1', 'asset-os-v1.9.3-pension-step1', 'asset-os-v1.9.2-isa-review', 'asset-os-v1.9.1-isa-review', 'asset-os-v1.9-isa-review', 'asset-os-v1.8-isa-review', 'asset-os-v1.7-isa-review', 'asset-os-v1.6.1-isa-review', 'asset-os-v1.6-isa-review', 'asset-os-v1.5-isa-review', 'asset-os-v1.4-isa-review', 'asset-os-v1.3-isa-review'];
+const nf = new Intl.NumberFormat('ko-KR');
+const clone = (v) => JSON.parse(JSON.stringify(v));
+const INVESTMENT_ROLES = ['성장', '배당', '현금흐름', '안정', '현금'];
+function localYmd(d) { if (d === undefined && QA_MODE)
+    return '2060-12-31'; const value = d === undefined ? new Date() : d, y = value.getFullYear(), m = String(value.getMonth() + 1).padStart(2, '0'), day = String(value.getDate()).padStart(2, '0'); return `${y}-${m}-${day}`; }
+const ymd = () => localYmd();
+const businessYear = () => Number(localYmd().slice(0, 4));
+const normalizeName = (s) => String(s || '').normalize('NFKC').replace(/\s+/g, '').replace(/[()（）·._-]/g, '').toUpperCase();
+const txDate = (t) => String(t.tradeDate || t.date || '');
+const txSequence = (t) => Number.isFinite(Number(t.sequence)) ? Number(t.sequence) : 0;
+const sortTxs = (txs) => [...txs].sort((a, b) => txDate(a).localeCompare(txDate(b)) || txSequence(a) - txSequence(b) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')) || String(a.id).localeCompare(String(b.id)));
+const stableTxKey = (t) => [(['buy', 'openingAllocation'].includes(t.type) ? 'buy' : t.type), txDate(t), txSequence(t), t.holdingId || '', Number(t.qty || 0).toFixed(8), Number(t.price || 0).toFixed(4), Number(t.amount || 0).toFixed(2), Number(t.fee || 0).toFixed(2), Number(t.tax || 0).toFixed(2), t.transferId || '', t.reversesTransactionId || ''].join('|');
+const won = (n) => nf.format(Math.round(Number(n) || 0)) + '원';
+function displayWon(input) { let n = Math.round(Number(input) || 0); const sign = n < 0 ? '-' : '', v = Math.abs(n); if (v < 100000000)
+    return sign + nf.format(v) + '원'; let jo = Math.floor(v / 1000000000000), rem = v % 1000000000000, eok = Math.floor(rem / 100000000), man = Math.round((rem % 100000000) / 10000); if (man >= 10000) {
+    man = 0;
+    eok++;
+} if (eok >= 10000) {
+    eok = 0;
+    jo++;
+} const parts = []; if (jo)
+    parts.push(`${nf.format(jo)}조`); if (eok)
+    parts.push(`${nf.format(eok)}억`); if (man)
+    parts.push(`${nf.format(man)}만원`); return sign + (parts.length ? parts.join(' ') : '0원'); }
+function amountClass(v) { const len = displayWon(v).replace(/\s/g, '').length; return len >= 16 ? 'amount-xxlong' : len >= 12 ? 'amount-xlong' : len >= 9 ? 'amount-long' : ''; }
+const num = (n) => nf.format(Math.round(Number(n) || 0));
+const signed = (n) => (Number(n) >= 0 ? '+' : '-') + won(Math.abs(Number(n) || 0));
+const pct = (n) => (Number(n) >= 0 ? '+' : '') + (Number(n) || 0).toFixed(1) + '%';
+const uid = (p) => (p + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7));
+const formatDateTime = (v) => { if (!v)
+    return '-'; const d = new Date(String(v)); return Number.isNaN(d.getTime()) ? String(v) : new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Seoul' }).format(d); };
+const transactionSnapshot = (t) => { const keys = ['id', 'type', 'tradeDate', 'date', 'settlementDate', 'sequence', 'createdAt', 'holdingId', 'qty', 'price', 'amount', 'fee', 'tax', 'note', 'transferId', 'reversesTransactionId', 'linkedBuyId', 'sourceDividendId', 'setQty', 'setAvg', 'cashDelta', 'ratio', 'status', 'cancelledAt']; const out = {}; for (const k of keys)
+    if (t?.[k] !== undefined)
+        out[k] = clone(t[k]); return out; };
+const transactionRevision = (before, after, action, reason) => ({ id: uid('revision'), action, changedAt: new Date().toISOString(), reason: String(reason || '').trim() || (action === 'cancel' ? '사용자 취소' : '사용자 수정'), before: transactionSnapshot(before), after: transactionSnapshot(after) });
+const revisionLabel = (r) => r.action === 'cancel' ? '취소 처리' : '수정 저장';
+const escapeHtml = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] || c));
+function findDataElement(root, attribute, value) { if (!root || !/^[a-z][a-z0-9-]*$/i.test(String(attribute || '')))
+    return null; return [...root.querySelectorAll(`[${attribute}]`)].find(element => element.getAttribute(attribute) === String(value ?? '')) || null; }
+let assetOsRuntimeApi = null;
+let runtimeErrors = 0;
+window.addEventListener('error', () => runtimeErrors++);
+window.addEventListener('unhandledrejection', () => runtimeErrors++);
+let scrollRestoreToken = 0;
+function restoreScrollY(y) { const target = Math.max(0, Number(y) || 0), token = ++scrollRestoreToken, apply = () => { if (token !== scrollRestoreToken)
+    return false; window.scrollTo(0, target); return true; }; apply(); requestAnimationFrame(() => { if (!apply())
+    return; requestAnimationFrame(apply); }); setTimeout(apply, 80); }
+function clearScrollGuard(guard) { if (!guard)
+    return; if (guard._releaseScrollHandler) {
+    window.removeEventListener('scroll', guard._releaseScrollHandler);
+    guard._releaseScrollHandler = null;
+} guard.style.height = '0px'; }
+function holdScrollGuard(guard, height, targetY) { if (!guard)
+    return; clearScrollGuard(guard); const h = Math.max(0, Number(height) || 0); if (!h)
+    return; guard.style.height = `${h}px`; const release = () => { const kept = guard.getBoundingClientRect().height, naturalMax = Math.max(0, document.documentElement.scrollHeight - kept - innerHeight); if (window.scrollY <= naturalMax + 1) {
+    clearScrollGuard(guard);
+    restoreScrollY(Math.min(Math.max(0, targetY), naturalMax));
+    return true;
+} return false; }; requestAnimationFrame(() => { if (release())
+    return; const onScroll = () => requestAnimationFrame(release); guard._releaseScrollHandler = onScroll; window.addEventListener('scroll', onScroll, { passive: true }); }); }
+function renderKeepingScroll() { const y = window.scrollY; render(); restoreScrollY(y); }
+function stableInlineToggle(anchor, panel, guard, expand, fill) { if (!anchor || !panel)
+    return; const y = window.scrollY, beforeH = panel.hidden ? 0 : panel.getBoundingClientRect().height, globalGuard = $('#globalScrollGuard'); clearScrollGuard(guard); clearScrollGuard(globalGuard); if (expand) {
+    if (typeof fill === 'function')
+        fill();
+    panel.hidden = false;
+    panel.classList.add('open');
+    restoreScrollY(y);
+    return;
+} panel.hidden = true; panel.classList.remove('open'); requestAnimationFrame(() => { holdScrollGuard(globalGuard || guard, beforeH, y); restoreScrollY(y); }); }
 ;
 /* asset-os source: policy-review.js */
 'use strict';
@@ -573,23 +611,22 @@ const brokerKisClient = (() => {
 ;
 /* asset-os source: data-defaults.js */
 'use strict';
-function buildIntegratedSeed(){return {mode:'live',label:'내 통합 거래기록',startedAt:'',accounts:[{id:'cash-main',kind:'cash',name:'현금·입출금'},{id:'isa-link',kind:'isa',name:'ISA 연결'},{id:'pension-link',kind:'pension',name:'연금저축 연결'},{id:'irp-link',kind:'irp',name:'IRP 연결'}],liabilities:[],ledger:[]}}
-const seed={
- settings:{theme:'light',accent:'blue',fab:false,haptics:true,selectedAccountId:'',txFilter:'all',compositionGroup:'',compositionFocus:'',dividendCompositionFocus:'',dividendPeriod:'month',dividendKey:'',policyTab:'isa',pensionGoalExpanded:false,pensionAssetScope:'all',pensionAssetLens:'assetClass',pensionAssetFocus:'',pensionTaxProfile:{},irpRiskClassifications:{},integratedMonth:'',integratedLedgerFilter:'all',monthlyLivingBudget:0,backupV04:{phoneEnabled:false,lastPhoneBackupAt:'',lastReleaseVersion:'',phonePermission:'unknown'}},
- policies:{
-  isa:{activePolicyId:'isa-policy-2026-official',versions:[{id:'isa-policy-2026-official',kind:'isa',name:'현행 ISA 2026',version:'2026.09',status:'current',sourceLabel:'금융회사 공식 ISA 안내·국가법령정보센터',sourceUrl:'https://www.law.go.kr/법령/조세특례제한법',verifiedAt:'2026-09-24',reviewAfter:'2027-03-23',userEdited:false,policySetId:'isa-policy-set-current',concurrentAccountLimit:1,coexistWithOtherIsa:false,annualLimitScope:'person',generalExemption:2000000,lowIncomeExemption:4000000,farmerExemption:4000000,taxRate:.099,annualLimit:20000000,totalContributionLimit:100000000,carryoverEnabled:true,withdrawalRestoresLimit:false,mandatoryYears:3,transferWindowDays:60,transferDeductionRate:.10,transferDeductionMax:3000000,taxCreditRate:.132,effectiveFrom:'2026-01-01'}]},
-  pension:{activePolicyId:'pension-policy-2026-official',versions:[{id:'pension-policy-2026-official',kind:'pension',name:'연금저축 제도 2026',version:'2026.08',status:'current',sourceLabel:'국가법령정보센터·국세청',sourceUrl:'https://www.law.go.kr/법령/소득세법',verifiedAt:'2026-08-18',reviewAfter:'2027-02-14',userEdited:false,annualContributionLimit:18000000,annualTaxCreditLimit:6000000,combinedTaxCreditLimit:9000000,taxCreditRate:.132,lowIncomeTaxCreditRate:.165,effectiveFrom:'2026-01-01'}]},
-  irp:{activePolicyId:'irp-policy-2026-official',versions:[{id:'irp-policy-2026-official',kind:'irp',name:'IRP 제도 2026',version:'2026.07',status:'current',sourceLabel:'국가법령정보센터·국세청',sourceUrl:'https://www.law.go.kr/법령/근로자퇴직급여보장법',verifiedAt:'2026-07-30',reviewAfter:'2027-01-26',userEdited:false,combinedTaxCreditLimit:9000000,taxCreditRate:.132,lowIncomeTaxCreditRate:.165,riskyAssetLimit:.70,effectiveFrom:'2026-01-01'}]}
- },
- accounts:[],
- pension:{
-  goal:{pensionSavings:0,irp:0},
-  accounts:[],
-
-  contributions:[],transactions:[],holdings:[],incomes:[],assetSnapshots:[],
-  projection:{birthYear:0,retirementAge:65,yearsToRetire:0,monthlyContribution:0,annualReturn:.06,withdrawalRate:.03,inflationRate:.02}
- },
- financialProducts:{items:[],events:[]},financeSchedules:{items:[]},insurance:{policies:[]},sourceArchives:{records:[]},moduleVerification:{isa:false,pension:false,irp:false},brokerKis:brokerKisEmptyStore(),integrated:buildIntegratedSeed()
+function buildIntegratedSeed() { return { mode: 'live', label: '내 통합 거래기록', startedAt: '', accounts: [{ id: 'cash-main', kind: 'cash', name: '현금·입출금' }, { id: 'isa-link', kind: 'isa', name: 'ISA 연결' }, { id: 'pension-link', kind: 'pension', name: '연금저축 연결' }, { id: 'irp-link', kind: 'irp', name: 'IRP 연결' }], liabilities: [], ledger: [] }; }
+const seed = {
+    settings: { theme: 'light', accent: 'blue', fab: false, haptics: true, selectedAccountId: '', txFilter: 'all', compositionGroup: '', compositionFocus: '', dividendCompositionFocus: '', dividendPeriod: 'month', dividendKey: '', policyTab: 'isa', pensionGoalExpanded: false, pensionAssetScope: 'all', pensionAssetLens: 'assetClass', pensionAssetFocus: '', pensionTaxProfile: {}, irpRiskClassifications: {}, integratedMonth: '', integratedLedgerFilter: 'all', monthlyLivingBudget: 0, backupV04: { phoneEnabled: false, lastPhoneBackupAt: '', lastReleaseVersion: '', phonePermission: 'unknown' } },
+    policies: {
+        isa: { activePolicyId: 'isa-policy-2026-official', versions: [{ id: 'isa-policy-2026-official', kind: 'isa', name: '현행 ISA 2026', version: '2026.09', status: 'current', sourceLabel: '금융회사 공식 ISA 안내·국가법령정보센터', sourceUrl: 'https://www.law.go.kr/법령/조세특례제한법', verifiedAt: '2026-09-24', reviewAfter: '2027-03-23', userEdited: false, policySetId: 'isa-policy-set-current', concurrentAccountLimit: 1, coexistWithOtherIsa: false, annualLimitScope: 'person', generalExemption: 2000000, lowIncomeExemption: 4000000, farmerExemption: 4000000, taxRate: .099, annualLimit: 20000000, totalContributionLimit: 100000000, carryoverEnabled: true, withdrawalRestoresLimit: false, mandatoryYears: 3, transferWindowDays: 60, transferDeductionRate: .10, transferDeductionMax: 3000000, taxCreditRate: .132, effectiveFrom: '2026-01-01' }] },
+        pension: { activePolicyId: 'pension-policy-2026-official', versions: [{ id: 'pension-policy-2026-official', kind: 'pension', name: '연금저축 제도 2026', version: '2026.08', status: 'current', sourceLabel: '국가법령정보센터·국세청', sourceUrl: 'https://www.law.go.kr/법령/소득세법', verifiedAt: '2026-08-18', reviewAfter: '2027-02-14', userEdited: false, annualContributionLimit: 18000000, annualTaxCreditLimit: 6000000, combinedTaxCreditLimit: 9000000, taxCreditRate: .132, lowIncomeTaxCreditRate: .165, effectiveFrom: '2026-01-01' }] },
+        irp: { activePolicyId: 'irp-policy-2026-official', versions: [{ id: 'irp-policy-2026-official', kind: 'irp', name: 'IRP 제도 2026', version: '2026.07', status: 'current', sourceLabel: '국가법령정보센터·국세청', sourceUrl: 'https://www.law.go.kr/법령/근로자퇴직급여보장법', verifiedAt: '2026-07-30', reviewAfter: '2027-01-26', userEdited: false, combinedTaxCreditLimit: 9000000, taxCreditRate: .132, lowIncomeTaxCreditRate: .165, riskyAssetLimit: .70, effectiveFrom: '2026-01-01' }] }
+    },
+    accounts: [],
+    pension: {
+        goal: { pensionSavings: 0, irp: 0 },
+        accounts: [],
+        contributions: [], transactions: [], holdings: [], incomes: [], assetSnapshots: [],
+        projection: { birthYear: 0, retirementAge: 65, yearsToRetire: 0, monthlyContribution: 0, annualReturn: .06, withdrawalRate: .03, inflationRate: .02 }
+    },
+    financialProducts: { items: [], events: [] }, financeSchedules: { items: [] }, insurance: { policies: [] }, sourceArchives: { records: [] }, moduleVerification: { isa: false, pension: false, irp: false }, brokerKis: brokerKisEmptyStore(), integrated: buildIntegratedSeed()
 };
 ;
 /* asset-os source: src/domain/integrated-replay.js */
@@ -1075,7 +1112,7 @@ function financialGrowthBreakdown(startDate, endDate) {
     let externalNet = 0, adjustment = 0;
     for (const transaction of rows) {
         const amount = Number(transaction.amount) || 0;
-        if (['externalIncome', 'externalAssetIn', 'externalDebtPrincipal'].includes(transaction.type) || (transaction.type === 'refund' && transaction.toAccountId))
+        if ((['externalIncome', 'externalAssetIn', 'externalDebtPrincipal'].includes(transaction.type) && !transaction.meta?.financeInterest) || (transaction.type === 'refund' && transaction.toAccountId))
             externalNet += amount;
         else if (['expense', 'externalWithdrawal', 'externalAssetOut', 'debtInterest'].includes(transaction.type))
             externalNet -= amount;
@@ -1164,42 +1201,138 @@ function integratedSpendingAnalysis(month = integratedLatestMonth()) {
 }
 ;
 /* asset-os source: integrated-schedule-engine.js */
+// @ts-nocheck
 'use strict';
-function normalizeFinanceSchedules(input){const src=input&&typeof input==='object'?input:{items:[]},items=Array.isArray(src.items)?src.items:[];return{items:items.map((x,i)=>({id:String(x.id||`schedule-${i+1}`),name:String(x.name||`일정 ${i+1}`),kind:['income','investment','saving','loan','insurance','expense'].includes(x.kind)?x.kind:'expense',amount:Math.max(0,Number(x.amount)||0),amountMode:x.amountMode==='estimate'?'estimate':'fixed',day:(x.day===0||x.day==='0')?0:Math.min(31,Math.max(1,Number(x.day)||DEFAULT_FINANCE_DAY)),recurrence:x.recurrence==='monthly'?'monthly':'monthly',startDate:String(x.startDate||''),endDate:String(x.endDate||''),targetKind:String(x.targetKind||''),targetAccountId:String(x.targetAccountId||''),targetPensionAccountId:String(x.targetPensionAccountId||''),targetIsaAccountId:String(x.targetIsaAccountId||''),productId:String(x.productId||''),liabilityId:String(x.liabilityId||''),active:x.active!==false,note:String(x.note||''),source:String(x.source||'user'),needsDate:!!x.needsDate,attention:String(x.attention||'')}))}}
-function financeSchedules(){return state.financeSchedules?.items||[]}
-function clampEndedProductSchedules(target=state){const products=target.financialProducts?.items||[],schedules=target.financeSchedules?.items||[];for(const p of products){if(p.status==='active')continue;const end=String(p.endedAt||p.settlement?.date||p.maturityDate||'');if(!end)continue;for(const s of schedules){if(String(s.productId||'')!==String(p.id))continue;if(!s.endDate||String(s.endDate)>end)s.endDate=end}}return target}
-function closeFinanceProductSchedules(productId,date){const end=String(date||localYmd());for(const s of financeSchedules()){if(String(s.productId||'')!==String(productId))continue;if(!s.endDate||String(s.endDate)>end)s.endDate=end}}
-function scheduleMonthDays(month){const [y,m]=String(month).split('-').map(Number),days=new Date(y,m,0).getDate();return{y,m,days}}
-function scheduleDateForMonth(s,month){if(!s.active||!s.day)return'';const {y,m,days}=scheduleMonthDays(month),day=Math.min(s.day,days),date=`${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`;if(s.startDate&&date<s.startDate)return'';if(s.endDate&&date>s.endDate)return'';return date}
-function scheduleFallbackMatches(s,date,t){if(!s||String(t.date)!==String(date)||(Number(t.amount)||0)!==(Number(s.amount)||0))return false;const account=integratedStore().accounts.find(a=>a.id===t.toAccountId),sameName=normalizeName(t.category)===normalizeName(s.name);if(s.kind==='income')return t.type==='externalIncome'&&sameName;if(['investment','saving'].includes(s.kind)){if(!['internalTransfer','externalAssetIn'].includes(t.type))return false;if(s.productId)return account?.productId===s.productId;const targetKind=s.targetKind||integratedStore().accounts.find(a=>a.id===scheduleTargetAccount(s))?.kind||'';return account?.kind===targetKind&&(sameName||['isa','pension','irp'].includes(targetKind))}if(s.kind==='loan')return ['debtInterest','debtInterestExternal','debtPrincipal','externalDebtPrincipal'].includes(t.type)&&(String(t.liabilityId||'')===String(s.liabilityId||'')||String(t.productId||'')===String(s.productId||'')||sameName);if(['insurance','expense'].includes(s.kind))return ['expense','externalExpense'].includes(t.type)&&sameName;return false}
-function scheduleCompletionTx(scheduleId,date,sourceRows=null){const rows=sourceRows||integratedOperationalLedger(),explicit=rows.find(t=>t.meta?.scheduleId===scheduleId&&t.meta?.scheduleDate===date);if(explicit)return explicit;const schedule=financeSchedules().find(s=>s.id===scheduleId);return rows.find(t=>scheduleFallbackMatches(schedule,date,t))||null}
-function scheduleOccurrenceStatus(s,date,knownTx){const tx=arguments.length>=3?knownTx:scheduleCompletionTx(s.id,date);if(tx)return'done';const today=localYmd();if(date<today)return'overdue';if(date===today)return'today';const diff=Math.round((new Date(date+'T00:00:00')-new Date(today+'T00:00:00'))/86400000);return diff<=3?'soon':'planned'}
-function scheduleStatusLabel(st){return({done:'완료',overdue:'미완료',today:'오늘',soon:'임박',planned:'예정'})[st]||'예정'}
-function scheduleOccurrences(month=integratedSelectedMonth()){const rows=integratedOperationalLedger();return financeSchedules().map(s=>{const date=scheduleDateForMonth(s.active?s:{...s,active:true},month);if(!date)return null;const tx=scheduleCompletionTx(s.id,date,rows);if(!s.active&&!tx)return null;return{schedule:s,date,status:scheduleOccurrenceStatus(s,date,tx),tx}}).filter(o=>o&&(o.schedule.kind!=='income'||o.status==='done')).sort((a,b)=>a.date.localeCompare(b.date)||String(a.schedule.name).localeCompare(String(b.schedule.name),'ko'))}
-function scheduleUrgentOccurrences(){const today=localYmd(),months=new Set([today.slice(0,7)]);const d=new Date(today+'T00:00:00');d.setDate(d.getDate()+4);months.add(localYmd(d).slice(0,7));const dated=[...months].flatMap(m=>scheduleOccurrences(m)).filter(x=>x.schedule.kind!=='income'&&['overdue','today','soon'].includes(x.status)),undated=financeSchedules().filter(x=>x.active&&x.needsDate&&x.attention==='overdue').map(s=>({schedule:s,date:'날짜 미설정',status:'overdue',tx:null,undated:true}));return [...undated,...dated].sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.schedule.name).localeCompare(String(b.schedule.name),'ko'))}
-function scheduleTargetAccount(s){if(s.targetAccountId)return s.targetAccountId;if(s.targetKind==='pension')return'pension-link';if(s.targetKind==='irp')return'irp-link';if(s.targetKind==='isa')return'isa-link';if(s.productId)return financeProductAccountId(s.productId);return''}
-function pensionAccountActiveOnDate(a,date){if(!a)return false;const d=String(date||localYmd()),start=String(a.openedAt||''),end=String(a.closedAt||'');if(start&&d<start)return false;if(end&&d>end)return false;return true}
-function pensionAccountsForKind(kind,date=''){return pensionStore().accounts.filter(a=>a.kind===kind&&(!date?pensionAccount(a.id)?.status==='active':pensionAccountActiveOnDate(a,date)))}
-function schedulePensionKind(sc){const linkedKind=integratedStore().accounts.find(a=>a.id===sc?.targetAccountId)?.kind;return ['pension','irp'].includes(sc?.targetKind)?sc.targetKind:(['pension','irp'].includes(linkedKind)?linkedKind:'')}
-function resolveSchedulePensionAccount(sc,explicit='',date=''){const kind=schedulePensionKind(sc);if(!kind)return'';const candidates=pensionAccountsForKind(kind,date||'');const requested=String(explicit||sc?.targetPensionAccountId||'');if(requested&&candidates.some(a=>a.id===requested))return requested;return candidates.length===1?candidates[0].id:''}
-function isaAccountsForDate(date=''){const d=String(date||localYmd()),today=localYmd();return state.accounts.filter(a=>{const open=String(a.openedAt||a.baselineDate||''),ends=[String(a.closedAt||''),String(a.maturityAt||'')].filter(Boolean).sort(),end=ends[0]||'';if(open&&d<open)return false;if(end&&d>end)return false;if(d>=today&&a.status!=='active')return false;return true})}
-function resolveScheduleIsaAccount(sc,explicit='',date=''){const candidates=isaAccountsForDate(date||''),requested=String(explicit||sc?.targetIsaAccountId||'');if(requested&&candidates.some(a=>a.id===requested))return requested;return candidates.length===1?candidates[0].id:''}
-function completeScheduleOccurrence(scheduleId,date,amountOverride=0,targetPensionAccountId='',targetIsaAccountId='',loanPrincipalOverride=0,loanInterestOverride=0){
- const request=validateScheduleCompletionRequest(scheduleId,date);
- if(!request.ok){toast(request.error);return false}
- const draft=request.schedule.kind==='loan'?calculateLoanScheduleCompletion(request.schedule,date,loanPrincipalOverride,loanInterestOverride):calculateStandardScheduleCompletion(request.schedule,date,amountOverride,targetPensionAccountId,targetIsaAccountId);
- if(!draft.ok){toast(draft.error);return false}
- const validationError=validateScheduleCompletionDraft(draft);
- if(validationError){toast(validationError);return false}
- if(!commitScheduleCompletion(request.schedule,date,draft))return false;
- renderScheduleCompletion(date,draft.successMessage);
- return true
+function normalizeFinanceSchedules(input) { const src = input && typeof input === 'object' ? input : { items: [] }, items = Array.isArray(src.items) ? src.items : []; return { items: items.map((x, i) => ({ id: String(x.id || `schedule-${i + 1}`), name: String(x.name || `일정 ${i + 1}`), kind: ['income', 'investment', 'saving', 'loan', 'insurance', 'expense'].includes(x.kind) ? x.kind : 'expense', amount: Math.max(0, Number(x.amount) || 0), amountMode: x.amountMode === 'estimate' ? 'estimate' : 'fixed', day: (x.day === 0 || x.day === '0') ? 0 : Math.min(31, Math.max(1, Number(x.day) || DEFAULT_FINANCE_DAY)), recurrence: x.recurrence === 'monthly' ? 'monthly' : 'monthly', startDate: String(x.startDate || ''), endDate: String(x.endDate || ''), targetKind: String(x.targetKind || ''), targetAccountId: String(x.targetAccountId || ''), targetPensionAccountId: String(x.targetPensionAccountId || ''), targetIsaAccountId: String(x.targetIsaAccountId || ''), productId: String(x.productId || ''), liabilityId: String(x.liabilityId || ''), active: x.active !== false, note: String(x.note || ''), source: String(x.source || 'user'), needsDate: !!x.needsDate, attention: String(x.attention || '') })) }; }
+function financeSchedules() { return state.financeSchedules?.items || []; }
+function clampEndedProductSchedules(target = state) { const products = target.financialProducts?.items || [], schedules = target.financeSchedules?.items || []; for (const p of products) {
+    if (p.status === 'active')
+        continue;
+    const end = String(p.endedAt || p.settlement?.date || p.maturityDate || '');
+    if (!end)
+        continue;
+    for (const s of schedules) {
+        if (String(s.productId || '') !== String(p.id))
+            continue;
+        if (!s.endDate || String(s.endDate) > end)
+            s.endDate = end;
+    }
+} return target; }
+function closeFinanceProductSchedules(productId, date) { const end = String(date || localYmd()); for (const s of financeSchedules()) {
+    if (String(s.productId || '') !== String(productId))
+        continue;
+    if (!s.endDate || String(s.endDate) > end)
+        s.endDate = end;
+} }
+function scheduleMonthDays(month) { const [y, m] = String(month).split('-').map(Number), days = new Date(y, m, 0).getDate(); return { y, m, days }; }
+function scheduleDateForMonth(s, month) { if (!s.active || !s.day)
+    return ''; const { y, m, days } = scheduleMonthDays(month), day = Math.min(s.day, days), date = `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`; if (s.startDate && date < s.startDate)
+    return ''; if (s.endDate && date > s.endDate)
+    return ''; return date; }
+function scheduleFallbackMatches(s, date, t) { if (!s || String(t.date) !== String(date) || (Number(t.amount) || 0) !== (Number(s.amount) || 0))
+    return false; const account = integratedStore().accounts.find(a => a.id === t.toAccountId), sameName = normalizeName(t.category) === normalizeName(s.name); if (s.kind === 'income')
+    return t.type === 'externalIncome' && sameName; if (['investment', 'saving'].includes(s.kind)) {
+    if (!['internalTransfer', 'externalAssetIn'].includes(t.type))
+        return false;
+    if (s.productId)
+        return account?.productId === s.productId;
+    const targetKind = s.targetKind || integratedStore().accounts.find(a => a.id === scheduleTargetAccount(s))?.kind || '';
+    return account?.kind === targetKind && (sameName || ['isa', 'pension', 'irp'].includes(targetKind));
+} if (s.kind === 'loan')
+    return ['debtInterest', 'debtInterestExternal', 'debtPrincipal', 'externalDebtPrincipal'].includes(t.type) && (String(t.liabilityId || '') === String(s.liabilityId || '') || String(t.productId || '') === String(s.productId || '') || sameName); if (['insurance', 'expense'].includes(s.kind))
+    return ['expense', 'externalExpense'].includes(t.type) && sameName; return false; }
+function scheduleCompletionTx(scheduleId, date, sourceRows = null) { const rows = sourceRows || integratedOperationalLedger(), explicit = rows.find(t => t.meta?.scheduleId === scheduleId && t.meta?.scheduleDate === date); if (explicit)
+    return explicit; const schedule = financeSchedules().find(s => s.id === scheduleId); return rows.find(t => scheduleFallbackMatches(schedule, date, t)) || null; }
+function scheduleOccurrenceStatus(s, date, knownTx) { const tx = arguments.length >= 3 ? knownTx : scheduleCompletionTx(s.id, date); if (tx)
+    return 'done'; const today = localYmd(); if (date < today)
+    return 'overdue'; if (date === today)
+    return 'today'; const diff = Math.round((new Date(date + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000); return diff <= 3 ? 'soon' : 'planned'; }
+function scheduleStatusLabel(st) { return ({ done: '완료', overdue: '미완료', today: '오늘', soon: '임박', planned: '예정' })[st] || '예정'; }
+function scheduleOccurrences(month = integratedSelectedMonth()) { const rows = integratedOperationalLedger(); return financeSchedules().map(s => { const date = scheduleDateForMonth(s.active ? s : { ...s, active: true }, month); if (!date)
+    return null; const tx = scheduleCompletionTx(s.id, date, rows); if (!s.active && !tx)
+    return null; return { schedule: s, date, status: scheduleOccurrenceStatus(s, date, tx), tx }; }).filter(o => o && (o.schedule.kind !== 'income' || o.status === 'done')).sort((a, b) => a.date.localeCompare(b.date) || String(a.schedule.name).localeCompare(String(b.schedule.name), 'ko')); }
+function scheduleUrgentOccurrences() { const today = localYmd(), months = new Set([today.slice(0, 7)]); const d = new Date(today + 'T00:00:00'); d.setDate(d.getDate() + 4); months.add(localYmd(d).slice(0, 7)); const dated = [...months].flatMap(m => scheduleOccurrences(m)).filter(x => x.schedule.kind !== 'income' && ['overdue', 'today', 'soon'].includes(x.status)), undated = financeSchedules().filter(x => x.active && x.needsDate && x.attention === 'overdue').map(s => ({ schedule: s, date: '날짜 미설정', status: 'overdue', tx: null, undated: true })); return [...undated, ...dated].sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.schedule.name).localeCompare(String(b.schedule.name), 'ko')); }
+function scheduleTargetAccount(s) { if (s.targetAccountId)
+    return s.targetAccountId; if (s.targetKind === 'pension')
+    return 'pension-link'; if (s.targetKind === 'irp')
+    return 'irp-link'; if (s.targetKind === 'isa')
+    return 'isa-link'; if (s.productId)
+    return financeProductAccountId(s.productId); return ''; }
+function pensionAccountActiveOnDate(a, date) { if (!a)
+    return false; const d = String(date || localYmd()), start = String(a.openedAt || ''), end = String(a.closedAt || ''); if (start && d < start)
+    return false; if (end && d > end)
+    return false; return true; }
+function pensionAccountsForKind(kind, date = '') { return pensionStore().accounts.filter(a => a.kind === kind && (!date ? pensionAccount(a.id)?.status === 'active' : pensionAccountActiveOnDate(a, date))); }
+function schedulePensionKind(sc) { const linkedKind = integratedStore().accounts.find(a => a.id === sc?.targetAccountId)?.kind; return ['pension', 'irp'].includes(sc?.targetKind) ? sc.targetKind : (['pension', 'irp'].includes(linkedKind) ? linkedKind : ''); }
+function resolveSchedulePensionAccount(sc, explicit = '', date = '') { const kind = schedulePensionKind(sc); if (!kind)
+    return ''; const candidates = pensionAccountsForKind(kind, date || ''); const requested = String(explicit || sc?.targetPensionAccountId || ''); if (requested && candidates.some(a => a.id === requested))
+    return requested; return candidates.length === 1 ? candidates[0].id : ''; }
+function isaAccountsForDate(date = '') { const d = String(date || localYmd()), today = localYmd(); return state.accounts.filter(a => { const open = String(a.openedAt || a.baselineDate || ''), ends = [String(a.closedAt || ''), String(a.maturityAt || '')].filter(Boolean).sort(), end = ends[0] || ''; if (open && d < open)
+    return false; if (end && d > end)
+    return false; if (d >= today && a.status !== 'active')
+    return false; return true; }); }
+function resolveScheduleIsaAccount(sc, explicit = '', date = '') { const candidates = isaAccountsForDate(date || ''), requested = String(explicit || sc?.targetIsaAccountId || ''); if (requested && candidates.some(a => a.id === requested))
+    return requested; return candidates.length === 1 ? candidates[0].id : ''; }
+function completeScheduleOccurrence(scheduleId, date, amountOverride = 0, targetPensionAccountId = '', targetIsaAccountId = '', loanPrincipalOverride = 0, loanInterestOverride = 0) {
+    const request = validateScheduleCompletionRequest(scheduleId, date);
+    if (!request.ok) {
+        toast(request.error);
+        return false;
+    }
+    const draft = request.schedule.kind === 'loan' ? calculateLoanScheduleCompletion(request.schedule, date, loanPrincipalOverride, loanInterestOverride) : calculateStandardScheduleCompletion(request.schedule, date, amountOverride, targetPensionAccountId, targetIsaAccountId);
+    if (!draft.ok) {
+        toast(draft.error);
+        return false;
+    }
+    const validationError = validateScheduleCompletionDraft(draft);
+    if (validationError) {
+        toast(validationError);
+        return false;
+    }
+    if (!commitScheduleCompletion(request.schedule, date, draft))
+        return false;
+    renderScheduleCompletion(date, draft.successMessage);
+    return true;
 }
-function centralPensionContributionRows(year=''){const rows=[];for(const t of integratedOperationalLedger()){if(t.meta?.analysisOnly)continue;if(!['internalTransfer','externalAssetIn'].includes(t.type))continue;const kind=integratedStore().accounts.find(a=>a.id===t.toAccountId)?.kind;if(!['pension','irp'].includes(kind))continue;if(year&&!String(t.date).startsWith(String(year)))continue;const explicit=String(t.meta?.pensionAccountId||t.meta?.targetPensionAccountId||''),dated=pensionStore().accounts.filter(a=>a.kind===kind&&pensionAccountActiveOnDate(a,t.date)),resolved=explicit&&pensionStore().accounts.some(a=>a.id===explicit&&a.kind===kind)?explicit:(dated.length===1?dated[0].id:'');rows.push({id:`central-${t.id}`,accountId:resolved,kind,type:t.meta?.isaTransfer?'isaTransfer':'contribution',date:String(t.date),amount:Number(t.amount)||0,sourceTxId:t.id,source:'integrated',unresolved:!resolved})}return rows}
-function centralIsaContributionRows(year=''){const rows=[];for(const t of integratedOperationalLedger()){if(t.meta?.analysisOnly)continue;if(!['internalTransfer','externalAssetIn'].includes(t.type))continue;if(integratedStore().accounts.find(a=>a.id===t.toAccountId)?.kind!=='isa')continue;if(year&&!String(t.date).startsWith(String(year)))continue;const dated=isaAccountsForDate(t.date),explicit=String(t.meta?.targetIsaAccountId||''),resolved=explicit&&dated.some(a=>a.id===explicit)?explicit:(dated.length===1?dated[0].id:'');rows.push({...t,accountId:resolved,unresolved:!resolved})}return rows}
-function centralIsaReplayRows(account,includeArchived=false){if(!account||(!includeArchived&&!isCurrentAccount(account)))return[];const localCounts=new Map();for(const t of account.transactions||[]){if(t.status==='cancelled'||!['deposit','internalTransferIn'].includes(t.type))continue;const key=`${txDate(t)}|${Number(t.amount)||0}`;localCounts.set(key,(localCounts.get(key)||0)+1)}const out=[];for(const t of centralIsaContributionRows().filter(t=>t.accountId===account.id&&!t.unresolved)){const key=`${String(t.date)}|${Number(t.amount)||0}`,remaining=localCounts.get(key)||0;if(remaining){localCounts.set(key,remaining-1);continue}out.push({id:`virtual-${t.id}`,type:'internalTransferIn',date:String(t.date),amount:Number(t.amount)||0,note:t.note||'통합 납입',status:'posted',sourceTxId:t.id,meta:{centralContribution:true,targetIsaAccountId:account.id}})}return out}
-
-/* v1.9.19 MODULE: financial product rules. Product terms are source-of-truth; balances come from transactions. */
+function centralPensionContributionRows(year = '') { const rows = []; for (const t of integratedOperationalLedger()) {
+    if (t.meta?.analysisOnly)
+        continue;
+    if (!['internalTransfer', 'externalAssetIn'].includes(t.type))
+        continue;
+    const kind = integratedStore().accounts.find(a => a.id === t.toAccountId)?.kind;
+    if (!['pension', 'irp'].includes(kind))
+        continue;
+    if (year && !String(t.date).startsWith(String(year)))
+        continue;
+    const explicit = String(t.meta?.pensionAccountId || t.meta?.targetPensionAccountId || ''), dated = pensionStore().accounts.filter(a => a.kind === kind && pensionAccountActiveOnDate(a, t.date)), resolved = explicit && pensionStore().accounts.some(a => a.id === explicit && a.kind === kind) ? explicit : (dated.length === 1 ? dated[0].id : '');
+    rows.push({ id: `central-${t.id}`, accountId: resolved, kind, type: t.meta?.isaTransfer ? 'isaTransfer' : 'contribution', date: String(t.date), amount: Number(t.amount) || 0, sourceTxId: t.id, source: 'integrated', unresolved: !resolved });
+} return rows; }
+function centralIsaContributionRows(year = '') { const rows = []; for (const t of integratedOperationalLedger()) {
+    if (t.meta?.analysisOnly)
+        continue;
+    if (!['internalTransfer', 'externalAssetIn'].includes(t.type))
+        continue;
+    if (integratedStore().accounts.find(a => a.id === t.toAccountId)?.kind !== 'isa')
+        continue;
+    if (year && !String(t.date).startsWith(String(year)))
+        continue;
+    const dated = isaAccountsForDate(t.date), explicit = String(t.meta?.targetIsaAccountId || ''), resolved = explicit && dated.some(a => a.id === explicit) ? explicit : (dated.length === 1 ? dated[0].id : '');
+    rows.push({ ...t, accountId: resolved, unresolved: !resolved });
+} return rows; }
+function centralIsaReplayRows(account, includeArchived = false) { if (!account || (!includeArchived && !isCurrentAccount(account)))
+    return []; const localCounts = new Map(); for (const t of account.transactions || []) {
+    if (t.status === 'cancelled' || !['deposit', 'internalTransferIn'].includes(t.type))
+        continue;
+    const key = `${txDate(t)}|${Number(t.amount) || 0}`;
+    localCounts.set(key, (localCounts.get(key) || 0) + 1);
+} const out = []; for (const t of centralIsaContributionRows().filter(t => t.accountId === account.id && !t.unresolved)) {
+    const key = `${String(t.date)}|${Number(t.amount) || 0}`, remaining = localCounts.get(key) || 0;
+    if (remaining) {
+        localCounts.set(key, remaining - 1);
+        continue;
+    }
+    out.push({ id: `virtual-${t.id}`, type: 'internalTransferIn', date: String(t.date), amount: Number(t.amount) || 0, note: t.note || '통합 납입', status: 'posted', sourceTxId: t.id, meta: { centralContribution: true, targetIsaAccountId: account.id } });
+} return out; }
 ;
 /* asset-os source: src/app/schedule-completion.js */
 'use strict';
@@ -1909,6 +2042,19 @@ function validateBackupPayload(payload) { if (!payload || payload.format !== BAC
     next.moduleVerification = { isa: false, pension: false, irp: false }; return next; }
 function downloadBytes(bytes, name, type = 'application/zip') { const blob = new Blob([bytes], { type }), url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1200); }
 function backupFileName() { return typeof assetManagedBackupName === 'function' ? assetManagedBackupName() : `AssetOS_${localYmd().replaceAll('-', '').slice(2)}_${APP_VERSION}.zip`; }
+function backupHealth(now = new Date()) {
+    const managed = typeof assetBackupSettings === 'function' ? assetBackupSettings() : { phoneEnabled: false, lastPhoneBackupAt: '', phonePermission: 'unknown' }, enabled = !!managed.phoneEnabled, last = String(managed.lastPhoneBackupAt || ''), lastTime = Date.parse(last);
+    if (!enabled)
+        return { level: 'setup', label: '백업 폴더 미지정', detail: '휴대폰 백업 폴더를 지정하면 저장할 때 자동으로 사본을 남깁니다.', lastBackupAt: '' };
+    if (!Number.isFinite(lastTime))
+        return { level: 'danger', label: '자동백업 확인 필요', detail: '폴더는 연결됐지만 완료된 자동백업 기록이 없습니다.', lastBackupAt: '' };
+    const ageDays = Math.max(0, Math.floor((now.getTime() - lastTime) / 86400000));
+    if (ageDays <= 2)
+        return { level: 'good', label: '백업 정상', detail: `최근 ${formatDateTime(last)}`, lastBackupAt: last, ageDays };
+    if (ageDays <= 7)
+        return { level: 'warn', label: '백업 다시 확인', detail: `마지막 자동백업 ${ageDays}일 전`, lastBackupAt: last, ageDays };
+    return { level: 'danger', label: '백업 오래됨', detail: `마지막 자동백업 ${ageDays}일 전 · 지금 실행해 주세요.`, lastBackupAt: last, ageDays };
+}
 async function saveZipBackup() {
     const name = backupFileName();
     try {
@@ -1985,10 +2131,10 @@ catch (e) {
     showNotice('복원 실패', backupErrorMessage(e));
 } }); return true; }
 function openBackupHub() {
-    const pickerWindow = window, size = new Blob([JSON.stringify(backupPayload())]).size, securePicker = typeof pickerWindow.showSaveFilePicker === 'function' && window.isSecureContext, folderApi = typeof pickerWindow.showDirectoryPicker === 'function' && window.isSecureContext, managed = typeof assetBackupSettings === 'function' ? assetBackupSettings() : { phoneEnabled: false, lastPhoneBackupAt: '', phonePermission: 'unknown' };
+    const pickerWindow = window, size = new Blob([JSON.stringify(backupPayload())]).size, securePicker = typeof pickerWindow.showSaveFilePicker === 'function' && window.isSecureContext, folderApi = typeof pickerWindow.showDirectoryPicker === 'function' && window.isSecureContext, managed = typeof assetBackupSettings === 'function' ? assetBackupSettings() : { phoneEnabled: false, lastPhoneBackupAt: '', phonePermission: 'unknown' }, health = backupHealth();
     $('#sheetEyebrow').textContent = '데이터 보호';
     $('#sheetTitle').textContent = '백업·복원';
-    $('#sheetBody').innerHTML = `<div class=backup-grid><button class="backup-action primary" data-phone-folder><strong>휴대폰 백업 폴더 ${managed.phoneEnabled ? '변경' : '지정'}</strong><small>${folderApi ? '한 번 지정하면 같은 폴더에 자동 저장합니다.' : '이 브라우저는 고정 폴더를 지원하지 않아 일반 ZIP 저장을 사용합니다.'}</small></button><button class=backup-action data-phone-now ${managed.phoneEnabled ? '' : 'disabled'}><strong>휴대폰 자동백업 지금 실행</strong><small>${managed.lastPhoneBackupAt ? `마지막 ${formatDateTime(managed.lastPhoneBackupAt)}` : '아직 자동백업 없음'} · 같은 날짜 파일은 교체</small></button><button class=backup-action data-backup-zip><strong>ZIP 백업 · 저장 위치 선택</strong><small>${securePicker ? '저장 위치를 직접 선택합니다.' : 'Downloads에 저장합니다.'}</small></button><button class=backup-action data-backup-drive><strong>Google Drive로 보내기</strong><small>공유 가능한 백업 TXT를 Drive로 보냅니다.</small></button><button class=backup-action data-backup-keep><strong>영구보관 ZIP</strong><small>자동 정리에서 제외되는 _keep 파일을 만듭니다.</small></button><button class=backup-action data-backup-restore><strong>ZIP / JSON / TXT 복원</strong><small>schema 4~${SCHEMA_VERSION} 파일을 검증하고 정상일 때만 교체합니다.</small></button></div><div class=backup-status-note>현재 원본 약 ${Math.max(1, Math.round(size / 1024))}KB · schema ${SCHEMA_VERSION}<br>백업 파일은 최근 30일 일별·이전 월 1개를 보관하고, _pre / _keep은 삭제하지 않습니다.<br>앱 잔고는 최근 6개월 일별·이전 월별로 보존합니다.</div>`;
+    $('#sheetBody').innerHTML = `<div class="backup-health ${health.level}"><span>${health.level === 'good' ? '✓' : health.level === 'setup' ? '○' : '!'}</span><div><strong>${health.label}</strong><small>${health.detail}</small></div></div><div class=backup-grid><button class="backup-action primary" data-phone-folder><strong>휴대폰 백업 폴더 ${managed.phoneEnabled ? '변경' : '지정'}</strong><small>${folderApi ? '한 번 지정하면 같은 폴더에 자동 저장합니다.' : '이 브라우저는 고정 폴더를 지원하지 않아 일반 ZIP 저장을 사용합니다.'}</small></button><button class=backup-action data-phone-now ${managed.phoneEnabled ? '' : 'disabled'}><strong>휴대폰 자동백업 지금 실행</strong><small>${managed.lastPhoneBackupAt ? `마지막 ${formatDateTime(managed.lastPhoneBackupAt)}` : '아직 자동백업 없음'} · 같은 날짜 파일은 교체</small></button><button class=backup-action data-backup-zip><strong>ZIP 백업 · 저장 위치 선택</strong><small>${securePicker ? '저장 위치를 직접 선택합니다.' : 'Downloads에 저장합니다.'}</small></button><button class=backup-action data-backup-drive><strong>Google Drive로 보내기</strong><small>공유 가능한 백업 TXT를 Drive로 보냅니다.</small></button><button class=backup-action data-backup-keep><strong>영구보관 ZIP</strong><small>자동 정리에서 제외되는 _keep 파일을 만듭니다.</small></button><button class=backup-action data-backup-restore><strong>ZIP / JSON / TXT 복원</strong><small>schema 4~${SCHEMA_VERSION} 파일을 검증하고 정상일 때만 교체합니다.</small></button></div><div class=backup-status-note>현재 원본 약 ${Math.max(1, Math.round(size / 1024))}KB · schema ${SCHEMA_VERSION}<br>백업 파일은 최근 30일 일별·이전 월 1개를 보관하고, _pre / _keep은 삭제하지 않습니다.<br>앱 잔고는 최근 6개월 일별·이전 월별로 보존합니다.</div>`;
     if (typeof appendInitialImportBackupAction === 'function')
         appendInitialImportBackupAction($('#sheetBody .backup-grid'));
     openSheet('#detailSheet');
@@ -2005,13 +2151,75 @@ function resetLiveData() { state = normalizeState(seed); if (!persist())
 ;
 /* asset-os source: export-csv.js */
 'use strict';
-function csvSafeText(value){const text=String(value??'');return /^[\s]*[=+\-@]/.test(text)?`'${text}`:text}
-function csvCell(value){if(typeof value==='number'&&Number.isFinite(value))return String(value);const text=csvSafeText(value);return /[",\r\n]/.test(text)?`"${text.replace(/"/g,'""')}"`:text}
-function csvTable(headers,rows){return '\ufeff'+[headers,...rows].map(row=>row.map(csvCell).join(',')).join('\r\n')+'\r\n'}
-function excelCsvEntries(){const ledger=integratedLedger(),integratedRows=[...ledger].sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(t=>[t.date,integratedTxLabel(t),t.category||'',Number(t.amount??t.delta)||0,integratedTxAccountsText(t),t.fixed===true?'고정비':t.fixed===false?'변동비':'',t.note||'',t.id]);const isaRows=state.accounts.flatMap(a=>[...(a.transactions||[]),...(typeof centralIsaReplayRows==='function'?centralIsaReplayRows(a,true):[])].map(t=>[a.name,a.status,txDate(t),typeText(t.type),t.holdingId?holdingName(a,t.holdingId):'',Number(t.qty??t.quantity)||0,Number(t.price)||0,Number(t.amount)||0,Number(t.fee)||0,Number(t.tax)||0,t.note||'',t.sourceTxId||t.id,t.sourceTxId?'integrated':'transaction'])).sort((a,b)=>String(a[2]).localeCompare(String(b[2])));const pensionRows=pensionVisibleTransactionRows('all').map(t=>{const account=pensionAccount(t.accountId),holding=t.holdingId?pensionHoldingById(t.holdingId):null;return[(t.accountKind||account?.kind)==='irp'?'IRP':'연금저축',account?.name||'',t.date,t.type,holding?.name||t.productName||t.label||'',Number(t.qty)||0,Number(t.price)||0,Number(t.amount??((Number(t.qty)||0)*(Number(t.price)||0)))||0,Number(t.fee)||0,Number(t.tax)||0,t.note||'',t.sourceTxId||t.id,t.source||'transaction',Number(t.originalAmount??t.amount)||0,Number(t.reconciledAmount)||0,t.rightTypeCode||'',t.rightTypeName||'',t.classificationBasis||'']}).sort((a,b)=>String(a[2]).localeCompare(String(b[2])));const months=[...new Set(ledger.map(t=>integratedMonthKey(t.date)).filter(Boolean))].sort(),currentModel={},monthlyRows=months.map(month=>{const x=integratedSummary(month,currentModel,ledger),s=ledger.filter(t=>integratedMonthKey(t.date)===month&&['expense','externalExpense','refund'].includes(t.type)).reduce((sum,t)=>{sum[t.fixed?'fixed':'variable']+=(t.type==='refund'?-1:1)*(Number(t.amount)||0);return sum},{fixed:0,variable:0});return[month,Number(x.income)||0,Number(s.fixed)||0,Number(s.variable)||0,Number(x.invest)||0,Number(x.principal)||0,Number(x.operatingCashDelta)||0]});return[{name:'통합거래.csv',text:csvTable(['날짜','구분','분류','금액','계좌·경로','소비구분','메모','기록ID'],integratedRows)},{name:'ISA거래.csv',text:csvTable(['계좌','상태','날짜','거래','종목','수량','가격','금액','수수료','세금','메모','기록ID','출처'],isaRows)},{name:'연금거래.csv',text:csvTable(['계좌구분','계좌','날짜','거래','종목','수량','가격','금액','수수료','세금','메모','기록ID','출처','원본금액','월합계중상세반영액','원본권리코드','원본지급유형','분류근거'],pensionRows)},{name:'월별요약.csv',text:csvTable(['월','수입','고정비','변동비','저축·투자','대출원금','가용현금'],monthlyRows)}]}
-function createStoredZip(entries){const enc=new TextEncoder(),parts=[],central=[],stamp=zipDosStamp();let offset=0;for(const entry of entries){const name=enc.encode(entry.name),data=enc.encode(entry.text),size=30+name.length+data.length,local=new Uint8Array(size),view=new DataView(local.buffer);let o=0;const u16=n=>{view.setUint16(o,n,true);o+=2},u32=n=>{view.setUint32(o,n>>>0,true);o+=4},put=b=>{local.set(b,o);o+=b.length},crc=crc32(data);u32(0x04034b50);u16(20);u16(0x0800);u16(0);u16(stamp.time);u16(stamp.date);u32(crc);u32(data.length);u32(data.length);u16(name.length);u16(0);put(name);put(data);parts.push(local);central.push({name,data,crc,offset});offset+=local.length}const centralOffset=offset;for(const item of central){const block=new Uint8Array(46+item.name.length),view=new DataView(block.buffer);let o=0;const u16=n=>{view.setUint16(o,n,true);o+=2},u32=n=>{view.setUint32(o,n>>>0,true);o+=4};u32(0x02014b50);u16(20);u16(20);u16(0x0800);u16(0);u16(stamp.time);u16(stamp.date);u32(item.crc);u32(item.data.length);u32(item.data.length);u16(item.name.length);u16(0);u16(0);u16(0);u16(0);u32(0);u32(item.offset);block.set(item.name,o);parts.push(block);offset+=block.length}const end=new Uint8Array(22),endView=new DataView(end.buffer);let e=0;const u16=n=>{endView.setUint16(e,n,true);e+=2},u32=n=>{endView.setUint32(e,n>>>0,true);e+=4};u32(0x06054b50);u16(0);u16(0);u16(entries.length);u16(entries.length);u32(offset-centralOffset);u32(centralOffset);u16(0);parts.push(end);const out=new Uint8Array(parts.reduce((sum,p)=>sum+p.length,0));let cursor=0;for(const part of parts){out.set(part,cursor);cursor+=part.length}return out}
-function excelCsvFileName(){return `AssetOS_엑셀용_${localYmd().replaceAll('-','')}_${APP_VERSION}.zip`}
-function exportExcelCsvZip(){try{const bytes=createStoredZip(excelCsvEntries()),url=URL.createObjectURL(new Blob([bytes],{type:'application/zip'})),a=document.createElement('a');a.href=url;a.download=excelCsvFileName();document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('엑셀용 CSV 4개를 저장했습니다.');return true}catch(error){showNotice('내보내기 실패','CSV 파일을 만들지 못했습니다. 데이터를 저장한 뒤 다시 시도해 주세요.');return false}}
+function csvSafeText(value) { const text = String(value ?? ''); return /^[\s]*[=+\-@]/.test(text) ? `'${text}` : text; }
+function csvCell(value) { if (typeof value === 'number' && Number.isFinite(value))
+    return String(value); const text = csvSafeText(value); return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; }
+function csvTable(headers, rows) { return '\ufeff' + [headers, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n'; }
+function excelCsvEntries() { const ledger = integratedLedger(), integratedRows = [...ledger].sort((a, b) => String(a.date).localeCompare(String(b.date))).map(t => [t.date, integratedTxLabel(t), t.category || '', Number(t.amount ?? t.delta) || 0, integratedTxAccountsText(t), t.fixed === true ? '고정비' : t.fixed === false ? '변동비' : '', t.note || '', t.id]); const isaRows = state.accounts.flatMap(a => [...(a.transactions || []), ...(typeof centralIsaReplayRows === 'function' ? centralIsaReplayRows(a, true) : [])].map(t => [a.name, a.status, txDate(t), typeText(t.type), t.holdingId ? holdingName(a, t.holdingId) : '', Number(t.qty ?? t.quantity) || 0, Number(t.price) || 0, Number(t.amount) || 0, Number(t.fee) || 0, Number(t.tax) || 0, t.note || '', t.sourceTxId || t.id, t.sourceTxId ? 'integrated' : 'transaction'])).sort((a, b) => String(a[2]).localeCompare(String(b[2]))); const pensionRows = pensionVisibleTransactionRows('all').map(t => { const account = pensionAccount(t.accountId), holding = t.holdingId ? pensionHoldingById(t.holdingId) : null; return [(t.accountKind || account?.kind) === 'irp' ? 'IRP' : '연금저축', account?.name || '', t.date, t.type, holding?.name || t.productName || t.label || '', Number(t.qty) || 0, Number(t.price) || 0, Number(t.amount ?? ((Number(t.qty) || 0) * (Number(t.price) || 0))) || 0, Number(t.fee) || 0, Number(t.tax) || 0, t.note || '', t.sourceTxId || t.id, t.source || 'transaction', Number(t.originalAmount ?? t.amount) || 0, Number(t.reconciledAmount) || 0, t.rightTypeCode || '', t.rightTypeName || '', t.classificationBasis || '']; }).sort((a, b) => String(a[2]).localeCompare(String(b[2]))); const months = [...new Set(ledger.map(t => integratedMonthKey(t.date)).filter(Boolean))].sort(), currentModel = {}, monthlyRows = months.map(month => { const x = integratedSummary(month, currentModel, ledger), s = ledger.filter(t => integratedMonthKey(t.date) === month && ['expense', 'externalExpense', 'refund'].includes(t.type)).reduce((sum, t) => { sum[t.fixed ? 'fixed' : 'variable'] += (t.type === 'refund' ? -1 : 1) * (Number(t.amount) || 0); return sum; }, { fixed: 0, variable: 0 }); return [month, Number(x.income) || 0, Number(s.fixed) || 0, Number(s.variable) || 0, Number(x.invest) || 0, Number(x.principal) || 0, Number(x.operatingCashDelta) || 0]; }); return [{ name: '통합거래.csv', text: csvTable(['날짜', '구분', '분류', '금액', '계좌·경로', '소비구분', '메모', '기록ID'], integratedRows) }, { name: 'ISA거래.csv', text: csvTable(['계좌', '상태', '날짜', '거래', '종목', '수량', '가격', '금액', '수수료', '세금', '메모', '기록ID', '출처'], isaRows) }, { name: '연금거래.csv', text: csvTable(['계좌구분', '계좌', '날짜', '거래', '종목', '수량', '가격', '금액', '수수료', '세금', '메모', '기록ID', '출처', '원본금액', '월합계중상세반영액', '원본권리코드', '원본지급유형', '분류근거'], pensionRows) }, { name: '월별요약.csv', text: csvTable(['월', '수입', '고정비', '변동비', '저축·투자', '대출원금', '가용현금'], monthlyRows) }]; }
+function createStoredZip(entries) { const enc = new TextEncoder(), parts = [], central = [], stamp = zipDosStamp(); let offset = 0; for (const entry of entries) {
+    const name = enc.encode(entry.name), data = enc.encode(entry.text), size = 30 + name.length + data.length, local = new Uint8Array(size), view = new DataView(local.buffer);
+    let o = 0;
+    const u16 = (n) => { view.setUint16(o, n, true); o += 2; }, u32 = (n) => { view.setUint32(o, n >>> 0, true); o += 4; }, put = (b) => { local.set(b, o); o += b.length; }, crc = crc32(data);
+    u32(0x04034b50);
+    u16(20);
+    u16(0x0800);
+    u16(0);
+    u16(stamp.time);
+    u16(stamp.date);
+    u32(crc);
+    u32(data.length);
+    u32(data.length);
+    u16(name.length);
+    u16(0);
+    put(name);
+    put(data);
+    parts.push(local);
+    central.push({ name, data, crc, offset });
+    offset += local.length;
+} const centralOffset = offset; for (const item of central) {
+    const block = new Uint8Array(46 + item.name.length), view = new DataView(block.buffer);
+    let o = 0;
+    const u16 = (n) => { view.setUint16(o, n, true); o += 2; }, u32 = (n) => { view.setUint32(o, n >>> 0, true); o += 4; };
+    u32(0x02014b50);
+    u16(20);
+    u16(20);
+    u16(0x0800);
+    u16(0);
+    u16(stamp.time);
+    u16(stamp.date);
+    u32(item.crc);
+    u32(item.data.length);
+    u32(item.data.length);
+    u16(item.name.length);
+    u16(0);
+    u16(0);
+    u16(0);
+    u16(0);
+    u32(0);
+    u32(item.offset);
+    block.set(item.name, o);
+    parts.push(block);
+    offset += block.length;
+} const end = new Uint8Array(22), endView = new DataView(end.buffer); let e = 0; const u16 = (n) => { endView.setUint16(e, n, true); e += 2; }, u32 = (n) => { endView.setUint32(e, n >>> 0, true); e += 4; }; u32(0x06054b50); u16(0); u16(0); u16(entries.length); u16(entries.length); u32(offset - centralOffset); u32(centralOffset); u16(0); parts.push(end); const out = new Uint8Array(parts.reduce((sum, p) => sum + p.length, 0)); let cursor = 0; for (const part of parts) {
+    out.set(part, cursor);
+    cursor += part.length;
+} return out; }
+function excelCsvFileName() { return `AssetOS_엑셀용_${localYmd().replaceAll('-', '')}_${APP_VERSION}.zip`; }
+function exportExcelCsvZip() { try {
+    const bytes = createStoredZip(excelCsvEntries()), url = URL.createObjectURL(new Blob([bytes], { type: 'application/zip' })), a = document.createElement('a');
+    a.href = url;
+    a.download = excelCsvFileName();
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast('엑셀용 CSV 4개를 저장했습니다.');
+    return true;
+}
+catch (error) {
+    showNotice('내보내기 실패', 'CSV 파일을 만들지 못했습니다. 데이터를 저장한 뒤 다시 시도해 주세요.');
+    return false;
+} }
 ;
 /* asset-os source: initial-import.js */
 'use strict';
@@ -2119,87 +2327,259 @@ function appendInitialImportBackupAction(grid) {
 ;
 /* asset-os source: backup-v04.js */
 'use strict';
-const ASSET_BACKUP_ENV=typeof APP_ENV==='string'?APP_ENV:(typeof QA_MODE!=='undefined'&&QA_MODE?'qa':'live'),ASSET_BACKUP_DB=`asset-os-backup-v05-${ASSET_BACKUP_ENV}`,ASSET_BACKUP_STORE='handles',ASSET_PHONE_HANDLE_KEY=`phone-directory-${ASSET_BACKUP_ENV}`,ASSET_DAILY_KEEP_DAYS=30,ASSET_AUTO_BACKUP_DELAY=60000;
-let assetAutoBackupTimer=0,assetBackupWriting=false;
-function assetBackupSettings(){const base={phoneEnabled:false,lastPhoneBackupAt:'',lastReleaseVersion:'',phonePermission:'unknown'},current=state.settings.backupV04&&typeof state.settings.backupV04==='object'?state.settings.backupV04:(state.settings.backupV04={});for(const [key,value] of Object.entries(base))if(current[key]===undefined)current[key]=value;return current}
-function assetBackupDateCode(date=new Date()){return `${String(date.getFullYear()).slice(-2)}${String(date.getMonth()+1).padStart(2,'0')}${String(date.getDate()).padStart(2,'0')}`}
-function assetBackupSafeVersion(version=APP_VERSION){return String(version||APP_VERSION).replace(/[^0-9A-Za-z._-]/g,'')||APP_VERSION}
-function assetManagedBackupName({date=new Date(),version=APP_VERSION,tag=''}={}){return `AssetOS_${ASSET_BACKUP_ENV==='qa'?'QA_':''}${assetBackupDateCode(date)}_${assetBackupSafeVersion(version)}${tag?`_${tag}`:''}.zip`}
-function assetOpenBackupDb(){return new Promise((resolve,reject)=>{const request=indexedDB.open(ASSET_BACKUP_DB,1);request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains(ASSET_BACKUP_STORE))request.result.createObjectStore(ASSET_BACKUP_STORE)};request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error||new Error('백업 폴더 저장소를 열지 못했습니다.'))})}
-async function assetBackupHandleGet(){const db=await assetOpenBackupDb();try{return await new Promise((resolve,reject)=>{const tx=db.transaction(ASSET_BACKUP_STORE,'readonly'),request=tx.objectStore(ASSET_BACKUP_STORE).get(ASSET_PHONE_HANDLE_KEY);request.onsuccess=()=>resolve(request.result||null);request.onerror=()=>reject(request.error)})}finally{db.close()}}
-async function assetBackupHandleSet(handle){const db=await assetOpenBackupDb();try{await new Promise((resolve,reject)=>{const tx=db.transaction(ASSET_BACKUP_STORE,'readwrite');tx.objectStore(ASSET_BACKUP_STORE).put(handle,ASSET_PHONE_HANDLE_KEY);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)})}finally{db.close()}}
-async function assetBackupPermission(handle,request=false){if(!handle)return'denied';const options={mode:'readwrite'};if(typeof handle.queryPermission==='function'){const value=await handle.queryPermission(options);if(value==='granted'||!request)return value}if(request&&typeof handle.requestPermission==='function')return handle.requestPermission(options);return'prompt'}
-async function assetPhoneBackupHandle(request=false){try{const handle=await assetBackupHandleGet();if(!handle)return null;const permission=await assetBackupPermission(handle,request);assetBackupSettings().phonePermission=permission;return permission==='granted'?handle:null}catch{return null}}
-function assetParseManagedBackup(name){const match=/^AssetOS_(QA_)?(\d{6})_(v[0-9A-Za-z._-]+?)(?:_(pre|keep))?\.zip$/i.exec(String(name||''));if(!match)return null;const environment=match[1]?'qa':'live',year=2000+Number(match[2].slice(0,2)),month=Number(match[2].slice(2,4)),day=Number(match[2].slice(4,6)),date=new Date(year,month-1,day);if(date.getFullYear()!==year||date.getMonth()!==month-1||date.getDate()!==day)return null;return{date,month:`${year}-${String(month).padStart(2,'0')}`,tag:match[4]||'',environment}}
-function assetBackupRetentionPlan(rows,now=new Date()){const cutoff=new Date(now.getFullYear(),now.getMonth(),now.getDate()-ASSET_DAILY_KEEP_DAYS),keep=new Set(),old=[];for(const row of rows){if(row.info.tag||row.info.date>=cutoff)keep.add(row.name);else old.push(row)}const monthly=new Map();for(const row of old){const current=monthly.get(row.info.month);if(!current||current.info.date<row.info.date)monthly.set(row.info.month,row)}for(const row of monthly.values())keep.add(row.name);return{keep,remove:rows.filter(row=>!keep.has(row.name)).map(row=>row.name)}}
-async function assetCleanupPhoneBackups(handle){const rows=[];for await(const [name,entry] of handle.entries())if(entry.kind==='file'){const info=assetParseManagedBackup(name);if(info&&info.environment===ASSET_BACKUP_ENV)rows.push({name,info})}const plan=assetBackupRetentionPlan(rows);for(const name of plan.remove)await handle.removeEntry(name);return plan}
-async function assetWritePhoneBackup({tag='',version=APP_VERSION,silent=false}={}){if(assetBackupWriting)return false;const handle=await assetPhoneBackupHandle(false);if(!handle){if(!silent)showNotice('휴대폰 백업 폴더 연결이 필요합니다.','백업·복원에서 폴더를 한 번 지정해 주세요. 지원하지 않는 브라우저에서는 ZIP 다운로드를 사용합니다.');return false}assetBackupWriting=true;const name=assetManagedBackupName({tag,version});try{const fileHandle=await handle.getFileHandle(name,{create:true}),writable=await fileHandle.createWritable();await writable.write(new Blob([createBackupZipBytes()],{type:'application/zip'}));await writable.close();await assetCleanupPhoneBackups(handle);const settings=assetBackupSettings();settings.phoneEnabled=true;settings.phonePermission='granted';settings.lastPhoneBackupAt=new Date().toISOString();persist(false);if(!silent)toast(`휴대폰 백업 완료: ${name}`);return true}catch(error){if(!silent)showNotice('휴대폰 백업 실패',String(error?.message||error));return false}finally{assetBackupWriting=false}}
-async function assetConnectPhoneBackup(){if(typeof window.showDirectoryPicker!=='function'||!window.isSecureContext){showNotice('고정 폴더를 지원하지 않는 브라우저입니다.','ZIP 저장은 계속 사용할 수 있습니다. Android에서 폴더 선택이 보이지 않으면 다운로드 또는 Drive 공유를 이용해 주세요.');return false}try{const handle=await window.showDirectoryPicker({id:`asset-os-backup-${ASSET_BACKUP_ENV}`,mode:'readwrite',startIn:'downloads'});if(await assetBackupPermission(handle,true)!=='granted')throw new Error('폴더 쓰기 권한이 필요합니다.');await assetBackupHandleSet(handle);const settings=assetBackupSettings();settings.phoneEnabled=true;settings.phonePermission='granted';if(settings.lastReleaseVersion!==APP_VERSION){await assetWritePhoneBackup({tag:'pre',version:settings.lastReleaseVersion||'v0.4',silent:true});settings.lastReleaseVersion=APP_VERSION}persist(false);toast('휴대폰 백업 폴더를 연결했습니다.');return true}catch(error){if(error?.name!=='AbortError')showNotice('폴더 연결 실패',String(error?.message||error));return false}}
-function queueAssetAutoBackup(){if(assetBackupWriting)return;clearTimeout(assetAutoBackupTimer);const settings=assetBackupSettings();if(!settings.phoneEnabled)return;assetAutoBackupTimer=setTimeout(()=>assetWritePhoneBackup({silent:true}),ASSET_AUTO_BACKUP_DELAY)}
-async function assetCreateKeepBackup(){if(await assetWritePhoneBackup({tag:'keep'}))return true;const name=assetManagedBackupName({tag:'keep'});downloadBytes(createBackupZipBytes(),name);toast(`영구보관 ZIP 저장: ${name}`);return true}
+function managedBackupErrorName(error) { return error && typeof error === 'object' && 'name' in error ? String(error.name) : ''; }
+function managedBackupErrorMessage(error) { return error instanceof Error ? error.message : String(error || ''); }
+const ASSET_BACKUP_ENV = typeof APP_ENV === 'string' ? APP_ENV : (typeof QA_MODE !== 'undefined' && QA_MODE ? 'qa' : 'live'), ASSET_BACKUP_DB = `asset-os-backup-v05-${ASSET_BACKUP_ENV}`, ASSET_BACKUP_STORE = 'handles', ASSET_PHONE_HANDLE_KEY = `phone-directory-${ASSET_BACKUP_ENV}`, ASSET_DAILY_KEEP_DAYS = 30, ASSET_AUTO_BACKUP_DELAY = 60000;
+let assetAutoBackupTimer, assetBackupWriting = false;
+function assetBackupSettings() { const base = { phoneEnabled: false, lastPhoneBackupAt: '', lastReleaseVersion: '', phonePermission: 'unknown' }, current = state.settings.backupV04 && typeof state.settings.backupV04 === 'object' ? state.settings.backupV04 : (state.settings.backupV04 = {}); for (const [key, value] of Object.entries(base))
+    if (current[key] === undefined)
+        current[key] = value; return current; }
+function assetBackupDateCode(date = new Date()) { return `${String(date.getFullYear()).slice(-2)}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`; }
+function assetBackupSafeVersion(version = APP_VERSION) { return String(version || APP_VERSION).replace(/[^0-9A-Za-z._-]/g, '') || APP_VERSION; }
+function assetManagedBackupName({ date = new Date(), version = APP_VERSION, tag = '' } = {}) { return `AssetOS_${ASSET_BACKUP_ENV === 'qa' ? 'QA_' : ''}${assetBackupDateCode(date)}_${assetBackupSafeVersion(version)}${tag ? `_${tag}` : ''}.zip`; }
+function assetOpenBackupDb() { return new Promise((resolve, reject) => { const request = indexedDB.open(ASSET_BACKUP_DB, 1); request.onupgradeneeded = () => { if (!request.result.objectStoreNames.contains(ASSET_BACKUP_STORE))
+    request.result.createObjectStore(ASSET_BACKUP_STORE); }; request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error || new Error('백업 폴더 저장소를 열지 못했습니다.')); }); }
+async function assetBackupHandleGet() { const db = await assetOpenBackupDb(); try {
+    return await new Promise((resolve, reject) => { const tx = db.transaction(ASSET_BACKUP_STORE, 'readonly'), request = tx.objectStore(ASSET_BACKUP_STORE).get(ASSET_PHONE_HANDLE_KEY); request.onsuccess = () => resolve(request.result || null); request.onerror = () => reject(request.error); });
+}
+finally {
+    db.close();
+} }
+async function assetBackupHandleSet(handle) { const db = await assetOpenBackupDb(); try {
+    await new Promise((resolve, reject) => { const tx = db.transaction(ASSET_BACKUP_STORE, 'readwrite'); tx.objectStore(ASSET_BACKUP_STORE).put(handle, ASSET_PHONE_HANDLE_KEY); tx.oncomplete = resolve; tx.onerror = () => reject(tx.error); });
+}
+finally {
+    db.close();
+} }
+async function assetBackupPermission(handle, request = false) { if (!handle)
+    return 'denied'; const options = { mode: 'readwrite' }; if (typeof handle.queryPermission === 'function') {
+    const value = await handle.queryPermission(options);
+    if (value === 'granted' || !request)
+        return value;
+} if (request && typeof handle.requestPermission === 'function')
+    return handle.requestPermission(options); return 'prompt'; }
+async function assetPhoneBackupHandle(request = false) { try {
+    const handle = await assetBackupHandleGet();
+    if (!handle)
+        return null;
+    const permission = await assetBackupPermission(handle, request);
+    assetBackupSettings().phonePermission = permission;
+    return permission === 'granted' ? handle : null;
+}
+catch {
+    return null;
+} }
+function assetParseManagedBackup(name) { const match = /^AssetOS_(QA_)?(\d{6})_(v[0-9A-Za-z._-]+?)(?:_(pre|keep))?\.zip$/i.exec(String(name || '')); if (!match)
+    return null; const environment = match[1] ? 'qa' : 'live', year = 2000 + Number(match[2].slice(0, 2)), month = Number(match[2].slice(2, 4)), day = Number(match[2].slice(4, 6)), date = new Date(year, month - 1, day); if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day)
+    return null; return { date, month: `${year}-${String(month).padStart(2, '0')}`, tag: match[4] || '', environment }; }
+function assetBackupRetentionPlan(rows, now = new Date()) { const cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ASSET_DAILY_KEEP_DAYS), keep = new Set(), old = []; for (const row of rows) {
+    if (row.info.tag || row.info.date >= cutoff)
+        keep.add(row.name);
+    else
+        old.push(row);
+} const monthly = new Map(); for (const row of old) {
+    const current = monthly.get(row.info.month);
+    if (!current || current.info.date < row.info.date)
+        monthly.set(row.info.month, row);
+} for (const row of monthly.values())
+    keep.add(row.name); return { keep, remove: rows.filter(row => !keep.has(row.name)).map(row => row.name) }; }
+async function assetCleanupPhoneBackups(handle) { const rows = []; for await (const [name, entry] of handle.entries())
+    if (entry.kind === 'file') {
+        const info = assetParseManagedBackup(name);
+        if (info && info.environment === ASSET_BACKUP_ENV)
+            rows.push({ name, info });
+    } const plan = assetBackupRetentionPlan(rows); for (const name of plan.remove)
+    await handle.removeEntry(name); return plan; }
+async function assetWritePhoneBackup({ tag = '', version = APP_VERSION, silent = false } = {}) { if (assetBackupWriting)
+    return false; const handle = await assetPhoneBackupHandle(false); if (!handle) {
+    if (!silent)
+        showNotice('휴대폰 백업 폴더 연결이 필요합니다.', '백업·복원에서 폴더를 한 번 지정해 주세요. 지원하지 않는 브라우저에서는 ZIP 다운로드를 사용합니다.');
+    return false;
+} assetBackupWriting = true; const name = assetManagedBackupName({ tag, version }); try {
+    const fileHandle = await handle.getFileHandle(name, { create: true }), writable = await fileHandle.createWritable();
+    await writable.write(new Blob([createBackupZipBytes()], { type: 'application/zip' }));
+    await writable.close();
+    await assetCleanupPhoneBackups(handle);
+    const settings = assetBackupSettings();
+    settings.phoneEnabled = true;
+    settings.phonePermission = 'granted';
+    settings.lastPhoneBackupAt = new Date().toISOString();
+    persist(false);
+    if (!silent)
+        toast(`휴대폰 백업 완료: ${name}`);
+    return true;
+}
+catch (error) {
+    if (!silent)
+        showNotice('휴대폰 백업 실패', managedBackupErrorMessage(error));
+    return false;
+}
+finally {
+    assetBackupWriting = false;
+} }
+async function assetConnectPhoneBackup() { if (typeof window.showDirectoryPicker !== 'function' || !window.isSecureContext) {
+    showNotice('고정 폴더를 지원하지 않는 브라우저입니다.', 'ZIP 저장은 계속 사용할 수 있습니다. Android에서 폴더 선택이 보이지 않으면 다운로드 또는 Drive 공유를 이용해 주세요.');
+    return false;
+} try {
+    const handle = await window.showDirectoryPicker({ id: `asset-os-backup-${ASSET_BACKUP_ENV}`, mode: 'readwrite', startIn: 'downloads' });
+    if (await assetBackupPermission(handle, true) !== 'granted')
+        throw new Error('폴더 쓰기 권한이 필요합니다.');
+    await assetBackupHandleSet(handle);
+    const settings = assetBackupSettings();
+    settings.phoneEnabled = true;
+    settings.phonePermission = 'granted';
+    if (settings.lastReleaseVersion !== APP_VERSION) {
+        await assetWritePhoneBackup({ tag: 'pre', version: settings.lastReleaseVersion || 'v0.4', silent: true });
+        settings.lastReleaseVersion = APP_VERSION;
+    }
+    persist(false);
+    toast('휴대폰 백업 폴더를 연결했습니다.');
+    return true;
+}
+catch (error) {
+    if (managedBackupErrorName(error) !== 'AbortError')
+        showNotice('폴더 연결 실패', managedBackupErrorMessage(error));
+    return false;
+} }
+function queueAssetAutoBackup() { if (assetBackupWriting)
+    return; clearTimeout(assetAutoBackupTimer); const settings = assetBackupSettings(); if (!settings.phoneEnabled)
+    return; assetAutoBackupTimer = setTimeout(() => assetWritePhoneBackup({ silent: true }), ASSET_AUTO_BACKUP_DELAY); }
+async function assetCreateKeepBackup() { if (await assetWritePhoneBackup({ tag: 'keep' }))
+    return true; const name = assetManagedBackupName({ tag: 'keep' }); downloadBytes(createBackupZipBytes(), name); toast(`영구보관 ZIP 저장: ${name}`); return true; }
 ;
 /* asset-os source: insurance.js */
 'use strict';
-function insurancePolicies(){return state.insurance?.policies||[]}
-function insuranceMonthlyPremium(asOf=localYmd()){return insurancePolicies().filter(p=>p.status==='active'&&p.paymentStyle==='monthly'&&(!p.contractDate||p.contractDate<=asOf)&&(!p.paymentEndDate||asOf<=p.paymentEndDate)).reduce((n,p)=>n+(Number(p.premium)||0),0)}
-function insuranceMonthsInclusive(start,end){const a=String(start||'').match(/^(\d{4})-(\d{2})/),b=String(end||'').match(/^(\d{4})-(\d{2})/);if(!a||!b)return 0;return Math.max(0,(Number(b[1])-Number(a[1]))*12+Number(b[2])-Number(a[2])+1)}
-function insurancePremiumSummary(p,asOf=localYmd()){
- const premium=Math.max(0,Number(p?.premium)||0),start=String(p?.contractDate||''),end=String(p?.paymentEndDate||''),cutoff=p?.status==='ended'?String(p.endedAt||end):end;
- const total=Math.max(0,Number(p?.totalPremium)||(p?.paymentStyle==='lump'?premium:insuranceMonthsInclusive(start,end)*premium));
- const scheduleIds=new Set(financeSchedules().filter(s=>s.kind==='insurance'&&String(s.productId||'')===String(p.id)).map(s=>s.id));
- const rows=typeof integratedOperationalLedger==='function'?integratedOperationalLedger():[];
- const payments=rows.filter(t=>['expense','externalExpense'].includes(t.type)&&t.status!=='cancelled'&&String(t.date)<=asOf&&(t.productId===p.id||scheduleIds.has(t.meta?.scheduleId))),paymentIds=new Set(payments.map(t=>t.id)),refunds=rows.filter(t=>t.type==='refund'&&String(t.date)<=asOf&&paymentIds.has(t.meta?.refundOf)).reduce((n,t)=>n+(Number(t.amount)||0),0),paid=Math.max(0,payments.reduce((n,t)=>n+(Number(t.amount)||0),0)-refunds);
- const nextMonth=asOf.slice(0,7)==='9999-12'?'':`${Number(asOf.slice(0,4))+(Number(asOf.slice(5,7))===12?1:0)}-${String(Number(asOf.slice(5,7))%12+1).padStart(2,'0')}-01`;
- const remaining=p?.status==='ended'?0:p?.paymentStyle==='lump'?(start>asOf?premium:0):nextMonth?insuranceMonthsInclusive(start>nextMonth?start:nextMonth,cutoff)*premium:0;
- return{total,paid,remaining,previousRecorded:Math.max(0,Number(p?.paidPremium)||0)}
+function insurancePolicies() { return state.insurance?.policies || []; }
+function insuranceMonthlyPremium(asOf = localYmd()) { return insurancePolicies().filter(p => p.status === 'active' && p.paymentStyle === 'monthly' && (!p.contractDate || p.contractDate <= asOf) && (!p.paymentEndDate || asOf <= p.paymentEndDate)).reduce((n, p) => n + (Number(p.premium) || 0), 0); }
+function insuranceMonthsInclusive(start, end) { const a = String(start || '').match(/^(\d{4})-(\d{2})/), b = String(end || '').match(/^(\d{4})-(\d{2})/); if (!a || !b)
+    return 0; return Math.max(0, (Number(b[1]) - Number(a[1])) * 12 + Number(b[2]) - Number(a[2]) + 1); }
+function insurancePremiumSummary(p, asOf = localYmd()) {
+    const premium = Math.max(0, Number(p?.premium) || 0), start = String(p?.contractDate || ''), end = String(p?.paymentEndDate || ''), cutoff = p?.status === 'ended' ? String(p.endedAt || end) : end;
+    const total = Math.max(0, Number(p?.totalPremium) || (p?.paymentStyle === 'lump' ? premium : insuranceMonthsInclusive(start, end) * premium));
+    const scheduleIds = new Set(financeSchedules().filter(s => s.kind === 'insurance' && String(s.productId || '') === String(p.id)).map(s => s.id));
+    const rows = typeof integratedOperationalLedger === 'function' ? integratedOperationalLedger() : [];
+    const payments = rows.filter(t => ['expense', 'externalExpense'].includes(t.type) && t.status !== 'cancelled' && String(t.date) <= asOf && (t.productId === p.id || scheduleIds.has(t.meta?.scheduleId))), paymentIds = new Set(payments.map(t => t.id)), refunds = rows.filter(t => t.type === 'refund' && String(t.date) <= asOf && paymentIds.has(t.meta?.refundOf)).reduce((n, t) => n + (Number(t.amount) || 0), 0), paid = Math.max(0, payments.reduce((n, t) => n + (Number(t.amount) || 0), 0) - refunds);
+    const nextMonth = asOf.slice(0, 7) === '9999-12' ? '' : `${Number(asOf.slice(0, 4)) + (Number(asOf.slice(5, 7)) === 12 ? 1 : 0)}-${String(Number(asOf.slice(5, 7)) % 12 + 1).padStart(2, '0')}-01`;
+    const remaining = p?.status === 'ended' ? 0 : p?.paymentStyle === 'lump' ? (start > asOf ? premium : 0) : nextMonth ? insuranceMonthsInclusive(start > nextMonth ? start : nextMonth, cutoff) * premium : 0;
+    return { total, paid, remaining, previousRecorded: Math.max(0, Number(p?.paidPremium) || 0) };
 }
-function insuranceSchedule(policy){if(!policy?.id)return null;return financeSchedules().find(s=>s.kind==='insurance'&&String(s.productId||'')===String(policy.id))||null}
-function insuranceCoverageText(rows=[]){return rows.map(c=>[c.name,Number(c.amount)||'',c.note||''].join(' | ')).join('\n')}
-function parseInsuranceCoverages(value){return String(value||'').split(/\r?\n/).map(line=>line.trim()).filter(Boolean).map(line=>{const [name='',amount='',...note]=line.split('|').map(x=>x.trim());return{name,amount:Math.max(0,Number(String(amount).replace(/,/g,''))||0),note:note.join(' | ')}}).filter(c=>c.name)}
-function syncInsuranceSchedule(policy,linkSchedule=true){let schedule=insuranceSchedule(policy);if(!linkSchedule){if(schedule){schedule.active=false;schedule.endDate=schedule.endDate||localYmd()}return null}if(policy.paymentStyle!=='monthly'||policy.status==='ended'||!Number(policy.premium)){if(schedule){schedule.active=false;schedule.endDate=policy.endedAt||policy.paymentEndDate||localYmd()}return schedule||null}if(!schedule){const matches=financeSchedules().filter(s=>s.kind==='insurance'&&!s.productId&&normalizeName(s.name)===normalizeName(policy.name)&&Math.abs((Number(s.amount)||0)-(Number(policy.premium)||0))<.5);if(matches.length===1)schedule=matches[0]}const next={id:schedule?.id||`schedule-insurance-${policy.id}`,name:policy.name,kind:'insurance',amount:Number(policy.premium)||0,amountMode:'fixed',day:Math.min(31,Math.max(0,Number(policy.paymentDay)||0)),recurrence:'monthly',startDate:policy.contractDate||'',endDate:policy.paymentEndDate||'',targetKind:'',targetAccountId:'',targetPensionAccountId:'',targetIsaAccountId:'',productId:policy.id,liabilityId:'',active:true,note:`${policy.company||'보험사 미입력'} · 보험료`,source:'insurance-policy',needsDate:!Number(policy.paymentDay),attention:!Number(policy.paymentDay)?'date-required':''};if(schedule)Object.assign(schedule,next);else financeSchedules().push(next);return next}
-function insuranceCardMarkup(p){const schedule=insuranceSchedule(p);return `<button class="finance-product-card ${p.status==='ended'?'ended':''}" data-insurance-id="${escapeHtml(p.id)}"><div><strong>${escapeHtml(p.name)} <span class="finance-status-pill ${p.status==='active'?'active':''}">${p.status==='active'?'유지':'종료'}</span></strong><small>${escapeHtml(p.company||'보험사 미입력')} · ${escapeHtml(p.category||'분류 미입력')}<br>${p.paymentStyle==='lump'?'일시납':`월 ${won(p.premium)}`} · ${p.paymentStyle==='lump'?'반복 일정 없음':schedule?.active&&!schedule.needsDate?`${schedule.day}일 일정 연결`:p.status==='ended'?'일정 종료':'일정 연결 안 됨'}</small></div><b>›</b></button>`}
-function openInsuranceHub(){const rows=insurancePolicies(),active=rows.filter(p=>p.status==='active'),ended=rows.filter(p=>p.status==='ended'),monthly=insuranceMonthlyPremium();$('#sheetEyebrow').textContent='보장성 보험';$('#sheetTitle').textContent='내 보험';$('#sheetBody').innerHTML=`<div class="sheetrows"><div class="sheetrow total"><span>현재 월 보험료</span><strong>${won(monthly)}</strong></div></div><div class="policy-toolbar"><strong>유지 중 ${active.length}건</strong><button data-insurance-new>＋ 보험 추가</button></div><div class="finance-product-list">${active.map(insuranceCardMarkup).join('')||'<div class="integrated-empty">유지 중인 보험이 없습니다.</div>'}</div>${ended.length?`<div class="finance-archive-title">종료된 보험 · ${ended.length}건</div><div class="finance-product-list">${ended.map(insuranceCardMarkup).join('')}</div>`:''}`;openSheet('#detailSheet');$('[data-insurance-new]')?.addEventListener('click',()=>openInsuranceForm());$$('[data-insurance-id]').forEach(b=>b.onclick=()=>openInsuranceDetail(b.dataset.insuranceId))}
-function openInsuranceDetail(id){const p=insurancePolicies().find(x=>x.id===id);if(!p)return;$('#sheetEyebrow').textContent='보험 · 계약';$('#sheetTitle').textContent=p.name;const premium=insurancePremiumSummary(p),schedule=insuranceSchedule(p),rows=[['보험사',p.company],['분류',p.category],['계약일',p.contractDate],['보장 만기',p.coverageEndDate],['납입 종료',p.paymentEndDate],['보험료',p.paymentStyle==='lump'?won(p.premium):`월 ${won(p.premium)}`],['납부 일정',p.paymentStyle==='lump'?'반복 일정 없음':p.status==='ended'?'일정 종료':schedule?.active?(schedule.needsDate?'납부일 확인 필요':`매월 ${schedule.day}일`):'연결 안 됨'],['계약 총 보험료 · 예상',won(premium.total)],['실제 납부 기록',won(premium.paid)],...(premium.previousRecorded?[['기존 등록 누계 · 별도',won(premium.previousRecorded)]]:[]),['다음 달 이후 · 예상',won(premium.remaining)]];$('#sheetBody').innerHTML=`<div class="sheetrows">${rows.map(([k,v])=>`<div class="sheetrow"><span>${escapeHtml(k)}</span><strong>${escapeHtml(v||'-')}</strong></div>`).join('')}</div><div class="policy-toolbar"><strong>보장 항목 ${p.coverages.length}개</strong></div><div class="sheetrows">${p.coverages.map(c=>`<div class="sheetrow"><span>${escapeHtml(c.name)}${c.note?`<small style="display:block">${escapeHtml(c.note)}</small>`:''}</span><strong>${won(c.amount)}</strong></div>`).join('')||'<div class="integrated-empty">보장 항목이 없습니다.</div>'}</div>${p.note?`<div class="source-note">${escapeHtml(p.note)}</div>`:''}<button class="diagnostic-action" data-insurance-payment="${escapeHtml(p.id)}">납부 기록</button>${p.status==='active'?`<div class="finance-detail-actions"><button class="primary" data-insurance-edit="${escapeHtml(p.id)}">계약 수정</button><button class="danger" data-insurance-end="${escapeHtml(p.id)}">종료 처리</button></div>`:''}`;openSheet('#detailSheet');$('[data-insurance-payment]')?.addEventListener('click',()=>openInsurancePaymentForm(id));$('[data-insurance-edit]')?.addEventListener('click',()=>openInsuranceForm(id));$('[data-insurance-end]')?.addEventListener('click',()=>endInsurancePolicy(id))}
-function openInsuranceForm(id=''){const p=insurancePolicies().find(x=>x.id===id)||null,schedule=insuranceSchedule(p);$('#formEyebrow').textContent='보험 · 계약 관리';$('#formTitle').textContent=p?'보험 계약 수정':'보험 추가';$('#formBody').innerHTML=`<form id="insuranceForm" class="form" data-insurance-id="${escapeHtml(p?.id||'')}"><div class="form-grid"><div class="field"><label>보험명</label><input name="name" value="${escapeHtml(p?.name||'')}" required></div><div class="field"><label>보험사</label><input name="company" value="${escapeHtml(p?.company||'')}"></div></div><div class="field"><label>분류</label><input name="category" value="${escapeHtml(p?.category||'')}" placeholder="예: 실손·건강·운전자"></div><div class="form-grid"><div class="field"><label>계약일</label><input name="contractDate" type="date" value="${escapeHtml(p?.contractDate||'')}"></div><div class="field"><label>보장 만기</label><input name="coverageEndDate" type="date" value="${escapeHtml(p?.coverageEndDate||'')}"></div></div><div class="form-grid"><div class="field"><label>납입 종료</label><input name="paymentEndDate" type="date" value="${escapeHtml(p?.paymentEndDate||'')}"></div><div class="field"><label>납입 방식</label><select name="paymentStyle"><option value="monthly" ${p?.paymentStyle!=='lump'?'selected':''}>월납</option><option value="lump" ${p?.paymentStyle==='lump'?'selected':''}>일시납</option></select></div></div><div class="form-grid"><div class="field"><label>보험료</label><input name="premium" type="number" min="0" step="1" inputmode="numeric" value="${escapeHtml(Number(p?.premium)||'')}" required></div><div class="field"><label>월 납부일</label><input name="paymentDay" type="number" min="1" max="31" value="${escapeHtml(Number(p?.paymentDay)||Number(schedule?.day)||'')}" placeholder="확인 후 입력"></div></div><label class="insurance-schedule-link"><input name="linkSchedule" type="checkbox" ${schedule||!p?'checked':''}><span>보험료를 통합 일정과 연결</span></label><div class="field"><label>보장 항목 <small>한 줄에 이름 | 금액 | 메모</small></label><textarea name="coverages" rows="6" placeholder="입원의료비 | 50000000 | 갱신형">${escapeHtml(insuranceCoverageText(p?.coverages||[]))}</textarea></div><div class="field"><label>메모</label><input name="note" value="${escapeHtml(p?.note||'')}"></div><button class="integrated-form-save">${p?'수정 저장':'보험 저장'}</button></form>`;openSheet('#formSheet',{mode:'input'});$('#insuranceForm').onsubmit=e=>{e.preventDefault();saveInsurancePolicy(e.currentTarget)}}
-function saveInsurancePolicy(form){const d=new FormData(form),id=form.dataset.insuranceId||uid('insurance'),old=insurancePolicies().find(x=>x.id===id),name=String(d.get('name')||'').trim(),premium=Math.max(0,Math.round(Number(d.get('premium'))||0)),paymentDay=Math.min(31,Math.max(0,Math.round(Number(d.get('paymentDay'))||0)));if(!name)return toast('보험명을 입력해 주세요.');if(!premium)return toast('보험료를 입력해 주세요.');const p={...(old||{}),id,name,company:String(d.get('company')||'').trim(),category:String(d.get('category')||'').trim(),premium,paymentDay,paymentStyle:String(d.get('paymentStyle'))==='lump'?'lump':'monthly',contractDate:String(d.get('contractDate')||''),coverageEndDate:String(d.get('coverageEndDate')||''),paymentEndDate:String(d.get('paymentEndDate')||''),status:old?.status||'active',coverages:parseInsuranceCoverages(d.get('coverages')),note:String(d.get('note')||'').trim()};if(p.contractDate&&p.paymentEndDate&&p.paymentEndDate<p.contractDate)return toast('납입 종료일은 계약일보다 빠를 수 없습니다.');if(old)Object.assign(old,p);else insurancePolicies().push(p);syncInsuranceSchedule(p,d.get('linkSchedule')==='on');if(!persist())return;sheetDirty=false;closeSheets();render();setTimeout(openInsuranceHub,60);toast(old?'보험 계약을 수정했습니다.':'보험과 납부 일정을 저장했습니다.')}
-function endInsurancePolicy(id){const p=insurancePolicies().find(x=>x.id===id);if(!p)return;showDialog({title:'보험 계약을 종료할까요?',message:'보험 기록과 과거 납부내역은 보존하고 앞으로의 연결 일정만 종료합니다.',confirmText:'종료',cancelText:'취소'},()=>{p.status='ended';p.endedAt=localYmd();const schedule=insuranceSchedule(p);if(schedule){schedule.active=false;schedule.endDate=p.endedAt}if(!persist())return;closeSheets();render();setTimeout(openInsuranceHub,60);toast('보험 계약을 종료 보관했습니다.')})}
-
-function recordInsurancePayment(id,{date,amount,source='tracked',paymentId=''}){
- const p=insurancePolicies().find(x=>x.id===id);if(!p)return{ok:false,error:'보험 계약을 찾지 못했습니다.'};
- const error=postedDateError(date);if(error)return{ok:false,error};
- if(p.contractDate&&date<p.contractDate)return{ok:false,error:'계약일 이전에는 납부를 기록할 수 없습니다.'};
- if((p.endedAt&&date>p.endedAt)||(p.paymentEndDate&&date>p.paymentEndDate))return{ok:false,error:'납입 종료일 이후입니다. 계약 기간을 확인해 주세요.'};
- if(!Number.isFinite(Number(amount))||Number(amount)<=0)return{ok:false,error:'납부 금액을 1원 이상 입력해 주세요.'};
- const ledger=integratedStore().ledger;if(paymentId&&ledger.some(t=>t.id===paymentId))return{ok:false,error:'이미 저장한 납부 기록입니다.'};
- const tx={id:paymentId||uid('insurance-payment'),date,type:source==='outside'?'externalExpense':'expense',amount:Number(amount),fromAccountId:source==='outside'?undefined:'cash-main',category:p.name+' 보험료',productId:id,fixed:true,meta:{insurancePayment:true}};
- const err=integratedValidateCandidate(tx,'');if(err)return{ok:false,error:err};ledger.push(tx);return{ok:true,transaction:tx}
+function insuranceSchedule(policy) { if (!policy?.id)
+    return null; return financeSchedules().find(s => s.kind === 'insurance' && String(s.productId || '') === String(policy.id)) || null; }
+function insuranceCoverageText(rows = []) { return rows.map(c => [c.name, Number(c.amount) || '', c.note || ''].join(' | ')).join('\n'); }
+function parseInsuranceCoverages(value) { return String(value || '').split(/\r?\n/).map(line => line.trim()).filter(Boolean).map(line => { const [name = '', amount = '', ...note] = line.split('|').map(x => x.trim()); return { name, amount: Math.max(0, Number(String(amount).replace(/,/g, '')) || 0), note: note.join(' | ') }; }).filter(c => c.name); }
+function syncInsuranceSchedule(policy, linkSchedule = true) { let schedule = insuranceSchedule(policy); if (!linkSchedule) {
+    if (schedule) {
+        schedule.active = false;
+        schedule.endDate = schedule.endDate || localYmd();
+    }
+    return null;
+} if (policy.paymentStyle !== 'monthly' || policy.status === 'ended' || !Number(policy.premium)) {
+    if (schedule) {
+        schedule.active = false;
+        schedule.endDate = policy.endedAt || policy.paymentEndDate || localYmd();
+    }
+    return schedule || null;
+} if (!schedule) {
+    const matches = financeSchedules().filter(s => s.kind === 'insurance' && !s.productId && normalizeName(s.name) === normalizeName(policy.name) && Math.abs((Number(s.amount) || 0) - (Number(policy.premium) || 0)) < .5);
+    if (matches.length === 1)
+        schedule = matches[0];
+} const next = { id: schedule?.id || `schedule-insurance-${policy.id}`, name: policy.name, kind: 'insurance', amount: Number(policy.premium) || 0, amountMode: 'fixed', day: Math.min(31, Math.max(0, Number(policy.paymentDay) || 0)), recurrence: 'monthly', startDate: policy.contractDate || '', endDate: policy.paymentEndDate || '', targetKind: '', targetAccountId: '', targetPensionAccountId: '', targetIsaAccountId: '', productId: policy.id, liabilityId: '', active: true, note: `${policy.company || '보험사 미입력'} · 보험료`, source: 'insurance-policy', needsDate: !Number(policy.paymentDay), attention: !Number(policy.paymentDay) ? 'date-required' : '' }; if (schedule)
+    Object.assign(schedule, next);
+else
+    financeSchedules().push(next); return next; }
+function insuranceCardMarkup(p) { const schedule = insuranceSchedule(p); return `<button class="finance-product-card ${p.status === 'ended' ? 'ended' : ''}" data-insurance-id="${escapeHtml(p.id)}"><div><strong>${escapeHtml(p.name)} <span class="finance-status-pill ${p.status === 'active' ? 'active' : ''}">${p.status === 'active' ? '유지' : '종료'}</span></strong><small>${escapeHtml(p.company || '보험사 미입력')} · ${escapeHtml(p.category || '분류 미입력')}<br>${p.paymentStyle === 'lump' ? '일시납' : `월 ${won(p.premium)}`} · ${p.paymentStyle === 'lump' ? '반복 일정 없음' : schedule?.active && !schedule.needsDate ? `${schedule.day}일 일정 연결` : p.status === 'ended' ? '일정 종료' : '일정 연결 안 됨'}</small></div><b>›</b></button>`; }
+function openInsuranceHub() { const rows = insurancePolicies(), active = rows.filter(p => p.status === 'active'), ended = rows.filter(p => p.status === 'ended'), monthly = insuranceMonthlyPremium(); $('#sheetEyebrow').textContent = '보장성 보험'; $('#sheetTitle').textContent = '내 보험'; $('#sheetBody').innerHTML = `<div class="sheetrows"><div class="sheetrow total"><span>현재 월 보험료</span><strong>${won(monthly)}</strong></div></div><div class="policy-toolbar"><strong>유지 중 ${active.length}건</strong><button data-insurance-new>＋ 보험 추가</button></div><div class="finance-product-list">${active.map(insuranceCardMarkup).join('') || '<div class="integrated-empty">유지 중인 보험이 없습니다.</div>'}</div>${ended.length ? `<div class="finance-archive-title">종료된 보험 · ${ended.length}건</div><div class="finance-product-list">${ended.map(insuranceCardMarkup).join('')}</div>` : ''}`; openSheet('#detailSheet'); $('[data-insurance-new]')?.addEventListener('click', () => openInsuranceForm()); $$('[data-insurance-id]').forEach(b => b.onclick = () => openInsuranceDetail(b.dataset.insuranceId)); }
+function openInsuranceDetail(id) { const p = insurancePolicies().find(x => x.id === id); if (!p)
+    return; $('#sheetEyebrow').textContent = '보험 · 계약'; $('#sheetTitle').textContent = p.name; const premium = insurancePremiumSummary(p), schedule = insuranceSchedule(p), rows = [['보험사', p.company], ['분류', p.category], ['계약일', p.contractDate], ['보장 만기', p.coverageEndDate], ['납입 종료', p.paymentEndDate], ['보험료', p.paymentStyle === 'lump' ? won(p.premium) : `월 ${won(p.premium)}`], ['납부 일정', p.paymentStyle === 'lump' ? '반복 일정 없음' : p.status === 'ended' ? '일정 종료' : schedule?.active ? (schedule.needsDate ? '납부일 확인 필요' : `매월 ${schedule.day}일`) : '연결 안 됨'], ['계약 총 보험료 · 예상', won(premium.total)], ['실제 납부 기록', won(premium.paid)], ...(premium.previousRecorded ? [['기존 등록 누계 · 별도', won(premium.previousRecorded)]] : []), ['다음 달 이후 · 예상', won(premium.remaining)]]; $('#sheetBody').innerHTML = `<div class="sheetrows">${rows.map(([k, v]) => `<div class="sheetrow"><span>${escapeHtml(k)}</span><strong>${escapeHtml(v || '-')}</strong></div>`).join('')}</div><div class="policy-toolbar"><strong>보장 항목 ${p.coverages.length}개</strong></div><div class="sheetrows">${p.coverages.map((c) => `<div class="sheetrow"><span>${escapeHtml(c.name)}${c.note ? `<small style="display:block">${escapeHtml(c.note)}</small>` : ''}</span><strong>${won(c.amount)}</strong></div>`).join('') || '<div class="integrated-empty">보장 항목이 없습니다.</div>'}</div>${p.note ? `<div class="source-note">${escapeHtml(p.note)}</div>` : ''}<button class="diagnostic-action" data-insurance-payment="${escapeHtml(p.id)}">납부 기록</button>${p.status === 'active' ? `<div class="finance-detail-actions"><button class="primary" data-insurance-edit="${escapeHtml(p.id)}">계약 수정</button><button class="danger" data-insurance-end="${escapeHtml(p.id)}">종료 처리</button></div>` : ''}`; openSheet('#detailSheet'); $('[data-insurance-payment]')?.addEventListener('click', () => openInsurancePaymentForm(id)); $('[data-insurance-edit]')?.addEventListener('click', () => openInsuranceForm(id)); $('[data-insurance-end]')?.addEventListener('click', () => endInsurancePolicy(id)); }
+function openInsuranceForm(id = '') { const p = insurancePolicies().find(x => x.id === id) || null, schedule = insuranceSchedule(p); $('#formEyebrow').textContent = '보험 · 계약 관리'; $('#formTitle').textContent = p ? '보험 계약 수정' : '보험 추가'; $('#formBody').innerHTML = `<form id="insuranceForm" class="form" data-insurance-id="${escapeHtml(p?.id || '')}"><div class="form-grid"><div class="field"><label>보험명</label><input name="name" value="${escapeHtml(p?.name || '')}" required></div><div class="field"><label>보험사</label><input name="company" value="${escapeHtml(p?.company || '')}"></div></div><div class="field"><label>분류</label><input name="category" value="${escapeHtml(p?.category || '')}" placeholder="예: 실손·건강·운전자"></div><div class="form-grid"><div class="field"><label>계약일</label><input name="contractDate" type="date" value="${escapeHtml(p?.contractDate || '')}"></div><div class="field"><label>보장 만기</label><input name="coverageEndDate" type="date" value="${escapeHtml(p?.coverageEndDate || '')}"></div></div><div class="form-grid"><div class="field"><label>납입 종료</label><input name="paymentEndDate" type="date" value="${escapeHtml(p?.paymentEndDate || '')}"></div><div class="field"><label>납입 방식</label><select name="paymentStyle"><option value="monthly" ${p?.paymentStyle !== 'lump' ? 'selected' : ''}>월납</option><option value="lump" ${p?.paymentStyle === 'lump' ? 'selected' : ''}>일시납</option></select></div></div><div class="form-grid"><div class="field"><label>보험료</label><input name="premium" type="number" min="0" step="1" inputmode="numeric" value="${escapeHtml(Number(p?.premium) || '')}" required></div><div class="field"><label>월 납부일</label><input name="paymentDay" type="number" min="1" max="31" value="${escapeHtml(Number(p?.paymentDay) || Number(schedule?.day) || '')}" placeholder="확인 후 입력"></div></div><label class="insurance-schedule-link"><input name="linkSchedule" type="checkbox" ${schedule || !p ? 'checked' : ''}><span>보험료를 통합 일정과 연결</span></label><div class="field"><label>보장 항목 <small>한 줄에 이름 | 금액 | 메모</small></label><textarea name="coverages" rows="6" placeholder="입원의료비 | 50000000 | 갱신형">${escapeHtml(insuranceCoverageText(p?.coverages || []))}</textarea></div><div class="field"><label>메모</label><input name="note" value="${escapeHtml(p?.note || '')}"></div><button class="integrated-form-save">${p ? '수정 저장' : '보험 저장'}</button></form>`; openSheet('#formSheet', { mode: 'input' }); $('#insuranceForm').onsubmit = (e) => { e.preventDefault(); saveInsurancePolicy(e.currentTarget); }; }
+function saveInsurancePolicy(form) { const d = new FormData(form), id = form.dataset.insuranceId || uid('insurance'), old = insurancePolicies().find(x => x.id === id), name = String(d.get('name') || '').trim(), premium = Math.max(0, Math.round(Number(d.get('premium')) || 0)), paymentDay = Math.min(31, Math.max(0, Math.round(Number(d.get('paymentDay')) || 0))); if (!name)
+    return toast('보험명을 입력해 주세요.'); if (!premium)
+    return toast('보험료를 입력해 주세요.'); const p = { ...(old || {}), id, name, company: String(d.get('company') || '').trim(), category: String(d.get('category') || '').trim(), premium, paymentDay, paymentStyle: String(d.get('paymentStyle')) === 'lump' ? 'lump' : 'monthly', contractDate: String(d.get('contractDate') || ''), coverageEndDate: String(d.get('coverageEndDate') || ''), paymentEndDate: String(d.get('paymentEndDate') || ''), status: old?.status || 'active', coverages: parseInsuranceCoverages(d.get('coverages')), note: String(d.get('note') || '').trim() }; if (p.contractDate && p.paymentEndDate && p.paymentEndDate < p.contractDate)
+    return toast('납입 종료일은 계약일보다 빠를 수 없습니다.'); if (old)
+    Object.assign(old, p);
+else
+    insurancePolicies().push(p); syncInsuranceSchedule(p, d.get('linkSchedule') === 'on'); if (!persist())
+    return; sheetDirty = false; closeSheets(); render(); setTimeout(openInsuranceHub, 60); toast(old ? '보험 계약을 수정했습니다.' : '보험과 납부 일정을 저장했습니다.'); }
+function endInsurancePolicy(id) { const p = insurancePolicies().find(x => x.id === id); if (!p)
+    return; showDialog({ title: '보험 계약을 종료할까요?', message: '보험 기록과 과거 납부내역은 보존하고 앞으로의 연결 일정만 종료합니다.', confirmText: '종료', cancelText: '취소' }, () => { p.status = 'ended'; p.endedAt = localYmd(); const schedule = insuranceSchedule(p); if (schedule) {
+    schedule.active = false;
+    schedule.endDate = p.endedAt;
+} if (!persist())
+    return; closeSheets(); render(); setTimeout(openInsuranceHub, 60); toast('보험 계약을 종료 보관했습니다.'); }); }
+function recordInsurancePayment(id, { date, amount, source = 'tracked', paymentId = '' }) {
+    const p = insurancePolicies().find(x => x.id === id);
+    if (!p)
+        return { ok: false, error: '보험 계약을 찾지 못했습니다.' };
+    const error = postedDateError(date);
+    if (error)
+        return { ok: false, error };
+    if (p.contractDate && date < p.contractDate)
+        return { ok: false, error: '계약일 이전에는 납부를 기록할 수 없습니다.' };
+    if ((p.endedAt && date > p.endedAt) || (p.paymentEndDate && date > p.paymentEndDate))
+        return { ok: false, error: '납입 종료일 이후입니다. 계약 기간을 확인해 주세요.' };
+    if (!Number.isFinite(Number(amount)) || Number(amount) <= 0)
+        return { ok: false, error: '납부 금액을 1원 이상 입력해 주세요.' };
+    const ledger = integratedStore().ledger;
+    if (paymentId && ledger.some(t => t.id === paymentId))
+        return { ok: false, error: '이미 저장한 납부 기록입니다.' };
+    const tx = { id: paymentId || uid('insurance-payment'), date, type: source === 'outside' ? 'externalExpense' : 'expense', amount: Number(amount), fromAccountId: source === 'outside' ? undefined : 'cash-main', category: p.name + ' 보험료', productId: id, fixed: true, meta: { insurancePayment: true } };
+    const err = integratedValidateCandidate(tx, '');
+    if (err)
+        return { ok: false, error: err };
+    ledger.push(tx);
+    return { ok: true, transaction: tx };
 }
-function openInsurancePaymentForm(id){
- const p=insurancePolicies().find(x=>x.id===id);if(!p)return;
- $('#formEyebrow').textContent='보험 · 실제 납부';$('#formTitle').textContent='보험료 납부 기록';
- $('#formBody').innerHTML=`<form id="insurancePaymentForm" class="form"><div class="form-grid"><div class="field"><label>납부일</label><input name="date" type="date" value="${escapeHtml(ymd())}" required></div><div class="field"><label>실제 납부액</label><input name="amount" type="number" min="1" step="1" value="${escapeHtml(Number(p.premium)||'')}" required></div></div><div class="field"><label>지급 계좌</label><select name="source"><option value="tracked">현금·입출금</option><option value="outside">앱 밖 계좌</option></select></div><div class="source-note">일정에서 이미 완료한 납부는 다시 입력하지 않습니다.</div><button class="integrated-form-save">납부 저장</button></form>`;
- openSheet('#formSheet',{mode:'input'});const paymentId=uid('insurance-payment');$('#insurancePaymentForm').onsubmit=e=>{e.preventDefault();const d=new FormData(e.currentTarget),r=recordInsurancePayment(id,{date:String(d.get('date')||''),amount:Number(d.get('amount')),source:String(d.get('source')||'tracked'),paymentId});if(!r.ok)return toast(r.error);setting().integratedMonth=integratedMonthKey(r.transaction.date);setting().integratedLedgerFilter='all';if(!persist())return;sheetDirty=false;closeSheets();render();setTimeout(()=>openInsuranceDetail(id),60);toast('실제 납부 기록을 저장했습니다.')}
+function openInsurancePaymentForm(id) {
+    const p = insurancePolicies().find(x => x.id === id);
+    if (!p)
+        return;
+    $('#formEyebrow').textContent = '보험 · 실제 납부';
+    $('#formTitle').textContent = '보험료 납부 기록';
+    $('#formBody').innerHTML = `<form id="insurancePaymentForm" class="form"><div class="form-grid"><div class="field"><label>납부일</label><input name="date" type="date" value="${escapeHtml(ymd())}" required></div><div class="field"><label>실제 납부액</label><input name="amount" type="number" min="1" step="1" value="${escapeHtml(Number(p.premium) || '')}" required></div></div><div class="field"><label>지급 계좌</label><select name="source"><option value="tracked">현금·입출금</option><option value="outside">앱 밖 계좌</option></select></div><div class="source-note">일정에서 이미 완료한 납부는 다시 입력하지 않습니다.</div><button class="integrated-form-save">납부 저장</button></form>`;
+    openSheet('#formSheet', { mode: 'input' });
+    const paymentId = uid('insurance-payment');
+    $('#insurancePaymentForm').onsubmit = (e) => { e.preventDefault(); const d = new FormData(e.currentTarget), r = recordInsurancePayment(id, { date: String(d.get('date') || ''), amount: Number(d.get('amount')), source: String(d.get('source') || 'tracked'), paymentId }); if (!r.ok)
+        return toast(r.error); setting().integratedMonth = integratedMonthKey(r.transaction.date); setting().integratedLedgerFilter = 'all'; if (!persist())
+        return; sheetDirty = false; closeSheets(); render(); setTimeout(() => openInsuranceDetail(id), 60); toast('실제 납부 기록을 저장했습니다.'); };
 }
 ;
 /* asset-os source: source-archive.js */
 'use strict';
-function sourceArchiveRecords(){return state.sourceArchives?.records||[]}
-function pensionArchiveKinds(scope='all',type='all'){
- const prefix=scope==='pension'?['pension']:scope==='irp'?['irp']:['pension','irp'],suffix=type==='realized'?['Realized']:type==='income'?['Dividend']:['Realized','Dividend'];return prefix.flatMap(p=>suffix.map(s=>p+s))
+function sourceArchiveRecords() { return state.sourceArchives?.records || []; }
+function pensionArchiveKinds(scope = 'all', type = 'all') {
+    const prefix = scope === 'pension' ? ['pension'] : scope === 'irp' ? ['irp'] : ['pension', 'irp'], suffix = type === 'realized' ? ['Realized'] : type === 'income' ? ['Dividend'] : ['Realized', 'Dividend'];
+    return prefix.flatMap(p => suffix.map(s => p + s));
 }
-function pensionArchivePerformanceRows(scope='all'){
- const kinds=new Set(pensionArchiveKinds(scope)),months=new Map();for(const r of sourceArchiveRecords()){if(!kinds.has(r.kind)||!/^\d{4}-\d{2}/.test(String(r.date)))continue;const key=String(r.date).slice(0,7),row=months.get(key)||{key,date:`${key}-01`,label:key.slice(2).replace('-','.'),realized:0,income:0,total:0,cumulativeRealized:0,cumulativeIncome:0,cumulativeTotal:0};if(String(r.kind).endsWith('Realized'))row.realized+=Number(r.amount)||0;else row.income+=Number(r.amount)||0;row.total=row.realized+row.income;months.set(key,row)}let realized=0,income=0;return [...months.values()].sort((a,b)=>a.date.localeCompare(b.date)).map(row=>{realized+=row.realized;income+=row.income;return{...row,cumulativeRealized:realized,cumulativeIncome:income,cumulativeTotal:realized+income}})
+function pensionArchivePerformanceRows(scope = 'all') {
+    const kinds = new Set(pensionArchiveKinds(scope)), months = new Map();
+    for (const r of sourceArchiveRecords()) {
+        if (!kinds.has(r.kind) || !/^\d{4}-\d{2}/.test(String(r.date)))
+            continue;
+        const key = String(r.date).slice(0, 7), row = months.get(key) || { key, date: `${key}-01`, label: key.slice(2).replace('-', '.'), realized: 0, income: 0, total: 0, cumulativeRealized: 0, cumulativeIncome: 0, cumulativeTotal: 0 };
+        if (String(r.kind).endsWith('Realized'))
+            row.realized += Number(r.amount) || 0;
+        else
+            row.income += Number(r.amount) || 0;
+        row.total = row.realized + row.income;
+        months.set(key, row);
+    }
+    let realized = 0, income = 0;
+    return [...months.values()].sort((a, b) => String(a.date).localeCompare(String(b.date))).map(row => { realized += Number(row.realized) || 0; income += Number(row.income) || 0; return { ...row, cumulativeRealized: realized, cumulativeIncome: income, cumulativeTotal: realized + income }; });
 }
-function pensionArchivePerformanceSummary(scope='all'){
- const rows=pensionArchivePerformanceRows(scope),last=rows.at(-1)||{cumulativeRealized:0,cumulativeIncome:0,cumulativeTotal:0};return{scope,rows,count:sourceArchiveRecords().filter(r=>pensionArchiveKinds(scope).includes(r.kind)).length,realized:last.cumulativeRealized,income:last.cumulativeIncome,total:last.cumulativeTotal}
+function pensionArchivePerformanceSummary(scope = 'all') {
+    const rows = pensionArchivePerformanceRows(scope), last = rows.at(-1) || { cumulativeRealized: 0, cumulativeIncome: 0, cumulativeTotal: 0 };
+    return { scope, rows, count: sourceArchiveRecords().filter(r => pensionArchiveKinds(scope).includes(r.kind)).length, realized: last.cumulativeRealized, income: last.cumulativeIncome, total: last.cumulativeTotal };
 }
-function pensionArchiveIncomeRecords(scope='all'){
- const kinds=new Set(pensionArchiveKinds(scope,'income'));return sourceArchiveRecords().filter(r=>kinds.has(r.kind)&&/^\d{4}-\d{2}/.test(String(r.date))&&(Number(r.amount)||0)>0).map(r=>({id:r.id,accountId:'',holdingId:'',accountKind:String(r.kind).startsWith('irp')?'irp':'pension',type:'dividend',date:r.date,amount:Number(r.amount)||0,label:r.label,source:'source-archive'}))
+function pensionArchiveIncomeRecords(scope = 'all') {
+    const kinds = new Set(pensionArchiveKinds(scope, 'income'));
+    return sourceArchiveRecords().filter(r => kinds.has(r.kind) && /^\d{4}-\d{2}/.test(String(r.date)) && (Number(r.amount) || 0) > 0).map(r => ({ id: r.id, accountId: '', holdingId: '', accountKind: String(r.kind).startsWith('irp') ? 'irp' : 'pension', type: 'dividend', date: r.date, amount: Number(r.amount) || 0, label: r.label, source: 'source-archive' }));
 }
-function pensionArchiveTransactionRows(scope='all'){
- const kinds=new Set(pensionArchiveKinds(scope));return sourceArchiveRecords().filter(r=>kinds.has(r.kind)&&/^\d{4}-\d{2}/.test(String(r.date))).map(r=>{const kind=String(r.kind||''),accountKind=kind.startsWith('irp')?'irp':'pension',income=kind.endsWith('Dividend');return{id:r.id,archive:true,readOnly:true,source:'source-archive',accountKind,type:income?'dividend':'realized',date:String(r.date),amount:Number(r.amount)||0,label:String(r.label||''),note:String(r.note||''),meta:r.meta||{}}}).sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.id).localeCompare(String(a.id)))
+function pensionArchiveTransactionRows(scope = 'all') {
+    const kinds = new Set(pensionArchiveKinds(scope));
+    return sourceArchiveRecords().filter(r => kinds.has(r.kind) && /^\d{4}-\d{2}/.test(String(r.date))).map(r => { const kind = String(r.kind || ''), accountKind = kind.startsWith('irp') ? 'irp' : 'pension', income = kind.endsWith('Dividend'); return { id: r.id, archive: true, readOnly: true, source: 'source-archive', accountKind, type: income ? 'dividend' : 'realized', date: String(r.date), amount: Number(r.amount) || 0, label: String(r.label || ''), note: String(r.note || ''), meta: r.meta || {} }; }).sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.id).localeCompare(String(a.id)));
 }
-function openPensionArchiveRecord(id){const r=sourceArchiveRecords().find(x=>String(x.id)===String(id));if(!r)return toast('과거자료를 찾지 못했습니다.');const reconciled=typeof pensionIncomeRecords==='function'?pensionIncomeRecords('all').find(x=>x.id===id&&x.archive):null;const kind=String(r.kind||''),income=kind.endsWith('Dividend'),account=kind.startsWith('irp')?'IRP':'연금저축';$('#sheetEyebrow').textContent=`${account} · 과거자료`;$('#sheetTitle').textContent=income?'배당':'실현손익';$('#sheetBody').innerHTML=`<div class="profitbox"><div class="metric"><span>금액</span><strong class="${escapeHtml(Number(r.amount)<0?'negative':'positive')}">${income?won(r.amount):signed(r.amount)}</strong></div><div class="metric"><span>기준일</span><strong>${formatDate(r.date)}</strong></div></div><div class="sheetrows"><div class="sheetrow"><span>계좌</span><strong>${account}</strong></div><div class="sheetrow"><span>원본 구분</span><strong>${escapeHtml(r.label||(income?'배당':'실현손익'))}</strong></div><div class="sheetrow"><span>저장 상태</span><strong>원본 확정 · 읽기 전용</strong></div></div>${reconciled?.reconciledAmount?`<div class="source-note">원본 월합계 ${won(reconciled.originalAmount)} 중 개별 내역 ${won(reconciled.reconciledAmount)}을 제외한 ${won(reconciled.amount)}만 합산합니다. 원본 기록은 유지됩니다.</div>`:''}<div class="source-note">증권사 과거 내역에서 옮긴 확정자료입니다. 현재 잔고·평단·거래 가능 현금 계산에는 다시 더하지 않습니다.</div>`;openSheet('#detailSheet')}
+function openPensionArchiveRecord(id) { const r = sourceArchiveRecords().find(x => String(x.id) === String(id)); if (!r)
+    return toast('과거자료를 찾지 못했습니다.'); const reconciled = typeof pensionIncomeRecords === 'function' ? pensionIncomeRecords('all').find(x => x.id === id && x.archive) : null; const kind = String(r.kind || ''), income = kind.endsWith('Dividend'), account = kind.startsWith('irp') ? 'IRP' : '연금저축'; $('#sheetEyebrow').textContent = `${account} · 과거자료`; $('#sheetTitle').textContent = income ? '배당' : '실현손익'; $('#sheetBody').innerHTML = `<div class="profitbox"><div class="metric"><span>금액</span><strong class="${escapeHtml(Number(r.amount) < 0 ? 'negative' : 'positive')}">${income ? won(r.amount) : signed(r.amount)}</strong></div><div class="metric"><span>기준일</span><strong>${formatDate(r.date)}</strong></div></div><div class="sheetrows"><div class="sheetrow"><span>계좌</span><strong>${account}</strong></div><div class="sheetrow"><span>원본 구분</span><strong>${escapeHtml(r.label || (income ? '배당' : '실현손익'))}</strong></div><div class="sheetrow"><span>저장 상태</span><strong>원본 확정 · 읽기 전용</strong></div></div>${reconciled?.reconciledAmount ? `<div class="source-note">원본 월합계 ${won(reconciled.originalAmount)} 중 개별 내역 ${won(reconciled.reconciledAmount)}을 제외한 ${won(reconciled.amount)}만 합산합니다. 원본 기록은 유지됩니다.</div>` : ''}<div class="source-note">증권사 과거 내역에서 옮긴 확정자료입니다. 현재 잔고·평단·거래 가능 현금 계산에는 다시 더하지 않습니다.</div>`; openSheet('#detailSheet'); }
 ;
 /* asset-os source: core-accessors.js */
 'use strict';
