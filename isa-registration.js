@@ -47,7 +47,8 @@ function updateRegistrationSummaryUI() {
         return;
     const wrap = document.createElement('div');
     wrap.innerHTML = registrationSummaryMarkup();
-    current.replaceWith(wrap.firstElementChild);
+    if (wrap.firstElementChild)
+        current.replaceWith(wrap.firstElementChild);
     const a = currentAccount();
     holdingRegistrationDraft.items.forEach(item => { const card = findDataElement($("#registerBody"), "data-registration-item", item.id), badge = card?.querySelectorAll('.registration-badge')?.[1]; if (!badge)
         return; const existing = registrationExistingHolding(item, a); badge.className = `registration-badge ${existing ? 'update' : 'new'}`; badge.textContent = existing ? '기존 종목 갱신' : '신규 종목'; });
@@ -176,7 +177,7 @@ function showRegistrationError(result) { $$('#registerBody .registration-item').
     card.classList.add('has-error');
     if (!card.querySelector('.registration-error'))
         card.insertAdjacentHTML('beforeend', `<div class="registration-error">${escapeHtml(result.error)}</div>`);
-} const target = ids.length ? findDataElement($("#registerBody"), "data-registration-item", ids[0]) : null; target?.scrollIntoView({ behavior: 'smooth', block: 'center' }); toast(result.error); }
+} const target = ids.length ? findDataElement($("#registerBody"), "data-registration-item", ids[0]) : null; target?.scrollIntoView({ behavior: 'smooth', block: 'center' }); toast(result.error || '거래 값을 확인해 주세요.'); }
 function saveHoldingRegistration() {
     syncRegistrationDraft();
     const result = applyHoldingRegistrationToAccount(currentAccount(), holdingRegistrationDraft);
@@ -196,7 +197,8 @@ function saveHoldingRegistration() {
     render();
     toast(`보유내역 저장 · 신규 ${result.summary.new} / 변경 ${result.summary.updated}`);
 }
-function openTransactionChoice() { const grid = $('#actionGrid'); $('#actionTitle').textContent = 'ISA 빠른 입력'; grid.className = 'actiongrid'; grid.innerHTML = `<div class="action-choice-sheet" style="grid-column:1/-1"><div class="source-note"><strong>납입은 통합에서만 기록합니다.</strong><br>여기서는 계좌 안에서 실제로 발생한 거래만 간단하게 입력합니다.</div><div class="action-choice-list"><button class="action-choice-item" data-t="buy"><div><strong>매수</strong><small>등록된 종목만 선택</small></div><span>›</span></button><button class="action-choice-item" data-t="sell"><div><strong>매도</strong><small>현재 보유수량이 있는 종목</small></div><span>›</span></button><button class="action-choice-item" data-t="distribution"><div><strong>ETF 분배금</strong><small>계좌 현금으로 받은 분배금</small></div><span>›</span></button><button class="action-choice-item" data-t="dividend"><div><strong>주식 배당</strong><small>개별 종목 배당금 기록</small></div><span>›</span></button><button class="action-choice-item" data-t="interest"><div><strong>예수금 이자</strong><small>종목 선택 없이 이자만 기록</small></div><span>›</span></button><button class="action-choice-item" data-t="withdrawal"><div><strong>일반 출금</strong><small>실제 ISA 외부출금 기록</small></div><span>›</span></button><button class="action-choice-item" data-register><div><strong>보유내역 등록</strong><small>직접 보유내역 입력</small></div><span>›</span></button></div></div>`; openSheet('#actionSheet'); $$('[data-t]').forEach((b) => b.onclick = () => openTransactionForm(b.dataset.t || '')); grid.querySelector('[data-register]').onclick = openRegisterChoice; }
+function openTransactionChoice() { const grid = $('#actionGrid'); $('#actionTitle').textContent = 'ISA 빠른 입력'; grid.className = 'actiongrid'; grid.innerHTML = `<div class="action-choice-sheet" style="grid-column:1/-1"><div class="source-note"><strong>납입은 통합에서만 기록합니다.</strong><br>여기서는 계좌 안에서 실제로 발생한 거래만 간단하게 입력합니다.</div><div class="action-choice-list"><button class="action-choice-item" data-t="buy"><div><strong>매수</strong><small>등록된 종목만 선택</small></div><span>›</span></button><button class="action-choice-item" data-t="sell"><div><strong>매도</strong><small>현재 보유수량이 있는 종목</small></div><span>›</span></button><button class="action-choice-item" data-t="distribution"><div><strong>ETF 분배금</strong><small>계좌 현금으로 받은 분배금</small></div><span>›</span></button><button class="action-choice-item" data-t="dividend"><div><strong>주식 배당</strong><small>개별 종목 배당금 기록</small></div><span>›</span></button><button class="action-choice-item" data-t="interest"><div><strong>예수금 이자</strong><small>종목 선택 없이 이자만 기록</small></div><span>›</span></button><button class="action-choice-item" data-t="withdrawal"><div><strong>일반 출금</strong><small>실제 ISA 외부출금 기록</small></div><span>›</span></button><button class="action-choice-item" data-register><div><strong>보유내역 등록</strong><small>직접 보유내역 입력</small></div><span>›</span></button></div></div>`; openSheet('#actionSheet'); $$('[data-t]').forEach((b) => b.onclick = () => openTransactionForm(b.dataset.t || '')); const registerButton = grid.querySelector('[data-register]'); if (registerButton)
+    registerButton.onclick = openRegisterChoice; }
 function openRegisterChoice() { openHoldingRegistration(); }
 function eligibleHoldings(type) { const a = currentAccount(), m = accountMetrics(a); return m.holdings.filter(h => ['sell', 'dividend', 'distribution'].includes(type) ? h.qty > 0 : true); }
 function nextSequence(a, date) { return Math.max(0, ...(a.transactions || []).filter(t => txDate(t) === date).map(t => txSequence(t))) + 1; }
@@ -209,7 +211,7 @@ let openTransactionForm = function (type, editId = null, preHolding = null, sour
     const a = currentAccount();
     if (!isTradeableAccount(a))
         return toast(a.status === 'maturity_pending' ? '만기 처리 대기 중에는 거래를 입력·수정할 수 없습니다.' : '종료된 ISA 거래는 수정할 수 없습니다.');
-    const old = editId ? a.transactions.find(t => t.id === editId) : null, sourceTx = old || template, needsHolding = ['buy', 'sell', 'dividend', 'distribution'].includes(type), hs = eligibleHoldings(type), reversibleSources = type === 'depositReversal' ? sortTxs(a.transactions || []).filter(t => ['deposit', 'internalTransferIn'].includes(t.type) && t.status !== 'cancelled').map((src) => { const reversed = (a.transactions || []).filter(r => r.type === 'depositReversal' && r.status !== 'cancelled' && r.id !== editId && r.reversesTransactionId === src.id).reduce((sum, r) => sum + (Number(r.amount) || 0), 0); return { ...src, remaining: Math.max(0, (Number(src.amount) || 0) - reversed) }; }).filter(src => src.remaining > Number(a.reconciliationTolerance || 10)) : [];
+    const old = editId ? a.transactions.find(t => t.id === editId) : null, sourceTx = old || template, needsHolding = ['buy', 'sell', 'dividend', 'distribution'].includes(type), hs = eligibleHoldings(type), reversibleSources = type === 'depositReversal' ? sortTxs(a.transactions || []).filter(t => ['deposit', 'internalTransferIn'].includes(t.type || '') && t.status !== 'cancelled').map((src) => { const reversed = (a.transactions || []).filter(r => r.type === 'depositReversal' && r.status !== 'cancelled' && r.id !== editId && r.reversesTransactionId === src.id).reduce((sum, r) => sum + (Number(r.amount) || 0), 0); return { ...src, remaining: Math.max(0, (Number(src.amount) || 0) - reversed) }; }).filter(src => (src.remaining || 0) > Number(a.reconciliationTolerance || 10)) : [];
     if (needsHolding && !hs.length)
         return toast('선택 가능한 보유종목이 없습니다.');
     if (type === 'depositReversal' && !reversibleSources.length)
@@ -241,13 +243,13 @@ let openTransactionForm = function (type, editId = null, preHolding = null, sour
         tx.amount = Number(fd.get('amount')); const dateError = isaTransactionDateError(a, date); if (dateError)
         return toast(dateError); const numericError = transactionNumericError(tx); if (numericError)
         return toast(numericError); if (editId)
-        tx.revisions.push(transactionRevision(old, tx, 'edit', fd.get('changeReason'))); tx.idempotencyKey = stableTxKey(tx); const dup = findDuplicateTransaction(a, tx, editId || ''); if (dup)
+        (tx.revisions ??= []).push(transactionRevision(old, tx, 'edit', fd.get('changeReason'))); tx.idempotencyKey = stableTxKey(tx); const dup = findDuplicateTransaction(a, tx, editId || ''); if (dup)
         return toast(`같은 거래가 이미 있습니다. ${formatDate(txDate(dup))} ${typeText(dup.type)}`); const candidate = editId ? a.transactions.map(t => t.id === editId ? tx : { ...t }) : [...a.transactions.map(t => ({ ...t })), tx]; if (tx.sourceDividendId && type === 'buy') {
         const source = candidate.find(t => t.id === tx.sourceDividendId);
         if (source)
             source.linkedBuyId = tx.id;
     } const result = replay(a, candidate); if (!result.valid)
-        return toast(result.error); const commit = () => { const submitButton = form.querySelector('button[type="submit"],button:not([type])'); if (submitButton?.disabled)
+        return toast(result.error || '거래 값을 확인해 주세요.'); const commit = () => { const submitButton = form.querySelector('button[type="submit"],button:not([type])'); if (submitButton?.disabled)
         return; if (submitButton)
         submitButton.disabled = true; a.transactions = candidate; if (!persist()) {
         if (submitButton)
@@ -256,28 +258,28 @@ let openTransactionForm = function (type, editId = null, preHolding = null, sour
     } sheetDirty = false; closeSheets(); render(); if (['dividend', 'distribution'].includes(type) && !editId)
         setTimeout(() => openDividendSaved(tx), 80);
     else
-        toast(editId ? '거래를 수정했습니다.' : template ? '같은 내용으로 새 거래를 저장했습니다.' : '거래를 저장했습니다.'); }; if (type === 'buy' && transactionPositionValue(getHolding(a, tx.holdingId), tx.qty, tx.price) + tx.fee + tx.tax > accountMetrics(a).cash + 1e-8)
+        toast(editId ? '거래를 수정했습니다.' : template ? '같은 내용으로 새 거래를 저장했습니다.' : '거래를 저장했습니다.'); }; if (type === 'buy' && transactionPositionValue(getHolding(a, tx.holdingId), Number(tx.qty) || 0, Number(tx.price) || 0) + (tx.fee || 0) + (tx.tax || 0) > accountMetrics(a).cash + 1e-8)
         return toast('ISA 계좌 현금이 부족합니다. 통합 납입 또는 현금 유입을 먼저 기록해 주세요.'); commit(); };
     if (editId)
         $('#deleteTx').onclick = () => showDialog({ title: '거래를 취소 처리할까요?', message: '원본은 남기고 취소 이력을 기록합니다. 이후 수량·손익·현금을 다시 계산합니다.', confirmText: '취소 처리', danger: true }, () => { const reason = new FormData(form).get('changeReason'), candidate = a.transactions.map(t => { if (t.id !== editId)
             return { ...t }; const next = { ...t, status: 'cancelled', cancelledAt: new Date().toISOString(), revisions: clone(t.revisions || []) }; next.revisions.push(transactionRevision(t, next, 'cancel', reason)); return next; }), result = replay(a, candidate); if (!result.valid)
-            return toast(result.error); a.transactions = candidate; if (!persist())
+            return toast(result.error || '거래 값을 확인해 주세요.'); a.transactions = candidate; if (!persist())
             return; sheetDirty = false; closeSheets(); render(); toast('거래를 취소 처리했습니다.'); });
 };
 function transactionSnapshotSummary(a, x) { if (!x)
     return '-'; const holding = x.holdingId ? getHolding(a, x.holdingId) : null, name = holding ? holding.name : typeText(x.type), date = formatDate(txDate(x)), settle = x.settlementDate ? ` · 결제 ${formatDate(x.settlementDate)}` : '', memo = ` · 메모 ${x.note || '-'}`, status = x.status === 'cancelled' ? ' · 취소됨' : ''; if (x.qty != null)
-    return `${date}${settle} · ${name} · ${holdingQuantityText(holding, x.qty)} × ${won(x.price || 0)} · 수수료 ${won(x.fee || 0)} · 세금 ${won(x.tax || 0)}${memo}${status}`; return `${date}${settle} · ${name} · ${won(x.amount || 0)} · 수수료 ${won(x.fee || 0)} · 세금 ${won(x.tax || 0)}${memo}${status}`; }
+    return `${date}${settle} · ${name} · ${holdingQuantityText(holding, Number(x.qty))} × ${won(x.price || 0)} · 수수료 ${won(x.fee || 0)} · 세금 ${won(x.tax || 0)}${memo}${status}`; return `${date}${settle} · ${name} · ${won(x.amount || 0)} · 수수료 ${won(x.fee || 0)} · 세금 ${won(x.tax || 0)}${memo}${status}`; }
 function openTransactionHistory(id, accountId = '') { const a = state.accounts.find(x => x.id === accountId) || currentAccount(), t = a.transactions.find(x => x.id === id); if (!t)
     return; const rs = [...(t.revisions || [])].sort((x, y) => String(y.changedAt || '').localeCompare(String(x.changedAt || ''))); $('#sheetEyebrow').textContent = '거래 감사 이력'; $('#sheetTitle').textContent = t.holdingId ? holdingName(a, t.holdingId) : typeText(t.type); $('#sheetBody').innerHTML = `<div class="lock-note">원본 거래를 지우지 않고 수정·취소 전후값을 보관합니다. 현재 계산에는 가장 최근 상태만 반영됩니다.</div><div class="revision-list">${rs.length ? rs.map((r, i) => `<article class="revision-card"><div class="revision-head"><div><strong>${rs.length - i}번째 ${revisionLabel(r)}</strong><small>${formatDateTime(r.changedAt)}</small></div><span class="revision-badge ${r.action === 'cancel' ? 'cancel' : ''}">${r.action === 'cancel' ? '취소' : '수정'}</span></div><div class="revision-reason">사유 · ${escapeHtml(r.reason || '-')}</div><div class="revision-change"><div class="revision-side"><span>변경 전</span><strong>${escapeHtml(transactionSnapshotSummary(a, r.before))}</strong></div><div class="revision-arrow">→</div><div class="revision-side"><span>변경 후</span><strong>${escapeHtml(transactionSnapshotSummary(a, r.after))}</strong></div></div></article>`).join('') : '<div class="empty-state"><strong>수정 이력이 없습니다.</strong><span>최초 저장 상태 그대로입니다.</span></div>'}</div>`; openSheet('#detailSheet'); }
 function openTransactionDetail(id, accountId = '') { const a = state.accounts.find(x => x.id === accountId) || currentAccount(), t = a.transactions.find(x => x.id === id); if (!t)
-    return; const facts = transactionFacts(a).get(t.id) || {}, linked = t.linkedBuyId ? a.transactions.find(x => x.id === t.linkedBuyId) : t.sourceDividendId ? a.transactions.find(x => x.id === t.sourceDividendId) : null, revisionCount = (t.revisions || []).length, canEdit = a.status === 'active' && t.status !== 'cancelled' && !['deposit', 'internalTransferIn', 'depositReversal'].includes(t.type), canCopy = a.status === 'active' && t.status === 'cancelled', actions = [canEdit ? '<button class="primary" data-edit-tx>수정·취소</button>' : '', canCopy ? '<button class="primary" data-copy-tx>같은 내용으로 새 거래 만들기</button>' : '', revisionCount ? '<button data-tx-history>수정 이력 보기</button>' : ''].filter(Boolean); $('#sheetEyebrow').textContent = typeText(t.type); $('#sheetTitle').textContent = t.holdingId ? holdingName(a, t.holdingId) : typeText(t.type); $('#sheetBody').innerHTML = `<div class="sheetrows"><div class="sheetrow"><span>날짜</span><strong>${formatDate(txDate(t))}</strong></div>${t.qty ? `<div class="sheetrow"><span>수량</span><strong>${quantityNumber(t.qty)}주</strong></div><div class="sheetrow"><span>단가</span><strong>${won(t.price)}</strong></div>` : `<div class="sheetrow"><span>금액</span><strong>${won(t.amount || 0)}</strong></div>`}<div class="sheetrow"><span>메모</span><strong>${escapeHtml(t.note || '-')}</strong></div><div class="sheetrow total"><span>${t.type === 'sell' ? '매도대금' : t.type === 'buy' ? '매수금액' : ['dividend', 'distribution'].includes(t.type) ? '받은 배당금' : '기록금액'}</span><strong>${won(facts.tradeAmount ?? Math.abs(txAmount(t)))}</strong></div>${t.type === 'sell' && Number.isFinite(facts.realized) ? `<div class="sheetrow"><span>실현손익</span><strong class="${escapeHtml(facts.realized >= 0 ? 'positive' : '')}">${signed(facts.realized)}</strong></div>` : ''}${linked ? `<div class="sheetrow"><span>${['dividend', 'distribution'].includes(t.type) ? '연결된 매수' : '연결된 배당'}</span><strong>${formatDate(txDate(linked))} · ${['dividend', 'distribution'].includes(t.type) ? won(linked.qty * linked.price) : won(linked.amount)}</strong></div>` : ''}<div class="sheetrow"><span>수정·취소 이력</span><strong>${revisionCount}건</strong></div></div>${['dividend', 'distribution'].includes(t.type) ? '<div class="lock-note">배당금은 계좌 현금에 반영됩니다. 재투자는 별도 매수 기록으로 저장하고 필요할 때만 연결합니다.</div>' : ''}${t.status === 'cancelled' ? `<div class="lock-note">${formatDate(String(t.cancelledAt || '').slice(0, 10))} 취소 처리된 거래입니다. 원본은 유지되며 다시 입력할 때는 새 거래로 저장됩니다.</div>` : a.status === 'maturity_pending' ? '<div class="lock-note">만기 처리 대기 중인 ISA 거래입니다. 조회만 가능합니다.</div>' : isPastAccount(a) ? '<div class="lock-note">종료된 ISA의 과거 거래입니다.</div>' : ''}${actions.length ? `<div class="tx-action-grid ${actions.length === 1 ? 'one' : ''}">${actions.join('')}</div>` : ''}`; openSheet('#detailSheet'); $('[data-edit-tx]')?.addEventListener('click', () => openTransactionForm(t.type, t.id)); $('[data-copy-tx]')?.addEventListener('click', () => openTransactionForm(t.type, null, t.holdingId, null, t)); $('[data-tx-history]')?.addEventListener('click', () => openTransactionHistory(t.id, a.id)); }
+    return; const facts = transactionFacts(a).get(t.id || '') || {}, linked = t.linkedBuyId ? a.transactions.find(x => x.id === t.linkedBuyId) : t.sourceDividendId ? a.transactions.find(x => x.id === t.sourceDividendId) : null, revisionCount = (t.revisions || []).length, canEdit = a.status === 'active' && t.status !== 'cancelled' && !['deposit', 'internalTransferIn', 'depositReversal'].includes(t.type || ''), canCopy = a.status === 'active' && t.status === 'cancelled', actions = [canEdit ? '<button class="primary" data-edit-tx>수정·취소</button>' : '', canCopy ? '<button class="primary" data-copy-tx>같은 내용으로 새 거래 만들기</button>' : '', revisionCount ? '<button data-tx-history>수정 이력 보기</button>' : ''].filter(Boolean); $('#sheetEyebrow').textContent = typeText(t.type); $('#sheetTitle').textContent = t.holdingId ? holdingName(a, t.holdingId) : typeText(t.type); $('#sheetBody').innerHTML = `<div class="sheetrows"><div class="sheetrow"><span>날짜</span><strong>${formatDate(txDate(t))}</strong></div>${t.qty ? `<div class="sheetrow"><span>수량</span><strong>${quantityNumber(t.qty)}주</strong></div><div class="sheetrow"><span>단가</span><strong>${won(t.price)}</strong></div>` : `<div class="sheetrow"><span>금액</span><strong>${won(t.amount || 0)}</strong></div>`}<div class="sheetrow"><span>메모</span><strong>${escapeHtml(t.note || '-')}</strong></div><div class="sheetrow total"><span>${t.type === 'sell' ? '매도대금' : t.type === 'buy' ? '매수금액' : ['dividend', 'distribution'].includes(t.type || '') ? '받은 배당금' : '기록금액'}</span><strong>${won(facts.tradeAmount ?? Math.abs(txAmount(t)))}</strong></div>${t.type === 'sell' && Number.isFinite(facts.realized) ? `<div class="sheetrow"><span>실현손익</span><strong class="${escapeHtml((facts.realized || 0) >= 0 ? 'positive' : '')}">${signed(facts.realized)}</strong></div>` : ''}${linked ? `<div class="sheetrow"><span>${['dividend', 'distribution'].includes(t.type || '') ? '연결된 매수' : '연결된 배당'}</span><strong>${formatDate(txDate(linked))} · ${['dividend', 'distribution'].includes(t.type || '') ? won(Number(linked.qty) * Number(linked.price)) : won(linked.amount)}</strong></div>` : ''}<div class="sheetrow"><span>수정·취소 이력</span><strong>${revisionCount}건</strong></div></div>${['dividend', 'distribution'].includes(t.type || '') ? '<div class="lock-note">배당금은 계좌 현금에 반영됩니다. 재투자는 별도 매수 기록으로 저장하고 필요할 때만 연결합니다.</div>' : ''}${t.status === 'cancelled' ? `<div class="lock-note">${formatDate(String(t.cancelledAt || '').slice(0, 10))} 취소 처리된 거래입니다. 원본은 유지되며 다시 입력할 때는 새 거래로 저장됩니다.</div>` : a.status === 'maturity_pending' ? '<div class="lock-note">만기 처리 대기 중인 ISA 거래입니다. 조회만 가능합니다.</div>' : isPastAccount(a) ? '<div class="lock-note">종료된 ISA의 과거 거래입니다.</div>' : ''}${actions.length ? `<div class="tx-action-grid ${actions.length === 1 ? 'one' : ''}">${actions.join('')}</div>` : ''}`; openSheet('#detailSheet'); $('[data-edit-tx]')?.addEventListener('click', () => openTransactionForm(t.type || '', t.id || '')); $('[data-copy-tx]')?.addEventListener('click', () => openTransactionForm(t.type || '', null, t.holdingId || '', null, t)); $('[data-tx-history]')?.addEventListener('click', () => openTransactionHistory(t.id || '', a.id)); }
 function registerHoldingFromBalance(a, input) {
     const name = String(input.name || '').trim(), key = normalizeName(name);
     if (!name)
         return { ok: false, error: '종목명을 입력해 주세요.' };
     if (a.holdings.some(h => normalizeName(h.name) === key))
         return { ok: false, error: '같은 종목이 이미 등록돼 있습니다.' };
-    const qty = Number(input.qty) || 0, avg = Number(input.avg) || 0, priceRaw = String(input.price ?? '').trim(), currentPrice = priceRaw === '' ? 0 : Number(priceRaw), quoteType = ['stock', 'bond'].includes(input.quoteType) ? input.quoteType : '', instrumentCode = String(input.instrumentCode || '').trim().toUpperCase(), assetClass = String(input.assetClass || '국내주식 ETF'), individualBond = quoteType === 'bond' || assetClass === '개별채권', priceScale = individualBond ? 10000 : 1, quantityUnit = individualBond ? 'face' : 'share', cost = qty * avg / priceScale, mode = String(input.mode || 'auto'), currentCash = replay(a).cash, tolerance = Number(a.reconciliationTolerance || 10);
+    const qty = Number(input.qty) || 0, avg = Number(input.avg) || 0, priceRaw = String(input.price ?? '').trim(), currentPrice = priceRaw === '' ? 0 : Number(priceRaw), quoteType = ['stock', 'bond'].includes(input.quoteType || '') ? input.quoteType : '', instrumentCode = String(input.instrumentCode || '').trim().toUpperCase(), assetClass = String(input.assetClass || '국내주식 ETF'), individualBond = quoteType === 'bond' || assetClass === '개별채권', priceScale = individualBond ? 10000 : 1, quantityUnit = individualBond ? 'face' : 'share', cost = qty * avg / priceScale, mode = String(input.mode || 'auto'), currentCash = replay(a).cash, tolerance = Number(a.reconciliationTolerance || 10);
     if (qty < 0 || avg < 0 || !Number.isFinite(currentPrice) || currentPrice < 0)
         return { ok: false, error: '수량·평균단가·현재가는 0 이상이어야 합니다.' };
     if (mode === 'cash' && cost > currentCash + 1e-8)
@@ -345,7 +347,7 @@ function applyReconcileSnapshot(a, snapshot) {
         }
         metrics = accountMetrics(a);
     }
-    result.missing = a.holdings.filter(h => !seen.has(h.id) && metrics.holdings.find(x => x.id === h.id)?.qty > 0).length;
+    result.missing = a.holdings.filter(h => !seen.has(h.id) && (metrics.holdings.find(x => x.id === h.id)?.qty || 0) > 0).length;
     if (snapshot.cashVisible === true && Number.isFinite(Number(snapshot.cash))) {
         const delta = Number(snapshot.cash) - accountMetrics(a).cash;
         if (Math.abs(delta) > Number(a.reconciliationTolerance || 10)) {
@@ -354,7 +356,7 @@ function applyReconcileSnapshot(a, snapshot) {
             result.adjustments++;
         }
     }
-    a.reconciliations.push({ id: uid('recon'), asOf, capturedAt, idempotencyKey: key, createdAt: new Date().toISOString(), cashVisible: snapshot.cashVisible === true, summary: result, tolerance: Number(a.reconciliationTolerance || 10) });
+    a.reconciliations.push({ id: uid('recon'), asOf, capturedAt, idempotencyKey: String(key), createdAt: new Date().toISOString(), cashVisible: snapshot.cashVisible === true, summary: result, tolerance: Number(a.reconciliationTolerance || 10) });
     rebuildLedgerIndexes(a);
     for (const k of Object.keys(target))
         delete target[k];
@@ -383,11 +385,11 @@ function isaTradeCandidateFromForm(form, type, editId = '') { const data = new F
 else
     tx.amount = Number(data.get('amount')); return tx; }
 function isaTradeFormError(form, type, editId = '', complete = false) { const data = new FormData(form), isTrade = ['buy', 'sell'].includes(type), required = isTrade ? ['qty', 'price'] : ['amount']; if (!complete && required.some(name => !String(data.get(name) || '')))
-    return ''; const account = currentAccount(), tx = isaTradeCandidateFromForm(form, type, editId), dateError = isaTransactionDateError(account, tx.date); if (dateError)
+    return ''; const account = currentAccount(), tx = isaTradeCandidateFromForm(form, type, editId), dateError = isaTransactionDateError(account, tx.date || ''); if (dateError)
     return dateError; const numericError = transactionNumericError(tx); if (numericError)
     return numericError; tx.idempotencyKey = stableTxKey(tx); const duplicate = findDuplicateTransaction(account, tx, editId || ''); if (duplicate)
     return `같은 거래가 이미 있습니다. ${formatDate(txDate(duplicate))} ${typeText(duplicate.type)}`; const candidate = editId ? account.transactions.map(t => t.id === editId ? tx : { ...t }) : [...account.transactions.map(t => ({ ...t })), tx], result = replay(account, candidate); if (!result.valid)
-    return result.error || '거래 값을 확인해 주세요.'; if (type === 'buy' && transactionPositionValue(getHolding(account, tx.holdingId), tx.qty, tx.price) + tx.fee + tx.tax > accountMetrics(account).cash + 1e-8)
+    return result.error || '거래 값을 확인해 주세요.'; if (type === 'buy' && transactionPositionValue(getHolding(account, tx.holdingId), Number(tx.qty) || 0, Number(tx.price) || 0) + (tx.fee || 0) + (tx.tax || 0) > accountMetrics(account).cash + 1e-8)
     return 'ISA 계좌 현금이 부족합니다. 통합 납입 또는 현금 유입을 먼저 기록해 주세요.'; return ''; }
 const openTransactionFormWithoutInlineValidation = openTransactionForm;
 openTransactionForm = function (...args) { openTransactionFormWithoutInlineValidation(...args); const form = $('#txForm'); if (!form)
@@ -400,4 +402,4 @@ else
     formShowError(form, error);
     toast(error);
     return;
-} submit.call(form, event); }; };
+} submit?.call(form, event); }; };

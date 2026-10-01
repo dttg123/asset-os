@@ -108,3 +108,32 @@ test('@core integrated input rejects unsafe amounts and saves a valid transactio
  expect(added).toEqual([{type:'externalIncome',amount:100000}]);
  expect(appErrors).toEqual([]);
 });
+
+test('@core ISA and pension interest save through typed form controls',async({page})=>{
+ await preparePage(page);
+ await page.goto(app);
+ await page.evaluate(()=>{
+  const next=window.__assetOS.getState();
+  next.accounts=[{id:'e2e-input-isa',name:'입력 테스트 ISA',status:'active',openedAt:'2026-01-01',baselineDate:'2026-01-01',baselineCash:0,holdings:[],transactions:[],reconciliations:[]}];
+  next.settings.selectedAccountId='e2e-input-isa';
+  next.pension.accounts=[{id:'e2e-input-pension',name:'입력 테스트 연금',kind:'pension',status:'active',openedAt:'2026-01-01'}];
+  next.pension.holdings=[];next.pension.transactions=[];
+  window.__assetOS.replaceState(next);
+  openTransactionForm('interest');
+ });
+ const isaForm=page.locator('#txForm');
+ await isaForm.locator('[name="tradeDate"]').fill('2026-10-01');
+ await isaForm.locator('[name="amount"]').fill('1000');
+ await isaForm.locator('button[type="submit"],button:not([type])').first().click();
+ await expect(page.locator('#formSheet')).toHaveAttribute('aria-hidden','true');
+ expect(await page.evaluate(()=>window.__assetOS.getState().accounts[0].transactions.map(row=>({type:row.type,amount:row.amount})))).toEqual([{type:'interest',amount:1000}]);
+ await page.evaluate(()=>openPensionTradeForm('','transactions','e2e-input-pension'));
+ const pensionForm=page.locator('#pensionTradeForm');
+ await pensionForm.locator('[name="type"]').selectOption('interest');
+ await pensionForm.locator('[name="date"]').fill('2026-10-01');
+ await pensionForm.locator('[name="amount"]').fill('2000');
+ await pensionForm.locator('button:not([type])').click();
+ await expect(page.locator('#formSheet')).toHaveAttribute('aria-hidden','true');
+ expect(await page.evaluate(()=>window.__assetOS.getState().pension.transactions.map(row=>({type:row.type,amount:row.amount})))).toEqual([{type:'interest',amount:2000}]);
+ expect(appErrors).toEqual([]);
+});
