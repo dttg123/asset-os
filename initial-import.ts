@@ -1,13 +1,17 @@
 'use strict';
 
-type ImportRecord=Record<string,any>;
-type ImportState={financialProducts?:{items?:ImportRecord[];events?:ImportRecord[]};financeSchedules?:{items?:ImportRecord[]};integrated?:{ledger?:ImportRecord[];[key:string]:any};insurance?:{policies?:ImportRecord[]};sourceArchives?:{records?:ImportRecord[]};pension?:ImportRecord;system:ImportRecord;[key:string]:any};
-type InitialImportBundle={format?:string;data?:{financialProducts?:{items?:ImportRecord[];events?:ImportRecord[]};financeSchedules?:{items?:ImportRecord[]};integrated?:{ledger?:ImportRecord[]};insurance?:{policies?:ImportRecord[]};sourceArchives?:{records?:ImportRecord[]};pensionProjection?:ImportRecord;[key:string]:any};[key:string]:any};
+type ImportRecord=Record<string,unknown>&{meta?:Record<string,unknown>};
+type ImportPension={accounts?:ImportRecord[];projection?:Record<string,unknown>;[key:string]:unknown};
+type ImportData={financialProducts?:{items?:ImportRecord[];events?:ImportRecord[]};financeSchedules?:{items?:ImportRecord[]};integrated?:{ledger?:ImportRecord[];[key:string]:unknown};insurance?:{policies?:ImportRecord[]};sourceArchives?:{records?:ImportRecord[]};pensionProjection?:Record<string,unknown>;[key:string]:unknown};
+type ImportState=ImportData&{pension?:ImportPension;system:{saveError?:string}};
+type InitialImportBundle={format:string;data:ImportData};
 
 declare let state:ImportState;
-declare const seed:{pension:ImportRecord},KEY:string;
+declare const seed:{pension:ImportPension},KEY:string;
 declare function clone<T>(value:T):T;
-declare function buildIntegratedSeed():ImportRecord;
+declare function buildIntegratedSeed():{ledger:ImportRecord[]};
+declare function stateInputRecord(value:unknown):value is Record<string,unknown>;
+declare function assertStateDataShape(value:unknown):asserts value is Record<string,unknown>;
 declare function normalizeState(value:unknown):ImportState;
 declare function systemIntegrityIssues():string[];
 declare function assertImportFileSize(file:{size?:unknown},label?:string):void;
@@ -37,19 +41,26 @@ function resolveInitialImportPlaceholders(candidate:ImportState):ImportState{
  const pensionAccounts:Array<ImportRecord>=Array.isArray(candidate.pension?.accounts)?candidate.pension.accounts:[];
  const byKind=(kind:string)=>pensionAccounts.filter(account=>account.kind===kind&&account.status==='active');
  for(const transaction of candidate.integrated?.ledger||[]){
-  const kind=transaction.meta?.targetPensionKind;
+  const kind=String(transaction.meta?.targetPensionKind||'');
   if(!kind)continue;
   const found=byKind(kind);
   if(found.length!==1)throw new Error(`${kind==='irp'?'IRP':'연금저축'} 연결 계좌가 ${found.length}개라 자동 연결할 수 없습니다.`);
-  if(!found[0].openedAt||found[0].openedAt>transaction.date)found[0].openedAt=transaction.date;
+  const date=String(transaction.date||'');
+  if(!found[0].openedAt||String(found[0].openedAt)>date)found[0].openedAt=date;
   transaction.meta={...(transaction.meta||{}),targetPensionAccountId:found[0].id};
   delete transaction.meta.targetPensionKind;
  }
  return candidate;
 }
 
-function buildInitialImportCandidate(bundle:InitialImportBundle):ImportState{
- if(!bundle||bundle.format!==INITIAL_IMPORT_FORMAT)throw new Error('Asset OS 초기자료 병합 파일이 아닙니다.');
+function initialImportBundle(input:unknown):InitialImportBundle{
+ if(!stateInputRecord(input)||input.format!==INITIAL_IMPORT_FORMAT)throw new Error('Asset OS 초기자료 병합 파일이 아닙니다.');
+ const data=input.data??{};assertStateDataShape(data);
+ if(data.pensionProjection!=null&&!stateInputRecord(data.pensionProjection))throw new Error('미래연금 기준은 객체여야 합니다.');
+ return{format:INITIAL_IMPORT_FORMAT,data:data as ImportData}
+}
+function buildInitialImportCandidate(input:unknown):ImportState{
+ const bundle=initialImportBundle(input);
  const add=bundle.data||{},candidate=clone(state);
  candidate.financialProducts=candidate.financialProducts||{items:[],events:[]};
  candidate.financeSchedules=candidate.financeSchedules||{items:[]};
@@ -76,7 +87,7 @@ async function importInitialMergeFile(file:File):Promise<boolean>{
  let bundle:InitialImportBundle,next:ImportState;
  try{
   assertImportFileSize(file,'초기자료');
-  bundle=JSON.parse(await file.text()) as InitialImportBundle;
+  bundle=initialImportBundle(JSON.parse(await file.text()));
   next=buildInitialImportCandidate(bundle);
  }catch(error:unknown){showNotice('병합하지 않았습니다.',initialImportErrorMessage(error));return false}
  const counts={products:bundle.data?.financialProducts?.items?.length||0,events:bundle.data?.financialProducts?.events?.length||0,schedules:bundle.data?.financeSchedules?.items?.length||0,ledger:bundle.data?.integrated?.ledger?.length||0,insurance:bundle.data?.insurance?.policies?.length||0,archive:bundle.data?.sourceArchives?.records?.length||0,projection:!!bundle.data?.pensionProjection};

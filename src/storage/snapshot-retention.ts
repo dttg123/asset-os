@@ -1,7 +1,7 @@
 'use strict';
 
-type SnapshotRecord=Record<string,any>;
-type SnapshotState={accounts?:SnapshotRecord[];brokerKis?:SnapshotRecord;[key:string]:any};
+type SnapshotRecord=Record<string,unknown>&{meta?:Record<string,unknown>};
+type SnapshotState={accounts?:Array<{id?:unknown;assetSnapshots?:unknown}>;brokerKis?:{balanceSnapshots?:SnapshotRecord[]};[key:string]:unknown};
 type SnapshotRetentionOptions={
  referenceDate?:string;
  automatic?:(row:SnapshotRecord)=>boolean;

@@ -18,6 +18,8 @@ export function compileRuntimeTypeScript(root,sourceNames){
   for(const [index,sourceName] of sourceNames.entries()){
    const source=fs.readFileSync(path.join(root,sourceName),'utf8');
    if(/^\s*\/\/\s*@ts-(?:nocheck|ignore)\b/m.test(source))throw new Error(`runtime type-check suppression is forbidden: ${sourceName}`);
+   const jsonBoundary=sourceName.startsWith('src/')||['backup.ts','initial-import.ts','supabase-sync.ts'].includes(sourceName);
+   if(jsonBoundary&&/\bany\b/.test(source))throw new Error(`untyped data is forbidden at a JSON/domain boundary: ${sourceName}`);
    const sourceOutputRoot=path.join(outputRoot,String(index));
    execFileSync(path.join(root,'node_modules','.bin','tsc'),['--ignoreConfig','--target','ES2024','--module','preserve','--strict','--skipLibCheck','--outDir',sourceOutputRoot,sourceName],{cwd:root,stdio:'pipe'});
    compiled[sourceName]=fs.readFileSync(path.join(sourceOutputRoot,path.basename(runtimeJavaScriptName(sourceName))),'utf8');

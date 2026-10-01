@@ -21,7 +21,7 @@ declare function pensionAccountKindLabel(kind:string):string;
 declare function clone<T>(value:T):T;
 declare function integratedValidateCandidate(row:LedgerRow,editingId:string):string;
 declare function integratedCandidateIssues(store:{accounts:Array<{id:string;kind?:string}>;ledger:LedgerRow[]}):string[];
-declare function setting():{integratedMonth:string;[key:string]:any};
+declare function setting():{integratedMonth:string;[key:string]:unknown};
 declare function persist(notify?:boolean):boolean;
 declare function closeSheets():void;
 declare function render():void;

@@ -20,16 +20,35 @@ function parseBackupZipBytes(bytes) { const src = bytes instanceof Uint8Array ? 
     throw new Error('지원하지 않는 압축 방식입니다. Asset OS에서 만든 ZIP을 선택해 주세요.'); if (size > MAX_IMPORT_FILE_BYTES)
     throw new Error('백업 내부 데이터는 8MB 이하만 열 수 있습니다.'); if (start + size > src.length)
     throw new Error('ZIP 데이터가 잘렸습니다.'); const data = src.slice(start, start + size); if (crc32(data) !== expected)
-    throw new Error('ZIP CRC 검증에 실패했습니다.'); return JSON.parse(new TextDecoder().decode(data)); }
-function backupContainsQaFixtures(payload) { const d = payload.data || {}, accounts = d.accounts || [], p = d.pension || {}, ledger = d.integrated?.ledger || []; return /(?:^|\s)QA(?:\s|$)/i.test(String(payload.appVersion || '')) || ledger.some((x) => x?.meta?.qaFixture) || accounts.some((a) => (a.assetSnapshots || []).some((x) => x?.meta?.qaFixture) || (a.transactions || []).some((x) => x?.meta?.qaFixture) || a.qaDividendHistory) || (p.incomes || []).some((x) => x?.meta?.qaFixture) || (p.assetSnapshots || []).some((x) => x?.meta?.qaFixture); }
-function backupEnvironment(payload) { if (['live', 'qa'].includes(String(payload.environment || '')))
+    throw new Error('ZIP CRC 검증에 실패했습니다.'); return backupInputPayload(JSON.parse(new TextDecoder().decode(data))); }
+function backupInputPayload(value) { if (!stateInputRecord(value))
+    throw new Error('Asset OS 백업 파일이 아닙니다.'); return value; }
+function backupRecord(value) { return stateInputRecord(value) ? value : {}; }
+function backupRows(value) { return Array.isArray(value) ? value.filter(stateInputRecord) : []; }
+function backupFixtureRow(value) { return !!backupRecord(value.meta).qaFixture; }
+function backupContainsQaFixtures(payload) {
+    const d = backupRecord(payload.data), p = backupRecord(d.pension), ledger = backupRows(backupRecord(d.integrated).ledger);
+    return /(?:^|\s)QA(?:\s|$)/i.test(String(payload.appVersion || '')) || ledger.some(backupFixtureRow) || backupRows(d.accounts).some(a => backupRows(a.assetSnapshots).some(backupFixtureRow) || backupRows(a.transactions).some(backupFixtureRow) || !!a.qaDividendHistory) || backupRows(p.incomes).some(backupFixtureRow) || backupRows(p.assetSnapshots).some(backupFixtureRow);
+}
+function backupEnvironment(payload) { if (payload.environment === 'live' || payload.environment === 'qa')
     return payload.environment; return backupContainsQaFixtures(payload) ? 'qa' : 'live'; }
-function validateBackupPayload(payload) { if (!payload || payload.format !== BACKUP_FORMAT)
-    throw new Error('Asset OS 백업 파일이 아닙니다.'); if (!SUPPORTED_SCHEMAS.has(Number(payload.schemaVersion)))
-    throw new Error(`지원하지 않는 데이터 구조 ${payload.schemaVersion}`); if (!payload.data || typeof payload.data !== 'object')
-    throw new Error('백업 데이터가 없습니다.'); const sourceEnv = backupEnvironment(payload); if (sourceEnv !== APP_ENV)
-    throw new Error(`${sourceEnv === 'qa' ? 'QA' : '운영'} 백업은 ${APP_ENV === 'qa' ? 'QA' : '운영'} 화면에 복원할 수 없습니다.`); const migrated = migrateStateData(payload.data, Number(payload.schemaVersion)), next = normalizeState(migrated.data); if (sourceEnv === 'qa')
-    next.moduleVerification = { isa: false, pension: false, irp: false }; return next; }
+function validateBackupPayload(input) {
+    const payload = backupInputPayload(input);
+    if (payload.format !== BACKUP_FORMAT)
+        throw new Error('Asset OS 백업 파일이 아닙니다.');
+    if (!SUPPORTED_SCHEMAS.has(Number(payload.schemaVersion)))
+        throw new Error(`지원하지 않는 데이터 구조 ${String(payload.schemaVersion)}`);
+    if (!stateInputRecord(payload.data))
+        throw new Error('백업 데이터가 없습니다.');
+    assertStateDataShape(payload.data);
+    const sourceEnv = backupEnvironment(payload);
+    if (sourceEnv !== APP_ENV)
+        throw new Error(`${sourceEnv === 'qa' ? 'QA' : '운영'} 백업은 ${APP_ENV === 'qa' ? 'QA' : '운영'} 화면에 복원할 수 없습니다.`);
+    const migrated = migrateStateData(payload.data, Number(payload.schemaVersion)), next = normalizeState(migrated.data);
+    if (sourceEnv === 'qa')
+        next.moduleVerification = { isa: false, pension: false, irp: false };
+    return next;
+}
 function downloadBytes(bytes, name, type = 'application/zip') { const blob = new Blob([bytes], { type }), url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1200); }
 function backupFileName() { return typeof assetManagedBackupName === 'function' ? assetManagedBackupName() : `AssetOS_${localYmd().replaceAll('-', '').slice(2)}_${APP_VERSION}.zip`; }
 function backupHealth(now = new Date()) {
@@ -98,7 +117,7 @@ async function shareDriveBackup() {
 }
 async function parseBackupFile(file) { assertImportFileSize(file); const bytes = new Uint8Array(await file.arrayBuffer()), name = String(file.name || '').toLowerCase(); if (bytes.length > MAX_IMPORT_FILE_BYTES)
     throw new Error('백업 파일은 8MB 이하만 열 수 있습니다.'); if (name.endsWith('.json') || name.endsWith('.txt'))
-    return JSON.parse(new TextDecoder().decode(bytes)); return parseBackupZipBytes(bytes); }
+    return backupInputPayload(JSON.parse(new TextDecoder().decode(bytes))); return parseBackupZipBytes(bytes); }
 async function restoreBackupFile(file) { let payload, next; try {
     payload = await parseBackupFile(file);
     next = validateBackupPayload(payload);

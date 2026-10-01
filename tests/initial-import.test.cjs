@@ -25,6 +25,7 @@ function environment(integrityIssues=[]){
   systemIntegrityIssues:()=>integrityIssues,assertImportFileSize(){},showNotice(){},showDialog(){},storeRecoveryCopy(){return true},
   stateEnvelopeJson:JSON.stringify,persist:()=>true,closeSheets(){},render(){},toast(){}
  });
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'..','src/storage/state-migrations.js'),'utf8'),context);
  vm.runInContext(`${source}\nthis.api={mergeRowsById,resolveInitialImportPlaceholders,buildInitialImportCandidate};`,context);
  return context;
 }

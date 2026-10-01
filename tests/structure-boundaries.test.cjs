@@ -7,7 +7,7 @@ const vm=require('node:vm');
 
 const root=path.join(__dirname,'..');
 const context=vm.createContext({Date,Math,Number,String,Object,Array,Map,JSON});
-for(const file of ['src/storage/cloud-save-contract.js','src/domain/cloud-state-policy.js','src/domain/integrated-replay.js','src/domain/investment-position.js','src/domain/integrated-ledger-core.js','src/domain/integrated-ledger.js','src/domain/integrated-ledger-validation.js','src/domain/financial-current.js','src/domain/financial-history.js','src/domain/integrated-spending.js','src/app/schedule-completion.js'])vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),context,{filename:file});
+for(const file of ['src/storage/state-migrations.js','src/storage/cloud-save-contract.js','src/domain/cloud-state-policy.js','src/domain/integrated-replay.js','src/domain/investment-position.js','src/domain/integrated-ledger-core.js','src/domain/integrated-ledger.js','src/domain/integrated-ledger-validation.js','src/domain/financial-current.js','src/domain/financial-history.js','src/domain/integrated-spending.js','src/app/schedule-completion.js'])vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),context,{filename:file});
 const plain=value=>JSON.parse(JSON.stringify(value));
 const run=(source,values={})=>vm.runInContext(source,Object.assign(context,values));
 

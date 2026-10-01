@@ -1,6 +1,6 @@
 'use strict';
-function cloudObject(value) { return value && typeof value === 'object' ? value : {}; }
-function cloudCollectionLength(value) { const length = cloudObject(value).length; return typeof length === 'number' ? length : typeof value === 'string' ? value.length : 0; }
+function cloudObject(value) { return value && typeof value === 'object' && !Array.isArray(value) ? value : {}; }
+function cloudCollectionLength(value) { return Array.isArray(value) ? value.length : 0; }
 function cloudCanonicalValue(value) {
     if (Array.isArray(value))
         return value.map(cloudCanonicalValue);
@@ -22,7 +22,19 @@ catch {
     return '';
 } }
 function cloudEnvelopeTime(envelope) { const time = Date.parse(String(envelope?.savedAt || '')); return Number.isFinite(time) ? time : 0; }
-function cloudPayloadValid(payload) { const source = cloudObject(payload); return !!(payload && typeof payload === 'object' && source.data && typeof source.data === 'object'); }
+function cloudPayloadValid(payload) {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload))
+        return false;
+    const source = cloudObject(payload);
+    if (source.schemaVersion !== undefined) {
+        const version = Number(source.schemaVersion);
+        if (!Number.isInteger(version) || version < 4 || version > SCHEMA_VERSION)
+            return false;
+    }
+    if (source.savedAt !== undefined && typeof source.savedAt !== 'string')
+        return false;
+    return !stateDataShapeIssue(source.data);
+}
 function cloudDataHasMeaningfulRecords(data) {
     const source = cloudObject(data), pension = cloudObject(source.pension), integrated = cloudObject(source.integrated), products = cloudObject(source.financialProducts), schedules = cloudObject(source.financeSchedules);
     return !!(cloudCollectionLength(source.accounts) || cloudCollectionLength(pension.accounts) || cloudCollectionLength(pension.contributions) || cloudCollectionLength(pension.transactions) || cloudCollectionLength(pension.holdings) || cloudCollectionLength(pension.incomes) || cloudCollectionLength(products.items) || cloudCollectionLength(products.events) || cloudCollectionLength(schedules.items) || cloudCollectionLength(integrated.ledger));

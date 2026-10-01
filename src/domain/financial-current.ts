@@ -23,7 +23,7 @@ type CurrentFinancialMetrics={value?:number;cost?:number;source?:string;[key:str
 type CurrentKisTotal={authoritative?:boolean;totalValue:number;[key:string]:unknown};
 
 function currentFinancialState(){
- return state as any
+ return state
 }
 function currentIntegratedStore(){
  return integratedStore() as CurrentFinancialStore

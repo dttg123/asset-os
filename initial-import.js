@@ -14,22 +14,31 @@ function resolveInitialImportPlaceholders(candidate) {
     const pensionAccounts = Array.isArray(candidate.pension?.accounts) ? candidate.pension.accounts : [];
     const byKind = (kind) => pensionAccounts.filter(account => account.kind === kind && account.status === 'active');
     for (const transaction of candidate.integrated?.ledger || []) {
-        const kind = transaction.meta?.targetPensionKind;
+        const kind = String(transaction.meta?.targetPensionKind || '');
         if (!kind)
             continue;
         const found = byKind(kind);
         if (found.length !== 1)
             throw new Error(`${kind === 'irp' ? 'IRP' : '연금저축'} 연결 계좌가 ${found.length}개라 자동 연결할 수 없습니다.`);
-        if (!found[0].openedAt || found[0].openedAt > transaction.date)
-            found[0].openedAt = transaction.date;
+        const date = String(transaction.date || '');
+        if (!found[0].openedAt || String(found[0].openedAt) > date)
+            found[0].openedAt = date;
         transaction.meta = { ...(transaction.meta || {}), targetPensionAccountId: found[0].id };
         delete transaction.meta.targetPensionKind;
     }
     return candidate;
 }
-function buildInitialImportCandidate(bundle) {
-    if (!bundle || bundle.format !== INITIAL_IMPORT_FORMAT)
+function initialImportBundle(input) {
+    if (!stateInputRecord(input) || input.format !== INITIAL_IMPORT_FORMAT)
         throw new Error('Asset OS 초기자료 병합 파일이 아닙니다.');
+    const data = input.data ?? {};
+    assertStateDataShape(data);
+    if (data.pensionProjection != null && !stateInputRecord(data.pensionProjection))
+        throw new Error('미래연금 기준은 객체여야 합니다.');
+    return { format: INITIAL_IMPORT_FORMAT, data: data };
+}
+function buildInitialImportCandidate(input) {
+    const bundle = initialImportBundle(input);
     const add = bundle.data || {}, candidate = clone(state);
     candidate.financialProducts = candidate.financialProducts || { items: [], events: [] };
     candidate.financeSchedules = candidate.financeSchedules || { items: [] };
@@ -62,7 +71,7 @@ async function importInitialMergeFile(file) {
     let bundle, next;
     try {
         assertImportFileSize(file, '초기자료');
-        bundle = JSON.parse(await file.text());
+        bundle = initialImportBundle(JSON.parse(await file.text()));
         next = buildInitialImportCandidate(bundle);
     }
     catch (error) {
