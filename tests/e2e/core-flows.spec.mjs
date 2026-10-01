@@ -103,7 +103,7 @@ test('@core integrated input rejects unsafe amounts and saves a valid transactio
  // Respect the application's existing 500 ms duplicate-submit guard.
  await expect.poll(()=>form.evaluate(node=>Date.now()-Number(node.dataset.lastSubmitAt||0))).toBeGreaterThanOrEqual(500);
  await form.locator('button[type="submit"]').click();
- await expect(form).toBeHidden();
+ await expect(page.locator('#formSheet')).toHaveAttribute('aria-hidden','true');
  const added=await page.evaluate(count=>window.__assetOS.getState().integrated.ledger.slice(count).map(row=>({type:row.type,amount:row.amount})),before);
  expect(added).toEqual([{type:'externalIncome',amount:100000}]);
  expect(appErrors).toEqual([]);
