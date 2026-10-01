@@ -108,7 +108,7 @@ function financialGrowthBreakdown(startDate, endDate) {
     let externalNet = 0, adjustment = 0;
     for (const transaction of rows) {
         const amount = Number(transaction.amount) || 0;
-        if (['externalIncome', 'externalAssetIn', 'externalDebtPrincipal'].includes(transaction.type) || (transaction.type === 'refund' && transaction.toAccountId))
+        if ((['externalIncome', 'externalAssetIn', 'externalDebtPrincipal'].includes(transaction.type) && !transaction.meta?.financeInterest) || (transaction.type === 'refund' && transaction.toAccountId))
             externalNet += amount;
         else if (['expense', 'externalWithdrawal', 'externalAssetOut', 'debtInterest'].includes(transaction.type))
             externalNet -= amount;
