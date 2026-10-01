@@ -1,10 +1,10 @@
 'use strict';
 
-type IntegratedRow={id:string;type:string;date?:string;sequence?:number;createdAt?:string;amount?:number;fixed?:boolean;category?:string;note?:string;sourceModule?:string;sourceId?:string;productId?:string;meta?:Record<string,unknown>;[key:string]:any};
-type IntegratedAccount={id:string;kind:string;name:string;productId?:string;[key:string]:any};
-type IntegratedLiability={id:string;kind:string;name:string;productId?:string;[key:string]:any};
+type IntegratedRow={id:string;type:string;date?:string;sequence?:number;createdAt?:string;amount?:number;fixed?:boolean;category?:string;note?:string;sourceModule?:string;sourceId?:string;productId?:string;meta?:Record<string,unknown>;[key:string]:unknown};
+type IntegratedAccount={id:string;kind:string;name:string;productId?:string;[key:string]:unknown};
+type IntegratedLiability={id:string;kind:string;name:string;productId?:string;[key:string]:unknown};
 type IntegratedStoreShape={mode?:string;label?:string;startedAt?:string;accounts:IntegratedAccount[];liabilities:IntegratedLiability[];ledger:IntegratedRow[]};
-type LedgerIndexedAccount={transactions?:IntegratedRow[];ledgerIndex?:Record<string,string[]>;contributionLedger?:string[];cashLedger?:string[];securityLedger?:string[];adjustmentLedger?:string[];[key:string]:any};
+type LedgerIndexedAccount={transactions?:IntegratedRow[];ledgerIndex?:Record<string,string[]>;contributionLedger?:string[];cashLedger?:string[];securityLedger?:string[];adjustmentLedger?:string[];[key:string]:unknown};
 
 declare const seed:{integrated:IntegratedStoreShape};
 declare function clone<T>(value:T):T;

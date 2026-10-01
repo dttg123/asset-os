@@ -78,7 +78,7 @@ function integratedIssues(store:LedgerValidationStore=validationIntegratedStore(
  const refunds=new Map<string,number>();
  for(const transaction of store.ledger||[])if(transaction.type==='refund'){
   const original=(store.ledger||[]).find(candidate=>candidate.id===transaction.meta?.refundOf);
-  if(!original||!['expense','externalExpense'].includes(original.type||'')||(transaction.date as any)<(original.date as any)||transaction.toAccountId!==(original.type==='expense'?original.fromAccountId:''))issues.push(`환불 원거래 또는 날짜 오류: ${transaction.id}`);
+  if(!original||!['expense','externalExpense'].includes(original.type||'')||String(transaction.date||'')<String(original.date||'')||transaction.toAccountId!==(original.type==='expense'?original.fromAccountId:''))issues.push(`환불 원거래 또는 날짜 오류: ${transaction.id}`);
   else{const originalId=String(original.id),total=(refunds.get(originalId)||0)+Number(transaction.amount);refunds.set(originalId,total);if(total>Number(original.amount))issues.push(`환불 누계가 원거래 금액을 초과합니다: ${original.id}`)}
  }
  const operationalRows=(store.ledger||[]).filter(transaction=>!validationIsQaFixture(transaction)),replay=validationReplay(operationalRows,store);

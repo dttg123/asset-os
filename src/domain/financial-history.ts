@@ -1,5 +1,5 @@
 'use strict';
-declare const state:Record<string,any>;
+declare const state:{accounts:FinancialHistoryAccount[];pension?:{assetSnapshots?:FinancialHistorySnapshot[]}};
 declare const QA_MODE:boolean;
 declare function integratedStore():FinancialHistoryStore;
 declare function integratedReplay(rows:FinancialHistoryRow[],store:FinancialHistoryStore):FinancialHistoryReplay;
@@ -21,7 +21,7 @@ declare function pensionAccountActiveOnDate(account:{[key:string]:unknown},asOf:
 
 // The runtime is assembled as ordered classic scripts; these names are supplied by earlier bundles.
 function financialHistoryState(){
- return state as any
+ return state
 }
 function financialHistoryStore(){
  return integratedStore() as unknown as FinancialHistoryStore

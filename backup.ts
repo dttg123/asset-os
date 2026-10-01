@@ -1,12 +1,12 @@
 'use strict';
-type BackupRecord=Record<string,any>;
-type BackupState={system:BackupRecord;moduleVerification?:BackupRecord;[key:string]:any};
-type BackupPayload={format?:string;schemaVersion?:number;appVersion?:string;environment?:string;exportedAt?:string;data?:BackupRecord;[key:string]:any};
+type BackupRecord=Record<string,unknown>;
+type BackupState={system:{saveError?:string};moduleVerification?:Record<string,boolean>;[key:string]:unknown};
+type BackupPayload={format?:unknown;schemaVersion?:unknown;appVersion?:unknown;environment?:unknown;exportedAt?:unknown;data?:unknown;[key:string]:unknown};
 type BackupFileHandle={name?:string;createWritable():Promise<{write(data:Blob):Promise<void>;close():Promise<void>}>};
 declare const SCHEMA_VERSION:number,APP_VERSION:string,APP_ENV:string,KEY:string;
 declare let state:BackupState;
 declare const seed:unknown;
-declare const assetManagedBackupName:(()=>string)|undefined,assetBackupSettings:(()=>BackupRecord)|undefined,appendInitialImportBackupAction:((container:any)=>void)|undefined;
+declare const assetManagedBackupName:(()=>string)|undefined,assetBackupSettings:(()=>BackupRecord)|undefined,appendInitialImportBackupAction:((container:HTMLElement)=>void)|undefined;
 declare function clone<T>(value:T):T;
 declare function localYmd():string;
 declare function migrateStateData(data:unknown,fromVersion:number):{data:BackupRecord;applied:number[]};
@@ -25,7 +25,9 @@ declare function openSheet(selector:string):void;
 declare function assetConnectPhoneBackup():Promise<boolean>;
 declare function assetWritePhoneBackup():unknown;
 declare function assetCreateKeepBackup():unknown;
-declare const $:(selector:string)=>any;
+declare function $(selector:string):HTMLElement;
+declare function stateInputRecord(value:unknown):value is BackupRecord;
+declare function assertStateDataShape(value:unknown):asserts value is BackupRecord;
 
 const BACKUP_FORMAT='asset-os-backup-v1',SUPPORTED_SCHEMAS=new Set([4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]);
 const MAX_IMPORT_FILE_BYTES=8*1024*1024;
@@ -36,10 +38,25 @@ let crcTable:number[]|null=null;function crc32(bytes:Uint8Array){if(!crcTable){c
 function zipDosStamp(d=new Date()){const year=Math.max(1980,d.getFullYear()),date=((year-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate(),time=(d.getHours()<<11)|(d.getMinutes()<<5)|Math.floor(d.getSeconds()/2);return{date,time}}
 function backupPayload():BackupPayload{return{format:BACKUP_FORMAT,schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,environment:APP_ENV,exportedAt:new Date().toISOString(),data:clone(state)}}
 function createBackupZipBytes(payload:BackupPayload=backupPayload()){const enc=new TextEncoder(),json=enc.encode(JSON.stringify(payload)),name=enc.encode('asset-os-backup.json'),crc=crc32(json),stamp=zipDosStamp(),localSize=30+name.length+json.length,centralSize=46+name.length,total=localSize+centralSize+22,out=new Uint8Array(total),v=new DataView(out.buffer);let o=0;const u16=(n:number)=>{v.setUint16(o,n,true);o+=2},u32=(n:number)=>{v.setUint32(o,n>>>0,true);o+=4},put=(b:Uint8Array)=>{out.set(b,o);o+=b.length};u32(0x04034b50);u16(20);u16(0);u16(0);u16(stamp.time);u16(stamp.date);u32(crc);u32(json.length);u32(json.length);u16(name.length);u16(0);put(name);put(json);const centralOffset=o;u32(0x02014b50);u16(20);u16(20);u16(0);u16(0);u16(stamp.time);u16(stamp.date);u32(crc);u32(json.length);u32(json.length);u16(name.length);u16(0);u16(0);u16(0);u16(0);u32(0);u32(0);put(name);const centralLength=o-centralOffset;u32(0x06054b50);u16(0);u16(0);u16(1);u16(1);u32(centralLength);u32(centralOffset);u16(0);return out}
-function parseBackupZipBytes(bytes:Uint8Array|ArrayBuffer){const src=bytes instanceof Uint8Array?bytes:new Uint8Array(bytes);if(src.length>MAX_IMPORT_FILE_BYTES)throw new Error('백업 파일은 8MB 이하만 열 수 있습니다.');const v=new DataView(src.buffer,src.byteOffset,src.byteLength);if(src.length<30||v.getUint32(0,true)!==0x04034b50)throw new Error('Asset OS ZIP 형식이 아닙니다.');const method=v.getUint16(8,true),expected=v.getUint32(14,true),size=v.getUint32(18,true),nameLen=v.getUint16(26,true),extraLen=v.getUint16(28,true),start=30+nameLen+extraLen;if(method!==0)throw new Error('지원하지 않는 압축 방식입니다. Asset OS에서 만든 ZIP을 선택해 주세요.');if(size>MAX_IMPORT_FILE_BYTES)throw new Error('백업 내부 데이터는 8MB 이하만 열 수 있습니다.');if(start+size>src.length)throw new Error('ZIP 데이터가 잘렸습니다.');const data=src.slice(start,start+size);if(crc32(data)!==expected)throw new Error('ZIP CRC 검증에 실패했습니다.');return JSON.parse(new TextDecoder().decode(data)) as BackupPayload}
-function backupContainsQaFixtures(payload:BackupPayload){const d=payload.data||{},accounts=d.accounts||[],p=d.pension||{},ledger=d.integrated?.ledger||[];return /(?:^|\s)QA(?:\s|$)/i.test(String(payload.appVersion||''))||ledger.some((x:BackupRecord)=>x?.meta?.qaFixture)||accounts.some((a:BackupRecord)=>(a.assetSnapshots||[]).some((x:BackupRecord)=>x?.meta?.qaFixture)||(a.transactions||[]).some((x:BackupRecord)=>x?.meta?.qaFixture)||a.qaDividendHistory)||(p.incomes||[]).some((x:BackupRecord)=>x?.meta?.qaFixture)||(p.assetSnapshots||[]).some((x:BackupRecord)=>x?.meta?.qaFixture)}
-function backupEnvironment(payload:BackupPayload){if(['live','qa'].includes(String(payload.environment||'')))return payload.environment;return backupContainsQaFixtures(payload)?'qa':'live'}
-function validateBackupPayload(payload:BackupPayload){if(!payload||payload.format!==BACKUP_FORMAT)throw new Error('Asset OS 백업 파일이 아닙니다.');if(!SUPPORTED_SCHEMAS.has(Number(payload.schemaVersion)))throw new Error(`지원하지 않는 데이터 구조 ${payload.schemaVersion}`);if(!payload.data||typeof payload.data!=='object')throw new Error('백업 데이터가 없습니다.');const sourceEnv=backupEnvironment(payload);if(sourceEnv!==APP_ENV)throw new Error(`${sourceEnv==='qa'?'QA':'운영'} 백업은 ${APP_ENV==='qa'?'QA':'운영'} 화면에 복원할 수 없습니다.`);const migrated=migrateStateData(payload.data,Number(payload.schemaVersion)),next=normalizeState(migrated.data);if(sourceEnv==='qa')next.moduleVerification={isa:false,pension:false,irp:false};return next}
+function parseBackupZipBytes(bytes:Uint8Array|ArrayBuffer){const src=bytes instanceof Uint8Array?bytes:new Uint8Array(bytes);if(src.length>MAX_IMPORT_FILE_BYTES)throw new Error('백업 파일은 8MB 이하만 열 수 있습니다.');const v=new DataView(src.buffer,src.byteOffset,src.byteLength);if(src.length<30||v.getUint32(0,true)!==0x04034b50)throw new Error('Asset OS ZIP 형식이 아닙니다.');const method=v.getUint16(8,true),expected=v.getUint32(14,true),size=v.getUint32(18,true),nameLen=v.getUint16(26,true),extraLen=v.getUint16(28,true),start=30+nameLen+extraLen;if(method!==0)throw new Error('지원하지 않는 압축 방식입니다. Asset OS에서 만든 ZIP을 선택해 주세요.');if(size>MAX_IMPORT_FILE_BYTES)throw new Error('백업 내부 데이터는 8MB 이하만 열 수 있습니다.');if(start+size>src.length)throw new Error('ZIP 데이터가 잘렸습니다.');const data=src.slice(start,start+size);if(crc32(data)!==expected)throw new Error('ZIP CRC 검증에 실패했습니다.');return backupInputPayload(JSON.parse(new TextDecoder().decode(data)))}
+function backupInputPayload(value:unknown):BackupPayload{if(!stateInputRecord(value))throw new Error('Asset OS 백업 파일이 아닙니다.');return value}
+function backupRecord(value:unknown):BackupRecord{return stateInputRecord(value)?value:{}}
+function backupRows(value:unknown):BackupRecord[]{return Array.isArray(value)?value.filter(stateInputRecord):[]}
+function backupFixtureRow(value:BackupRecord):boolean{return !!backupRecord(value.meta).qaFixture}
+function backupContainsQaFixtures(payload:BackupPayload){
+ const d=backupRecord(payload.data),p=backupRecord(d.pension),ledger=backupRows(backupRecord(d.integrated).ledger);
+ return /(?:^|\s)QA(?:\s|$)/i.test(String(payload.appVersion||''))||ledger.some(backupFixtureRow)||backupRows(d.accounts).some(a=>backupRows(a.assetSnapshots).some(backupFixtureRow)||backupRows(a.transactions).some(backupFixtureRow)||!!a.qaDividendHistory)||backupRows(p.incomes).some(backupFixtureRow)||backupRows(p.assetSnapshots).some(backupFixtureRow)
+}
+function backupEnvironment(payload:BackupPayload):'live'|'qa'{if(payload.environment==='live'||payload.environment==='qa')return payload.environment;return backupContainsQaFixtures(payload)?'qa':'live'}
+function validateBackupPayload(input:unknown){
+ const payload=backupInputPayload(input);
+ if(payload.format!==BACKUP_FORMAT)throw new Error('Asset OS 백업 파일이 아닙니다.');
+ if(!SUPPORTED_SCHEMAS.has(Number(payload.schemaVersion)))throw new Error(`지원하지 않는 데이터 구조 ${String(payload.schemaVersion)}`);
+ if(!stateInputRecord(payload.data))throw new Error('백업 데이터가 없습니다.');
+ assertStateDataShape(payload.data);
+ const sourceEnv=backupEnvironment(payload);if(sourceEnv!==APP_ENV)throw new Error(`${sourceEnv==='qa'?'QA':'운영'} 백업은 ${APP_ENV==='qa'?'QA':'운영'} 화면에 복원할 수 없습니다.`);
+ const migrated=migrateStateData(payload.data,Number(payload.schemaVersion)),next=normalizeState(migrated.data);if(sourceEnv==='qa')next.moduleVerification={isa:false,pension:false,irp:false};return next
+}
 function downloadBytes(bytes:Uint8Array,name:string,type='application/zip'){const blob=new Blob([bytes as BlobPart],{type}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1200)}
 function backupFileName(){return typeof assetManagedBackupName==='function'?assetManagedBackupName():`AssetOS_${localYmd().replaceAll('-','').slice(2)}_${APP_VERSION}.zip`}
 function backupHealth(now:Date=new Date()){
@@ -89,7 +106,7 @@ async function shareDriveBackup(){
  showNotice('공유 대신 ZIP을 저장했습니다.','공유 권한을 사용할 수 없어 Downloads에 백업했습니다. Google Drive 앱에서 이 ZIP을 업로드해 주세요.');
  return true
 }
-async function parseBackupFile(file:File):Promise<BackupPayload>{assertImportFileSize(file);const bytes=new Uint8Array(await file.arrayBuffer()),name=String(file.name||'').toLowerCase();if(bytes.length>MAX_IMPORT_FILE_BYTES)throw new Error('백업 파일은 8MB 이하만 열 수 있습니다.');if(name.endsWith('.json')||name.endsWith('.txt'))return JSON.parse(new TextDecoder().decode(bytes)) as BackupPayload;return parseBackupZipBytes(bytes)}
+async function parseBackupFile(file:File):Promise<BackupPayload>{assertImportFileSize(file);const bytes=new Uint8Array(await file.arrayBuffer()),name=String(file.name||'').toLowerCase();if(bytes.length>MAX_IMPORT_FILE_BYTES)throw new Error('백업 파일은 8MB 이하만 열 수 있습니다.');if(name.endsWith('.json')||name.endsWith('.txt'))return backupInputPayload(JSON.parse(new TextDecoder().decode(bytes)));return parseBackupZipBytes(bytes)}
 async function restoreBackupFile(file:File){let payload:BackupPayload,next:BackupState;try{payload=await parseBackupFile(file);next=validateBackupPayload(payload)}catch(e:unknown){showNotice('복원하지 않았습니다.',`백업 파일 검증 실패: ${backupErrorMessage(e)}`);return false}showDialog({title:'백업으로 복원할까요?',message:`백업 시각 ${formatDateTime(payload.exportedAt)}\n현재 데이터는 복구용 사본을 먼저 남긴 뒤 교체합니다.`,confirmText:'복원',cancelText:'취소'},()=>{try{const recovery=stateEnvelopeJson(state);storeRecoveryCopy(`${KEY}-pre-restore-${Date.now()}`,recovery);state=next;if(!persist(false))throw new Error(state.system.saveError||'저장 실패');applyTheme();closeSheets();render();toast('백업을 복원했습니다.')}catch(e:unknown){showNotice('복원 실패',backupErrorMessage(e))}});return true}
 function openBackupHub(){
  const pickerWindow=window as typeof window&{showSaveFilePicker?:unknown;showDirectoryPicker?:unknown},size=new Blob([JSON.stringify(backupPayload())]).size,securePicker=typeof pickerWindow.showSaveFilePicker==='function'&&window.isSecureContext,folderApi=typeof pickerWindow.showDirectoryPicker==='function'&&window.isSecureContext,managed=typeof assetBackupSettings==='function'?assetBackupSettings():{phoneEnabled:false,lastPhoneBackupAt:'',phonePermission:'unknown'},health=backupHealth();

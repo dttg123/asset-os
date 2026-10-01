@@ -15,8 +15,8 @@ function cloudSaveRpcArguments(pending, payload) {
 ;
 /* asset-os source: src/domain/cloud-state-policy.js */
 'use strict';
-function cloudObject(value) { return value && typeof value === 'object' ? value : {}; }
-function cloudCollectionLength(value) { const length = cloudObject(value).length; return typeof length === 'number' ? length : typeof value === 'string' ? value.length : 0; }
+function cloudObject(value) { return value && typeof value === 'object' && !Array.isArray(value) ? value : {}; }
+function cloudCollectionLength(value) { return Array.isArray(value) ? value.length : 0; }
 function cloudCanonicalValue(value) {
     if (Array.isArray(value))
         return value.map(cloudCanonicalValue);
@@ -38,7 +38,19 @@ catch {
     return '';
 } }
 function cloudEnvelopeTime(envelope) { const time = Date.parse(String(envelope?.savedAt || '')); return Number.isFinite(time) ? time : 0; }
-function cloudPayloadValid(payload) { const source = cloudObject(payload); return !!(payload && typeof payload === 'object' && source.data && typeof source.data === 'object'); }
+function cloudPayloadValid(payload) {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload))
+        return false;
+    const source = cloudObject(payload);
+    if (source.schemaVersion !== undefined) {
+        const version = Number(source.schemaVersion);
+        if (!Number.isInteger(version) || version < 4 || version > SCHEMA_VERSION)
+            return false;
+    }
+    if (source.savedAt !== undefined && typeof source.savedAt !== 'string')
+        return false;
+    return !stateDataShapeIssue(source.data);
+}
 function cloudDataHasMeaningfulRecords(data) {
     const source = cloudObject(data), pension = cloudObject(source.pension), integrated = cloudObject(source.integrated), products = cloudObject(source.financialProducts), schedules = cloudObject(source.financeSchedules);
     return !!(cloudCollectionLength(source.accounts) || cloudCollectionLength(pension.accounts) || cloudCollectionLength(pension.contributions) || cloudCollectionLength(pension.transactions) || cloudCollectionLength(pension.holdings) || cloudCollectionLength(pension.incomes) || cloudCollectionLength(products.items) || cloudCollectionLength(products.events) || cloudCollectionLength(schedules.items) || cloudCollectionLength(integrated.ledger));
@@ -198,7 +210,7 @@ function cloudLocalEnvelope() {
     if (raw) {
         try {
             const parsed = JSON.parse(raw);
-            if (parsed?.data)
+            if (cloudPayloadValid(parsed))
                 return { envelope: parsed, raw, stored: true };
         }
         catch { }
@@ -209,6 +221,7 @@ function cloudCurrentEnvelope() { const local = cloudLocalEnvelope(); if (local.
     return local.envelope; return { schemaVersion: SCHEMA_VERSION, appVersion: APP_VERSION, savedAt: new Date().toISOString(), data: clone(state) }; }
 function cloudTableMissing(error) { const msg = String(error?.message || ''); return error?.code === '42P01' || /asset_os_state|relation .* does not exist/i.test(msg); }
 function cloudAtomicSaveMissing(error) { const msg = String(error?.message || ''); return ['42883', 'PGRST202', 'PGRST204'].includes(String(error?.code || '')) || /save_asset_os_state|revision/i.test(msg); }
+function cloudErrorMessage(error) { return error instanceof Error ? error.message : stateInputRecord(error) ? String(error.message || '') : String(error || ''); }
 function cloudRequestId() { const native = globalThis.crypto?.randomUUID?.(); if (native)
     return native; return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const n = Math.floor(Math.random() * 16); return (c === 'x' ? n : (n & 3) | 8).toString(16); }); }
 function refreshCloudProfileUI() {
@@ -269,7 +282,7 @@ async function initSupabaseCloud() {
         return true;
     }
     catch (e) {
-        cloudSetStatus(`연결 확인 필요: ${e?.message || '초기화 실패'}`, 'wait');
+        cloudSetStatus(`연결 확인 필요: ${cloudErrorMessage(e) || '초기화 실패'}`, 'wait');
         return false;
     }
 }
@@ -304,8 +317,11 @@ async function signInAssetGoogle() {
     }
     if (!assetSupabaseClient && !(await initSupabaseCloud()))
         return false;
+    const client = assetSupabaseClient;
+    if (!client)
+        return false;
     cloudSetStatus('Google 로그인 이동 중', 'wait');
-    const { error } = await assetSupabaseClient.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: SUPABASE_REDIRECT_URL } });
+    const { error } = await client.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: SUPABASE_REDIRECT_URL } });
     if (error) {
         cloudSetStatus(`로그인 실패: ${error.message}`, 'wait');
         toast('Google 로그인을 시작하지 못했습니다.');
@@ -339,11 +355,15 @@ async function signOutAssetGoogle() {
 async function cloudFetchStateRow() {
     if (qaCloudBlocked())
         return { row: null, error: { message: 'QA_CLOUD_BLOCKED' } };
-    const u = cloudUser();
-    if (!u)
+    const u = cloudUser(), client = assetSupabaseClient;
+    if (!u || !client)
         return { row: null, error: null };
-    const { data, error } = await assetSupabaseClient.from(SUPABASE_STATE_TABLE).select('payload,updated_at,revision').eq('user_id', u.id).maybeSingle();
-    return { row: data || null, error: error || null };
+    const { data, error } = await client.from(SUPABASE_STATE_TABLE).select('payload,updated_at,revision').eq('user_id', u.id).maybeSingle();
+    if (error || data == null)
+        return { row: null, error: error || null };
+    if (!stateInputRecord(data) || !('payload' in data))
+        return { row: null, error: { message: '클라우드 응답 형식 오류' } };
+    return { row: { payload: data.payload, updated_at: typeof data.updated_at === 'string' ? data.updated_at : undefined, revision: data.revision }, error: null };
 }
 async function cloudPushState(envelope = cloudCurrentEnvelope(), quiet = false) {
     if (qaCloudBlocked())
@@ -423,11 +443,11 @@ function cloudApplyRemoteEnvelope(payload, revision = cloudBaseRevision) {
     const local = cloudLocalEnvelope();
     if (local.raw)
         storeRecoveryCopy(`${KEY}-pre-cloud-${Date.now()}`, local.raw);
-    const normalized = normalizeState(clone(payload.data));
-    state = normalized;
-    lastPersistedState = clone(normalized);
+    const migrated = migrateStateData(payload.data, Number(payload.schemaVersion) || SCHEMA_VERSION), normalized = normalizeState(migrated.data);
     const savedAt = String(payload.savedAt || new Date().toISOString());
     localStorage.setItem(KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, appVersion: APP_VERSION, environment: APP_ENV, savedAt, data: normalized }));
+    state = normalized;
+    lastPersistedState = clone(normalized);
     cloudBaseFingerprint = cloudEnvelopeFingerprint(payload);
     cloudBaseRevision = Number(revision) || 0;
     cloudPendingWrite = null;
@@ -469,7 +489,7 @@ async function cloudResolveConflictOverwrite() {
     }
     catch (error) {
         cloudSetStatus('충돌 백업 실패', 'wait');
-        assetAuthGateState('conflict', `이 기기 원장을 백업하지 못해 덮어쓰기를 중단했습니다: ${error?.message || error}`);
+        assetAuthGateState('conflict', `이 기기 원장을 백업하지 못해 덮어쓰기를 중단했습니다: ${cloudErrorMessage(error)}`);
         return false;
     }
     cloudPrepareConflictResolution();
@@ -508,7 +528,12 @@ async function cloudReconcileState(force = 'auto') {
             cloudSyncBusy = false;
             return await cloudPushState(cloudCurrentEnvelope(), true);
         }
-        const remote = row.payload, remoteRevision = Number(row.revision) || 1, latestLocal = cloudLocalEnvelope(), latestFingerprint = cloudEnvelopeFingerprint(latestLocal.envelope), remoteFingerprint = cloudEnvelopeFingerprint(remote);
+        const remote = row.payload;
+        if (!cloudPayloadValid(remote)) {
+            cloudSetStatus('클라우드 데이터 확인 필요', 'wait');
+            return false;
+        }
+        const remoteRevision = Number(row.revision) || 1, latestLocal = cloudLocalEnvelope(), latestFingerprint = cloudEnvelopeFingerprint(latestLocal.envelope), remoteFingerprint = cloudEnvelopeFingerprint(remote);
         if (latestLocal.stored && latestFingerprint !== startedFingerprint) {
             if (remoteFingerprint !== startedFingerprint) {
                 cloudConflict = { revision: remoteRevision };
@@ -828,11 +853,11 @@ function initQaMode() { if (!QA_MODE)
 'use strict';
 if ('serviceWorker' in navigator)
     window.addEventListener('load', async () => { try {
-        const reg = await navigator.serviceWorker.register('./service-worker.js?v=0.6.8&build=20261001-1', { scope: './', updateViaCache: 'none' });
+        const reg = await navigator.serviceWorker.register('./service-worker.js?v=0.6.9&build=20261002-1', { scope: './', updateViaCache: 'none' });
         await reg.update();
         let refreshing = false;
         navigator.serviceWorker.addEventListener('controllerchange', () => { if (refreshing)
-            return; refreshing = true; const key = 'asset-os-sw-reload-0.6.8-build20261001-1'; if (sessionStorage.getItem(key))
+            return; refreshing = true; const key = 'asset-os-sw-reload-0.6.9-build20261002-1'; if (sessionStorage.getItem(key))
             return; sessionStorage.setItem(key, '1'); location.reload(); });
     }
     catch { } });
@@ -864,9 +889,9 @@ window.addEventListener('storage', event => {
         return;
     try {
         const saved = JSON.parse(event.newValue);
-        if (!saved?.data || Number(saved.schemaVersion) !== SCHEMA_VERSION)
+        if (!stateInputRecord(saved) || Number(saved.schemaVersion) !== SCHEMA_VERSION || stateDataShapeIssue(saved.data))
             return;
-        applyExternalSavedState(saved);
+        applyExternalSavedState({ data: saved.data });
     }
     catch { }
 });

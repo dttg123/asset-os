@@ -24,9 +24,9 @@ window.addEventListener('storage', event => {
         return;
     try {
         const saved = JSON.parse(event.newValue);
-        if (!saved?.data || Number(saved.schemaVersion) !== SCHEMA_VERSION)
+        if (!stateInputRecord(saved) || Number(saved.schemaVersion) !== SCHEMA_VERSION || stateDataShapeIssue(saved.data))
             return;
-        applyExternalSavedState(saved);
+        applyExternalSavedState({ data: saved.data });
     }
     catch { }
 });

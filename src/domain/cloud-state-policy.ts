@@ -2,12 +2,14 @@
 
 type CloudReconcileAction='reject-invalid'|'pull'|'protect-empty'|'push'|'conflict'|'synced';
 interface CloudEnvelopeLike {savedAt?:unknown;data?:unknown}
+declare function stateDataShapeIssue(value:unknown):string;
+declare const SCHEMA_VERSION:number;
 interface CloudLocalEnvelope {stored?:boolean;envelope?:CloudEnvelopeLike|null}
 interface CloudStateRow {payload?:unknown}
 interface CloudReconcilePlan {action:CloudReconcileAction;notify?:boolean}
 
-function cloudObject(value:unknown):Record<string,unknown>{return value&&typeof value==='object'?value as Record<string,unknown>:{}}
-function cloudCollectionLength(value:unknown){const length=cloudObject(value).length;return typeof length==='number'?length:typeof value==='string'?value.length:0}
+function cloudObject(value:unknown):Record<string,unknown>{return value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:{}}
+function cloudCollectionLength(value:unknown){return Array.isArray(value)?value.length:0}
 function cloudCanonicalValue(value:unknown):unknown{
  if(Array.isArray(value))return value.map(cloudCanonicalValue);
  if(value&&typeof value==='object'){
@@ -19,7 +21,13 @@ function cloudCanonicalValue(value:unknown):unknown{
 }
 function cloudEnvelopeFingerprint(envelope:CloudEnvelopeLike|null|undefined){try{return JSON.stringify(cloudCanonicalValue(envelope?.data||{}))}catch{return''}}
 function cloudEnvelopeTime(envelope:CloudEnvelopeLike|null|undefined){const time=Date.parse(String(envelope?.savedAt||''));return Number.isFinite(time)?time:0}
-function cloudPayloadValid(payload:unknown):payload is CloudEnvelopeLike&{data:object}{const source=cloudObject(payload);return !!(payload&&typeof payload==='object'&&source.data&&typeof source.data==='object')}
+function cloudPayloadValid(payload:unknown):payload is CloudEnvelopeLike&{data:Record<string,unknown>}{
+ if(!payload||typeof payload!=='object'||Array.isArray(payload))return false;
+ const source=cloudObject(payload);
+ if(source.schemaVersion!==undefined){const version=Number(source.schemaVersion);if(!Number.isInteger(version)||version<4||version>SCHEMA_VERSION)return false}
+ if(source.savedAt!==undefined&&typeof source.savedAt!=='string')return false;
+ return !stateDataShapeIssue(source.data)
+}
 function cloudDataHasMeaningfulRecords(data:unknown){
  const source=cloudObject(data),pension=cloudObject(source.pension),integrated=cloudObject(source.integrated),products=cloudObject(source.financialProducts),schedules=cloudObject(source.financeSchedules);
  return !!(cloudCollectionLength(source.accounts)||cloudCollectionLength(pension.accounts)||cloudCollectionLength(pension.contributions)||cloudCollectionLength(pension.transactions)||cloudCollectionLength(pension.holdings)||cloudCollectionLength(pension.incomes)||cloudCollectionLength(products.items)||cloudCollectionLength(products.events)||cloudCollectionLength(schedules.items)||cloudCollectionLength(integrated.ledger))

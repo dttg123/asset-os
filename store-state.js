@@ -1,5 +1,6 @@
 'use strict';
 function normalizeState(data) {
+    assertStateDataShape(data || seed);
     const next = clone((data || seed));
     next.settings = { ...clone(seed.settings), ...(next.settings || {}) };
     next.settings.monthlyLivingBudget = Math.max(0, Math.round(Number(next.settings.monthlyLivingBudget) || 0));
@@ -195,9 +196,12 @@ function loadState() {
             continue;
         try {
             const parsed = JSON.parse(raw);
-            if (!parsed?.data || ![4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21].includes(Number(parsed.schemaVersion)))
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
                 throw new Error('지원하지 않는 저장 형식');
-            const migrated = migrateStateData(parsed.data, Number(parsed.schemaVersion)), loaded = normalizeState(migrated.data);
+            const envelope = parsed;
+            if (!envelope.data || ![4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21].includes(Number(envelope.schemaVersion)))
+                throw new Error('지원하지 않는 저장 형식');
+            const migrated = migrateStateData(envelope.data, Number(envelope.schemaVersion)), loaded = normalizeState(migrated.data);
             if (key !== KEY || migrated.applied.length) {
                 loaded.system.loadWarning = '';
                 try {
@@ -208,7 +212,7 @@ function loadState() {
             return loaded;
         }
         catch (e) {
-            loadIssue = `저장 데이터 손상 또는 형식 오류: ${e.message}`;
+            loadIssue = `저장 데이터 손상 또는 형식 오류: ${e instanceof Error ? e.message : String(e)}`;
             try {
                 recoveryStored = storeRecoveryCopy(`${KEY}-recovery-${Date.now()}`, raw);
             }
@@ -294,7 +298,7 @@ function persist(notify = true) {
         return true;
     }
     catch (e) {
-        const message = `저장 실패: ${e.message || '로컬 저장소를 확인해 주세요.'}`;
+        const message = `저장 실패: ${(e instanceof Error ? e.message : String(e)) || '로컬 저장소를 확인해 주세요.'}`;
         state = before;
         state.system = { loadWarning: '', saveError: '', ...(state.system || {}) };
         state.system.saveError = message;

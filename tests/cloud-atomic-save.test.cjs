@@ -23,6 +23,7 @@ function client(database,id){
   $:selector=>['#assetAuthGate','#assetAuthButton','#assetAuthStatus','#assetAuthConflict'].includes(selector)?element(selector):null
  });
  context.globalThis=context;
+ vm.runInContext(fs.readFileSync(path.join(root,'src/storage/state-migrations.js'),'utf8'),context);
  vm.runInContext(contractSource,context,{filename:'cloud-save-contract.js'});
  vm.runInContext(policySource,context,{filename:'cloud-state-policy.js'});
  vm.runInContext(source,context,{filename:'supabase-sync.js'});

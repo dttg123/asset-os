@@ -87,7 +87,7 @@ function integratedIssues(store = validationIntegratedStore()) {
     for (const transaction of store.ledger || [])
         if (transaction.type === 'refund') {
             const original = (store.ledger || []).find(candidate => candidate.id === transaction.meta?.refundOf);
-            if (!original || !['expense', 'externalExpense'].includes(original.type || '') || transaction.date < original.date || transaction.toAccountId !== (original.type === 'expense' ? original.fromAccountId : ''))
+            if (!original || !['expense', 'externalExpense'].includes(original.type || '') || String(transaction.date || '') < String(original.date || '') || transaction.toAccountId !== (original.type === 'expense' ? original.fromAccountId : ''))
                 issues.push(`환불 원거래 또는 날짜 오류: ${transaction.id}`);
             else {
                 const originalId = String(original.id), total = (refunds.get(originalId) || 0) + Number(transaction.amount);

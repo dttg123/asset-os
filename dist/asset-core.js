@@ -5,7 +5,7 @@ const BROKER_KIS_PUBLIC_CONFIG = Object.freeze({ projectUrl: 'https://wjrzukoofs
 const QA_MODE = typeof location !== 'undefined' && /(?:^|[?&])qa=1(?:&|$)/.test(String(location.search || ''));
 const QA_STORAGE_KEY = 'asset-os-qa-v0.5', LIVE_STORAGE_KEY = 'asset-os-v1.9.45-live';
 const DEFAULT_FINANCE_DAY = 25;
-const APP_VERSION = 'v0.6.8', APP_ENV = QA_MODE ? 'qa' : 'live', SCHEMA_VERSION = 21, KEY = QA_MODE ? QA_STORAGE_KEY : LIVE_STORAGE_KEY, LEGACY_KEYS = ['asset-os-v1.9.22-central-schedule', 'asset-os-v1.9.20-real-finance', 'asset-os-v1.9.19-finance-linked', 'asset-os-v1.9.18-integrated-ui-refine', 'asset-os-v1.9.17-integrated-complete-stage1', 'asset-os-v1.9.16-integrated-ledger-stage2', 'asset-os-v1.9.9-pension-step2-analysis', 'asset-os-v1.9.7-pension-step2-precision', 'asset-os-v1.9.6-pension-step2-refine', 'asset-os-v1.9.5-pension-step2', 'asset-os-v1.9.4-pension-step1', 'asset-os-v1.9.3-pension-step1', 'asset-os-v1.9.2-isa-review', 'asset-os-v1.9.1-isa-review', 'asset-os-v1.9-isa-review', 'asset-os-v1.8-isa-review', 'asset-os-v1.7-isa-review', 'asset-os-v1.6.1-isa-review', 'asset-os-v1.6-isa-review', 'asset-os-v1.5-isa-review', 'asset-os-v1.4-isa-review', 'asset-os-v1.3-isa-review'];
+const APP_VERSION = 'v0.6.9', APP_ENV = QA_MODE ? 'qa' : 'live', SCHEMA_VERSION = 21, KEY = QA_MODE ? QA_STORAGE_KEY : LIVE_STORAGE_KEY, LEGACY_KEYS = ['asset-os-v1.9.22-central-schedule', 'asset-os-v1.9.20-real-finance', 'asset-os-v1.9.19-finance-linked', 'asset-os-v1.9.18-integrated-ui-refine', 'asset-os-v1.9.17-integrated-complete-stage1', 'asset-os-v1.9.16-integrated-ledger-stage2', 'asset-os-v1.9.9-pension-step2-analysis', 'asset-os-v1.9.7-pension-step2-precision', 'asset-os-v1.9.6-pension-step2-refine', 'asset-os-v1.9.5-pension-step2', 'asset-os-v1.9.4-pension-step1', 'asset-os-v1.9.3-pension-step1', 'asset-os-v1.9.2-isa-review', 'asset-os-v1.9.1-isa-review', 'asset-os-v1.9-isa-review', 'asset-os-v1.8-isa-review', 'asset-os-v1.7-isa-review', 'asset-os-v1.6.1-isa-review', 'asset-os-v1.6-isa-review', 'asset-os-v1.5-isa-review', 'asset-os-v1.4-isa-review', 'asset-os-v1.3-isa-review'];
 const nf = new Intl.NumberFormat('ko-KR');
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const INVESTMENT_ROLES = ['성장', '배당', '현금흐름', '안정', '현금'];
@@ -868,7 +868,7 @@ function integratedIssues(store = validationIntegratedStore()) {
     for (const transaction of store.ledger || [])
         if (transaction.type === 'refund') {
             const original = (store.ledger || []).find(candidate => candidate.id === transaction.meta?.refundOf);
-            if (!original || !['expense', 'externalExpense'].includes(original.type || '') || transaction.date < original.date || transaction.toAccountId !== (original.type === 'expense' ? original.fromAccountId : ''))
+            if (!original || !['expense', 'externalExpense'].includes(original.type || '') || String(transaction.date || '') < String(original.date || '') || transaction.toAccountId !== (original.type === 'expense' ? original.fromAccountId : ''))
                 issues.push(`환불 원거래 또는 날짜 오류: ${transaction.id}`);
             else {
                 const originalId = String(original.id), total = (refunds.get(originalId) || 0) + Number(transaction.amount);
@@ -1549,17 +1549,111 @@ function financeProductInterestEstimate(p, asOf = '') {
 /* asset-os source: src/storage/state-migrations.js */
 'use strict';
 function migrationRecord(value) { return value && typeof value === 'object' && !Array.isArray(value) ? value : {}; }
-function migrationRows(value) { return Array.isArray(value) ? value : []; }
+function migrationRows(value) { return Array.isArray(value) ? value.map(migrationRecord) : []; }
 function migrationClone(value) { return JSON.parse(JSON.stringify(migrationRecord(value))); }
 function migrationMutate(data, apply) { apply(data); return data; }
+// External JSON starts as unknown. Missing legacy sections are allowed; malformed
+// present sections are rejected before migration can silently discard an account.
+function stateInputRecord(value) { return value !== null && typeof value === 'object' && !Array.isArray(value); }
+function stateDataShapeIssue(value) {
+    if (!stateInputRecord(value))
+        return '원본 데이터는 객체여야 합니다.';
+    const objectFields = new Set(['settings', 'system', 'policies', 'moduleVerification', 'pension', 'integrated', 'financialProducts', 'financeSchedules', 'insurance', 'sourceArchives', 'brokerKis']);
+    const collectionFields = {
+        '': ['accounts'], pension: ['accounts', 'contributions', 'transactions', 'holdings', 'incomes', 'assetSnapshots'],
+        integrated: ['accounts', 'liabilities', 'ledger'], financialProducts: ['items', 'events'], financeSchedules: ['items'],
+        insurance: ['policies'], sourceArchives: ['records'], brokerKis: ['orders', 'rights', 'balanceSnapshots', 'matches', 'instrumentLinks']
+    };
+    const collection = (record, key, path) => {
+        const rows = record[key];
+        if (rows == null)
+            return '';
+        if (!Array.isArray(rows))
+            return `${path}는 배열이어야 합니다.`;
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            if (!stateInputRecord(row))
+                return `${path}[${i}]는 객체여야 합니다.`;
+            if (row.meta != null && !stateInputRecord(row.meta))
+                return `${path}[${i}].meta는 객체여야 합니다.`;
+            for (const key of ['amount', 'qty', 'quantity', 'price', 'currentPrice', 'avgPrice', 'fee', 'tax', 'value', 'cost', 'cash', 'totalValue', 'securitiesValue', 'premium', 'delta', 'setQty', 'setAvg']) {
+                const field = row[key];
+                if (field != null && (typeof field !== 'number' && typeof field !== 'string' || !Number.isFinite(Number(field))))
+                    return `${path}[${i}].${key}는 유효한 금액 또는 수량이어야 합니다.`;
+            }
+        }
+        return '';
+    };
+    for (const key of objectFields)
+        if (value[key] != null && !stateInputRecord(value[key]))
+            return `${key}는 객체여야 합니다.`;
+    for (const [section, keys] of Object.entries(collectionFields)) {
+        const record = section ? migrationRecord(value[section]) : value;
+        for (const key of keys) {
+            const issue = collection(record, key, section ? `${section}.${key}` : key);
+            if (issue)
+                return issue;
+        }
+    }
+    for (const account of migrationRows(value.accounts)) {
+        for (const key of ['holdings', 'transactions', 'assetSnapshots', 'reconciliations', 'corporateActions', 'policyHistory']) {
+            const issue = collection(account, key, `accounts.${String(account.id || '?')}.${key}`);
+            if (issue)
+                return issue;
+        }
+        if (account.baseline != null && !stateInputRecord(account.baseline))
+            return '계좌 기준잔고는 객체여야 합니다.';
+        for (const tx of migrationRows(account.transactions)) {
+            const issue = collection(tx, 'revisions', 'transactions.revisions');
+            if (issue)
+                return issue;
+        }
+    }
+    const pension = migrationRecord(value.pension);
+    for (const key of ['projection', 'goal'])
+        if (pension[key] != null && !stateInputRecord(pension[key]))
+            return `pension.${key}는 객체여야 합니다.`;
+    for (const policy of migrationRows(migrationRecord(value.insurance).policies)) {
+        const issue = collection(policy, 'coverages', 'insurance.coverages');
+        if (issue)
+            return issue;
+    }
+    for (const [kind, group] of Object.entries(migrationRecord(value.policies))) {
+        if (!stateInputRecord(group))
+            return `policies.${kind}는 객체여야 합니다.`;
+        const issue = collection(group, 'versions', `policies.${kind}.versions`);
+        if (issue)
+            return issue;
+    }
+    // Reject prototype keys recursively while preserving unknown future fields.
+    const pending = [value];
+    const seen = new Set();
+    while (pending.length) {
+        const item = pending.pop();
+        if (!item || typeof item !== 'object')
+            continue;
+        if (seen.has(item))
+            continue;
+        seen.add(item);
+        for (const [key, child] of Object.entries(item)) {
+            if (key === '__proto__' || key === 'constructor' || key === 'prototype')
+                return '지원하지 않는 데이터 속성입니다.';
+            if (child && typeof child === 'object')
+                pending.push(child);
+        }
+    }
+    return '';
+}
+function assertStateDataShape(value) { const issue = stateDataShapeIssue(value); if (issue)
+    throw new Error(`저장 데이터 형식 오류: ${issue}`); }
 const STATE_MIGRATIONS = [
-    { from: 4, to: 5, name: 'initialize pension and integrated collections', migrate: data => migrationMutate(data, next => { next.settings = migrationRecord(next.settings); next.pension = migrationRecord(next.pension); for (const key of ['accounts', 'contributions', 'transactions', 'holdings', 'incomes', 'assetSnapshots'])
-            next.pension[key] = migrationRows(next.pension[key]); next.integrated = migrationRecord(next.integrated); for (const key of ['accounts', 'liabilities', 'ledger'])
-            next.integrated[key] = migrationRows(next.integrated[key]); }) },
-    { from: 5, to: 6, name: 'initialize financial product collections', migrate: data => migrationMutate(data, next => { next.financialProducts = migrationRecord(next.financialProducts); next.financialProducts.items = migrationRows(next.financialProducts.items); next.financialProducts.events = migrationRows(next.financialProducts.events); }) },
-    { from: 6, to: 7, name: 'initialize finance schedules', migrate: data => migrationMutate(data, next => { next.financeSchedules = migrationRecord(next.financeSchedules); next.financeSchedules.items = migrationRows(next.financeSchedules.items); }) },
-    { from: 7, to: 8, name: 'initialize insurance policies', migrate: data => migrationMutate(data, next => { next.insurance = migrationRecord(next.insurance); next.insurance.policies = migrationRows(next.insurance.policies); }) },
-    { from: 8, to: 9, name: 'initialize source archives', migrate: data => migrationMutate(data, next => { next.sourceArchives = migrationRecord(next.sourceArchives); next.sourceArchives.records = migrationRows(next.sourceArchives.records); }) },
+    { from: 4, to: 5, name: 'initialize pension and integrated collections', migrate: data => migrationMutate(data, next => { next.settings = migrationRecord(next.settings); const pension = migrationRecord(next.pension); next.pension = pension; for (const key of ['accounts', 'contributions', 'transactions', 'holdings', 'incomes', 'assetSnapshots'])
+            pension[key] = migrationRows(pension[key]); const integrated = migrationRecord(next.integrated); next.integrated = integrated; for (const key of ['accounts', 'liabilities', 'ledger'])
+            integrated[key] = migrationRows(integrated[key]); }) },
+    { from: 5, to: 6, name: 'initialize financial product collections', migrate: data => migrationMutate(data, next => { const products = migrationRecord(next.financialProducts); next.financialProducts = products; products.items = migrationRows(products.items); products.events = migrationRows(products.events); }) },
+    { from: 6, to: 7, name: 'initialize finance schedules', migrate: data => migrationMutate(data, next => { const schedules = migrationRecord(next.financeSchedules); next.financeSchedules = schedules; schedules.items = migrationRows(schedules.items); }) },
+    { from: 7, to: 8, name: 'initialize insurance policies', migrate: data => migrationMutate(data, next => { const insurance = migrationRecord(next.insurance); next.insurance = insurance; insurance.policies = migrationRows(insurance.policies); }) },
+    { from: 8, to: 9, name: 'initialize source archives', migrate: data => migrationMutate(data, next => { const archives = migrationRecord(next.sourceArchives); next.sourceArchives = archives; archives.records = migrationRows(archives.records); }) },
     { from: 9, to: 10, name: 'initialize module verification', migrate: data => migrationMutate(data, next => { next.moduleVerification = { isa: false, pension: false, irp: false, ...migrationRecord(next.moduleVerification) }; }) },
     { from: 10, to: 11, name: 'initialize ISA account collections', migrate: data => migrationMutate(data, next => { for (const account of migrationRows(next.accounts)) {
             account.holdings = migrationRows(account.holdings);
@@ -1567,8 +1661,8 @@ const STATE_MIGRATIONS = [
             account.assetSnapshots = migrationRows(account.assetSnapshots);
         } }) },
     { from: 11, to: 12, name: 'initialize policies and system state', migrate: data => migrationMutate(data, next => { next.policies = migrationRecord(next.policies); next.system = migrationRecord(next.system); }) },
-    { from: 12, to: 13, name: 'initialize KIS collections', migrate: data => migrationMutate(data, next => { next.brokerKis = migrationRecord(next.brokerKis); for (const key of ['balanceSnapshots', 'orders', 'rights'])
-            next.brokerKis[key] = migrationRows(next.brokerKis[key]); }) },
+    { from: 12, to: 13, name: 'initialize KIS collections', migrate: data => migrationMutate(data, next => { const broker = migrationRecord(next.brokerKis); next.brokerKis = broker; for (const key of ['balanceSnapshots', 'orders', 'rights'])
+            broker[key] = migrationRows(broker[key]); }) },
     { from: 13, to: 14, name: 'initialize reconciliation collections', migrate: data => migrationMutate(data, next => { for (const account of migrationRows(next.accounts)) {
             account.reconciliations = migrationRows(account.reconciliations);
             account.corporateActions = migrationRows(account.corporateActions);
@@ -1578,15 +1672,15 @@ const STATE_MIGRATIONS = [
                 tx.revisions = migrationRows(tx.revisions); }) },
     { from: 15, to: 16, name: 'initialize account policy history', migrate: data => migrationMutate(data, next => { for (const account of migrationRows(next.accounts))
             account.policyHistory = migrationRows(account.policyHistory); }) },
-    { from: 16, to: 17, name: 'initialize pension projection and goal', migrate: data => migrationMutate(data, next => { next.pension = migrationRecord(next.pension); next.pension.projection = migrationRecord(next.pension.projection); next.pension.goal = migrationRecord(next.pension.goal); }) },
-    { from: 17, to: 18, name: 'initialize tax and risk settings', migrate: data => migrationMutate(data, next => { next.settings = migrationRecord(next.settings); next.settings.pensionTaxProfile = migrationRecord(next.settings.pensionTaxProfile); next.settings.irpRiskClassifications = migrationRecord(next.settings.irpRiskClassifications); }) },
-    { from: 18, to: 19, name: 'initialize integrated ledger metadata', migrate: data => migrationMutate(data, next => { next.integrated = migrationRecord(next.integrated); for (const row of migrationRows(next.integrated.ledger))
+    { from: 16, to: 17, name: 'initialize pension projection and goal', migrate: data => migrationMutate(data, next => { const pension = migrationRecord(next.pension); next.pension = pension; pension.projection = migrationRecord(pension.projection); pension.goal = migrationRecord(pension.goal); }) },
+    { from: 17, to: 18, name: 'initialize tax and risk settings', migrate: data => migrationMutate(data, next => { const settings = migrationRecord(next.settings); next.settings = settings; settings.pensionTaxProfile = migrationRecord(settings.pensionTaxProfile); settings.irpRiskClassifications = migrationRecord(settings.irpRiskClassifications); }) },
+    { from: 18, to: 19, name: 'initialize integrated ledger metadata', migrate: data => migrationMutate(data, next => { for (const row of migrationRows(migrationRecord(next.integrated).ledger))
             row.meta = migrationRecord(row.meta); }) },
-    { from: 19, to: 20, name: 'initialize integrated ledger filter', migrate: data => migrationMutate(data, next => { next.settings = migrationRecord(next.settings); if (typeof next.settings.integratedLedgerFilter !== 'string')
-            next.settings.integratedLedgerFilter = 'all'; }) },
-    { from: 20, to: 21, name: 'initialize storage diagnostics', migrate: data => migrationMutate(data, next => { next.system = migrationRecord(next.system); if (typeof next.system.loadWarning !== 'string')
-            next.system.loadWarning = ''; if (typeof next.system.saveError !== 'string')
-            next.system.saveError = ''; }) }
+    { from: 19, to: 20, name: 'initialize integrated ledger filter', migrate: data => migrationMutate(data, next => { const settings = migrationRecord(next.settings); next.settings = settings; if (typeof settings.integratedLedgerFilter !== 'string')
+            settings.integratedLedgerFilter = 'all'; }) },
+    { from: 20, to: 21, name: 'initialize storage diagnostics', migrate: data => migrationMutate(data, next => { const system = migrationRecord(next.system); next.system = system; if (typeof system.loadWarning !== 'string')
+            system.loadWarning = ''; if (typeof system.saveError !== 'string')
+            system.saveError = ''; }) }
 ];
 const STATE_MIGRATION_BY_VERSION = new Map(STATE_MIGRATIONS.map(step => [step.from, step]));
 function stateMigrationPlan(fromVersion, toVersion = SCHEMA_VERSION) {
@@ -1603,6 +1697,7 @@ function stateMigrationPlan(fromVersion, toVersion = SCHEMA_VERSION) {
     return plan;
 }
 function migrateStateData(data, fromVersion, toVersion = SCHEMA_VERSION) {
+    assertStateDataShape(data);
     const plan = stateMigrationPlan(fromVersion, toVersion), next = migrationClone(data), applied = [];
     for (const descriptor of plan) {
         const step = STATE_MIGRATION_BY_VERSION.get(descriptor.from);
@@ -1670,6 +1765,7 @@ function stateEnvelopeBytes(raw) { return typeof TextEncoder === 'function' ? ne
 /* asset-os source: store-state.js */
 'use strict';
 function normalizeState(data) {
+    assertStateDataShape(data || seed);
     const next = clone((data || seed));
     next.settings = { ...clone(seed.settings), ...(next.settings || {}) };
     next.settings.monthlyLivingBudget = Math.max(0, Math.round(Number(next.settings.monthlyLivingBudget) || 0));
@@ -1865,9 +1961,12 @@ function loadState() {
             continue;
         try {
             const parsed = JSON.parse(raw);
-            if (!parsed?.data || ![4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21].includes(Number(parsed.schemaVersion)))
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
                 throw new Error('지원하지 않는 저장 형식');
-            const migrated = migrateStateData(parsed.data, Number(parsed.schemaVersion)), loaded = normalizeState(migrated.data);
+            const envelope = parsed;
+            if (!envelope.data || ![4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21].includes(Number(envelope.schemaVersion)))
+                throw new Error('지원하지 않는 저장 형식');
+            const migrated = migrateStateData(envelope.data, Number(envelope.schemaVersion)), loaded = normalizeState(migrated.data);
             if (key !== KEY || migrated.applied.length) {
                 loaded.system.loadWarning = '';
                 try {
@@ -1878,7 +1977,7 @@ function loadState() {
             return loaded;
         }
         catch (e) {
-            loadIssue = `저장 데이터 손상 또는 형식 오류: ${e.message}`;
+            loadIssue = `저장 데이터 손상 또는 형식 오류: ${e instanceof Error ? e.message : String(e)}`;
             try {
                 recoveryStored = storeRecoveryCopy(`${KEY}-recovery-${Date.now()}`, raw);
             }
@@ -1964,7 +2063,7 @@ function persist(notify = true) {
         return true;
     }
     catch (e) {
-        const message = `저장 실패: ${e.message || '로컬 저장소를 확인해 주세요.'}`;
+        const message = `저장 실패: ${(e instanceof Error ? e.message : String(e)) || '로컬 저장소를 확인해 주세요.'}`;
         state = before;
         state.system = { loadWarning: '', saveError: '', ...(state.system || {}) };
         state.system.saveError = message;
@@ -1997,16 +2096,35 @@ function parseBackupZipBytes(bytes) { const src = bytes instanceof Uint8Array ? 
     throw new Error('지원하지 않는 압축 방식입니다. Asset OS에서 만든 ZIP을 선택해 주세요.'); if (size > MAX_IMPORT_FILE_BYTES)
     throw new Error('백업 내부 데이터는 8MB 이하만 열 수 있습니다.'); if (start + size > src.length)
     throw new Error('ZIP 데이터가 잘렸습니다.'); const data = src.slice(start, start + size); if (crc32(data) !== expected)
-    throw new Error('ZIP CRC 검증에 실패했습니다.'); return JSON.parse(new TextDecoder().decode(data)); }
-function backupContainsQaFixtures(payload) { const d = payload.data || {}, accounts = d.accounts || [], p = d.pension || {}, ledger = d.integrated?.ledger || []; return /(?:^|\s)QA(?:\s|$)/i.test(String(payload.appVersion || '')) || ledger.some((x) => x?.meta?.qaFixture) || accounts.some((a) => (a.assetSnapshots || []).some((x) => x?.meta?.qaFixture) || (a.transactions || []).some((x) => x?.meta?.qaFixture) || a.qaDividendHistory) || (p.incomes || []).some((x) => x?.meta?.qaFixture) || (p.assetSnapshots || []).some((x) => x?.meta?.qaFixture); }
-function backupEnvironment(payload) { if (['live', 'qa'].includes(String(payload.environment || '')))
+    throw new Error('ZIP CRC 검증에 실패했습니다.'); return backupInputPayload(JSON.parse(new TextDecoder().decode(data))); }
+function backupInputPayload(value) { if (!stateInputRecord(value))
+    throw new Error('Asset OS 백업 파일이 아닙니다.'); return value; }
+function backupRecord(value) { return stateInputRecord(value) ? value : {}; }
+function backupRows(value) { return Array.isArray(value) ? value.filter(stateInputRecord) : []; }
+function backupFixtureRow(value) { return !!backupRecord(value.meta).qaFixture; }
+function backupContainsQaFixtures(payload) {
+    const d = backupRecord(payload.data), p = backupRecord(d.pension), ledger = backupRows(backupRecord(d.integrated).ledger);
+    return /(?:^|\s)QA(?:\s|$)/i.test(String(payload.appVersion || '')) || ledger.some(backupFixtureRow) || backupRows(d.accounts).some(a => backupRows(a.assetSnapshots).some(backupFixtureRow) || backupRows(a.transactions).some(backupFixtureRow) || !!a.qaDividendHistory) || backupRows(p.incomes).some(backupFixtureRow) || backupRows(p.assetSnapshots).some(backupFixtureRow);
+}
+function backupEnvironment(payload) { if (payload.environment === 'live' || payload.environment === 'qa')
     return payload.environment; return backupContainsQaFixtures(payload) ? 'qa' : 'live'; }
-function validateBackupPayload(payload) { if (!payload || payload.format !== BACKUP_FORMAT)
-    throw new Error('Asset OS 백업 파일이 아닙니다.'); if (!SUPPORTED_SCHEMAS.has(Number(payload.schemaVersion)))
-    throw new Error(`지원하지 않는 데이터 구조 ${payload.schemaVersion}`); if (!payload.data || typeof payload.data !== 'object')
-    throw new Error('백업 데이터가 없습니다.'); const sourceEnv = backupEnvironment(payload); if (sourceEnv !== APP_ENV)
-    throw new Error(`${sourceEnv === 'qa' ? 'QA' : '운영'} 백업은 ${APP_ENV === 'qa' ? 'QA' : '운영'} 화면에 복원할 수 없습니다.`); const migrated = migrateStateData(payload.data, Number(payload.schemaVersion)), next = normalizeState(migrated.data); if (sourceEnv === 'qa')
-    next.moduleVerification = { isa: false, pension: false, irp: false }; return next; }
+function validateBackupPayload(input) {
+    const payload = backupInputPayload(input);
+    if (payload.format !== BACKUP_FORMAT)
+        throw new Error('Asset OS 백업 파일이 아닙니다.');
+    if (!SUPPORTED_SCHEMAS.has(Number(payload.schemaVersion)))
+        throw new Error(`지원하지 않는 데이터 구조 ${String(payload.schemaVersion)}`);
+    if (!stateInputRecord(payload.data))
+        throw new Error('백업 데이터가 없습니다.');
+    assertStateDataShape(payload.data);
+    const sourceEnv = backupEnvironment(payload);
+    if (sourceEnv !== APP_ENV)
+        throw new Error(`${sourceEnv === 'qa' ? 'QA' : '운영'} 백업은 ${APP_ENV === 'qa' ? 'QA' : '운영'} 화면에 복원할 수 없습니다.`);
+    const migrated = migrateStateData(payload.data, Number(payload.schemaVersion)), next = normalizeState(migrated.data);
+    if (sourceEnv === 'qa')
+        next.moduleVerification = { isa: false, pension: false, irp: false };
+    return next;
+}
 function downloadBytes(bytes, name, type = 'application/zip') { const blob = new Blob([bytes], { type }), url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1200); }
 function backupFileName() { return typeof assetManagedBackupName === 'function' ? assetManagedBackupName() : `AssetOS_${localYmd().replaceAll('-', '').slice(2)}_${APP_VERSION}.zip`; }
 function backupHealth(now = new Date()) {
@@ -2075,7 +2193,7 @@ async function shareDriveBackup() {
 }
 async function parseBackupFile(file) { assertImportFileSize(file); const bytes = new Uint8Array(await file.arrayBuffer()), name = String(file.name || '').toLowerCase(); if (bytes.length > MAX_IMPORT_FILE_BYTES)
     throw new Error('백업 파일은 8MB 이하만 열 수 있습니다.'); if (name.endsWith('.json') || name.endsWith('.txt'))
-    return JSON.parse(new TextDecoder().decode(bytes)); return parseBackupZipBytes(bytes); }
+    return backupInputPayload(JSON.parse(new TextDecoder().decode(bytes))); return parseBackupZipBytes(bytes); }
 async function restoreBackupFile(file) { let payload, next; try {
     payload = await parseBackupFile(file);
     next = validateBackupPayload(payload);
@@ -2205,22 +2323,31 @@ function resolveInitialImportPlaceholders(candidate) {
     const pensionAccounts = Array.isArray(candidate.pension?.accounts) ? candidate.pension.accounts : [];
     const byKind = (kind) => pensionAccounts.filter(account => account.kind === kind && account.status === 'active');
     for (const transaction of candidate.integrated?.ledger || []) {
-        const kind = transaction.meta?.targetPensionKind;
+        const kind = String(transaction.meta?.targetPensionKind || '');
         if (!kind)
             continue;
         const found = byKind(kind);
         if (found.length !== 1)
             throw new Error(`${kind === 'irp' ? 'IRP' : '연금저축'} 연결 계좌가 ${found.length}개라 자동 연결할 수 없습니다.`);
-        if (!found[0].openedAt || found[0].openedAt > transaction.date)
-            found[0].openedAt = transaction.date;
+        const date = String(transaction.date || '');
+        if (!found[0].openedAt || String(found[0].openedAt) > date)
+            found[0].openedAt = date;
         transaction.meta = { ...(transaction.meta || {}), targetPensionAccountId: found[0].id };
         delete transaction.meta.targetPensionKind;
     }
     return candidate;
 }
-function buildInitialImportCandidate(bundle) {
-    if (!bundle || bundle.format !== INITIAL_IMPORT_FORMAT)
+function initialImportBundle(input) {
+    if (!stateInputRecord(input) || input.format !== INITIAL_IMPORT_FORMAT)
         throw new Error('Asset OS 초기자료 병합 파일이 아닙니다.');
+    const data = input.data ?? {};
+    assertStateDataShape(data);
+    if (data.pensionProjection != null && !stateInputRecord(data.pensionProjection))
+        throw new Error('미래연금 기준은 객체여야 합니다.');
+    return { format: INITIAL_IMPORT_FORMAT, data: data };
+}
+function buildInitialImportCandidate(input) {
+    const bundle = initialImportBundle(input);
     const add = bundle.data || {}, candidate = clone(state);
     candidate.financialProducts = candidate.financialProducts || { items: [], events: [] };
     candidate.financeSchedules = candidate.financeSchedules || { items: [] };
@@ -2253,7 +2380,7 @@ async function importInitialMergeFile(file) {
     let bundle, next;
     try {
         assertImportFileSize(file, '초기자료');
-        bundle = JSON.parse(await file.text());
+        bundle = initialImportBundle(JSON.parse(await file.text()));
         next = buildInitialImportCandidate(bundle);
     }
     catch (error) {

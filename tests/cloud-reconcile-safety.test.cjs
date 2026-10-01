@@ -12,6 +12,7 @@ const context=vm.createContext({
  $:()=>null,document:{documentElement:{classList:{add:()=>{},remove:()=>{}}}},location:{hash:'#/home'}
 });
 vm.runInContext(fs.readFileSync(path.join(__dirname,'..','src/storage/cloud-save-contract.js'),'utf8'),context,{filename:'cloud-save-contract.js'});
+vm.runInContext(fs.readFileSync(path.join(__dirname,'..','src/storage/state-migrations.js'),'utf8'),context);
 vm.runInContext(fs.readFileSync(path.join(__dirname,'..','src/domain/cloud-state-policy.js'),'utf8'),context,{filename:'cloud-state-policy.js'});
 vm.runInContext(fs.readFileSync(path.join(__dirname,'..','supabase-sync.js'),'utf8'),context,{filename:'supabase-sync.js'});
 
