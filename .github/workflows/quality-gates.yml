@@ -44,7 +44,14 @@ jobs:
           else
             echo "name=core" >> "$GITHUB_OUTPUT"
           fi
-      - run: npx playwright install --with-deps chromium
+      - name: Install Chromium
+        timeout-minutes: 4
+        run: |
+          # Avoid the Azure mirror's slow package downloads on hosted runners.
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            printf '%s\n' 'https://archive.ubuntu.com/ubuntu/' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+          fi
+          npx playwright install --with-deps chromium
       - run: npm run "qa:${{ steps.profile.outputs.name }}"
       - run: npm run audit
       - if: failure()
