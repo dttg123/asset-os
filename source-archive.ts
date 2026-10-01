@@ -1,8 +1,11 @@
 'use strict';
-type SourceArchiveRecord=Record<string,any>;
-declare const state:SourceArchiveRecord,$:(selector:string)=>any;
+type SourceArchiveRecord={id:string;kind:string;date:string;label?:string;amount:number;note?:string;meta?:Record<string,unknown>};
+type ArchiveIncome=SourceArchiveRecord&{archive?:boolean;originalAmount?:number;reconciledAmount?:number};
+type ArchivePerformance={key:string;date:string;label:string;realized:number;income:number;total:number;cumulativeRealized:number;cumulativeIncome:number;cumulativeTotal:number};
+declare const state:{sourceArchives?:{records?:SourceArchiveRecord[]}};
+declare function $(selector:string):HTMLElement;
 declare function toast(message:string):void;
-declare function pensionIncomeRecords(scope:string):SourceArchiveRecord[];
+declare function pensionIncomeRecords(scope:string):ArchiveIncome[];
 declare function escapeHtml(value:unknown):string;
 declare function won(value:unknown):string;
 declare function signed(value:unknown):string;
@@ -12,8 +15,8 @@ function sourceArchiveRecords():SourceArchiveRecord[]{return state.sourceArchive
 function pensionArchiveKinds(scope='all',type='all'):string[]{
  const prefix=scope==='pension'?['pension']:scope==='irp'?['irp']:['pension','irp'],suffix=type==='realized'?['Realized']:type==='income'?['Dividend']:['Realized','Dividend'];return prefix.flatMap(p=>suffix.map(s=>p+s))
 }
-function pensionArchivePerformanceRows(scope='all'):SourceArchiveRecord[]{
- const kinds=new Set(pensionArchiveKinds(scope)),months=new Map<string,SourceArchiveRecord>();for(const r of sourceArchiveRecords()){if(!kinds.has(r.kind)||!/^\d{4}-\d{2}/.test(String(r.date)))continue;const key=String(r.date).slice(0,7),row=months.get(key)||{key,date:`${key}-01`,label:key.slice(2).replace('-','.'),realized:0,income:0,total:0,cumulativeRealized:0,cumulativeIncome:0,cumulativeTotal:0};if(String(r.kind).endsWith('Realized'))row.realized+=Number(r.amount)||0;else row.income+=Number(r.amount)||0;row.total=row.realized+row.income;months.set(key,row)}let realized=0,income=0;return [...months.values()].sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(row=>{realized+=Number(row.realized)||0;income+=Number(row.income)||0;return{...row,cumulativeRealized:realized,cumulativeIncome:income,cumulativeTotal:realized+income}})
+function pensionArchivePerformanceRows(scope='all'):ArchivePerformance[]{
+ const kinds=new Set(pensionArchiveKinds(scope)),months=new Map<string,ArchivePerformance>();for(const r of sourceArchiveRecords()){if(!kinds.has(r.kind)||!/^\d{4}-\d{2}/.test(String(r.date)))continue;const key=String(r.date).slice(0,7),row=months.get(key)||{key,date:`${key}-01`,label:key.slice(2).replace('-','.'),realized:0,income:0,total:0,cumulativeRealized:0,cumulativeIncome:0,cumulativeTotal:0};if(String(r.kind).endsWith('Realized'))row.realized+=Number(r.amount)||0;else row.income+=Number(r.amount)||0;row.total=row.realized+row.income;months.set(key,row)}let realized=0,income=0;return [...months.values()].sort((a,b)=>String(a.date).localeCompare(String(b.date))).map(row=>{realized+=Number(row.realized)||0;income+=Number(row.income)||0;return{...row,cumulativeRealized:realized,cumulativeIncome:income,cumulativeTotal:realized+income}})
 }
 function pensionArchivePerformanceSummary(scope='all'){
  const rows=pensionArchivePerformanceRows(scope),last=rows.at(-1)||{cumulativeRealized:0,cumulativeIncome:0,cumulativeTotal:0};return{scope,rows,count:sourceArchiveRecords().filter(r=>pensionArchiveKinds(scope).includes(r.kind)).length,realized:last.cumulativeRealized,income:last.cumulativeIncome,total:last.cumulativeTotal}

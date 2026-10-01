@@ -28,20 +28,20 @@ function formValidationFieldName(message = '') { const text = String(message); i
     return 'newName'; if (/금액|수령액|현금|잔액|납입한도/.test(text))
     return 'amount'; return ''; }
 function formClearError(form) { if (!form)
-    return; const box = form.querySelector?.('[data-form-error]'); if (box) {
+    return; const box = form.querySelector('[data-form-error]'); if (box) {
     box.textContent = '';
     box.hidden = true;
-} form.classList?.remove('has-validation-error'); for (const field of form.querySelectorAll?.('[aria-invalid="true"]') || []) {
+} form.classList?.remove('has-validation-error'); for (const field of form.querySelectorAll('[aria-invalid="true"]')) {
     field.removeAttribute('aria-invalid');
     field.closest?.('.field')?.classList.remove('has-error');
 } return false; }
 function formShowError(form, message = '', fieldName = '') { if (!form || !message)
-    return formClearError(form); formClearError(form); const box = form.querySelector?.('[data-form-error]'); if (box) {
+    return formClearError(form); formClearError(form); const box = form.querySelector('[data-form-error]'); if (box) {
     box.textContent = String(message);
     box.hidden = false;
-} form.classList?.add('has-validation-error'); const name = fieldName || formValidationFieldName(message), field = (name && form.elements?.namedItem ? form.elements.namedItem(name) : form.elements?.[name]) || (name === 'date' ? form.elements?.namedItem?.('tradeDate') : null); if (field) {
-    field.setAttribute?.('aria-invalid', 'true');
-    field.closest?.('.field')?.classList.add('has-error');
+} form.classList?.add('has-validation-error'); const name = fieldName || formValidationFieldName(message), field = (name ? form.elements.namedItem(name) : null) || (name === 'date' ? form.elements.namedItem('tradeDate') : null); if (field && 'setAttribute' in field) {
+    field.setAttribute('aria-invalid', 'true');
+    field.closest('.field')?.classList.add('has-error');
 } return true; }
 function isaContributionRowsForStore(a, store = integratedStore(), throughDate = localYmd()) {
     const accounts = store?.accounts || [], rows = [];
@@ -409,8 +409,8 @@ function commonIncomeAnalysisMarkup({ mode, points = [], selected = null, rate =
 function pensionIncomeAnalysisMarkup(scope, mode, selectedKey = '') {
     const s = pensionIncomeSummary(scope), monthly = mode === 'month', yearly = mode === 'year', recent = mode === 'recent';
     const allYearPoints = pensionIncomeYears(scope), points = recent ? [] : (monthly ? pensionIncomeMonths(scope, s.year) : incomeYearRangePoints(allYearPoints, pensionIncomeYearRange));
-    const fallback = recent ? null : (points.filter(x => x.amount > 0).at(-1) || null), rawSelected = recent ? null : (points.find(x => x.key === selectedKey) || fallback), selected = rawSelected ? { ...rawSelected, value: rawSelected.amount } : null;
-    const principal = selected ? pensionIncomePrincipalAt(scope, selected.key, monthly ? 'month' : 'year') : 0, selectedRate = selected ? (principal ? selected.value / principal * 100 : null) : null, recentRows = recent ? (s.records || []).filter(row => row.amount > 0).slice(0, 3) : [], recentHtml = `<div class="composition-holdings compact-income-detail"><div class="sectionhead"><h2 style="font-size:13px">최근 내역</h2><span class="count-pill">최대 3건</span></div><div class="dividend-list compact-dividend-list">${recentRows.length ? recentRows.map(x => { const h = pensionHoldingById(x.holdingId), type = typeof brokerKisIncomeTypeLabel === 'function' ? brokerKisIncomeTypeLabel(x.type) : (x.type === 'interest' ? '이자' : '배당'), source = x.source === 'kis-right' ? ' · 한투 조회' : x.source === 'source-archive' ? ' · 과거자료' : ''; return `<div class="dividend-row"><span class="rowcopy"><strong>${escapeHtml(h?.name || pensionStore().holdings.find(h => h.id === x.holdingId)?.name || x.productName || x.label || '종목')}</strong><small>${formatDate(x.date)} · ${type}${source}</small></span><span class="rowamount positive">${won(x.amount)}</span></div>`; }).join('') : '<div class="empty-state"><span>배당·분배금·이자·기타 권리 내역이 없습니다.</span></div>'}</div>${recentRows.some(x => x.source === 'kis-right') ? '<div class="source-note">한투 권리내역은 세후 수령액을 조회용으로 표시하며 계좌 현금·거래 원장에 다시 더하지 않습니다.</div>' : ''}</div>`;
+    const fallback = recent ? null : (points.filter(x => (x.amount || 0) > 0).at(-1) || null), rawSelected = recent ? null : (points.find(x => x.key === selectedKey) || fallback), selected = rawSelected ? { ...rawSelected, value: rawSelected.amount } : null;
+    const principal = selected ? pensionIncomePrincipalAt(scope, selected.key, monthly ? 'month' : 'year') : 0, selectedRate = selected ? (principal ? (selected.value || 0) / principal * 100 : null) : null, recentRows = recent ? (s.records || []).filter(row => (row.amount || 0) > 0).slice(0, 3) : [], recentHtml = `<div class="composition-holdings compact-income-detail"><div class="sectionhead"><h2 style="font-size:13px">최근 내역</h2><span class="count-pill">최대 3건</span></div><div class="dividend-list compact-dividend-list">${recentRows.length ? recentRows.map(x => { const h = pensionHoldingById(x.holdingId), type = typeof brokerKisIncomeTypeLabel === 'function' ? brokerKisIncomeTypeLabel(x.type) : (x.type === 'interest' ? '이자' : '배당'), source = x.source === 'kis-right' ? ' · 한투 조회' : x.source === 'source-archive' ? ' · 과거자료' : ''; return `<div class="dividend-row"><span class="rowcopy"><strong>${escapeHtml(h?.name || pensionStore().holdings.find(h => h.id === x.holdingId)?.name || x.productName || x.label || '종목')}</strong><small>${formatDate(x.date)} · ${type}${source}</small></span><span class="rowamount positive">${won(x.amount)}</span></div>`; }).join('') : '<div class="empty-state"><span>배당·분배금·이자·기타 권리 내역이 없습니다.</span></div>'}</div>${recentRows.some(x => x.source === 'kis-right') ? '<div class="source-note">한투 권리내역은 세후 수령액을 조회용으로 표시하며 계좌 현금·거래 원장에 다시 더하지 않습니다.</div>' : ''}</div>`;
     return commonIncomeAnalysisMarkup({ mode, points, selected, rate: selectedRate, modeAttr: 'data-pension-income-mode', pointAttr: 'data-pension-income-point', amountTerm: '수령', rateTerm: '현금수익률', focusNote: selected ? (principal ? `${monthly ? '월말' : '연말'} 투자원금 ${won(principal)} 기준` : '해당 기간 투자원금 스냅샷 없음') : '', recentHtml, yearly, caption: yearly && pensionIncomeChartMode === 'line' ? '연간 수령액의 장기 성장 흐름입니다. 점을 누르면 해당 연도를 확인합니다.' : '막대를 누르면 해당 기간 수령액과 현금수익률을 확인합니다.', yearRange: pensionIncomeYearRange, rangeAttr: 'data-pension-income-range', chartMode: pensionIncomeChartMode, chartModeAttr: 'data-pension-income-chart', totalYearCount: incomeRecordSpanYears(pensionIncomeRecords(scope)) });
 }
 function captureIncomeChartScroll() { const e = $('.income-chart-scroll'); if (!e)
@@ -426,10 +426,10 @@ function restoreIncomeChartScroll(saved, preferLatest = false) { requestAnimatio
 }
 else if (max > 0 && preferLatest)
     left = max; e.scrollLeft = left; }); }
-function pensionIncomeAnalysisSheetMarkup(scope = pensionAssetScope()) { const x = pensionIncomeSummary(scope), records = x.records || [], latest = records.find(row => row.amount > 0); return `<div class="analysis-sheet-summary"><div class="dividend-metrics compact-four"><div class="dividend-metric emphasis"><span>누적 수령</span><strong>${won(x.total)}</strong></div><div class="dividend-metric"><span>${x.year}년 수령</span><strong>${won(x.yearTotal)}</strong></div><div class="dividend-metric"><span>${x.year} 현금수익률</span><strong>${x.yieldRate == null ? '계산 불가' : x.yieldRate.toFixed(2) + '%'}</strong></div><div class="dividend-metric"><span>최근 수령</span><strong>${latest ? won(latest.amount) : '-'}</strong><small>${latest ? escapeHtml(pensionHoldingById(latest.holdingId)?.name || pensionStore().holdings.find(h => h.id === latest.holdingId)?.name || latest.productName || latest.label || '종목') : '내역 없음'}</small></div></div></div>${pensionIncomeAnalysisMarkup(scope, pensionIncomeAnalysisMode, pensionIncomeSelectedPoint)}`; }
-function bindPensionIncomeAnalysis() { const selectPoint = (key) => { pensionIncomeSelectedPoint = key; renderPensionIncomeAnalysis(false); }; $$('[data-pension-income-mode]').forEach(b => b.onclick = () => { pensionIncomeAnalysisMode = ['month', 'year', 'recent'].includes(b.dataset.pensionIncomeMode) ? b.dataset.pensionIncomeMode : 'month'; pensionIncomeSelectedPoint = ''; renderPensionIncomeAnalysis(true); }); $$('[data-pension-income-range]').forEach(b => b.onclick = () => { pensionIncomeYearRange = ['5y', '10y', '20y', 'all'].includes(b.dataset.pensionIncomeRange) ? b.dataset.pensionIncomeRange : '10y'; pensionIncomeSelectedPoint = ''; renderPensionIncomeAnalysis(true); }); $$('[data-pension-income-chart]').forEach(b => b.onclick = () => { pensionIncomeChartMode = b.dataset.pensionIncomeChart === 'line' ? 'line' : 'bar'; pensionIncomeSelectedPoint = ''; renderPensionIncomeAnalysis(false); }); $$('[data-pension-income-point]').forEach(b => { b.onclick = () => selectPoint(b.dataset.pensionIncomePoint); b.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') {
+function pensionIncomeAnalysisSheetMarkup(scope = pensionAssetScope()) { const x = pensionIncomeSummary(scope), records = x.records || [], latest = records.find(row => (row.amount || 0) > 0); return `<div class="analysis-sheet-summary"><div class="dividend-metrics compact-four"><div class="dividend-metric emphasis"><span>누적 수령</span><strong>${won(x.total)}</strong></div><div class="dividend-metric"><span>${x.year}년 수령</span><strong>${won(x.yearTotal)}</strong></div><div class="dividend-metric"><span>${x.year} 현금수익률</span><strong>${x.yieldRate == null ? '계산 불가' : x.yieldRate.toFixed(2) + '%'}</strong></div><div class="dividend-metric"><span>최근 수령</span><strong>${latest ? won(latest.amount) : '-'}</strong><small>${latest ? escapeHtml(pensionHoldingById(latest.holdingId)?.name || pensionStore().holdings.find(h => h.id === latest.holdingId)?.name || latest.productName || latest.label || '종목') : '내역 없음'}</small></div></div></div>${pensionIncomeAnalysisMarkup(scope, pensionIncomeAnalysisMode, pensionIncomeSelectedPoint)}`; }
+function bindPensionIncomeAnalysis() { const selectPoint = (key) => { pensionIncomeSelectedPoint = key; renderPensionIncomeAnalysis(false); }; $$('[data-pension-income-mode]').forEach(b => b.onclick = () => { pensionIncomeAnalysisMode = ['month', 'year', 'recent'].includes((b.dataset.pensionIncomeMode || '')) ? (b.dataset.pensionIncomeMode || '') : 'month'; pensionIncomeSelectedPoint = ''; renderPensionIncomeAnalysis(true); }); $$('[data-pension-income-range]').forEach(b => b.onclick = () => { pensionIncomeYearRange = ['5y', '10y', '20y', 'all'].includes((b.dataset.pensionIncomeRange || '')) ? (b.dataset.pensionIncomeRange || '') : '10y'; pensionIncomeSelectedPoint = ''; renderPensionIncomeAnalysis(true); }); $$('[data-pension-income-chart]').forEach(b => b.onclick = () => { pensionIncomeChartMode = (b.dataset.pensionIncomeChart || '') === 'line' ? 'line' : 'bar'; pensionIncomeSelectedPoint = ''; renderPensionIncomeAnalysis(false); }); $$('[data-pension-income-point]').forEach(b => { b.onclick = () => selectPoint((b.dataset.pensionIncomePoint || '')); b.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault();
-    selectPoint(b.dataset.pensionIncomePoint);
+    selectPoint((b.dataset.pensionIncomePoint || ''));
 } }; }); }
 function renderPensionIncomeAnalysis(preferLatest = false) { const body = $('#sheetBody'); if (!body)
     return; const saved = captureIncomeChartScroll(); body.innerHTML = pensionIncomeAnalysisSheetMarkup(pensionAssetScope()); bindPensionIncomeAnalysis(); restoreIncomeChartScroll(saved, preferLatest); }
@@ -655,7 +655,7 @@ catch { } ; updatePensionFuturePoint(e.clientX); }; const move = (e) => { if (!a
     return; if (e.pointerType === 'mouse' && !e.buttons)
     return; e.preventDefault(); e.stopPropagation(); updatePensionFuturePoint(e.clientX); }; const release = (e) => { if (!active)
     return; e.preventDefault(); e.stopPropagation(); updatePensionFuturePoint(e.clientX); active = false; try {
-    track.releasePointerCapture(pointerId);
+    track.releasePointerCapture(pointerId ?? e.pointerId);
 }
 catch { } ; pointerId = null; }; track.style.touchAction = 'none'; track.onpointerdown = lock; track.onpointermove = move; track.onpointerup = release; track.onpointercancel = release; track.onlostpointercapture = () => { active = false; pointerId = null; }; }
 ;
@@ -731,7 +731,7 @@ function updateIsaAnalysisPoint(clientX) { const svg = $('#isaAnalysisChart'), h
     $('#isaAnalysisRate').textContent = pct(rate);
     $('#isaAnalysisRate').className = rate < 0 ? 'negative' : 'positive';
 } }
-function bindIsaAssetAnalysis() { $$('[data-isa-analysis-period]').forEach(b => b.onclick = () => { isaAnalysisPeriod = ['3m', '6m', '1y', '3y', '5y', 'all'].includes(b.dataset.isaAnalysisPeriod) ? b.dataset.isaAnalysisPeriod : '1y'; isaAnalysisSelectedKey = ''; $('#sheetBody').innerHTML = isaAnalysisMarkup(currentAccount()); bindIsaAssetAnalysis(); }); const track = $('[data-isa-analysis-track]'); if (track) {
+function bindIsaAssetAnalysis() { $$('[data-isa-analysis-period]').forEach(b => b.onclick = () => { isaAnalysisPeriod = ['3m', '6m', '1y', '3y', '5y', 'all'].includes((b.dataset.isaAnalysisPeriod || '')) ? (b.dataset.isaAnalysisPeriod || '') : '1y'; isaAnalysisSelectedKey = ''; $('#sheetBody').innerHTML = isaAnalysisMarkup(currentAccount()); bindIsaAssetAnalysis(); }); const track = $('[data-isa-analysis-track]'); if (track) {
     let active = false, pid = null;
     track.style.touchAction = 'none';
     track.onpointerdown = (e) => { active = true; pid = e.pointerId; e.preventDefault(); e.stopPropagation(); try {
@@ -818,7 +818,7 @@ function updatePensionAnalysisPoint(clientX) { const svg = $('#pensionAnalysisCh
     $('#pensionAnalysisRate').textContent = pct(rate);
     $('#pensionAnalysisRate').className = rate < 0 ? 'negative' : 'positive';
 } }
-function bindPensionAssetAnalysis() { $$('[data-pension-analysis-mode]').forEach(b => b.onclick = () => { pensionAnalysisMode = b.dataset.pensionAnalysisMode; pensionAnalysisSelectedKey = ''; renderPensionAssetAnalysis(); }); $$('[data-pension-analysis-period]').forEach(b => b.onclick = () => { pensionAnalysisPeriod = ['3m', '6m', '1y', '3y', '5y', 'all'].includes(b.dataset.pensionAnalysisPeriod) ? b.dataset.pensionAnalysisPeriod : '1y'; pensionAnalysisSelectedKey = ''; renderPensionAssetAnalysis(); }); $('[data-pension-analysis-period-select]')?.addEventListener('change', (e) => { pensionAnalysisPeriod = ['3m', '6m', '1y', '3y', '5y', 'all'].includes(e.currentTarget.value) ? e.currentTarget.value : '1y'; pensionAnalysisSelectedKey = ''; renderPensionAssetAnalysis(); }); const track = $('[data-pension-analysis-track]'); if (track) {
+function bindPensionAssetAnalysis() { $$('[data-pension-analysis-mode]').forEach(b => b.onclick = () => { pensionAnalysisMode = (b.dataset.pensionAnalysisMode || ''); pensionAnalysisSelectedKey = ''; renderPensionAssetAnalysis(); }); $$('[data-pension-analysis-period]').forEach(b => b.onclick = () => { pensionAnalysisPeriod = ['3m', '6m', '1y', '3y', '5y', 'all'].includes((b.dataset.pensionAnalysisPeriod || '')) ? (b.dataset.pensionAnalysisPeriod || '') : '1y'; pensionAnalysisSelectedKey = ''; renderPensionAssetAnalysis(); }); $('[data-pension-analysis-period-select]')?.addEventListener('change', (e) => { pensionAnalysisPeriod = ['3m', '6m', '1y', '3y', '5y', 'all'].includes(e.currentTarget.value) ? e.currentTarget.value : '1y'; pensionAnalysisSelectedKey = ''; renderPensionAssetAnalysis(); }); const track = $('[data-pension-analysis-track]'); if (track) {
     let active = false, pid = null;
     track.style.touchAction = 'none';
     track.onpointerdown = (e) => { active = true; pid = e.pointerId; e.preventDefault(); e.stopPropagation(); try {
@@ -956,9 +956,9 @@ function integratedPage(tab = 'summary') { const safe = ['summary', 'ledger', 's
 'use strict';
 function integratedUiType(t) { if (!t)
     return 'externalIncome'; if (t.type === 'expense')
-    return 'lifeExpense'; if (['externalAssetIn', 'internalTransfer'].includes(t.type) && ['isa', 'pension', 'irp', 'deposit', 'savings'].includes(integratedStore().accounts.find(a => a.id === t.toAccountId)?.kind))
-    return 'savingInvestment'; if (['debtPrincipal', 'externalDebtPrincipal', 'debtInterest', 'debtInterestExternal'].includes(t.type))
-    return 'loanPayment'; return t.type; }
+    return 'lifeExpense'; if (['externalAssetIn', 'internalTransfer'].includes(t.type || '') && ['isa', 'pension', 'irp', 'deposit', 'savings'].includes(integratedStore().accounts.find(a => a.id === t.toAccountId)?.kind || ''))
+    return 'savingInvestment'; if (['debtPrincipal', 'externalDebtPrincipal', 'debtInterest', 'debtInterestExternal'].includes(t.type || ''))
+    return 'loanPayment'; return t.type || ''; }
 function integratedDefaultCategory(uiType) { const categories = { externalIncome: '월급', lifeExpense: '생활비', savingInvestment: '저축·투자', loanPayment: '대출 납부' }; return categories[uiType] || ''; }
 function integratedFormAccountOptions(selected = '') { const activeIds = new Set(activeFinancialProducts().map(p => p.id)); return integratedStore().accounts.filter(a => !['isa', 'pension', 'irp'].includes(a.kind) && (!a.productId || activeIds.has(a.productId))).map(a => `<option value="${escapeHtml(a.id)}" ${a.id === selected ? 'selected' : ''}>${escapeHtml(a.name)}</option>`).join(''); }
 function integratedInvestmentTargetOptions(selected = '') { const activeIds = new Set(activeFinancialProducts().map(p => p.id)); return integratedStore().accounts.filter(a => ['isa', 'pension', 'irp', 'deposit', 'savings'].includes(a.kind) && (!a.productId || activeIds.has(a.productId))).map(a => `<option value="${escapeHtml(a.id)}" ${a.id === selected ? 'selected' : ''}>${escapeHtml(a.name)}</option>`).join(''); }
@@ -1018,7 +1018,7 @@ function updateDiagnostics() { const h = state.accounts.reduce((sum, a) => sum +
 } if ($('#storageUsageStatus')) {
     const mb = Math.round((Number(usage?.bytes) || 0) / 10000) / 100, pctUsed = Math.round((Number(usage?.bytes) || 0) / (Number(usage?.limit) || MAX_STATE_BYTES) * 100);
     $('#storageUsageStatus').textContent = usage ? `${mb}MB · ${pctUsed}%` : '저장 후 계산';
-    $('#storageUsageStatus').className = `diagnostic-value ${['warning', 'critical'].includes(usage?.level) ? 'wait' : 'ok'}`;
+    $('#storageUsageStatus').className = `diagnostic-value ${['warning', 'critical'].includes(usage?.level || '') ? 'wait' : 'ok'}`;
 } if ($('#backupStatus'))
     $('#backupStatus').textContent = '준비됨'; }
 function selectAccount(id) { setting().selectedAccountId = id; persist(); render(); haptic('light'); }
@@ -1027,10 +1027,11 @@ function bind() {
         transactionDisplayLimit = 50; nav(b.dataset.route, b.dataset.tab || 'summary'); });
     $$('[data-integrated-tab]').forEach(b => b.onclick = () => nav('integrated', b.dataset.integratedTab));
     $$('[data-integrated-tab-go]').forEach(b => b.onclick = () => nav('integrated', b.dataset.integratedTabGo));
-    $('[data-integrated-month-select]')?.addEventListener('change', e => { const month = e.target.value; if (!/^\d{4}-\d{2}$/.test(month))
+    $('[data-integrated-month-select]')?.addEventListener('change', e => { const target = e.target; if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement))
+        return; const month = target.value; if (!/^\d{4}-\d{2}$/.test(month))
         return; setting().integratedMonth = month; persist(false); render(); });
     $$('[data-integrated-month-shift]').forEach(b => b.onclick = () => integratedShiftMonth(Number(b.dataset.integratedMonthShift) || 0));
-    $$('[data-integrated-filter]').forEach(b => b.onclick = () => { setting().integratedLedgerFilter = b.dataset.integratedFilter; persist(false); render(); });
+    $$('[data-integrated-filter]').forEach(b => b.onclick = () => { setting().integratedLedgerFilter = b.dataset.integratedFilter || ''; persist(false); render(); });
     $$('[data-integrated-new]').forEach(b => b.onclick = () => openIntegratedTransactionForm());
     $$('[data-integrated-tx]').forEach(b => b.onclick = () => openIntegratedTransactionDetail(b.dataset.integratedTx));
     $$('[data-integrated-month-detail]').forEach(b => b.onclick = () => openIntegratedMonthDetail(b.dataset.integratedMonthDetail));
@@ -1045,17 +1046,17 @@ function bind() {
     $$('[data-schedule-day]').forEach(b => b.onclick = () => openScheduleDay(b.dataset.scheduleDay));
     $('[data-empty-new-isa]')?.addEventListener('click', () => openNewIsaAccount(policyGroup('isa').activePolicyId));
     $$('[data-detail]').forEach(b => b.onclick = e => { e.stopPropagation(); openDetail(b.dataset.detail); });
-    $$('[data-account]').forEach(b => b.onclick = () => selectAccount(b.dataset.account));
+    $$('[data-account]').forEach(b => b.onclick = () => selectAccount(b.dataset.account || ''));
     $$('[data-archive-open]').forEach(b => b.onclick = () => openArchivedAccountDetail(b.dataset.archiveOpen));
     $$('[data-isa-tab]').forEach(b => b.onclick = () => { if (b.dataset.isaTab === 'transactions')
         transactionDisplayLimit = 50; nav('isa', b.dataset.isaTab); });
     $$('[data-holding]').forEach(b => b.onclick = () => openHolding(b.dataset.holding));
     $$('[data-tx]').forEach(b => b.onclick = () => openTransactionDetail(b.dataset.tx));
-    $$('[data-tx-filter]').forEach(b => b.onclick = () => { setting().txFilter = b.dataset.txFilter; transactionDisplayLimit = 50; persist(); render(); });
+    $$('[data-tx-filter]').forEach(b => b.onclick = () => { setting().txFilter = b.dataset.txFilter || ''; transactionDisplayLimit = 50; persist(); render(); });
     $('[data-tx-more]')?.addEventListener('click', () => { transactionDisplayLimit += 50; render(); });
     $$('[data-register]').forEach(b => b.onclick = openRegisterChoice);
     $$('[data-new-tx]').forEach(b => b.onclick = openTransactionChoice);
-    $$('[data-inline-group],[data-inline-donut]').forEach(b => b.onclick = () => { const group = b.dataset.inlineGroup || b.dataset.inlineDonut, next = setting().compositionFocus === group ? '' : group; setting().compositionGroup = next; setting().compositionFocus = next; persist(); renderKeepingScroll(); });
+    $$('[data-inline-group],[data-inline-donut]').forEach(b => b.onclick = () => { const group = b.dataset.inlineGroup || b.dataset.inlineDonut || '', next = setting().compositionFocus === group ? '' : group; setting().compositionGroup = next; setting().compositionFocus = next; persist(); renderKeepingScroll(); });
     $('[data-isa-holdings-toggle]')?.addEventListener('click', e => { const panel = $('[data-isa-holdings-extra]'), guard = $('[data-isa-holdings-guard]'); isaHoldingsExpanded = !isaHoldingsExpanded; stableInlineToggle(e.currentTarget, panel, guard, isaHoldingsExpanded); e.currentTarget.textContent = isaHoldingsExpanded ? '숨기기 ∧' : '펼치기 ∨'; e.currentTarget.setAttribute('aria-expanded', isaHoldingsExpanded ? 'true' : 'false'); });
     $('[data-pension-holdings-toggle]')?.addEventListener('click', e => { const panel = $('[data-pension-holdings-extra]'), guard = $('[data-pension-holdings-guard]'); pensionHoldingsExpanded = !pensionHoldingsExpanded; stableInlineToggle(e.currentTarget, panel, guard, pensionHoldingsExpanded); e.currentTarget.textContent = pensionHoldingsExpanded ? '숨기기 ∧' : '펼치기 ∨'; e.currentTarget.setAttribute('aria-expanded', pensionHoldingsExpanded ? 'true' : 'false'); });
     $$('[data-dividend-analysis]').forEach(b => b.onclick = () => { dividendDisplayLimit = 50; openDividendAnalysis(b.dataset.period || ''); });
@@ -1087,9 +1088,9 @@ function bind() {
         return; integratedAssetsExpanded = !integratedAssetsExpanded; stableInlineToggle(e.currentTarget, body, guard, integratedAssetsExpanded); card.classList.toggle('open', integratedAssetsExpanded); e.currentTarget.setAttribute('aria-expanded', integratedAssetsExpanded ? 'true' : 'false'); });
     $('[data-fixed-cost-toggle]')?.addEventListener('click', e => { const card = e.currentTarget.closest('[data-fixed-cost-card]'), body = card?.querySelector('[data-fixed-cost-body]'); if (!card || !body)
         return; integratedFixedCostsExpanded = !integratedFixedCostsExpanded; body.hidden = !integratedFixedCostsExpanded; card.classList.toggle('open', integratedFixedCostsExpanded); e.currentTarget.setAttribute('aria-expanded', integratedFixedCostsExpanded ? 'true' : 'false'); });
-    $$('[data-pension-scope]').forEach(b => b.onclick = () => { setting().pensionAssetScope = b.dataset.pensionScope; setting().pensionAssetFocus = ''; pensionExpandedAssetGroup = ''; pensionHoldingsExpanded = false; pensionAnalysisScope = b.dataset.pensionScope; pensionAnalysisSelectedKey = ''; persist(); renderKeepingScroll(); });
-    $$('[data-pension-group],[data-pension-donut]').forEach(b => b.onclick = () => { const key = b.dataset.pensionGroup || b.dataset.pensionDonut, next = setting().pensionAssetFocus === key ? '' : key; setting().pensionAssetFocus = next; pensionExpandedAssetGroup = next; persist(); renderKeepingScroll(); });
-    $('[data-pension-group-toggle]')?.addEventListener('click', e => { const key = e.currentTarget.dataset.pensionGroupToggle; pensionExpandedAssetGroup = pensionExpandedAssetGroup === key ? '' : key; renderKeepingScroll(); });
+    $$('[data-pension-scope]').forEach(b => b.onclick = () => { setting().pensionAssetScope = b.dataset.pensionScope || ''; setting().pensionAssetFocus = ''; pensionExpandedAssetGroup = ''; pensionHoldingsExpanded = false; pensionAnalysisScope = b.dataset.pensionScope || ''; pensionAnalysisSelectedKey = ''; persist(); renderKeepingScroll(); });
+    $$('[data-pension-group],[data-pension-donut]').forEach(b => b.onclick = () => { const key = b.dataset.pensionGroup || b.dataset.pensionDonut || '', next = setting().pensionAssetFocus === key ? '' : key; setting().pensionAssetFocus = next; pensionExpandedAssetGroup = next; persist(); renderKeepingScroll(); });
+    $('[data-pension-group-toggle]')?.addEventListener('click', e => { const key = e.currentTarget.dataset.pensionGroupToggle || ''; pensionExpandedAssetGroup = pensionExpandedAssetGroup === key ? '' : key; renderKeepingScroll(); });
     $$('[data-pension-holding]').forEach(b => b.onclick = () => openPensionHoldingDetail(b.dataset.pensionHolding));
     $('[data-isa-asset-analysis]')?.addEventListener('click', openIsaAssetAnalysis);
     $('[data-pension-asset-analysis]')?.addEventListener('click', openPensionAssetAnalysis);
@@ -1115,10 +1116,10 @@ function integratedPolicyLimitIssues(store = integratedStore()) {
     for (const year of years) {
         let ordinary = 0;
         for (const t of store.ledger || []) {
-            if (!String(t.date || '').startsWith(year) || t.meta?.analysisOnly || t.meta?.isaTransfer || !['internalTransfer', 'externalAssetIn'].includes(t.type))
+            if (!String(t.date || '').startsWith(year) || t.meta?.analysisOnly || t.meta?.isaTransfer || !['internalTransfer', 'externalAssetIn'].includes(t.type || ''))
                 continue;
             const kind = accountMap.get(t.toAccountId)?.kind;
-            if (['pension', 'irp'].includes(kind))
+            if (['pension', 'irp'].includes(kind || ''))
                 ordinary += Number(t.amount) || 0;
         }
         const limit = Number(policyForYear('pension', year).annualContributionLimit) || 18000000;
@@ -1171,7 +1172,8 @@ function openIntegratedTransactionForm(id = '', preset = {}) {
         form.elements.category.dataset.auto = '1'; syncIntegratedFormFields(); formClearError(form); sheetDirty = true; });
     form.elements.toAccountId?.addEventListener('change', () => { syncIntegratedFormFields(); formClearError(form); sheetDirty = true; });
     form.elements.date?.addEventListener('change', () => { syncIntegratedFormFields(); sheetDirty = true; });
-    form.addEventListener('input', (event) => { sheetDirty = true; const name = event.target?.name; if (['amount', 'principal', 'interest', 'date', 'targetPensionAccountId', 'targetIsaAccountId'].includes(name)) {
+    form.addEventListener('input', (event) => { sheetDirty = true; const target = event.target; if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement))
+        return; const name = target.name; if (['amount', 'principal', 'interest', 'date', 'targetPensionAccountId', 'targetIsaAccountId'].includes(name)) {
         const error = integratedFormLiveError(form);
         if (error)
             formShowError(form, error);
@@ -1249,12 +1251,12 @@ function integratedValidateCandidate(candidate, editingId = '') {
         return '복수 연금계좌 중 실제 납입 계좌를 선택해 주세요.';
     if (candidate.meta?.isaRoutingRequired)
         return '복수 ISA 중 실제 납입 계좌를 선택해 주세요.';
-    const dateError = postedDateError(candidate.date);
+    const dateError = postedDateError(candidate.date || '');
     if (dateError)
         return dateError;
     const accountMap = new Map((integratedStore().accounts || []).map(a => [a.id, a])), targetKind = accountMap.get(candidate.toAccountId)?.kind || '', explicitPension = String(candidate.meta?.targetPensionAccountId || ''), explicitIsa = String(candidate.meta?.targetIsaAccountId || '');
-    if (['internalTransfer', 'externalAssetIn'].includes(candidate.type) && ['pension', 'irp'].includes(targetKind)) {
-        const eligible = pensionAccountsForKind(targetKind, candidate.date);
+    if (['internalTransfer', 'externalAssetIn'].includes(candidate.type || '') && ['pension', 'irp'].includes(targetKind)) {
+        const eligible = pensionAccountsForKind(targetKind, candidate.date || '');
         if (explicitPension && !eligible.some(a => a.id === explicitPension))
             return '선택한 연금 납입 계좌가 해당 날짜에 운영 중이 아닙니다.';
         if (eligible.length > 1 && !explicitPension)
@@ -1262,8 +1264,8 @@ function integratedValidateCandidate(candidate, editingId = '') {
         if (!eligible.length)
             return '해당 날짜에 운영 중인 연금 납입 계좌가 없습니다.';
     }
-    if (['internalTransfer', 'externalAssetIn'].includes(candidate.type) && targetKind === 'isa') {
-        const eligible = isaAccountsForDate(candidate.date);
+    if (['internalTransfer', 'externalAssetIn'].includes(candidate.type || '') && targetKind === 'isa') {
+        const eligible = isaAccountsForDate(candidate.date || '');
         if (explicitIsa && !eligible.some(a => a.id === explicitIsa))
             return '선택한 ISA가 해당 날짜에 운영 중이 아닙니다.';
         if (eligible.length > 1 && !explicitIsa)
@@ -1271,17 +1273,17 @@ function integratedValidateCandidate(candidate, editingId = '') {
         if (!eligible.length)
             return '해당 날짜에 운영 중인 ISA가 없습니다.';
         const target = eligible.find(a => a.id === (explicitIsa || eligible[0]?.id));
-        if (target?.baselineDate && candidate.date <= target.baselineDate)
+        if (target?.baselineDate && (candidate.date || '') <= target.baselineDate)
             return `초기 잔고 기준일 ${formatDate(target.baselineDate)} 이후 납입만 추가해 주세요.`;
     }
     for (const id of [candidate.fromAccountId, candidate.toAccountId, candidate.accountId].filter(Boolean)) {
-        const account = accountMap.get(id), product = account?.productId ? financialProduct(account.productId) : null;
-        if (account && product && !financialProductActiveOnDate(product, candidate.date))
+        const account = accountMap.get(id || ''), product = account?.productId ? financialProduct(account.productId || '') : null;
+        if (account && product && !financialProductActiveOnDate(product, candidate.date || ''))
             return `${account.name} 상품의 운영기간 밖 거래는 저장할 수 없습니다.`;
     }
     if (candidate.liabilityId) {
-        const liability = (integratedStore().liabilities || []).find(x => x.id === candidate.liabilityId), product = liability?.productId ? financialProduct(liability.productId) : null;
-        if (liability && product && !financialProductActiveOnDate(product, candidate.date))
+        const liability = (integratedStore().liabilities || []).find(x => x.id === candidate.liabilityId), product = liability?.productId ? financialProduct(liability.productId || '') : null;
+        if (liability && product && !financialProductActiveOnDate(product, candidate.date || ''))
             return `${liability.name} 대출의 운영기간 밖 거래는 저장할 수 없습니다.`;
     }
     if (candidate.type === 'adjustment') {
@@ -1340,7 +1342,7 @@ function saveIntegratedTransaction(form) {
     integratedStore().ledger.push(...rows);
     integratedStore().mode = 'live';
     integratedStore().label = '내 통합 거래기록';
-    setting().integratedMonth = integratedMonthKey(rows[0].date);
+    setting().integratedMonth = integratedMonthKey(rows[0].date || '');
     integratedLedgerSearch = '';
     integratedSearchDisplayLimit = 50;
     setting().integratedLedgerFilter = 'all';
@@ -1434,13 +1436,13 @@ function openIntegratedTransactionDetail(id) {
         toast('거래를 찾지 못했습니다.');
         return;
     }
-    const linkedProduct = !!tx.productId, productLinkedManaged = linkedProduct && ['externalAssetIn', 'externalAssetOut', 'externalDebtPrincipal', 'debtInterestExternal', 'openingAsset', 'openingLiability'].includes(tx.type);
+    const linkedProduct = !!tx.productId, productLinkedManaged = linkedProduct && ['externalAssetIn', 'externalAssetOut', 'externalDebtPrincipal', 'debtInterestExternal', 'openingAsset', 'openingLiability'].includes(tx.type || '');
     $('#sheetEyebrow').textContent = '통합 · 거래';
     $('#sheetTitle').textContent = tx.category || integratedTxLabel(tx);
-    const sourceBox = tx.readonly ? `<div class="source-note">${tx.sourceModule === 'isa' ? 'ISA' : '개인연금'}의 실제 기록을 자동으로 읽은 거래입니다. 통합에서 중복 수정하지 않습니다.</div><button class="diagnostic-action" data-linked-source="${escapeHtml(tx.sourceModule)}">원본 화면 열기</button>` : productLinkedManaged ? `<div class="source-note">금융상품과 연결된 거래입니다. 통합에서 따로 수정하면 상품 잔액과 어긋날 수 있어 상품 화면에서 관리합니다.</div><button class="diagnostic-action" data-linked-product="${escapeHtml(tx.productId)}">금융상품 열기</button>` : `<div class="integrated-detail-note">수정·삭제하면 통합 수치가 즉시 다시 계산됩니다.</div><div class="integrated-detail-actions"><button data-integrated-edit="${escapeHtml(tx.id)}">수정</button><button class="danger" data-integrated-delete-detail="${escapeHtml(tx.id)}">삭제</button></div>`;
-    $('#sheetBody').innerHTML = `<div class="sheetrows"><div class="sheetrow"><span>날짜</span><strong>${escapeHtml(tx.date)}</strong></div><div class="sheetrow"><span>유형</span><strong>${escapeHtml(integratedTxLabel(tx))}</strong></div><div class="sheetrow"><span>금액</span><strong>${tx.type === 'adjustment' ? signed(Number(tx.delta) || 0) : won(tx.amount)}</strong></div>${integratedTxAccountsText(tx) ? `<div class="sheetrow"><span>계좌</span><strong>${escapeHtml(integratedTxAccountsText(tx))}</strong></div>` : ''}${tx.note ? `<div class="sheetrow"><span>메모</span><strong>${escapeHtml(tx.note)}</strong></div>` : ''}</div>${sourceBox}${['expense', 'externalExpense'].includes(tx.type) ? `<button class="diagnostic-action" data-refund="${escapeHtml(tx.id)}">환불·부분취소</button>` : ''}`;
+    const sourceBox = tx.readonly ? `<div class="source-note">${tx.sourceModule === 'isa' ? 'ISA' : '개인연금'}의 실제 기록을 자동으로 읽은 거래입니다. 통합에서 중복 수정하지 않습니다.</div><button class="diagnostic-action" data-linked-source="${escapeHtml(tx.sourceModule)}">원본 화면 열기</button>` : productLinkedManaged ? `<div class="source-note">금융상품과 연결된 거래입니다. 통합에서 따로 수정하면 상품 잔액과 어긋날 수 있어 상품 화면에서 관리합니다.</div><button class="diagnostic-action" data-linked-product="${escapeHtml(tx.productId)}">금융상품 열기</button>` : `<div class="integrated-detail-note">수정·삭제하면 통합 수치가 즉시 다시 계산됩니다.</div><div class="integrated-detail-actions"><button data-integrated-edit="${escapeHtml(tx.id || '')}">수정</button><button class="danger" data-integrated-delete-detail="${escapeHtml(tx.id || '')}">삭제</button></div>`;
+    $('#sheetBody').innerHTML = `<div class="sheetrows"><div class="sheetrow"><span>날짜</span><strong>${escapeHtml(tx.date)}</strong></div><div class="sheetrow"><span>유형</span><strong>${escapeHtml(integratedTxLabel(tx))}</strong></div><div class="sheetrow"><span>금액</span><strong>${tx.type === 'adjustment' ? signed(Number(tx.delta) || 0) : won(tx.amount)}</strong></div>${integratedTxAccountsText(tx) ? `<div class="sheetrow"><span>계좌</span><strong>${escapeHtml(integratedTxAccountsText(tx))}</strong></div>` : ''}${tx.note ? `<div class="sheetrow"><span>메모</span><strong>${escapeHtml(tx.note)}</strong></div>` : ''}</div>${sourceBox}${['expense', 'externalExpense'].includes(tx.type || '') ? `<button class="diagnostic-action" data-refund="${escapeHtml(tx.id || '')}">환불·부분취소</button>` : ''}`;
     openSheet('#detailSheet');
-    $('[data-refund]')?.addEventListener('click', () => openIntegratedRefundForm(tx.id));
+    $('[data-refund]')?.addEventListener('click', () => openIntegratedRefundForm(tx.id || ''));
     $('[data-integrated-edit]')?.addEventListener('click', (event) => openIntegratedTransactionForm(eventTarget(event).dataset.integratedEdit));
     $('[data-integrated-delete-detail]')?.addEventListener('click', (event) => deleteIntegratedTransaction(String(eventTarget(event).dataset.integratedDeleteDetail || '')));
     $('[data-linked-source]')?.addEventListener('click', (event) => { closeSheets(); eventTarget(event).dataset.linkedSource === 'isa' ? nav('isa', 'transactions') : nav('pension', 'contribution'); });
@@ -1448,7 +1450,7 @@ function openIntegratedTransactionDetail(id) {
 }
 function recordIntegratedRefund(originalId, date, amount) {
     const original = integratedStore().ledger.find(t => t.id === originalId);
-    if (!original || !['expense', 'externalExpense'].includes(original.type))
+    if (!original || !['expense', 'externalExpense'].includes(original.type || ''))
         return { ok: false, error: '환불할 지출 기록을 찾지 못했습니다.' };
     const row = { id: uid('refund'), date, type: 'refund', amount: Number(amount), toAccountId: original.type === 'expense' ? original.fromAccountId : '', category: original.category, fixed: original.fixed, note: '원거래 환불', meta: { refundOf: original.id } };
     const error = integratedValidateCandidate(row);
@@ -1755,20 +1757,20 @@ function bindFinancialGrowthAnalysis() { const track = $('[data-growth-track]');
 catch { } updateFinancialGrowthPoint(e.clientX); }, move = (e) => { if (!active || e.pointerId !== pointerId)
     return; e.preventDefault(); e.stopPropagation(); updateFinancialGrowthPoint(e.clientX); }, end = (e) => { if (!active)
     return; updateFinancialGrowthPoint(e.clientX); active = false; try {
-    track.releasePointerCapture(pointerId);
+    track.releasePointerCapture(pointerId ?? e.pointerId);
 }
 catch { } pointerId = null; }; track.style.touchAction = 'none'; track.onpointerdown = pick; track.onpointermove = move; track.onpointerup = end; track.onpointercancel = end; track.onkeydown = (e) => { const c = financialGrowthChartModel(financialGrowthPeriod), i = Math.max(0, c.pts.findIndex(p => p.key === financialGrowthSelectedKey)), next = e.key === 'ArrowLeft' ? Math.max(0, i - 1) : e.key === 'ArrowRight' ? Math.min(c.pts.length - 1, i + 1) : -1; if (next < 0)
     return; e.preventDefault(); const rect = track.getBoundingClientRect(); updateFinancialGrowthPoint(rect.left + (c.pts[next].x - c.L) / Math.max(1, c.CW) * rect.width); }; }
 function openFinancialGrowthAnalysis(period = financialGrowthPeriod) { const nextPeriod = ['3m', '6m', '1y', '3y', 'all'].includes(period) ? period : '6m'; if (nextPeriod !== financialGrowthPeriod)
-    financialGrowthSelectedKey = ''; financialGrowthPeriod = nextPeriod; const end = localYmd(), start = financialAnalysisStart(financialGrowthPeriod, end), a = financialGrowthBreakdown(start, end), debtChange = financialDebtChangeView(a.debtReduction), labels = { '3m': '3개월', '6m': '6개월', '1y': '1년', '3y': '3년', 'all': '전체' }; $('#sheetEyebrow').textContent = '통합 · 자산분석'; $('#sheetTitle').textContent = '금융자산 증가 분석'; $('#sheetBody').innerHTML = `<div class="finance-growth-periods">${Object.entries(labels).map(([k, v]) => `<button class="${escapeHtml(financialGrowthPeriod === k ? 'active' : '')}" data-growth-period="${escapeHtml(k)}">${v}</button>`).join('')}</div><div class="finance-growth-grid"><div class="finance-growth-box primary"><span>순금융자산 변화</span><strong class="${escapeHtml(a.netChange < 0 ? 'negative' : 'positive')}">${signed(a.netChange)}</strong></div><div class="finance-growth-box"><span>총금융자산 변화</span><strong class="${escapeHtml(a.assetChange < 0 ? 'negative' : 'positive')}">${signed(a.assetChange)}</strong></div><div class="finance-growth-box"><span>${debtChange.label}</span><strong${debtChange.negative ? ' class="negative"' : ''}>${won(debtChange.amount)}</strong></div><div class="finance-growth-box"><span>순자산 증가율</span><strong>${a.rate == null ? '기준 없음' : pct(a.rate)}</strong></div></div>${financialGrowthChartMarkup(financialGrowthPeriod)}<div class="finance-growth-breakdown"><div class="finance-growth-breakdown-row"><span>외부 순유입·지출</span><strong>${signed(a.externalNet)}</strong></div><div class="finance-growth-breakdown-row"><span>투자·평가 및 기타 변동</span><strong>${signed(a.residual)}</strong></div>${Math.abs(a.adjustment) > .5 ? `<div class="finance-growth-breakdown-row"><span>잔액 보정</span><strong>${signed(a.adjustment)}</strong></div>` : ''}</div><div class="finance-growth-note">그래프를 좌우로 움직이면 시점별 순금융자산을 볼 수 있습니다.</div>`; openSheet('#detailSheet'); $$('[data-growth-period]').forEach(b => b.onclick = () => openFinancialGrowthAnalysis(b.dataset.growthPeriod)); bindFinancialGrowthAnalysis(); }
-function homeOutgoingGroupRows(group, activity) { const accounts = new Map(integratedStore().accounts.map(a => [a.id, a])), matches = group === 'living' ? (t) => ['expense', 'externalExpense'].includes(t.type) : group === 'saving' ? (t) => ['internalTransfer', 'externalAssetIn'].includes(t.type) && ['isa', 'pension', 'irp', 'deposit', 'savings'].includes(accounts.get(t.toAccountId)?.kind) : group === 'loan' ? (t) => ['debtInterest', 'debtInterestExternal', 'debtPrincipal', 'externalDebtPrincipal'].includes(t.type) : (t) => ['externalWithdrawal', 'externalAssetOut'].includes(t.type), map = new Map(); for (const t of activity.rows.filter(matches)) {
+    financialGrowthSelectedKey = ''; financialGrowthPeriod = nextPeriod; const end = localYmd(), start = financialAnalysisStart(financialGrowthPeriod, end), a = financialGrowthBreakdown(start, end), debtChange = financialDebtChangeView(a.debtReduction), labels = { '3m': '3개월', '6m': '6개월', '1y': '1년', '3y': '3년', 'all': '전체' }; $('#sheetEyebrow').textContent = '통합 · 자산분석'; $('#sheetTitle').textContent = '금융자산 증가 분석'; $('#sheetBody').innerHTML = `<div class="finance-growth-periods">${Object.entries(labels).map(([k, v]) => `<button class="${escapeHtml(financialGrowthPeriod === k ? 'active' : '')}" data-growth-period="${escapeHtml(k)}">${v}</button>`).join('')}</div><div class="finance-growth-grid"><div class="finance-growth-box primary"><span>순금융자산 변화</span><strong class="${escapeHtml(a.netChange < 0 ? 'negative' : 'positive')}">${signed(a.netChange)}</strong></div><div class="finance-growth-box"><span>총금융자산 변화</span><strong class="${escapeHtml(a.assetChange < 0 ? 'negative' : 'positive')}">${signed(a.assetChange)}</strong></div><div class="finance-growth-box"><span>${debtChange.label}</span><strong${debtChange.negative ? ' class="negative"' : ''}>${won(debtChange.amount)}</strong></div><div class="finance-growth-box"><span>순자산 증가율</span><strong>${a.rate == null ? '기준 없음' : pct(a.rate)}</strong></div></div>${financialGrowthChartMarkup(financialGrowthPeriod)}<div class="finance-growth-breakdown"><div class="finance-growth-breakdown-row"><span>외부 순유입·지출</span><strong>${signed(a.externalNet)}</strong></div><div class="finance-growth-breakdown-row"><span>투자·평가 및 기타 변동</span><strong>${signed(a.residual)}</strong></div>${Math.abs(a.adjustment) > .5 ? `<div class="finance-growth-breakdown-row"><span>잔액 보정</span><strong>${signed(a.adjustment)}</strong></div>` : ''}</div><div class="finance-growth-note">그래프를 좌우로 움직이면 시점별 순금융자산을 볼 수 있습니다.</div>`; openSheet('#detailSheet'); $$('[data-growth-period]').forEach(b => b.onclick = () => openFinancialGrowthAnalysis((b.dataset.growthPeriod || ''))); bindFinancialGrowthAnalysis(); }
+function homeOutgoingGroupRows(group, activity) { const accounts = new Map(integratedStore().accounts.map(a => [a.id, a])), matches = group === 'living' ? (t) => ['expense', 'externalExpense'].includes(t.type) : group === 'saving' ? (t) => ['internalTransfer', 'externalAssetIn'].includes(t.type) && ['isa', 'pension', 'irp', 'deposit', 'savings'].includes(accounts.get(t.toAccountId || '')?.kind || '') : group === 'loan' ? (t) => ['debtInterest', 'debtInterestExternal', 'debtPrincipal', 'externalDebtPrincipal'].includes(t.type) : (t) => ['externalWithdrawal', 'externalAssetOut'].includes(t.type), map = new Map(); for (const t of activity.rows.filter(matches)) {
     const key = String(t.category || integratedTxLabel(t) || '기타'), row = map.get(key) || { name: key, amount: 0 };
     row.amount += Number(t.amount) || 0;
     map.set(key, row);
 } return [...map.values()].sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name, 'ko')); }
-function bindHomeOutgoingSummary(activity) { $$('[data-home-outgoing-group]').forEach(b => b.onclick = () => openHomeOutgoingGroup(b.dataset.homeOutgoingGroup, activity)); $('[data-home-outgoing-back]')?.addEventListener('click', () => openDetail('contribution')); }
+function bindHomeOutgoingSummary(activity) { $$('[data-home-outgoing-group]').forEach(b => b.onclick = () => openHomeOutgoingGroup((b.dataset.homeOutgoingGroup || '') || '', activity)); $('[data-home-outgoing-back]')?.addEventListener('click', () => openDetail('contribution')); }
 function openHomeOutgoingGroup(group, activity = homeMonthActivity()) { const labels = { living: '생활비·고정지출', saving: '저축·투자', loan: '대출 원금·이자', other: '기타 출금', remaining: '남은 일정' }, rows = group === 'remaining' ? activity.remaining.map((o) => ({ name: o.schedule.name, amount: Number(o.schedule.amount) || 0 })) : homeOutgoingGroupRows(group, activity); $('#sheetEyebrow').textContent = '이번 달'; $('#sheetTitle').textContent = labels[group] || '이번 달 내역'; $('#sheetBody').innerHTML = `<div class="sheetrows">${rows.length ? rows.map((r) => `<div class="sheetrow"><span>${escapeHtml(r.name)}</span><strong>${won(r.amount)}</strong></div>`).join('') : '<div class="empty-state"><span>해당 내역이 없습니다.</span></div>'}</div><button class="diagnostic-action" data-home-outgoing-back>이달 요약으로</button>`; bindHomeOutgoingSummary(activity); }
-function openDetail(type) { const a = currentAccount(), m = type === 'isa-home' ? activeMetrics() : {}; $('#sheetEyebrow').textContent = '상세'; $('#sheetTitle').textContent = type === 'total' ? '총금융자산 상세' : type === 'isa-home' ? 'ISA 투자손익' : type === 'pension' ? '개인연금 투자손익' : type === 'cash' ? '현금·예적금 상세' : '이번 달 지출·납입'; if (type === 'isa-home') {
+function openDetail(type) { const a = currentAccount(), m = type === 'isa-home' ? activeMetrics() : { profit: 0, rate: 0, holdings: [] }; $('#sheetEyebrow').textContent = '상세'; $('#sheetTitle').textContent = type === 'total' ? '총금융자산 상세' : type === 'isa-home' ? 'ISA 투자손익' : type === 'pension' ? '개인연금 투자손익' : type === 'cash' ? '현금·예적금 상세' : '이번 달 지출·납입'; if (type === 'isa-home') {
     $('#sheetBody').innerHTML = `<div class="profitbox"><div class="metric"><span>평가손익</span><strong class="${escapeHtml(m.profit >= 0 ? 'positive' : '')}">${signed(m.profit)}</strong></div><div class="metric"><span>수익률</span><strong class="${escapeHtml(m.rate >= 0 ? 'positive' : '')}">${pct(m.rate)}</strong></div></div><div class="sheetrows"><div class="sheetrow"><span>현재 합산 ISA 평가액</span><strong>${won(m.value)}</strong></div><div class="sheetrow"><span>보유종목</span><strong>${m.holdings.length}개</strong></div><div class="sheetrow"><span>이전 ISA</span><strong>${state.accounts.filter(isPastAccount).length}개 회차</strong></div></div><button class="diagnostic-action" data-go-isa>ISA 열기</button>`;
     openSheet('#detailSheet');
     $('[data-go-isa]').onclick = () => nav('isa');
@@ -1792,7 +1794,7 @@ else {
 } openSheet('#detailSheet'); if (type === 'total')
     $('[data-financial-growth]')?.addEventListener('click', () => openFinancialGrowthAnalysis('6m')); if (type === 'contribution')
     bindHomeOutgoingSummary(s.activity); }
-function openHolding(id) { const a = currentAccount(), h = getHolding(a, id), ds = dividends(a).filter((d) => d.holdingId === id), txs = a.transactions.filter((t) => t.holdingId === id).sort((x, y) => y.date.localeCompare(x.date)).slice(0, 4), p = holdingCostValue(h), profit = h.marketValue - p, rate = p ? profit / p * 100 : 0; $('#sheetEyebrow').textContent = escapeHtml(h.assetClass); $('#sheetTitle').textContent = h.name; $('#sheetBody').innerHTML = `<div class="profitbox"><div class="metric"><span>평가금액</span><strong>${won(h.marketValue)}</strong></div><div class="metric"><span>평가손익</span><strong class="${escapeHtml(profit >= 0 ? 'positive' : '')}">${signed(profit)}</strong></div></div>${a.status === 'active' ? '<div class="form-actions"><button class="form-btn" data-h-buy>매수</button><button class="form-btn primary" data-h-sell>매도</button></div>' : `<div class="lock-note">${a.status === 'maturity_pending' ? '만기 처리 대기 중인 현재 종목입니다.' : '만기 완료 계좌의 보관 종목입니다.'} 새 거래는 입력할 수 없습니다.</div>`}<div class="sheetrows"><div class="sheetrow"><span>보유수량</span><strong>${holdingQuantityText(h)}</strong></div><div class="sheetrow"><span>평균단가</span><strong>${won(h.avgPrice)}${h.quantityUnit === 'face' ? ' / 액면 1만원' : ''}</strong></div><div class="sheetrow"><span>현재가</span><strong>${won(h.currentPrice)}${h.quantityUnit === 'face' ? ' / 액면 1만원' : ''}</strong></div><div class="sheetrow"><span>투자원금</span><strong>${won(p)}</strong></div><div class="sheetrow"><span>수익률</span><strong>${pct(rate)}</strong></div><div class="sheetrow"><span>받은 배당·이자</span><strong>${won(ds.reduce((s, d) => s + dividendNetAmount(d), 0))}</strong></div>${h.instrumentCode ? `<div class="sheetrow"><span>${h.quoteSource === 'kis' ? '시세 연결' : '종목코드'}</span><strong>${h.quoteSource === 'kis' ? 'KIS · ' : ''}${escapeHtml(h.instrumentCode)}</strong></div>` : ''}</div><section class="composition-holdings"><div class="sectionhead"><h2 style="font-size:15px">최근 거래</h2><button data-all-tx>전체 보기 ›</button></div><div class="transaction-list">${txs.map((t) => `<div class="transaction-row"><span class="rowcopy"><strong>${typeText(t.type)}</strong><small>${formatDate(txDate(t))}</small></span>${transactionAmountMarkup(a, t)}</div>`).join('') || '<div class="empty-state"><span>거래내역이 없습니다.</span></div>'}</div></section>`; openSheet('#detailSheet'); $('[data-h-buy]')?.addEventListener('click', () => openTransactionForm('buy', null, id)); $('[data-h-sell]')?.addEventListener('click', () => openTransactionForm('sell', null, id)); $('[data-all-tx]').onclick = () => { closeSheets(); nav('isa', 'transactions'); }; }
+function openHolding(id) { const a = currentAccount(), h = getHolding(a, id), ds = dividends(a).filter((d) => d.holdingId === id), txs = a.transactions.filter((t) => t.holdingId === id).sort((x, y) => String(y.date || '').localeCompare(String(x.date || ''))).slice(0, 4), p = holdingCostValue(h), profit = h.marketValue - p, rate = p ? profit / p * 100 : 0; $('#sheetEyebrow').textContent = escapeHtml(h.assetClass); $('#sheetTitle').textContent = h.name; $('#sheetBody').innerHTML = `<div class="profitbox"><div class="metric"><span>평가금액</span><strong>${won(h.marketValue)}</strong></div><div class="metric"><span>평가손익</span><strong class="${escapeHtml(profit >= 0 ? 'positive' : '')}">${signed(profit)}</strong></div></div>${a.status === 'active' ? '<div class="form-actions"><button class="form-btn" data-h-buy>매수</button><button class="form-btn primary" data-h-sell>매도</button></div>' : `<div class="lock-note">${a.status === 'maturity_pending' ? '만기 처리 대기 중인 현재 종목입니다.' : '만기 완료 계좌의 보관 종목입니다.'} 새 거래는 입력할 수 없습니다.</div>`}<div class="sheetrows"><div class="sheetrow"><span>보유수량</span><strong>${holdingQuantityText(h)}</strong></div><div class="sheetrow"><span>평균단가</span><strong>${won(h.avgPrice)}${h.quantityUnit === 'face' ? ' / 액면 1만원' : ''}</strong></div><div class="sheetrow"><span>현재가</span><strong>${won(h.currentPrice)}${h.quantityUnit === 'face' ? ' / 액면 1만원' : ''}</strong></div><div class="sheetrow"><span>투자원금</span><strong>${won(p)}</strong></div><div class="sheetrow"><span>수익률</span><strong>${pct(rate)}</strong></div><div class="sheetrow"><span>받은 배당·이자</span><strong>${won(ds.reduce((s, d) => s + dividendNetAmount(d), 0))}</strong></div>${h.instrumentCode ? `<div class="sheetrow"><span>${h.quoteSource === 'kis' ? '시세 연결' : '종목코드'}</span><strong>${h.quoteSource === 'kis' ? 'KIS · ' : ''}${escapeHtml(h.instrumentCode)}</strong></div>` : ''}</div><section class="composition-holdings"><div class="sectionhead"><h2 style="font-size:15px">최근 거래</h2><button data-all-tx>전체 보기 ›</button></div><div class="transaction-list">${txs.map((t) => `<div class="transaction-row"><span class="rowcopy"><strong>${typeText(String(t.type || ''))}</strong><small>${formatDate(txDate(t))}</small></span>${transactionAmountMarkup(a, t)}</div>`).join('') || '<div class="empty-state"><span>거래내역이 없습니다.</span></div>'}</div></section>`; openSheet('#detailSheet'); $('[data-h-buy]')?.addEventListener('click', () => openTransactionForm('buy', null, id)); $('[data-h-sell]')?.addEventListener('click', () => openTransactionForm('sell', null, id)); $('[data-all-tx]').onclick = () => { closeSheets(); nav('isa', 'transactions'); }; }
 ;
 /* asset-os source: isa-registration.js */
 'use strict';
@@ -2222,10 +2224,10 @@ function dividendAnalysisMarkup(a = currentAccount(), initialPeriod = '') {
 }
 function dividendAnalysisSheetMarkup(a = currentAccount(), initialPeriod = '') { const d = dividendModel(a, true), year = localYmd().slice(0, 4), yearTotal = d.ds.filter(x => txDate(x).startsWith(year)).reduce((n, x) => n + (Number(x.amount) || 0), 0), yearRate = dividendYieldFor(a, year, 'year', yearTotal).rate, latest = d.ds[0]; return `<div class="analysis-sheet-summary"><div class="dividend-metrics compact-four"><div class="dividend-metric emphasis"><span>누적 배당</span><strong>${won(d.total)}</strong></div><div class="dividend-metric"><span>${year}년 수령</span><strong>${won(yearTotal)}</strong></div><div class="dividend-metric"><span>${year} 배당률</span><strong>${yearRate == null ? '계산 전' : yearRate.toFixed(2) + '%'}</strong></div><div class="dividend-metric"><span>최근 수령</span><strong>${latest ? won(latest.amount) : '-'}</strong><small>${latest ? escapeHtml(holdingName(a, latest.holdingId)) : '내역 없음'}</small></div></div></div>${dividendAnalysisMarkup(a, initialPeriod)}`; }
 function bindDividendAnalysisInline() { const rerender = (preferLatest = false) => { const body = $('#sheetBody'); if (!body)
-    return; const saved = captureIncomeChartScroll(); body.innerHTML = dividendAnalysisSheetMarkup(currentAccount()); bindDividendAnalysisInline(); restoreIncomeChartScroll(saved, preferLatest); }, selectKey = (key) => { setting().dividendKey = setting().dividendKey === key ? '' : key; dividendDisplayLimit = 50; persist(); rerender(false); }; $$('[data-dividend-period]').forEach(b => b.onclick = () => { setting().dividendPeriod = b.dataset.dividendPeriod; setting().dividendKey = ''; dividendDisplayLimit = 50; persist(); rerender(true); }); $$('[data-dividend-range]').forEach(b => b.onclick = () => { dividendYearRange = ['5y', '10y', '20y', 'all'].includes(b.dataset.dividendRange) ? b.dataset.dividendRange : '10y'; setting().dividendKey = ''; rerender(true); }); $$('[data-dividend-chart]').forEach(b => b.onclick = () => { dividendChartMode = b.dataset.dividendChart === 'line' ? 'line' : 'bar'; setting().dividendKey = ''; rerender(false); }); $$('[data-dividend-key]').forEach(b => { b.onclick = () => selectKey(b.dataset.dividendKey); b.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') {
+    return; const saved = captureIncomeChartScroll(); body.innerHTML = dividendAnalysisSheetMarkup(currentAccount()); bindDividendAnalysisInline(); restoreIncomeChartScroll(saved, preferLatest); }, selectKey = (key) => { setting().dividendKey = setting().dividendKey === key ? '' : key; dividendDisplayLimit = 50; persist(); rerender(false); }; $$('[data-dividend-period]').forEach(b => b.onclick = () => { setting().dividendPeriod = (b.dataset.dividendPeriod || ''); setting().dividendKey = ''; dividendDisplayLimit = 50; persist(); rerender(true); }); $$('[data-dividend-range]').forEach(b => b.onclick = () => { dividendYearRange = ['5y', '10y', '20y', 'all'].includes((b.dataset.dividendRange || '')) ? (b.dataset.dividendRange || '') : '10y'; setting().dividendKey = ''; rerender(true); }); $$('[data-dividend-chart]').forEach(b => b.onclick = () => { dividendChartMode = (b.dataset.dividendChart || '') === 'line' ? 'line' : 'bar'; setting().dividendKey = ''; rerender(false); }); $$('[data-dividend-key]').forEach(b => { b.onclick = () => selectKey((b.dataset.dividendKey || '')); b.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault();
-    selectKey(b.dataset.dividendKey);
-} }; }); $('[data-dividend-clear]')?.addEventListener('click', () => { setting().dividendKey = ''; dividendDisplayLimit = 50; persist(); rerender(false); }); $$('[data-d-detail]').forEach(b => b.onclick = () => openTransactionDetail(b.dataset.dDetail)); }
+    selectKey((b.dataset.dividendKey || ''));
+} }; }); $('[data-dividend-clear]')?.addEventListener('click', () => { setting().dividendKey = ''; dividendDisplayLimit = 50; persist(); rerender(false); }); $$('[data-d-detail]').forEach(b => b.onclick = () => openTransactionDetail((b.dataset.dDetail || ''))); }
 function openDividendAnalysis(initialPeriod = '') { dividendDisplayLimit = 50; dividendYearRange = '10y'; dividendChartMode = 'bar'; if (['month', 'year', 'recent'].includes(initialPeriod))
     setting().dividendPeriod = initialPeriod; $('#sheetEyebrow').textContent = 'ISA'; $('#sheetTitle').textContent = '배당 분석'; $('#sheetBody').innerHTML = dividendAnalysisSheetMarkup(currentAccount(), initialPeriod); openSheet('#detailSheet', { variant: 'income-analysis' }); setTimeout(bindDividendAnalysisInline, 0); }
 function openDividendSaved(tx) { $('#actionTitle').textContent = '배당 저장 완료'; $('#actionGrid').innerHTML = `<button class="action" data-dividend-done><strong>완료</strong><small>계좌 현금에 ${won(dividendNetAmount(tx))} 반영</small></button><button class="action" data-dividend-buy><strong>이어서 매수</strong><small>같은 종목의 매수 화면 열기</small></button>`; openSheet('#actionSheet'); $('[data-dividend-done]').onclick = () => { closeSheets(); toast('배당금을 저장했습니다.'); }; $('[data-dividend-buy]').onclick = () => openTransactionForm('buy', null, tx.holdingId, tx.id); }

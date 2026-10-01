@@ -19,7 +19,7 @@ test('runtime bundles contain every production source exactly once and in declar
  assert.equal(new Set(scriptSources).size,scriptSources.length);
  assert.equal(new Set(styleSources).size,styleSources.length);
  for(const source of typedSources){
-  if(source.startsWith('src/')||['backup.ts','initial-import.ts','supabase-sync.ts'].includes(source))assert.doesNotMatch(fs.readFileSync(path.join(root,source),'utf8'),/\bany\b/,`${source} must narrow unknown JSON and use explicit domain contracts`);
+  if(source.startsWith('src/')||['backup.ts','initial-import.ts','supabase-sync.ts','ui-sheets.ts','initial-import-ui.ts','export-csv.ts','source-archive.ts','core-visual-utils.ts','chart-pension-future.ts','ui-render.ts','chart-income.ts','chart-dividends.ts','chart-asset-analysis.ts','chart-financial-growth.ts','integrated-forms.ts'].includes(source))assert.doesNotMatch(fs.readFileSync(path.join(root,source),'utf8'),/\bany\b/,`${source} must narrow unknown JSON and use explicit domain contracts`);
   assert.ok(scriptSources.includes(source.replace(/\.ts$/,'.js')),`${source} generated output is not bundled`);
   assert.doesNotMatch(fs.readFileSync(path.join(root,source),'utf8'),/^\s*\/\/\s*@ts-(?:nocheck|ignore)\b/m,`${source} must not suppress runtime type checking`);
  }

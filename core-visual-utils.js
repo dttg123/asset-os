@@ -27,20 +27,20 @@ function formValidationFieldName(message = '') { const text = String(message); i
     return 'newName'; if (/금액|수령액|현금|잔액|납입한도/.test(text))
     return 'amount'; return ''; }
 function formClearError(form) { if (!form)
-    return; const box = form.querySelector?.('[data-form-error]'); if (box) {
+    return; const box = form.querySelector('[data-form-error]'); if (box) {
     box.textContent = '';
     box.hidden = true;
-} form.classList?.remove('has-validation-error'); for (const field of form.querySelectorAll?.('[aria-invalid="true"]') || []) {
+} form.classList?.remove('has-validation-error'); for (const field of form.querySelectorAll('[aria-invalid="true"]')) {
     field.removeAttribute('aria-invalid');
     field.closest?.('.field')?.classList.remove('has-error');
 } return false; }
 function formShowError(form, message = '', fieldName = '') { if (!form || !message)
-    return formClearError(form); formClearError(form); const box = form.querySelector?.('[data-form-error]'); if (box) {
+    return formClearError(form); formClearError(form); const box = form.querySelector('[data-form-error]'); if (box) {
     box.textContent = String(message);
     box.hidden = false;
-} form.classList?.add('has-validation-error'); const name = fieldName || formValidationFieldName(message), field = (name && form.elements?.namedItem ? form.elements.namedItem(name) : form.elements?.[name]) || (name === 'date' ? form.elements?.namedItem?.('tradeDate') : null); if (field) {
-    field.setAttribute?.('aria-invalid', 'true');
-    field.closest?.('.field')?.classList.add('has-error');
+} form.classList?.add('has-validation-error'); const name = fieldName || formValidationFieldName(message), field = (name ? form.elements.namedItem(name) : null) || (name === 'date' ? form.elements.namedItem('tradeDate') : null); if (field && 'setAttribute' in field) {
+    field.setAttribute('aria-invalid', 'true');
+    field.closest('.field')?.classList.add('has-error');
 } return true; }
 function isaContributionRowsForStore(a, store = integratedStore(), throughDate = localYmd()) {
     const accounts = store?.accounts || [], rows = [];
