@@ -1,54 +1,41 @@
 'use strict';
 function currentFinancialState() {
-    // @ts-ignore runtime global supplied by store-state.js
     return state;
 }
 function currentIntegratedStore() {
-    // @ts-ignore runtime global supplied by integrated-ledger.js
     return integratedStore();
 }
 function currentIntegratedReplay() {
-    // @ts-ignore runtime global supplied by integrated-ledger.js
     return integratedReplay();
 }
 function currentActiveProducts() {
-    // @ts-ignore runtime global supplied by integrated-finance-engine.js
     return activeFinancialProducts();
 }
 function currentPensionStore() {
-    // @ts-ignore runtime global supplied by pension-ledger.js
     return pensionStore();
 }
 function currentKisKindTotal(kind, accountIds) {
-    // @ts-ignore runtime global supplied by broker-kis.js
     return brokerKisCurrentKindTotal(currentFinancialState().brokerKis, kind, accountIds);
 }
 function currentIsaAccount(account) {
-    // @ts-ignore runtime global supplied by isa-ledger.js
     return isCurrentAccount(account);
 }
 function currentIsaMetrics(account) {
-    // @ts-ignore runtime global supplied by isa-ledger.js
     return accountMetrics(account);
 }
 function currentPensionMetrics(kind) {
-    // @ts-ignore runtime global supplied by pension-assets.js
     return pensionAssetMetrics(kind);
 }
 function currentFinancialProduct(id) {
-    // @ts-ignore runtime global supplied by integrated-finance-engine.js
     return financialProduct(id);
 }
 function currentIntegratedLedger() {
-    // @ts-ignore runtime global supplied by integrated-ledger.js
     return integratedLedger();
 }
 function currentIntegratedMonthKey(date) {
-    // @ts-ignore runtime global supplied by integrated-ledger.js
     return integratedMonthKey(date);
 }
 function currentIntegratedLatestMonth() {
-    // @ts-ignore runtime global supplied by integrated-ledger.js
     return integratedLatestMonth();
 }
 function moduleVerified(kind) { return !!currentFinancialState().moduleVerification?.[kind]; }

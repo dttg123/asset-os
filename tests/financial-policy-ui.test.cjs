@@ -77,7 +77,8 @@ test('ISA transfer window, unified refresh and conditional KIS token cache are w
 });
 
 test('home unified refresh runs once, reports progress and keeps partial account results',async()=>{
- const settings=source('ui-settings.ts'),refreshSource=settings.slice(settings.indexOf('let investmentRefreshPromise='),settings.indexOf('async function syncKisHistory'));
+ const settings=source('ui-settings.js'),refreshSource=settings.slice(settings.indexOf('let investmentRefreshPromise ='),settings.indexOf('async function syncKisHistory'));
+ assert.ok(refreshSource.includes('function refreshAllInvestments'), 'refresh tests must execute generated production code');
  const calls=[],buttons=[{disabled:false,textContent:''}];
  let releaseIsa;
  const isaGate=new Promise(resolve=>{releaseIsa=resolve});
@@ -98,7 +99,8 @@ test('home unified refresh runs once, reports progress and keeps partial account
 });
 
 test('failed-only refresh retries only the failed account and keeps successful accounts untouched',async()=>{
- const settings=source('ui-settings.ts'),refreshSource=settings.slice(settings.indexOf('let investmentRefreshPromise='),settings.indexOf('async function syncKisHistory'));
+ const settings=source('ui-settings.js'),refreshSource=settings.slice(settings.indexOf('let investmentRefreshPromise ='),settings.indexOf('async function syncKisHistory'));
+ assert.ok(refreshSource.includes('function refreshAllInvestments'), 'refresh tests must execute generated production code');
  const calls=[],buttons=[{disabled:false,textContent:''}];let errors=['irp'];
  const context=vm.createContext({console,currentAccount:()=>null,isaQuoteLinks:()=>[],kisConnectedAccount:kind=>kind==='irp',investmentRefreshStatus:()=>({errors}),refreshIsaQuotes:async()=>{calls.push('isa');return{ok:true}},refreshBrokerKisManually:async kinds=>{calls.push(kinds[0]);errors=[];return{ok:true,results:[{ok:true}]}},$$:()=>buttons,renderKeepingScroll:()=>calls.push('render'),toast:message=>calls.push(message)});
  vm.runInContext(refreshSource,context);

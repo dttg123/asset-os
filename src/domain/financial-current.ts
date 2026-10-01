@@ -1,4 +1,18 @@
 'use strict';
+declare const state:{brokerKis:unknown;accounts:CurrentFinancialAccount[];moduleVerification?:Record<string,boolean>};
+declare function integratedStore():CurrentFinancialStore;
+declare function integratedReplay():CurrentFinancialReplay;
+declare function activeFinancialProducts():Array<{id:string}>;
+declare function pensionStore():{accounts:CurrentFinancialAccount[]};
+declare function brokerKisCurrentKindTotal(store:unknown,kind:string,ids:string[]):CurrentKisTotal|null;
+declare function isCurrentAccount(a:CurrentFinancialAccount):boolean;
+declare function accountMetrics(a:CurrentFinancialAccount):CurrentFinancialMetrics;
+declare function pensionAssetMetrics(kind:string):CurrentFinancialMetrics;
+declare function financialProduct(id:string):{status?:string}|null;
+declare function integratedLedger():CurrentFinancialRow[];
+declare function integratedMonthKey(date:unknown):string;
+declare function integratedLatestMonth():string;
+
 
 type CurrentFinancialAccount={id:string;kind?:string;productId?:string;status?:string;[key:string]:unknown};
 type CurrentFinancialLiability={id:string;productId?:string;[key:string]:unknown};
@@ -9,55 +23,42 @@ type CurrentFinancialMetrics={value?:number;cost?:number;source?:string;[key:str
 type CurrentKisTotal={authoritative?:boolean;totalValue:number;[key:string]:unknown};
 
 function currentFinancialState(){
- // @ts-ignore runtime global supplied by store-state.js
  return state as any
 }
 function currentIntegratedStore(){
- // @ts-ignore runtime global supplied by integrated-ledger.js
  return integratedStore() as CurrentFinancialStore
 }
 function currentIntegratedReplay(){
- // @ts-ignore runtime global supplied by integrated-ledger.js
  return integratedReplay() as CurrentFinancialReplay
 }
 function currentActiveProducts(){
- // @ts-ignore runtime global supplied by integrated-finance-engine.js
  return activeFinancialProducts() as Array<{id:string}>
 }
 function currentPensionStore(){
- // @ts-ignore runtime global supplied by pension-ledger.js
  return pensionStore() as {accounts:CurrentFinancialAccount[]}
 }
 function currentKisKindTotal(kind:'pension'|'irp',accountIds:string[]){
- // @ts-ignore runtime global supplied by broker-kis.js
  return brokerKisCurrentKindTotal(currentFinancialState().brokerKis,kind,accountIds) as CurrentKisTotal|null
 }
 function currentIsaAccount(account:CurrentFinancialAccount){
- // @ts-ignore runtime global supplied by isa-ledger.js
  return isCurrentAccount(account) as boolean
 }
 function currentIsaMetrics(account:CurrentFinancialAccount){
- // @ts-ignore runtime global supplied by isa-ledger.js
  return accountMetrics(account) as CurrentFinancialMetrics
 }
 function currentPensionMetrics(kind:'pension'|'irp'){
- // @ts-ignore runtime global supplied by pension-assets.js
  return pensionAssetMetrics(kind) as CurrentFinancialMetrics
 }
 function currentFinancialProduct(id:string){
- // @ts-ignore runtime global supplied by integrated-finance-engine.js
  return financialProduct(id) as {status?:string}|null
 }
 function currentIntegratedLedger(){
- // @ts-ignore runtime global supplied by integrated-ledger.js
  return integratedLedger() as CurrentFinancialRow[]
 }
 function currentIntegratedMonthKey(date:unknown){
- // @ts-ignore runtime global supplied by integrated-ledger.js
  return integratedMonthKey(date) as string
 }
 function currentIntegratedLatestMonth(){
- // @ts-ignore runtime global supplied by integrated-ledger.js
  return integratedLatestMonth() as string
 }
 

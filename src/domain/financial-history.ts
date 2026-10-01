@@ -1,4 +1,9 @@
 'use strict';
+declare const state:Record<string,any>;
+declare const QA_MODE:boolean;
+declare function integratedStore():FinancialHistoryStore;
+declare function integratedReplay(rows:FinancialHistoryRow[],store:FinancialHistoryStore):FinancialHistoryReplay;
+
 
 type FinancialHistoryRow={type:string;date?:string;amount?:unknown;delta?:unknown;toAccountId?:string;meta?:{financeInterest?:boolean;[key:string]:unknown};[key:string]:unknown};
 type FinancialHistorySnapshot={date?:string;value?:unknown;totalValue?:unknown;meta?:{qaFixture?:boolean};pension?:{value?:unknown};irp?:{value?:unknown};[key:string]:unknown};
@@ -16,19 +21,15 @@ declare function pensionAccountActiveOnDate(account:{[key:string]:unknown},asOf:
 
 // The runtime is assembled as ordered classic scripts; these names are supplied by earlier bundles.
 function financialHistoryState(){
- // @ts-ignore runtime global supplied by store-state.js
  return state as any
 }
 function financialHistoryStore(){
- // @ts-ignore runtime global supplied by integrated-ledger.js
  return integratedStore() as unknown as FinancialHistoryStore
 }
 function financialHistoryReplay(rows:FinancialHistoryRow[],store:FinancialHistoryStore){
- // @ts-ignore runtime global supplied by integrated-ledger.js
  return integratedReplay(rows,store) as FinancialHistoryReplay
 }
 function financialHistoryQaMode(){
- // @ts-ignore runtime global supplied by core-config.js
  return QA_MODE as boolean
 }
 

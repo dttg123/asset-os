@@ -1,11 +1,46 @@
-// @ts-nocheck
 'use strict';
+
+type QaRecord=Record<string,any>;
+type QaCost=[string,number,boolean,number];
+
+declare const seed:QaRecord;
+declare const APP_VERSION:string;
+declare const QA_MODE:boolean;
+declare const QA_STORAGE_KEY:string;
+declare const nf:Intl.NumberFormat;
+declare let state:QaRecord;
+declare let lastPersistedState:QaRecord;
+declare let transactionDisplayLimit:number;
+declare let dividendDisplayLimit:number;
+declare let pensionTransactionDisplayLimit:number;
+declare let pensionTransactionSearch:string;
+declare let integratedLedgerSearch:string;
+declare let integratedSearchDisplayLimit:number;
+declare function clone<T>(value:T):T;
+declare function buildIntegratedSeed():QaRecord;
+declare function normalizeState(value:QaRecord):QaRecord;
+declare function brokerKisImportBalanceSnapshot(...args:any[]):void;
+declare function brokerKisImportOrderSnapshots(...args:any[]):void;
+declare function brokerKisImportRights(...args:any[]):void;
+declare function brokerKisCompleteSync(...args:any[]):void;
+declare function integratedFinancialModel():QaRecord;
+declare function $(selector:string):any;
+declare function $$(selector:string):any[];
+declare function displayWon(value:unknown):string;
+declare function setting():QaRecord;
+declare function persist(notify?:boolean):boolean;
+declare function render():void;
+declare function toast(message:string):void;
+declare function integratedValidateCandidate(value:QaRecord):unknown;
+declare function pensionTransactionSave(value:QaRecord):QaRecord;
+declare function transactionNumericError(value:QaRecord):unknown;
+declare function showDialog(options:QaRecord,onConfirm:()=>unknown):void;
 
 const QA_START_YEAR=2026,QA_END_YEAR=2060,QA_MONTHS=(QA_END_YEAR-QA_START_YEAR+1)*12;
 const QA_ISA_SKIP_YEARS=new Set([2027,2031,2036,2042,2049,2054,2058]);
 const QA_PENSION_SKIP_YEARS=new Set([2033,2041,2052]);
-function qaStorageState(input){
- const out=clone(input),dropZero=(row,key)=>{if(!Number(row[key]))delete row[key]},dropEmpty=(row,key)=>{if(row[key]===''||row[key]==null)delete row[key]};
+function qaStorageState(input:QaRecord){
+ const out=clone(input),dropZero=(row:QaRecord,key:string)=>{if(!Number(row[key]))delete row[key]},dropEmpty=(row:QaRecord,key:string)=>{if(row[key]===''||row[key]==null)delete row[key]};
  for(const account of out.accounts||[]){
   for(const key of ['ledgerIndex','contributionLedger','cashLedger','securityLedger','adjustmentLedger'])delete account[key];
   for(const tx of account.transactions||[]){if(tx.tradeDate===tx.date)delete tx.tradeDate;delete tx.createdAt;delete tx.idempotencyKey;dropEmpty(tx,'settlementDate');if(!tx.revisions?.length)delete tx.revisions;for(const key of ['fee','tax','amount','qty','price','setQty','setAvg'])dropZero(tx,key);if(tx.meta?.qaGenerated===true&&Object.keys(tx.meta).length===1)delete tx.meta}
@@ -16,15 +51,15 @@ function qaStorageState(input){
  for(const tx of out.integrated?.ledger||[]){delete tx.createdAt;delete tx.sequence;if(tx.fixed===false)delete tx.fixed;for(const key of ['note','sourceModule','sourceId','productId'])dropEmpty(tx,key);if(tx.meta?.qaGenerated===true){delete tx.meta.qaGenerated;if(!Object.keys(tx.meta).length)delete tx.meta}}
  return out
 }
-function qaPad(value){return String(value).padStart(2,'0')}
-function qaStamp(date,index=0){return `${date}T12:00:00.${String(index%1000).padStart(3,'0')}Z`}
-function qaRound(value,unit=1000){return Math.max(unit,Math.round(Number(value||0)/unit)*unit)}
-function qaMarketPrice(year,month,base=100000){
+function qaPad(value:unknown){return String(value).padStart(2,'0')}
+function qaStamp(date:string,index=0){return `${date}T12:00:00.${String(index%1000).padStart(3,'0')}Z`}
+function qaRound(value:unknown,unit=1000){return Math.max(unit,Math.round(Number(value||0)/unit)*unit)}
+function qaMarketPrice(year:number,month:number,base=100000){
  const age=year-QA_START_YEAR,trend=Math.pow(1.045,age),wave=1+Math.sin((age*12+month)*.37)*.08;
  const shock=([2028,2034,2042,2050,2057].includes(year)?.62:[2029,2035,2043,2051,2058].includes(year)?.82:1);
  return qaRound(base*trend*wave*shock,100)
 }
-function qaMonthlyContribution(total,index,count,year,month,skip){
+function qaMonthlyContribution(total:number,index:number,count:number,year:number,month:number,skip:boolean){
  const years=Math.ceil(count/12),yearIndex=Math.floor(index/12),monthsInYear=Math.min(12,count-yearIndex*12),yearBase=Math.floor(total/years),yearTarget=yearBase+(yearIndex===years-1?total-yearBase*years:0),base=Math.floor(yearTarget/monthsInYear);if(skip)return 0;
  let amount=base;if(QA_ISA_SKIP_YEARS.has(year)&&month===6)amount+=base;
  if(month===12||index===count-1)amount+=yearTarget-(base*monthsInYear);
@@ -32,9 +67,9 @@ function qaMonthlyContribution(total,index,count,year,month,skip){
 }
 
 function qaBuildThirtyFiveYearState(){
- const next=clone(seed),ledger=[],isaAccounts=[],pensionTransactions=[],pensionSnapshots=[];let sequence=0;
- const add=row=>ledger.push({...row,sequence:++sequence,createdAt:qaStamp(row.date,sequence),meta:{...(row.meta||{}),qaGenerated:true}});
- const financialItems=[
+ const next:QaRecord=clone(seed),ledger:QaRecord[]=[],isaAccounts:QaRecord[]=[],pensionTransactions:QaRecord[]=[],pensionSnapshots:QaRecord[]=[];let sequence=0;
+ const add=(row:QaRecord)=>ledger.push({...row,sequence:++sequence,createdAt:qaStamp(row.date,sequence),meta:{...(row.meta||{}),qaGenerated:true}});
+ const financialItems:QaRecord[]=[
   {id:'qa-home-loan',type:'loan',name:'QA 주택담보대출',institution:'테스트은행',status:'active',startDate:'2030-01-01',maturityDate:'2079-12-31',annualRate:4,rateType:'variable',repaymentMethod:'equalPrincipal',contractPrincipal:230000000,termMonths:600,paymentDay:26,rateHistory:[{effectiveFrom:'2030-01-01',rate:4},{effectiveFrom:'2040-01-01',rate:5.2},{effectiveFrom:'2050-01-01',rate:3.4}]},
   {id:'qa-car-loan',type:'loan',name:'QA 자동차대출',institution:'테스트캐피탈',status:'ended',startDate:'2034-01-01',maturityDate:'2038-12-31',endedAt:'2038-12-31',endReason:'paidOff',annualRate:5.2,rateType:'fixed',repaymentMethod:'equalPrincipal',contractPrincipal:30000000,termMonths:60,paymentDay:26},
   {id:'qa-deposit',type:'deposit',name:'QA 정기예금',institution:'테스트은행',status:'active',startDate:'2060-01-01',maturityDate:'2060-12-31',annualRate:3.5,rateType:'fixed',interestMethod:'simple',taxMode:'general',paymentStyle:'lump',contractPrincipal:20000000},
@@ -47,7 +82,7 @@ function qaBuildThirtyFiveYearState(){
  for(let cycle=0;cycle<12;cycle++){
   const start=QA_START_YEAR+cycle*3,end=start+2,lastYear=Math.min(end,QA_END_YEAR),count=(lastYear-start+1)*12,id=`qa-isa-${start}`,holdingId=`qa-isa-h-${start}`;
   const targets=[20000000,50000000,60000000],target=Math.round(targets[cycle%3]*count/36),scenario=`납입 ${Math.round(target/10000).toLocaleString('ko-KR')}만원`;
-  const account={id,name:`QA ISA ${start} · ${scenario}`,type:cycle%4===0?'서민형':'일반형',status:end<=QA_END_YEAR?'closed':'active',openedAt:`${start}-01-01`,closedAt:end<=QA_END_YEAR?`${end}-12-31`:'',maturityAt:`${end}-12-31`,policyId:next.policies.isa.activePolicyId,policyHistory:[],baseline:{date:`${start}-01-01`,cash:0,contribution:0},baselineDate:`${start}-01-01`,baselineCash:0,reconciliationTolerance:10,holdings:[{id:holdingId,name:'QA 미국지수 ETF',securityKey:`QAUSINDEX${start}`,instrumentCode:'379800',quoteType:'stock',quoteSource:'kis',investmentRole:'성장',baselineQty:0,baselineAvg:0,currentPrice:qaMarketPrice(lastYear,12,100000)}],transactions:[],assetSnapshots:[]};
+  const account:QaRecord={id,name:`QA ISA ${start} · ${scenario}`,type:cycle%4===0?'서민형':'일반형',status:end<=QA_END_YEAR?'closed':'active',openedAt:`${start}-01-01`,closedAt:end<=QA_END_YEAR?`${end}-12-31`:'',maturityAt:`${end}-12-31`,policyId:next.policies.isa.activePolicyId,policyHistory:[],baseline:{date:`${start}-01-01`,cash:0,contribution:0},baselineDate:`${start}-01-01`,baselineCash:0,reconciliationTolerance:10,holdings:[{id:holdingId,name:'QA 미국지수 ETF',securityKey:`QAUSINDEX${start}`,instrumentCode:'379800',quoteType:'stock',quoteSource:'kis',investmentRole:'성장',baselineQty:0,baselineAvg:0,currentPrice:qaMarketPrice(lastYear,12,100000)}],transactions:[],assetSnapshots:[]};
   let txSequence=0,totalQty=0,cash=0,paid=0;
   for(let i=0;i<count;i++){
    const year=start+Math.floor(i/12),month=i%12+1,md=qaPad(month),date=`${year}-${md}-25`,skip=QA_ISA_SKIP_YEARS.has(year)&&month===5;
@@ -63,11 +98,11 @@ function qaBuildThirtyFiveYearState(){
   isaAccounts.push(account)
  }
 
- const pensionAccounts=[
+ const pensionAccounts:QaRecord[]=[
   {id:'qa-pension',kind:'pension',name:'QA 한국투자 연금저축',provider:'한국투자증권',status:'active',openedAt:'2026-01-01',closedAt:'',policyId:next.policies.pension.activePolicyId,policyHistory:[]},
   {id:'qa-irp',kind:'irp',name:'QA 한국투자 IRP',provider:'한국투자증권',status:'active',openedAt:'2026-01-01',closedAt:'',policyId:next.policies.irp.activePolicyId,policyHistory:[]}
  ];
- const pensionHoldings=[
+ const pensionHoldings:QaRecord[]=[
   {id:'qa-pension-h',accountId:'qa-pension',name:'QA 연금 미국지수 ETF',productType:'ETF',baselineQty:0,baselineAvgPrice:0,currentPrice:qaMarketPrice(QA_END_YEAR,12,100000),investmentRole:'성장',risky:true},
   {id:'qa-irp-h',accountId:'qa-irp',name:'QA IRP 채권혼합 ETF',productType:'ETF',baselineQty:0,baselineAvgPrice:0,currentPrice:qaMarketPrice(QA_END_YEAR,12,85000),investmentRole:'안정',risky:false}
  ];
@@ -76,7 +111,7 @@ function qaBuildThirtyFiveYearState(){
  for(let year=QA_START_YEAR;year<=QA_END_YEAR;year++)for(let month=1;month<=12;month++){
   const md=qaPad(month),ym=`${year}-${md}`,salaryDate=`${ym}-21`,transferDate=`${ym}-25`,idx=(year-QA_START_YEAR)*12+month-1,inflation=Math.pow(1.02,year-QA_START_YEAR);
   if(!leaveMonths.has(ym))add({id:`qa-salary-${year}-${md}`,date:salaryDate,type:'externalIncome',amount:qaRound(4342250*Math.pow(1.025,year-QA_START_YEAR),1000),toAccountId:'cash-main',category:'월급'});
-  const costs=[['보험',250000,true,5],['통신',70000,true,10],['관리비',180000+(month%4)*18000,true,12],['구독',30000,true,15],['식비',520000+(idx%5)*35000,false,18],['교통',100000+(idx%3)*20000,false,20],['카드값',280000+(idx%7)*55000,false,23],['생활용품',90000+(idx%4)*25000,false,27]];
+  const costs:QaCost[]=[['보험',250000,true,5],['통신',70000,true,10],['관리비',180000+(month%4)*18000,true,12],['구독',30000,true,15],['식비',520000+(idx%5)*35000,false,18],['교통',100000+(idx%3)*20000,false,20],['카드값',280000+(idx%7)*55000,false,23],['생활용품',90000+(idx%4)*25000,false,27]];
   for(const [key,raw,fixed,day] of costs)add({id:`qa-expense-${key}-${year}-${md}`,date:`${ym}-${qaPad(day)}`,type:'expense',amount:qaRound(raw*inflation,1000),fromAccountId:'cash-main',fixed,category:key});
   if(idx%29===0)add({id:`qa-extra-medical-${year}-${md}`,date:`${ym}-14`,type:'expense',amount:qaRound((800000+(idx%4)*450000)*inflation,1000),fromAccountId:'cash-main',fixed:false,category:'병원·치과'});
   if(idx%17===8)add({id:`qa-extra-travel-${year}-${md}`,date:`${ym}-14`,type:'expense',amount:qaRound((1200000+(idx%3)*600000)*inflation,1000),fromAccountId:'cash-main',fixed:false,category:'여행'});
@@ -105,7 +140,7 @@ function qaBuildThirtyFiveYearState(){
  return normalized
 }
 
-function qaDatasetStats(){const model=integratedFinancialModel(),isa=state.accounts.reduce((n,a)=>n+(a.transactions||[]).length,0),pension=(state.pension.transactions||[]).length,integrated=(state.integrated.ledger||[]).length,round=n=>Math.round(Number(n)*100)/100;return{isa,pension,integrated,total:isa+pension+integrated,totalAssets:round(model.totalAssets),totalDebt:round(model.totalDebt),netAssets:round(model.netAssets),cash:round(model.cash),isaAccounts:state.accounts.length,months:state.system.qaDataset?.months||0}}
+function qaDatasetStats(){const model=integratedFinancialModel(),isa=(state.accounts as QaRecord[]).reduce((n:number,a:QaRecord)=>n+(a.transactions||[]).length,0),pension=(state.pension.transactions||[]).length,integrated=(state.integrated.ledger||[]).length,round=(n:unknown)=>Math.round(Number(n)*100)/100;return{isa,pension,integrated,total:isa+pension+integrated,totalAssets:round(model.totalAssets),totalDebt:round(model.totalDebt),netAssets:round(model.netAssets),cash:round(model.cash),isaAccounts:state.accounts.length,months:state.system.qaDataset?.months||0}}
 function qaRenderStats(){const box=$('#qaStats');if(!box)return;const s=qaDatasetStats();box.textContent=`${state.system?.qaDataset?.range||'직접 입력 QA'} · ${nf.format(s.total)}건 · 순자산 ${displayWon(s.netAssets)} · 대출 ${displayWon(s.totalDebt)}`}
 function qaResetTransientViewState(){transactionDisplayLimit=50;dividendDisplayLimit=50;pensionTransactionDisplayLimit=20;pensionTransactionSearch='';integratedLedgerSearch='';integratedSearchDisplayLimit=50;setting().integratedLedgerFilter='all'}
 function qaGenerateThirtyFiveYears(){if(!QA_MODE)return false;state=qaBuildThirtyFiveYearState();qaResetTransientViewState();lastPersistedState=clone(state);const ok=persist(false);render();qaRenderStats();toast(ok?'QA 35년 실사용 데이터를 만들었습니다.':'QA 데이터 저장에 실패했습니다.');return ok}

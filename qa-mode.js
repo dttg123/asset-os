@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use strict';
 const QA_START_YEAR = 2026, QA_END_YEAR = 2060, QA_MONTHS = (QA_END_YEAR - QA_START_YEAR + 1) * 12;
 const QA_ISA_SKIP_YEARS = new Set([2027, 2031, 2036, 2042, 2049, 2054, 2058]);
@@ -73,7 +72,7 @@ function qaMonthlyContribution(total, index, count, year, month, skip) {
 function qaBuildThirtyFiveYearState() {
     const next = clone(seed), ledger = [], isaAccounts = [], pensionTransactions = [], pensionSnapshots = [];
     let sequence = 0;
-    const add = row => ledger.push({ ...row, sequence: ++sequence, createdAt: qaStamp(row.date, sequence), meta: { ...(row.meta || {}), qaGenerated: true } });
+    const add = (row) => ledger.push({ ...row, sequence: ++sequence, createdAt: qaStamp(row.date, sequence), meta: { ...(row.meta || {}), qaGenerated: true } });
     const financialItems = [
         { id: 'qa-home-loan', type: 'loan', name: 'QA 주택담보대출', institution: '테스트은행', status: 'active', startDate: '2030-01-01', maturityDate: '2079-12-31', annualRate: 4, rateType: 'variable', repaymentMethod: 'equalPrincipal', contractPrincipal: 230000000, termMonths: 600, paymentDay: 26, rateHistory: [{ effectiveFrom: '2030-01-01', rate: 4 }, { effectiveFrom: '2040-01-01', rate: 5.2 }, { effectiveFrom: '2050-01-01', rate: 3.4 }] },
         { id: 'qa-car-loan', type: 'loan', name: 'QA 자동차대출', institution: '테스트캐피탈', status: 'ended', startDate: '2034-01-01', maturityDate: '2038-12-31', endedAt: '2038-12-31', endReason: 'paidOff', annualRate: 5.2, rateType: 'fixed', repaymentMethod: 'equalPrincipal', contractPrincipal: 30000000, termMonths: 60, paymentDay: 26 },
@@ -219,7 +218,7 @@ function qaBuildThirtyFiveYearState() {
     normalized.system.qaDataset = { version: APP_VERSION, generatedAt: new Date().toISOString(), range: '2026-2060', months: QA_MONTHS, scenario: 'real-user-35-years', homeLoanRemaining: homeBalance, carLoanRemaining: carBalance };
     return normalized;
 }
-function qaDatasetStats() { const model = integratedFinancialModel(), isa = state.accounts.reduce((n, a) => n + (a.transactions || []).length, 0), pension = (state.pension.transactions || []).length, integrated = (state.integrated.ledger || []).length, round = n => Math.round(Number(n) * 100) / 100; return { isa, pension, integrated, total: isa + pension + integrated, totalAssets: round(model.totalAssets), totalDebt: round(model.totalDebt), netAssets: round(model.netAssets), cash: round(model.cash), isaAccounts: state.accounts.length, months: state.system.qaDataset?.months || 0 }; }
+function qaDatasetStats() { const model = integratedFinancialModel(), isa = state.accounts.reduce((n, a) => n + (a.transactions || []).length, 0), pension = (state.pension.transactions || []).length, integrated = (state.integrated.ledger || []).length, round = (n) => Math.round(Number(n) * 100) / 100; return { isa, pension, integrated, total: isa + pension + integrated, totalAssets: round(model.totalAssets), totalDebt: round(model.totalDebt), netAssets: round(model.netAssets), cash: round(model.cash), isaAccounts: state.accounts.length, months: state.system.qaDataset?.months || 0 }; }
 function qaRenderStats() { const box = $('#qaStats'); if (!box)
     return; const s = qaDatasetStats(); box.textContent = `${state.system?.qaDataset?.range || '직접 입력 QA'} · ${nf.format(s.total)}건 · 순자산 ${displayWon(s.netAssets)} · 대출 ${displayWon(s.totalDebt)}`; }
 function qaResetTransientViewState() { transactionDisplayLimit = 50; dividendDisplayLimit = 50; pensionTransactionDisplayLimit = 20; pensionTransactionSearch = ''; integratedLedgerSearch = ''; integratedSearchDisplayLimit = 50; setting().integratedLedgerFilter = 'all'; }

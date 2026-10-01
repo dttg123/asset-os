@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use strict';
 let aiStrategyPurpose = 'buy';
 const AI_STRATEGY_SCOPES = ['isa', 'pension', 'irp'];
@@ -25,9 +24,9 @@ function aiStrategyPrompt(purpose, amount, fundingSource = 'new_money', included
     return `너는 내 계좌를 평가하는 감사자가 아니라 실제 매수 결정을 돕는 투자판단 파트너다. 첨부한 Asset OS 자료와 오늘의 최신 시장자료를 함께 사용해 ${focus}에 대한 결론을 내려라.\n\n가장 먼저 보여줄 것\n- ${scopeLabel} 계좌별로 지금 행동을 매수 / 분할매수 / 대기 / 유지 / 축소 / 교체 중 하나로 확정\n- 각 계좌에서 실행할 종목, 금액, 최신 현재가 기준 예상 수량, 실행 순서\n- 지금 전액을 쓰지 않는다면 이번 집행액과 남겨둘 금액\n\n판단 순서\n1. 웹에서 오늘 날짜의 금리·환율·미국 및 한국 증시·보유종목 가격과 핵심 이슈를 확인한다. 첨부 현재가가 오래됐으면 최신 웹 가격을 사용한다.\n2. 현재 시장을 5줄 이내로 판단한다.\n3. 앞으로 1~3개월, 6~12개월, 3~5년의 기본 전망을 계좌 보유종목과 투자 테마에 연결한다.\n4. 선택한 ${scopeLabel} 계좌를 각각 판단하고 마지막에 실제 실행 순서를 하나의 표로 정리한다.\n5. 다음 매수 또는 판단 변경 시점을 날짜·가격·시장 조건 중 확인 가능한 기준으로 제시한다.\n\n내 조건\n- 자금 출처: ${sourceLabel}\n- ${zeroRebalance ? '추가 투자금' : '판단 금액'}: ${amount.toLocaleString('ko-KR')}원\n- 투자기간: 3년 이상\n- 투자성향: 공격형\n- 감내 가능한 최대 손실: -40%\n- ${zeroRebalance ? '추가 자금 없이 기존 보유종목의 유지·축소·교체를 판단' : '기존 종목을 불필요하게 매도하지 말고 신규 자금 배분을 우선'}\n\n답변 원칙\n- 결론부터 말하고 애매한 양비론으로 끝내지 않는다.\n- 앱 구조, 데이터 형식, 개인정보 제외 여부를 설명하지 않는다.\n- 일반적인 투자 위험 설명, 교과서식 주의사항, 긴 면책문구를 쓰지 않는다.\n- 보유내역을 그대로 다시 읽어주는 데 분량을 쓰지 않는다.\n- 위험요인은 별도 장문 항목으로 만들지 말고 매수·대기 판단을 바꾸는 조건에만 짧게 반영한다.\n- 정확한 수량을 계산할 수 없으면 최신 가격 기준의 금액 범위로 제시한다.\n- 오늘 이미 체결한 주문은 중복 추천하지 않는다.`;
 }
 function aiRecentRows(rows, limit = 240) { return [...(rows || [])].sort((a, b) => String(b.date || b.orderDate || '').localeCompare(String(a.date || a.orderDate || ''))).slice(0, limit); }
-function aiIsoAgeHours(value) { const time = new Date(value || '').getTime(); return Number.isFinite(time) ? Math.max(0, (Date.now() - time) / 36e5) : Infinity; }
+function aiIsoAgeHours(value) { const time = new Date(String(value || '')).getTime(); return Number.isFinite(time) ? Math.max(0, (Date.now() - time) / 36e5) : Infinity; }
 const AI_KR_MARKET_HOLIDAYS_2026 = new Set(['2026-01-01', '2026-02-16', '2026-02-17', '2026-02-18', '2026-03-02', '2026-05-05', '2026-05-25', '2026-08-17', '2026-09-24', '2026-09-25', '2026-09-28', '2026-10-05', '2026-10-09', '2026-12-25']);
-function aiKoreaDate(value) { const date = new Date(value || ''); if (!Number.isFinite(date.getTime()))
+function aiKoreaDate(value) { const date = new Date(String(value || '')); if (!Number.isFinite(date.getTime()))
     return ''; return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date); }
 function aiTradingDaysSince(value, now = new Date()) { const start = aiKoreaDate(value), end = aiKoreaDate(now); if (!start || !end)
     return Infinity; let cursor = new Date(`${start}T00:00:00Z`), finish = new Date(`${end}T00:00:00Z`), days = 0; while (cursor < finish && days < 400) {
@@ -36,13 +35,13 @@ function aiTradingDaysSince(value, now = new Date()) { const start = aiKoreaDate
     if (dow !== 0 && dow !== 6 && !AI_KR_MARKET_HOLIDAYS_2026.has(key))
         days++;
 } return days; }
-function aiKoreaTimestamp(value) { const date = new Date(value || ''); return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(date) : '갱신 기록 없음'; }
+function aiKoreaTimestamp(value) { const date = new Date(String(value || '')); return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(date) : '갱신 기록 없음'; }
 function aiPurposeLabel(value) { return value === 'rebalance' ? '리밸런싱' : value === 'tax' ? '절세·납입' : '추가매수 판단'; }
 function aiFundingLabel(value) { return value === 'account_cash' ? '계좌 안 현금' : value === 'next_contribution' ? '다음 납입금' : '새로 넣을 돈'; }
 function aiIsaAccountExport(account, index) {
     const metrics = accountMetrics(account), holdingRefs = new Map(), currentPolicy = policy('isa', account), year = String(businessYear()), fallbackPaid = annualContributionTotal(account), contributionModel = typeof isaContributionModel === 'function' ? isaContributionModel(account) : { currentYearPaid: fallbackPaid, lifetimePaid: fallbackPaid, accruedLimit: Number(currentPolicy.annualLimit) || 0, remaining: Math.max(0, (Number(currentPolicy.annualLimit) || 0) - fallbackPaid), carryoverAvailable: 0 }, paidThisYear = contributionModel.currentYearPaid;
-    const holdings = (metrics.holdings || []).map((holding, holdingIndex) => {
-        const source = (account.holdings || []).find(row => row.id === holding.id) || holding, ref = `ISA${index + 1}-H${holdingIndex + 1}`;
+    const metricHoldings = metrics.holdings || [], accountHoldings = account.holdings || [], holdings = metricHoldings.map((holding, holdingIndex) => {
+        const source = accountHoldings.find(row => row.id === holding.id) || holding, ref = `ISA${index + 1}-H${holdingIndex + 1}`;
         holdingRefs.set(String(holding.id || ''), ref);
         const quoteAt = source.quoteUpdatedAt || source.priceUpdatedAt || '';
         return { ref, name: holding.name, instrumentCode: source.instrumentCode || '', quoteType: source.quoteType || '', assetClass: holding.assetClass || source.assetClass || '', quantity: Number(holding.quantity ?? holding.qty) || 0, quantityUnit: source.quantityUnit || 'share', averagePrice: Number(holding.avgPrice) || 0, currentPrice: Number(holding.currentPrice) || 0, marketValue: Math.round(Number(holding.marketValue) || 0), profitLoss: Math.round((Number(holding.marketValue) || 0) - holdingCostValue(holding)), quoteSource: source.quoteSource || '', quoteUpdatedAt: quoteAt, quoteAgeHours: aiIsoAgeHours(quoteAt) };
@@ -77,8 +76,8 @@ function aiIntegratedCashFlowExport() {
 function aiStrategyPreflight(payload, amount, fundingSource) {
     const blockers = [], warnings = [];
     const isRebalance = payload?.request?.purpose === '리밸런싱';
-    const isaHoldings = payload.isa.accounts.flatMap(a => a.holdings), stale7 = isaHoldings.filter(h => h.quoteAgeHours > 168), stale3 = isaHoldings.filter(h => h.quoteAgeHours > 72 && h.quoteAgeHours <= 168);
-    if (payload.isa.accounts.some(a => Math.abs(a.summary.componentDelta) > 1))
+    const isaAccounts = payload.isa.accounts || [], isaHoldings = isaAccounts.flatMap(a => a.holdings), stale7 = isaHoldings.filter(h => h.quoteAgeHours > 168), stale3 = isaHoldings.filter(h => h.quoteAgeHours > 72 && h.quoteAgeHours <= 168);
+    if (isaAccounts.some(a => Math.abs(a.summary.componentDelta) > 1))
         blockers.push('ISA 합계와 보유·현금 구성값이 일치하지 않습니다.');
     if (stale7.length)
         warnings.push(`ISA 현재가가 7일 넘게 오래된 종목 ${stale7.length}개가 있습니다. 최신 주문 전에는 현재가를 다시 갱신해 주세요.`);
@@ -120,7 +119,7 @@ function aiStrategyPreflight(payload, amount, fundingSource) {
 }
 function aiEmptyPensionSection() { return { accounts: [], combined: { value: 0, cost: 0, cash: 0, profit: 0, returnRate: 0 }, contribution: { year: String(businessYear()), paid: 0 }, policy: {}, contributions: [], transactions: [], brokerOrders: [], income: [], assetSnapshots: [] }; }
 function buildAiStrategyPayload(purpose, amount, fundingSource = 'new_money', includedScopes = AI_STRATEGY_SCOPES) {
-    const scopes = aiStrategyScopes(includedScopes), has = key => scopes.includes(key), isaAccounts = has('isa') ? state.accounts.filter(isCurrentAccount).map(aiIsaAccountExport) : [], pensionSavings = has('pension') ? aiPensionSection('pension') : aiEmptyPensionSection(), irpSection = has('irp') ? aiPensionSection('irp') : aiEmptyPensionSection(), projection = pensionProjection(), risk = has('irp') ? pensionRiskMetrics() : { risky: 0, unknown: 0, ratio: 0, maxRatio: 0, limit: 70, classificationComplete: true };
+    const scopes = aiStrategyScopes(includedScopes), has = (key) => scopes.includes(key), isaAccounts = has('isa') ? state.accounts.filter(isCurrentAccount).map(aiIsaAccountExport) : [], pensionSavings = has('pension') ? aiPensionSection('pension') : aiEmptyPensionSection(), irpSection = has('irp') ? aiPensionSection('irp') : aiEmptyPensionSection(), projection = pensionProjection(), risk = has('irp') ? pensionRiskMetrics() : { risky: 0, unknown: 0, ratio: 0, maxRatio: 0, limit: 70, classificationComplete: true };
     const payload = { format: 'asset-os-ai-strategy-v2', generatedAt: new Date().toISOString(), privacy: { excluded: ['이름', '이메일', '계좌번호', '메모', 'API 키', '토큰'] }, request: { purpose: aiPurposeLabel(purpose), fundingSource: aiFundingLabel(fundingSource), additionalInvestmentWon: amount, includedScopes: scopes, includedAccountTypes: aiStrategyScopeLabels(scopes), prompt: aiStrategyPrompt(purpose, amount, fundingSource, scopes) }, profile: { investmentHorizon: '3년 이상', riskStyle: '공격형', maximumDrawdownTolerance: '-40%', rebalancePreference: '가능하면 매도보다 신규 자금으로 조정' }, isa: { accounts: isaAccounts, combined: { value: isaAccounts.reduce((s, x) => s + x.summary.value, 0), cost: isaAccounts.reduce((s, x) => s + x.summary.cost, 0), cash: isaAccounts.reduce((s, x) => s + x.summary.cash, 0), profit: isaAccounts.reduce((s, x) => s + x.summary.profit, 0) } }, pensionSavings, irp: { ...irpSection, risk: { riskyValue: Math.round(risk.risky), unclassifiedValue: Math.round(risk.unknown), confirmedRatio: Number(risk.ratio) || 0, maximumPossibleRatio: Number(risk.maxRatio) || 0, limit: Number(risk.limit) || 70, classificationComplete: !!risk.classificationComplete } }, cashFlow: aiIntegratedCashFlowExport(), combinedPlan: { totalValue: Math.round(payloadNumber(pensionSavings.combined.value) + payloadNumber(irpSection.combined.value) + isaAccounts.reduce((s, x) => s + x.summary.value, 0)), projection: { retirementAge: projection.retirementAge, currentAge: projection.currentAge, monthlyContribution: Math.round(projection.monthly), annualReturnRate: Number(projection.annual) || 0, inflationRate: Number(projection.inflation) || 0, expectedAssetsAtRetirement: Math.round(projection.future), expectedMonthlyPension: Math.round(projection.monthlyPension) } } };
     payload.dataQuality = aiStrategyPreflight(payload, amount, fundingSource);
     return payload;
@@ -143,7 +142,7 @@ async function shareAiStrategyFile(purpose, amount, fundingSource, includedScope
         showNotice('공유 전 확인', payload.dataQuality.blockers.join('\n'));
         return false;
     }
-    if (!(navigator.share && navigator.canShare?.({ files: [file] }))) {
+    if (!(typeof navigator.share === 'function' && navigator.canShare?.({ files: [file] }))) {
         showNotice('공유 기능 필요', '이 기기에서는 파일 공유를 지원하지 않습니다. Android의 Chrome 또는 설치된 Asset OS에서 다시 시도해 주세요.');
         return false;
     }

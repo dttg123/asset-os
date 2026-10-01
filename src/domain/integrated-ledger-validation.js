@@ -1,42 +1,32 @@
 'use strict';
 function validationIntegratedStore() {
-    // @ts-ignore runtime global supplied by integrated-ledger.js
     return integratedStore();
 }
 function validationPostedDateError(date) {
-    // @ts-ignore runtime global supplied by core-config.js
     return postedDateError(date);
 }
 function validationIsaAccounts(date) {
-    // @ts-ignore runtime global supplied by isa-ledger.js
     return isaAccountsForDate(date);
 }
 function validationPensionAccounts(kind, date) {
-    // @ts-ignore runtime global supplied by pension-ledger.js
     return pensionAccountsForKind(kind, date);
 }
 function validationIsQaFixture(transaction) {
-    // @ts-ignore runtime global supplied by integrated-ledger.js
     return isQaIntegratedFixture(transaction);
 }
 function validationReplay(rows, store) {
-    // @ts-ignore runtime global supplied by integrated-ledger.js
     return integratedReplay(rows, store);
 }
 function validationFinancialProducts() {
-    // @ts-ignore runtime global supplied by integrated-finance-engine.js
     return financialProducts();
 }
 function validationProductAccountId(id) {
-    // @ts-ignore runtime global supplied by integrated-finance-engine.js
     return financeProductAccountId(id);
 }
 function validationProductLiabilityId(id) {
-    // @ts-ignore runtime global supplied by integrated-finance-engine.js
     return financeProductLiabilityId(id);
 }
 function validationWon(value) {
-    // @ts-ignore runtime global supplied by core-visual-utils.js
     return won(value);
 }
 function integratedIssues(store = validationIntegratedStore()) {

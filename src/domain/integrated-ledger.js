@@ -1,26 +1,20 @@
 'use strict';
 function ledgerState() {
-    // @ts-ignore runtime global supplied by store-state.js
     return state;
 }
 function ledgerSeed() {
-    // @ts-ignore runtime global supplied by data-defaults.js
     return seed;
 }
 function ledgerCompare(left, right) {
-    // @ts-ignore runtime global supplied by integrated-replay.js
     return compareIntegratedTransactions(left, right);
 }
 function ledgerCalculateReplay(store, rows) {
-    // @ts-ignore runtime global supplied by integrated-replay.js
     return calculateIntegratedReplay(store, rows);
 }
 function ledgerLocalYmd() {
-    // @ts-ignore runtime global supplied by core-config.js
     return localYmd();
 }
 function ledgerCentralIsaRows() {
-    // @ts-ignore runtime global supplied by isa-ledger.js
     return centralIsaContributionRows();
 }
 function integratedStore() { return ledgerState().integrated || ledgerSeed().integrated; }

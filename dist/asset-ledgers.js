@@ -29,7 +29,6 @@ function calculatePensionPosition(holding, transactions) {
 }
 ;
 /* asset-os source: pension-contributions.js */
-// @ts-nocheck
 'use strict';
 function pensionStore() { return state.pension; }
 function pensionAccount(id) { return pensionStore().accounts.find(a => a.id === id) || null; }
@@ -118,7 +117,7 @@ function pensionContributionBatchCandidate(input = {}) {
             return { ok: false, error: `${pensionAccountKindLabel(kind)}의 납입 월을 하나 이상 선택해 주세요.` };
         if ((amount || selected.length) && !account)
             return { ok: false, error: `운영 중인 ${pensionAccountKindLabel(kind)} 계좌를 선택해 주세요.` };
-        const scheduleId = pensionContributionBatchScheduleId(kind), generatedIds = new Set((nextIntegrated.ledger || []).filter(t => t.meta?.pensionBatch && t.meta?.batchYear === data.year && t.meta?.batchKind === kind).map(t => t.id));
+        const ledger = nextIntegrated.ledger || [], scheduleId = pensionContributionBatchScheduleId(kind), generatedIds = new Set(ledger.filter(t => t.meta?.pensionBatch && t.meta?.batchYear === data.year && t.meta?.batchKind === kind).map(t => t.id));
         const manualRows = centralPensionContributionRows(data.year).filter(r => r.kind === kind && !generatedIds.has(r.sourceTxId));
         for (const month of selected) {
             const monthKey = `${data.year}-${String(month).padStart(2, '0')}`, manual = manualRows.filter(r => String(r.date).startsWith(monthKey)).reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
@@ -133,7 +132,7 @@ function pensionContributionBatchCandidate(input = {}) {
             summary.total += delta;
             summary.count++;
         }
-        nextIntegrated.ledger = (nextIntegrated.ledger || []).filter(t => !(t.meta?.pensionBatch && t.meta?.batchYear === data.year && t.meta?.batchKind === kind));
+        nextIntegrated.ledger = ledger.filter(t => !(t.meta?.pensionBatch && t.meta?.batchYear === data.year && t.meta?.batchKind === kind));
         nextIntegrated.ledger.push(...generated.filter(t => t.meta.batchKind === kind));
         if (account && selected.length) {
             const first = `${data.year}-${String(selected[0]).padStart(2, '0')}-${String(data.day).padStart(2, '0')}`;
@@ -163,7 +162,6 @@ function applyPensionContributionBatch(input = {}) {
 }
 ;
 /* asset-os source: pension-ledger.js */
-// @ts-nocheck
 'use strict';
 function normalizeInvestmentRole(value, h = null) {
     const v = String(value || '');
@@ -193,7 +191,7 @@ function investmentThemeTag(h) { const explicit = String(h?.themeTag || '').trim
     return '채권'; return ''; }
 function investmentRoleMeta(h) { const role = investmentRoleForHolding(h), tag = investmentThemeTag(h); return tag ? `${role} · ${tag}` : role; }
 function pensionTransactions(scope = 'all') { return pensionStore().transactions.filter(t => { const a = pensionAccount(t.accountId); return a && (scope === 'all' || a.kind === scope); }).sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.createdAt || '').localeCompare(String(a.createdAt || ''))); }
-function pensionTradeLabel(type) { return ({ contribution: '납입', isaTransfer: 'ISA 만기 이전', buy: '매수', sell: '매도', dividend: '배당금', distribution: '분배금', interest: '이자', other_right: '기타 권리', adjustment: '보정' })[type] || type; }
+function pensionTradeLabel(type) { return { contribution: '납입', isaTransfer: 'ISA 만기 이전', buy: '매수', sell: '매도', dividend: '배당금', distribution: '분배금', interest: '이자', other_right: '기타 권리', adjustment: '보정' }[type] || type; }
 function pensionPositionFromLedger(h, transactions = pensionStore().transactions) { return calculatePensionPosition(h, transactions); }
 function syncPensionDerivedHoldings(target = state) { const ps = target?.pension; if (!ps)
     return; const txs = Array.isArray(ps.transactions) ? ps.transactions : []; for (const h of ps.holdings || []) {
@@ -366,7 +364,6 @@ function pensionTransactionDelete(id) { pensionTransactionDeleteError = ''; cons
 } pensionStore().transactions = next; syncPensionDerivedHoldings(); return true; }
 ;
 /* asset-os source: pension-assets.js */
-// @ts-nocheck
 'use strict';
 function pensionAssetScope() { return ['all', 'pension', 'irp'].includes(setting().pensionAssetScope) ? setting().pensionAssetScope : 'all'; }
 function pensionAssetLens() { return 'assetClass'; }
@@ -383,7 +380,9 @@ function pensionKisRiskClassification(holding) { const manual = setting().irpRis
     return { risky: false, riskClassification: '퇴직연금 100% 편입 가능 채권혼합형', riskSource: 'IBK 상품 분류' }; if (/KODEX미국AI테크TOP10/i.test(name))
     return { risky: true, riskClassification: '주식형 위험자산', riskSource: '삼성자산운용 상품 분류' }; return { risky: null, riskClassification: '분류 확인 필요', riskSource: '' }; }
 function openPensionRiskClassificationForm() { const unknown = pensionAssetMetrics('irp').holdings.filter(h => h.risky !== true && h.risky !== false); if (!unknown.length)
-    return toast('확인할 미분류 종목이 없습니다.'); $('#formEyebrow').textContent = 'IRP · 위험자산'; $('#formTitle').textContent = '종목 분류 확인'; $('#formBody').innerHTML = `<form id="irpRiskClassificationForm" class="form"><div class="source-note">금융회사 상품 상세의 ‘퇴직연금 위험자산’ 여부를 확인한 뒤 선택하세요. 미확인 종목은 한도 여유에서 제외됩니다.</div>${unknown.map((h, i) => `<div class="field"><label>${escapeHtml(h.name)}</label><select name="risk-${i}" data-risk-key="${escapeHtml(pensionRiskClassificationKey(h))}"><option value="">확인 필요</option><option value="risky">위험자산</option><option value="safe">비위험자산·100% 편입 가능</option></select></div>`).join('')}<button class="form-btn primary">분류 저장</button></form>`; openSheet('#formSheet', { mode: 'input' }); $('#irpRiskClassificationForm').onsubmit = e => { e.preventDefault(); const map = { ...(setting().irpRiskClassifications || {}) }; for (const select of e.currentTarget.querySelectorAll('[data-risk-key]')) {
+    return toast('확인할 미분류 종목이 없습니다.'); $('#formEyebrow').textContent = 'IRP · 위험자산'; $('#formTitle').textContent = '종목 분류 확인'; $('#formBody').innerHTML = `<form id="irpRiskClassificationForm" class="form"><div class="source-note">금융회사 상품 상세의 ‘퇴직연금 위험자산’ 여부를 확인한 뒤 선택하세요. 미확인 종목은 한도 여유에서 제외됩니다.</div>${unknown.map((h, i) => `<div class="field"><label>${escapeHtml(h.name)}</label><select name="risk-${i}" data-risk-key="${escapeHtml(pensionRiskClassificationKey(h))}"><option value="">확인 필요</option><option value="risky">위험자산</option><option value="safe">비위험자산·100% 편입 가능</option></select></div>`).join('')}<button class="form-btn primary">분류 저장</button></form>`; openSheet('#formSheet', { mode: 'input' }); $('#irpRiskClassificationForm').onsubmit = (e) => { e.preventDefault(); const map = { ...(setting().irpRiskClassifications || {}) }; for (const select of e.currentTarget.querySelectorAll('[data-risk-key]')) {
+    if (!select.dataset.riskKey)
+        continue;
     if (select.value)
         map[select.dataset.riskKey] = select.value;
     else
@@ -485,7 +484,7 @@ function pensionReconcileIncome(details, archives) {
     // Archives are historical monthly totals, not individual cash movements.
     // Retain their unitemized remainder; never drop a whole month for one payment.
     const rows = [], remaining = new Map(), matched = new Set();
-    const key = x => { const holding = x.holdingId && typeof pensionHoldingById === 'function' ? pensionHoldingById(x.holdingId) : null, product = x.productCode || holding?.productCode || holding?.code; return x.accountId && product ? [x.accountId, product, x.date, brokerKisIncomeCategory(x.type), Number(x.amount) || 0, Number(x.tax) || 0].join('|') : ''; };
+    const key = (x) => { const holding = x.holdingId && typeof pensionHoldingById === 'function' ? pensionHoldingById(x.holdingId) : null, product = x.productCode || holding?.productCode || holding?.code; return x.accountId && product ? [x.accountId, product, x.date, brokerKisIncomeCategory(x.type), Number(x.amount) || 0, Number(x.tax) || 0].join('|') : ''; };
     const broker = details.filter(x => x.brokerRight);
     for (const x of details) {
         if (!x.brokerRight) {
@@ -516,7 +515,7 @@ function pensionReconcileIncome(details, archives) {
 function pensionVisibleTransactionRows(scope = 'all') {
     const incomes = pensionIncomeRecords(scope), manual = pensionTransactions(scope).filter(x => !['dividend', 'distribution', 'interest', 'other_right'].includes(x.type)), orders = brokerKisVisibleOrders(state.brokerKis, scope);
     const realized = typeof pensionArchiveTransactionRows === 'function' ? pensionArchiveTransactionRows(scope).filter(x => x.type !== 'dividend') : [];
-    const contributions = typeof centralPensionContributionRows === 'function' ? centralPensionContributionRows().filter(t => scope === 'all' || t.kind === scope).map(t => ({ ...t, accountKind: t.kind, linkedContribution: true })) : [];
+    const contributions = typeof centralPensionContributionRows === 'function' ? centralPensionContributionRows().filter(t => scope === 'all' || t.kind === scope).map((t) => ({ ...t, accountKind: t.kind, linkedContribution: true })) : [];
     return [...manual, ...orders, ...incomes, ...realized, ...contributions].sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.time || '').localeCompare(String(a.time || '')) || String(b.id).localeCompare(String(a.id)));
 }
 ;
@@ -582,7 +581,6 @@ function transactionNumericError(tx) {
 function typeText(t) { return { buy: '매수', sell: '매도', openingAllocation: '기초자금 매수반영', dividend: '배당', distribution: 'ETF 분배금', interest: '예수금 이자', deposit: '외부 입금', internalTransferIn: '통합→ISA 이체', depositReversal: '입금 취소·반환', withdrawal: '일반 출금', internalTransferOut: 'ISA→통합 이체', adjustment: '잔고 조정', split: '액면분할', reverseSplit: '병합', merger: '합병', delisting: '상장폐지', feeRefund: '수수료 환급', taxRefund: '세금 환급' }[t] || t; }
 ;
 /* asset-os source: isa-ledger.js */
-// @ts-nocheck
 'use strict';
 function holdingQuantityText(h, qty = h?.qty) { return h?.quantityUnit === 'face' ? `${num(qty)}원 액면` : `${quantityNumber(qty)}주`; }
 function replay(account, candidateTxs = null, includeCentral = true) {
@@ -763,7 +761,7 @@ function accountMetrics(account) {
 function isaHoldingTaxTreatment(h) { const kind = String(h?.assetClass || '').trim(); if (['국내주식', '국내주식 ETF', '개별채권'].includes(kind))
     return 'exempt'; if (['해외주식 ETF', '채권 ETF', '현금성 ETF'].includes(kind))
     return 'taxable-estimate'; return 'unknown'; }
-function taxableBreakdown(a) { const b = { gains: Number(a.taxBreakdown?.gains) || 0, losses: Number(a.taxBreakdown?.losses) || 0, dividends: Number(a.taxBreakdown?.dividends) || 0, expenses: Number(a.taxBreakdown?.expenses) || 0, excludedGains: 0, excludedLosses: 0, unclassified: 0, estimatedBasis: 0 }; const r = replay(a), holdings = new Map((a.holdings || []).map(h => [h.id, h])); for (const t of sortTxs(a.transactions || [])) {
+function taxableBreakdown(a) { const b = { gains: Number(a.taxBreakdown?.gains) || 0, losses: Number(a.taxBreakdown?.losses) || 0, dividends: Number(a.taxBreakdown?.dividends) || 0, expenses: Number(a.taxBreakdown?.expenses) || 0, excludedGains: 0, excludedLosses: 0, unclassified: 0, estimatedBasis: 0 }; const r = replay(a), holdingRows = a.holdings || [], holdings = new Map(holdingRows.map(h => [h.id, h])); for (const t of sortTxs(a.transactions || [])) {
     if (t.status === 'cancelled' || txDate(t) < (a.baselineDate || a.openedAt || ''))
         continue;
     const f = r.facts.get(t.id) || {};
@@ -807,14 +805,14 @@ function investmentPrincipalAt(a, endDate) { if (isPastAccount(a))
     return accountMetrics(a).cost; const txs = (a.transactions || []).filter(t => txDate(t) <= endDate), r = replay(a, txs); return r.valid ? r.holdings.reduce((sum, h) => sum + holdingCostValue(h), 0) : 0; }
 function dividendYieldFor(a, key, period, amount) { const end = periodEndDate(key, period), principal = investmentPrincipalAt(a, end), rate = principal > 0 ? (Number(amount) || 0) / principal * 100 : null; return { principal, rate }; }
 function consistencyIssues(a) {
-    const issues = [], tol = Number(a.reconciliationTolerance || 10), r = auditReplay(a);
+    const issues = [], transactions = a.transactions || [], holdings = a.holdings || [], tol = Number(a.reconciliationTolerance || 10), r = auditReplay(a);
     const push = (code, title, detail, severity = 'medium', transactionId = '') => issues.push({ id: `${a.id}-${code}-${transactionId || issues.length}`, accountId: a.id, transactionId, title, detail, severity });
     if (!r.valid)
         push('ledger', r.error || '거래원장 계산 오류', '해당 거래와 그 이후 계산을 확인해 주세요.', 'high', r.errorTxId || '');
     else if (r.cash < -tol)
         push('cash-negative', '계좌 현금이 음수입니다', `${won(Math.abs(r.cash))} 부족합니다. 누락된 입금 또는 매수 기록을 확인해 주세요.`, 'high');
     const seen = new Map();
-    for (const t of a.transactions || []) {
+    for (const t of transactions) {
         if (t.status === 'cancelled')
             continue;
         const key = t.idempotencyKey || stableTxKey(t);
@@ -822,25 +820,25 @@ function consistencyIssues(a) {
             push('duplicate', '중복 거래가 의심됩니다', `${formatDate(txDate(t))} ${typeText(t.type)} 거래가 같은 조건으로 두 번 있습니다.`, 'medium', t.id);
         else
             seen.set(key, t.id);
-        if (t.holdingId && !a.holdings.some(h => h.id === t.holdingId) && ['buy', 'sell', 'openingAllocation', 'dividend', 'distribution', 'adjustment', 'securityTransferIn', 'securityTransferOut'].includes(t.type))
+        if (t.holdingId && !holdings.some(h => h.id === t.holdingId) && ['buy', 'sell', 'openingAllocation', 'dividend', 'distribution', 'adjustment', 'securityTransferIn', 'securityTransferOut'].includes(t.type))
             push('missing-holding', '거래 종목 연결이 끊겼습니다', `${formatDate(txDate(t))} ${typeText(t.type)} 거래의 종목을 찾지 못했습니다.`, 'high', t.id);
         const closeDate = a.closedAt || a.maturityAt;
         if (!isTradeableAccount(a) && closeDate && txDate(t) > closeDate)
             push('after-close', a.status === 'maturity_pending' ? '만기 후 거래가 있습니다' : '종료 후 거래가 있습니다', `${formatDate(txDate(t))} 거래가 ${a.status === 'maturity_pending' ? '만기일' : '계좌 종료일'} 이후입니다.`, 'high', t.id);
         if (t.type === 'depositReversal') {
-            const src = a.transactions.find(x => x.id === t.reversesTransactionId), used = (a.transactions || []).filter(x => x.type === 'depositReversal' && x.status !== 'cancelled' && x.reversesTransactionId === t.reversesTransactionId).reduce((sum, x) => sum + (Number(x.amount) || 0), 0);
+            const src = transactions.find(x => x.id === t.reversesTransactionId), used = transactions.filter(x => x.type === 'depositReversal' && x.status !== 'cancelled' && x.reversesTransactionId === t.reversesTransactionId).reduce((sum, x) => sum + (Number(x.amount) || 0), 0);
             if (!src || !['deposit', 'internalTransferIn'].includes(src.type))
                 push('reversal-source', '입금 취소의 원거래가 없습니다', `${formatDate(txDate(t))} 입금 취소 기록을 확인해 주세요.`, 'high', t.id);
             else if (used > (Number(src.amount) || 0) + tol)
                 push('reversal-over', '원입금보다 많이 취소됐습니다', `원입금 ${won(src.amount)}보다 누적 취소액이 큽니다.`, 'high', t.id);
         }
-        if (t.linkedBuyId && !a.transactions.some(x => x.id === t.linkedBuyId))
+        if (t.linkedBuyId && !transactions.some(x => x.id === t.linkedBuyId))
             push('linked-buy', '연결된 매수 기록이 없습니다', `${formatDate(txDate(t))} 배당의 재투자 연결을 확인해 주세요.`, 'medium', t.id);
-        if (t.sourceDividendId && !a.transactions.some(x => x.id === t.sourceDividendId))
+        if (t.sourceDividendId && !transactions.some(x => x.id === t.sourceDividendId))
             push('linked-dividend', '연결된 배당 기록이 없습니다', `${formatDate(txDate(t))} 매수의 배당 연결을 확인해 주세요.`, 'medium', t.id);
     }
     const holdingNames = new Map();
-    for (const h of a.holdings || []) {
+    for (const h of holdings) {
         const key = h.securityKey || normalizeName(h.name);
         if (holdingNames.has(key))
             push('holding-duplicate', '중복 종목 등록이 의심됩니다', `${h.name}이(가) 두 개의 보유종목으로 등록돼 있습니다.`, 'medium');

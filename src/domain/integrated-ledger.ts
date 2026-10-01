@@ -1,30 +1,31 @@
 'use strict';
+declare const state:{integrated?:IntegratedLedgerStore};
+declare const seed:{integrated:IntegratedLedgerStore};
+declare function compareIntegratedTransactions(left:IntegratedLedgerRow,right:IntegratedLedgerRow):number;
+declare function calculateIntegratedReplay(store:IntegratedLedgerStore,rows:IntegratedLedgerRow[]):{assets:Record<string,number>;liabilities:Record<string,number>;minAssets:Record<string,number>;minLiabilities:Record<string,number>;totalAssets:number;totalDebt:number;netAssets:number};
+declare function localYmd():string;
+declare function centralIsaContributionRows():IntegratedLedgerRow[];
+
 
 type IntegratedLedgerRow={id:string;type:string;date:string;sequence?:unknown;amount:number;meta:({qaFixture?:boolean}&Record<string,unknown>);[key:string]:unknown};
 type IntegratedLedgerStore={startedAt?:string;ledger:IntegratedLedgerRow[];accounts:Array<{id:string;kind?:string;[key:string]:unknown}>;liabilities:Array<{id:string;[key:string]:unknown}>;[key:string]:unknown};
 
 function ledgerState(){
- // @ts-ignore runtime global supplied by store-state.js
  return state as {integrated?:IntegratedLedgerStore}
 }
 function ledgerSeed(){
- // @ts-ignore runtime global supplied by data-defaults.js
  return seed as {integrated:IntegratedLedgerStore}
 }
 function ledgerCompare(left:IntegratedLedgerRow,right:IntegratedLedgerRow){
- // @ts-ignore runtime global supplied by integrated-replay.js
  return compareIntegratedTransactions(left,right) as number
 }
 function ledgerCalculateReplay(store:IntegratedLedgerStore,rows:IntegratedLedgerRow[]){
- // @ts-ignore runtime global supplied by integrated-replay.js
  return calculateIntegratedReplay(store,rows) as {assets:Record<string,number>;liabilities:Record<string,number>;minAssets:Record<string,number>;minLiabilities:Record<string,number>;totalAssets:number;totalDebt:number;netAssets:number}
 }
 function ledgerLocalYmd(){
- // @ts-ignore runtime global supplied by core-config.js
  return localYmd() as string
 }
 function ledgerCentralIsaRows(){
- // @ts-ignore runtime global supplied by isa-ledger.js
  return centralIsaContributionRows() as IntegratedLedgerRow[]
 }
 

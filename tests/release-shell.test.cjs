@@ -70,8 +70,8 @@ test('Excel CSV output is UTF-8 BOM, quoted safely, and neutralizes formulas',()
 });
 
 test('cross-tab sync closes a dirty input before replacing state',()=>{
- const boot=read('boot.ts');
- const source=boot.match(/function applyExternalSavedState\(saved\)\{[\s\S]*?\n\}/)?.[0];
+ const boot=read('boot.js');
+ const source=boot.match(/function applyExternalSavedState\(saved\)\s*\{[\s\S]*?\n\}/)?.[0];
  assert.ok(source,'storage application helper must exist');
  const calls=[];
  const context=vm.createContext({sheetMode:'input',sheetDirty:true,activeSheetId:'#registerSheet',holdingRegistrationDraft:{items:[1]},state:{old:true},lastPersistedState:null,closeSheets:options=>calls.push(['close',options]),normalizeState:data=>({normalized:data}),clone:value=>structuredClone(value),render:()=>calls.push(['render']),qaRenderStats:()=>calls.push(['qa']),showNotice:(title,message)=>calls.push(['notice',title,message]),toast:message=>calls.push(['toast',message])});

@@ -20,8 +20,8 @@ test('long-term transaction search is available without changing stored ledgers'
  assert.match(ui,/data-pension-search-form/);
  assert.doesNotMatch(store,/settings.*TransactionSearch/i);
  const context={pensionStore:()=>({holdings:[]}),pensionHoldingById:()=>null,pensionAccount:()=>null,pensionTradeLabel:type=>type==='buy'?'매수':type};
- vm.runInNewContext(integrated,context);
- vm.runInNewContext(pension,context);
+ vm.runInNewContext(fs.readFileSync(path.join(root,'integrated-pages.js'),'utf8'),context);
+ vm.runInNewContext(fs.readFileSync(path.join(root,'pension-forms.js'),'utf8'),context);
  assert.equal(context.transactionSearchKey(['2060-12-27','324,000원']),'20601227324000원');
  assert.equal(context.transactionSearchKey(['2060.12.27','324,000원']),'20601227324000원');
  assert.match(context.integratedTransactionSearchText({date:'2060-12-27',type:'expense',category:'생활용품',note:'QA 메모',amount:324000}),/생활용품.*qa메모.*324000/);
