@@ -69,7 +69,7 @@ test('@core finance interest and backup health work through their real sheets',a
   next.integrated.accounts.push({id:accountId,kind:'deposit',name:'E2E 정기예금',productId:id});
   next.integrated.ledger=next.integrated.ledger.filter(row=>row.productId!==id);
   next.integrated.ledger.push({id:'e2e-opening',date:'2060-01-01',type:'openingAsset',amount:1000000,toAccountId:accountId,productId:id});
-  next.settings.backupV04={...(next.settings.backupV04||{}),phoneEnabled:true,lastPhoneBackupAt:'2060-11-01T00:00:00.000Z'};
+  next.settings.backupV04={...(next.settings.backupV04||{}),phoneEnabled:true,lastPhoneBackupAt:new Date(Date.now()-10*86400000).toISOString()};
   window.__assetOS.replaceState(next);
  });
  await page.evaluate(()=>openFinancialProductDetail('e2e-deposit'));
