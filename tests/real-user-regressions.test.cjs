@@ -16,14 +16,14 @@ test('selected integrated month controls the new transaction date',()=>{
 });
 
 test('sheet navigation consumes its temporary history entry before rendering',()=>{
- const home=read('home.js'),sheets=read('ui-sheets.js');
+ const home=read('home.ts'),sheets=read('ui-sheets.ts');
  assert.match(home,/const fromSheet=\$\$\('\.sheet\.open'\)\.length>0/);
  assert.match(home,/if\(fromSheet\)\{history\.replaceState\(null,'',next\);render\(\);window\.scrollTo\(0,0\)\}/);
  assert.match(sheets,/function cancelSheetBackForNavigation/);
 });
 
 test('long sheets reset reused scroll and keep upward header swipes scrollable',()=>{
- const sheets=read('ui-sheets.js'),css=read('css-core-base.css'),classes=new Set();
+ const sheets=read('ui-sheets.ts'),runtimeSheets=read('ui-sheets.js'),css=read('css-core-base.css'),classes=new Set();
  const context={
   console,requestAnimationFrame:fn=>fn(),setTimeout:()=>0,clearTimeout:()=>{},
   innerHeight:800,performance:{now:()=>1},history:{scrollRestoration:'auto',pushState(){},back(){},replaceState(){}},
@@ -31,7 +31,7 @@ test('long sheets reset reused scroll and keep upward header swipes scrollable',
   document:{body:{classList:{contains:x=>classes.has(x),add:x=>classes.add(x),remove:x=>classes.delete(x)},style:{}}},
   $:()=>({style:{},hidden:true}),$$:()=>[]
  };
- vm.runInNewContext(sheets,context);
+ vm.runInNewContext(runtimeSheets,context);
  const sheet={scrollTop:417,scrollTo:({top})=>{sheet.scrollTop=top}};
  context.resetSheetScroll(sheet);
  assert.equal(sheet.scrollTop,0,'reused detail sheets must open at the top');
@@ -42,7 +42,7 @@ test('long sheets reset reused scroll and keep upward header swipes scrollable',
 });
 
 test('long-term UI fallbacks remain usable at the retirement boundary',()=>{
- const pension=read('pension-pages.js'),settings=read('ui-settings.js');
+ const pension=read('pension-pages.ts'),settings=read('ui-settings.ts');
  assert.match(pension,/p\.years>0\?pensionFutureSheetMarkup\(\):pensionReachedPageMarkup\(p\)/);
  assert.match(pension,/은퇴 목표 나이에 도달했습니다/);
  assert.match(settings,/retirementAge<currentAge/);
@@ -50,7 +50,7 @@ test('long-term UI fallbacks remain usable at the retirement boundary',()=>{
 });
 
 test('financial growth and insurance details expose real interactive and derived values',()=>{
- const growth=read('chart-financial-growth.js'),insurance=read('insurance.js');
+ const growth=read('chart-financial-growth.ts'),insurance=read('insurance.js');
  assert.match(growth,/data-growth-track/);
  assert.match(growth,/onpointerdown=pick/);
  assert.match(growth,/ArrowLeft/);
@@ -60,7 +60,7 @@ test('financial growth and insurance details expose real interactive and derived
 });
 
 test('home wording and selected-month summaries cannot regress',()=>{
- const home=read('home.js'),detail=read('chart-financial-growth.js'),pages=read('integrated-pages.js'),render=read('ui-render.js');
+ const home=read('home.ts'),detail=read('chart-financial-growth.ts'),pages=read('integrated-pages.ts'),render=read('ui-render.ts');
  for(const text of ['이번 달 지출·납입','기록','남은 일정'])assert.match(home,new RegExp(text));
  for(const text of ['생활비·고정지출','저축·투자','대출 원금·이자','기타 출금','남은 일정','기록된 금액','남은 예정금액','이번 달 합계'])assert.match(detail,new RegExp(text));
  assert.match(pages,/recent=\[\.\.\.integratedRowsForMonth\(month\)\]/);
@@ -68,7 +68,7 @@ test('home wording and selected-month summaries cannot regress',()=>{
 });
 
 test('completed schedules show actual amounts and empty calendar days are not buttons',()=>{
- const pages=read('integrated-pages.js');
+ const pages=read('integrated-pages.ts');
  assert.match(pages,/function scheduleOccurrenceDisplayAmount/);
  assert.match(pages,/o\.status==='done'\?'실제 금액'/);
  assert.match(pages,/list\.length\?`<button class="schedule-day/);
@@ -76,28 +76,28 @@ test('completed schedules show actual amounts and empty calendar days are not bu
 });
 
 test('ISA balance registrations appear in adjustment filter and linked details use the displayed total',()=>{
- const isa=read('isa-summary.js'),pages=read('integrated-pages.js');
+ const isa=read('isa-summary.ts'),pages=read('integrated-pages.ts');
  assert.match(isa,/filter==='adjustment'&&t\.type==='openingAllocation'/);
  assert.match(pages,/sourceLabel=.*한국투자 조회 합계/);
  assert.match(pages,/won\(known\)/);
 });
 
 test('successful integrated save clears hidden search and filter state',()=>{
- const source=read('integrated-forms.js');
+ const source=read('integrated-forms.ts');
  assert.match(source,/integratedLedgerSearch\s*=\s*''/);
  assert.match(source,/integratedSearchDisplayLimit\s*=\s*50/);
  assert.match(source,/integratedLedgerFilter\s*=\s*'all'/);
 });
 
 test('the global duplicate-submit guard does not cancel the first ISA save',()=>{
- const boot=read('boot.js'),isa=read('isa-registration.js');
+ const boot=read('boot.ts'),isa=read('isa-registration.ts');
  assert.match(boot,/lastSubmitAt/,'rapid duplicate submits still need a time guard');
  assert.doesNotMatch(boot,/submitters\.forEach\(x=>x\.disabled=true\)/,'capture phase must not disable the first submit before the ISA handler runs');
  assert.match(isa,/if\(submitButton\?\.disabled\)return/,'the ISA form keeps its own in-flight submit guard');
 });
 
 test('newly rendered sheet actions are bound before the first user tap',()=>{
- const isa=read('isa-registration.js'),pension=read('pension-forms.js'),backup=read('backup.js'),insurance=read('insurance.js'),settings=read('ui-settings.js');
+ const isa=read('isa-registration.ts'),pension=read('pension-forms.ts'),backup=read('backup.ts'),insurance=read('insurance.ts'),settings=read('ui-settings.ts');
  const pensionAccountManager=pension.slice(pension.indexOf('function openPensionAccountManager'),pension.indexOf('function openPensionTransactionDetail'));
  const advancedSettings=settings.slice(settings.indexOf('function openAdvancedSettings'),settings.indexOf("let kisUiEmail"));
  assert.doesNotMatch(isa,/openSheet\('#actionSheet'\);setTimeout\(/,'ISA quick actions must not expose an unbound first-tap window');

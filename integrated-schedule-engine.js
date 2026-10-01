@@ -1,36 +1,132 @@
+// @ts-nocheck
 'use strict';
-function normalizeFinanceSchedules(input){const src=input&&typeof input==='object'?input:{items:[]},items=Array.isArray(src.items)?src.items:[];return{items:items.map((x,i)=>({id:String(x.id||`schedule-${i+1}`),name:String(x.name||`일정 ${i+1}`),kind:['income','investment','saving','loan','insurance','expense'].includes(x.kind)?x.kind:'expense',amount:Math.max(0,Number(x.amount)||0),amountMode:x.amountMode==='estimate'?'estimate':'fixed',day:(x.day===0||x.day==='0')?0:Math.min(31,Math.max(1,Number(x.day)||DEFAULT_FINANCE_DAY)),recurrence:x.recurrence==='monthly'?'monthly':'monthly',startDate:String(x.startDate||''),endDate:String(x.endDate||''),targetKind:String(x.targetKind||''),targetAccountId:String(x.targetAccountId||''),targetPensionAccountId:String(x.targetPensionAccountId||''),targetIsaAccountId:String(x.targetIsaAccountId||''),productId:String(x.productId||''),liabilityId:String(x.liabilityId||''),active:x.active!==false,note:String(x.note||''),source:String(x.source||'user'),needsDate:!!x.needsDate,attention:String(x.attention||'')}))}}
-function financeSchedules(){return state.financeSchedules?.items||[]}
-function clampEndedProductSchedules(target=state){const products=target.financialProducts?.items||[],schedules=target.financeSchedules?.items||[];for(const p of products){if(p.status==='active')continue;const end=String(p.endedAt||p.settlement?.date||p.maturityDate||'');if(!end)continue;for(const s of schedules){if(String(s.productId||'')!==String(p.id))continue;if(!s.endDate||String(s.endDate)>end)s.endDate=end}}return target}
-function closeFinanceProductSchedules(productId,date){const end=String(date||localYmd());for(const s of financeSchedules()){if(String(s.productId||'')!==String(productId))continue;if(!s.endDate||String(s.endDate)>end)s.endDate=end}}
-function scheduleMonthDays(month){const [y,m]=String(month).split('-').map(Number),days=new Date(y,m,0).getDate();return{y,m,days}}
-function scheduleDateForMonth(s,month){if(!s.active||!s.day)return'';const {y,m,days}=scheduleMonthDays(month),day=Math.min(s.day,days),date=`${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`;if(s.startDate&&date<s.startDate)return'';if(s.endDate&&date>s.endDate)return'';return date}
-function scheduleFallbackMatches(s,date,t){if(!s||String(t.date)!==String(date)||(Number(t.amount)||0)!==(Number(s.amount)||0))return false;const account=integratedStore().accounts.find(a=>a.id===t.toAccountId),sameName=normalizeName(t.category)===normalizeName(s.name);if(s.kind==='income')return t.type==='externalIncome'&&sameName;if(['investment','saving'].includes(s.kind)){if(!['internalTransfer','externalAssetIn'].includes(t.type))return false;if(s.productId)return account?.productId===s.productId;const targetKind=s.targetKind||integratedStore().accounts.find(a=>a.id===scheduleTargetAccount(s))?.kind||'';return account?.kind===targetKind&&(sameName||['isa','pension','irp'].includes(targetKind))}if(s.kind==='loan')return ['debtInterest','debtInterestExternal','debtPrincipal','externalDebtPrincipal'].includes(t.type)&&(String(t.liabilityId||'')===String(s.liabilityId||'')||String(t.productId||'')===String(s.productId||'')||sameName);if(['insurance','expense'].includes(s.kind))return ['expense','externalExpense'].includes(t.type)&&sameName;return false}
-function scheduleCompletionTx(scheduleId,date,sourceRows=null){const rows=sourceRows||integratedOperationalLedger(),explicit=rows.find(t=>t.meta?.scheduleId===scheduleId&&t.meta?.scheduleDate===date);if(explicit)return explicit;const schedule=financeSchedules().find(s=>s.id===scheduleId);return rows.find(t=>scheduleFallbackMatches(schedule,date,t))||null}
-function scheduleOccurrenceStatus(s,date,knownTx){const tx=arguments.length>=3?knownTx:scheduleCompletionTx(s.id,date);if(tx)return'done';const today=localYmd();if(date<today)return'overdue';if(date===today)return'today';const diff=Math.round((new Date(date+'T00:00:00')-new Date(today+'T00:00:00'))/86400000);return diff<=3?'soon':'planned'}
-function scheduleStatusLabel(st){return({done:'완료',overdue:'미완료',today:'오늘',soon:'임박',planned:'예정'})[st]||'예정'}
-function scheduleOccurrences(month=integratedSelectedMonth()){const rows=integratedOperationalLedger();return financeSchedules().map(s=>{const date=scheduleDateForMonth(s.active?s:{...s,active:true},month);if(!date)return null;const tx=scheduleCompletionTx(s.id,date,rows);if(!s.active&&!tx)return null;return{schedule:s,date,status:scheduleOccurrenceStatus(s,date,tx),tx}}).filter(o=>o&&(o.schedule.kind!=='income'||o.status==='done')).sort((a,b)=>a.date.localeCompare(b.date)||String(a.schedule.name).localeCompare(String(b.schedule.name),'ko'))}
-function scheduleUrgentOccurrences(){const today=localYmd(),months=new Set([today.slice(0,7)]);const d=new Date(today+'T00:00:00');d.setDate(d.getDate()+4);months.add(localYmd(d).slice(0,7));const dated=[...months].flatMap(m=>scheduleOccurrences(m)).filter(x=>x.schedule.kind!=='income'&&['overdue','today','soon'].includes(x.status)),undated=financeSchedules().filter(x=>x.active&&x.needsDate&&x.attention==='overdue').map(s=>({schedule:s,date:'날짜 미설정',status:'overdue',tx:null,undated:true}));return [...undated,...dated].sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.schedule.name).localeCompare(String(b.schedule.name),'ko'))}
-function scheduleTargetAccount(s){if(s.targetAccountId)return s.targetAccountId;if(s.targetKind==='pension')return'pension-link';if(s.targetKind==='irp')return'irp-link';if(s.targetKind==='isa')return'isa-link';if(s.productId)return financeProductAccountId(s.productId);return''}
-function pensionAccountActiveOnDate(a,date){if(!a)return false;const d=String(date||localYmd()),start=String(a.openedAt||''),end=String(a.closedAt||'');if(start&&d<start)return false;if(end&&d>end)return false;return true}
-function pensionAccountsForKind(kind,date=''){return pensionStore().accounts.filter(a=>a.kind===kind&&(!date?pensionAccount(a.id)?.status==='active':pensionAccountActiveOnDate(a,date)))}
-function schedulePensionKind(sc){const linkedKind=integratedStore().accounts.find(a=>a.id===sc?.targetAccountId)?.kind;return ['pension','irp'].includes(sc?.targetKind)?sc.targetKind:(['pension','irp'].includes(linkedKind)?linkedKind:'')}
-function resolveSchedulePensionAccount(sc,explicit='',date=''){const kind=schedulePensionKind(sc);if(!kind)return'';const candidates=pensionAccountsForKind(kind,date||'');const requested=String(explicit||sc?.targetPensionAccountId||'');if(requested&&candidates.some(a=>a.id===requested))return requested;return candidates.length===1?candidates[0].id:''}
-function isaAccountsForDate(date=''){const d=String(date||localYmd()),today=localYmd();return state.accounts.filter(a=>{const open=String(a.openedAt||a.baselineDate||''),ends=[String(a.closedAt||''),String(a.maturityAt||'')].filter(Boolean).sort(),end=ends[0]||'';if(open&&d<open)return false;if(end&&d>end)return false;if(d>=today&&a.status!=='active')return false;return true})}
-function resolveScheduleIsaAccount(sc,explicit='',date=''){const candidates=isaAccountsForDate(date||''),requested=String(explicit||sc?.targetIsaAccountId||'');if(requested&&candidates.some(a=>a.id===requested))return requested;return candidates.length===1?candidates[0].id:''}
-function completeScheduleOccurrence(scheduleId,date,amountOverride=0,targetPensionAccountId='',targetIsaAccountId='',loanPrincipalOverride=0,loanInterestOverride=0){
- const request=validateScheduleCompletionRequest(scheduleId,date);
- if(!request.ok){toast(request.error);return false}
- const draft=request.schedule.kind==='loan'?calculateLoanScheduleCompletion(request.schedule,date,loanPrincipalOverride,loanInterestOverride):calculateStandardScheduleCompletion(request.schedule,date,amountOverride,targetPensionAccountId,targetIsaAccountId);
- if(!draft.ok){toast(draft.error);return false}
- const validationError=validateScheduleCompletionDraft(draft);
- if(validationError){toast(validationError);return false}
- if(!commitScheduleCompletion(request.schedule,date,draft))return false;
- renderScheduleCompletion(date,draft.successMessage);
- return true
+function normalizeFinanceSchedules(input) { const src = input && typeof input === 'object' ? input : { items: [] }, items = Array.isArray(src.items) ? src.items : []; return { items: items.map((x, i) => ({ id: String(x.id || `schedule-${i + 1}`), name: String(x.name || `일정 ${i + 1}`), kind: ['income', 'investment', 'saving', 'loan', 'insurance', 'expense'].includes(x.kind) ? x.kind : 'expense', amount: Math.max(0, Number(x.amount) || 0), amountMode: x.amountMode === 'estimate' ? 'estimate' : 'fixed', day: (x.day === 0 || x.day === '0') ? 0 : Math.min(31, Math.max(1, Number(x.day) || DEFAULT_FINANCE_DAY)), recurrence: x.recurrence === 'monthly' ? 'monthly' : 'monthly', startDate: String(x.startDate || ''), endDate: String(x.endDate || ''), targetKind: String(x.targetKind || ''), targetAccountId: String(x.targetAccountId || ''), targetPensionAccountId: String(x.targetPensionAccountId || ''), targetIsaAccountId: String(x.targetIsaAccountId || ''), productId: String(x.productId || ''), liabilityId: String(x.liabilityId || ''), active: x.active !== false, note: String(x.note || ''), source: String(x.source || 'user'), needsDate: !!x.needsDate, attention: String(x.attention || '') })) }; }
+function financeSchedules() { return state.financeSchedules?.items || []; }
+function clampEndedProductSchedules(target = state) { const products = target.financialProducts?.items || [], schedules = target.financeSchedules?.items || []; for (const p of products) {
+    if (p.status === 'active')
+        continue;
+    const end = String(p.endedAt || p.settlement?.date || p.maturityDate || '');
+    if (!end)
+        continue;
+    for (const s of schedules) {
+        if (String(s.productId || '') !== String(p.id))
+            continue;
+        if (!s.endDate || String(s.endDate) > end)
+            s.endDate = end;
+    }
+} return target; }
+function closeFinanceProductSchedules(productId, date) { const end = String(date || localYmd()); for (const s of financeSchedules()) {
+    if (String(s.productId || '') !== String(productId))
+        continue;
+    if (!s.endDate || String(s.endDate) > end)
+        s.endDate = end;
+} }
+function scheduleMonthDays(month) { const [y, m] = String(month).split('-').map(Number), days = new Date(y, m, 0).getDate(); return { y, m, days }; }
+function scheduleDateForMonth(s, month) { if (!s.active || !s.day)
+    return ''; const { y, m, days } = scheduleMonthDays(month), day = Math.min(s.day, days), date = `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`; if (s.startDate && date < s.startDate)
+    return ''; if (s.endDate && date > s.endDate)
+    return ''; return date; }
+function scheduleFallbackMatches(s, date, t) { if (!s || String(t.date) !== String(date) || (Number(t.amount) || 0) !== (Number(s.amount) || 0))
+    return false; const account = integratedStore().accounts.find(a => a.id === t.toAccountId), sameName = normalizeName(t.category) === normalizeName(s.name); if (s.kind === 'income')
+    return t.type === 'externalIncome' && sameName; if (['investment', 'saving'].includes(s.kind)) {
+    if (!['internalTransfer', 'externalAssetIn'].includes(t.type))
+        return false;
+    if (s.productId)
+        return account?.productId === s.productId;
+    const targetKind = s.targetKind || integratedStore().accounts.find(a => a.id === scheduleTargetAccount(s))?.kind || '';
+    return account?.kind === targetKind && (sameName || ['isa', 'pension', 'irp'].includes(targetKind));
+} if (s.kind === 'loan')
+    return ['debtInterest', 'debtInterestExternal', 'debtPrincipal', 'externalDebtPrincipal'].includes(t.type) && (String(t.liabilityId || '') === String(s.liabilityId || '') || String(t.productId || '') === String(s.productId || '') || sameName); if (['insurance', 'expense'].includes(s.kind))
+    return ['expense', 'externalExpense'].includes(t.type) && sameName; return false; }
+function scheduleCompletionTx(scheduleId, date, sourceRows = null) { const rows = sourceRows || integratedOperationalLedger(), explicit = rows.find(t => t.meta?.scheduleId === scheduleId && t.meta?.scheduleDate === date); if (explicit)
+    return explicit; const schedule = financeSchedules().find(s => s.id === scheduleId); return rows.find(t => scheduleFallbackMatches(schedule, date, t)) || null; }
+function scheduleOccurrenceStatus(s, date, knownTx) { const tx = arguments.length >= 3 ? knownTx : scheduleCompletionTx(s.id, date); if (tx)
+    return 'done'; const today = localYmd(); if (date < today)
+    return 'overdue'; if (date === today)
+    return 'today'; const diff = Math.round((new Date(date + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000); return diff <= 3 ? 'soon' : 'planned'; }
+function scheduleStatusLabel(st) { return ({ done: '완료', overdue: '미완료', today: '오늘', soon: '임박', planned: '예정' })[st] || '예정'; }
+function scheduleOccurrences(month = integratedSelectedMonth()) { const rows = integratedOperationalLedger(); return financeSchedules().map(s => { const date = scheduleDateForMonth(s.active ? s : { ...s, active: true }, month); if (!date)
+    return null; const tx = scheduleCompletionTx(s.id, date, rows); if (!s.active && !tx)
+    return null; return { schedule: s, date, status: scheduleOccurrenceStatus(s, date, tx), tx }; }).filter(o => o && (o.schedule.kind !== 'income' || o.status === 'done')).sort((a, b) => a.date.localeCompare(b.date) || String(a.schedule.name).localeCompare(String(b.schedule.name), 'ko')); }
+function scheduleUrgentOccurrences() { const today = localYmd(), months = new Set([today.slice(0, 7)]); const d = new Date(today + 'T00:00:00'); d.setDate(d.getDate() + 4); months.add(localYmd(d).slice(0, 7)); const dated = [...months].flatMap(m => scheduleOccurrences(m)).filter(x => x.schedule.kind !== 'income' && ['overdue', 'today', 'soon'].includes(x.status)), undated = financeSchedules().filter(x => x.active && x.needsDate && x.attention === 'overdue').map(s => ({ schedule: s, date: '날짜 미설정', status: 'overdue', tx: null, undated: true })); return [...undated, ...dated].sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.schedule.name).localeCompare(String(b.schedule.name), 'ko')); }
+function scheduleTargetAccount(s) { if (s.targetAccountId)
+    return s.targetAccountId; if (s.targetKind === 'pension')
+    return 'pension-link'; if (s.targetKind === 'irp')
+    return 'irp-link'; if (s.targetKind === 'isa')
+    return 'isa-link'; if (s.productId)
+    return financeProductAccountId(s.productId); return ''; }
+function pensionAccountActiveOnDate(a, date) { if (!a)
+    return false; const d = String(date || localYmd()), start = String(a.openedAt || ''), end = String(a.closedAt || ''); if (start && d < start)
+    return false; if (end && d > end)
+    return false; return true; }
+function pensionAccountsForKind(kind, date = '') { return pensionStore().accounts.filter(a => a.kind === kind && (!date ? pensionAccount(a.id)?.status === 'active' : pensionAccountActiveOnDate(a, date))); }
+function schedulePensionKind(sc) { const linkedKind = integratedStore().accounts.find(a => a.id === sc?.targetAccountId)?.kind; return ['pension', 'irp'].includes(sc?.targetKind) ? sc.targetKind : (['pension', 'irp'].includes(linkedKind) ? linkedKind : ''); }
+function resolveSchedulePensionAccount(sc, explicit = '', date = '') { const kind = schedulePensionKind(sc); if (!kind)
+    return ''; const candidates = pensionAccountsForKind(kind, date || ''); const requested = String(explicit || sc?.targetPensionAccountId || ''); if (requested && candidates.some(a => a.id === requested))
+    return requested; return candidates.length === 1 ? candidates[0].id : ''; }
+function isaAccountsForDate(date = '') { const d = String(date || localYmd()), today = localYmd(); return state.accounts.filter(a => { const open = String(a.openedAt || a.baselineDate || ''), ends = [String(a.closedAt || ''), String(a.maturityAt || '')].filter(Boolean).sort(), end = ends[0] || ''; if (open && d < open)
+    return false; if (end && d > end)
+    return false; if (d >= today && a.status !== 'active')
+    return false; return true; }); }
+function resolveScheduleIsaAccount(sc, explicit = '', date = '') { const candidates = isaAccountsForDate(date || ''), requested = String(explicit || sc?.targetIsaAccountId || ''); if (requested && candidates.some(a => a.id === requested))
+    return requested; return candidates.length === 1 ? candidates[0].id : ''; }
+function completeScheduleOccurrence(scheduleId, date, amountOverride = 0, targetPensionAccountId = '', targetIsaAccountId = '', loanPrincipalOverride = 0, loanInterestOverride = 0) {
+    const request = validateScheduleCompletionRequest(scheduleId, date);
+    if (!request.ok) {
+        toast(request.error);
+        return false;
+    }
+    const draft = request.schedule.kind === 'loan' ? calculateLoanScheduleCompletion(request.schedule, date, loanPrincipalOverride, loanInterestOverride) : calculateStandardScheduleCompletion(request.schedule, date, amountOverride, targetPensionAccountId, targetIsaAccountId);
+    if (!draft.ok) {
+        toast(draft.error);
+        return false;
+    }
+    const validationError = validateScheduleCompletionDraft(draft);
+    if (validationError) {
+        toast(validationError);
+        return false;
+    }
+    if (!commitScheduleCompletion(request.schedule, date, draft))
+        return false;
+    renderScheduleCompletion(date, draft.successMessage);
+    return true;
 }
-function centralPensionContributionRows(year=''){const rows=[];for(const t of integratedOperationalLedger()){if(t.meta?.analysisOnly)continue;if(!['internalTransfer','externalAssetIn'].includes(t.type))continue;const kind=integratedStore().accounts.find(a=>a.id===t.toAccountId)?.kind;if(!['pension','irp'].includes(kind))continue;if(year&&!String(t.date).startsWith(String(year)))continue;const explicit=String(t.meta?.pensionAccountId||t.meta?.targetPensionAccountId||''),dated=pensionStore().accounts.filter(a=>a.kind===kind&&pensionAccountActiveOnDate(a,t.date)),resolved=explicit&&pensionStore().accounts.some(a=>a.id===explicit&&a.kind===kind)?explicit:(dated.length===1?dated[0].id:'');rows.push({id:`central-${t.id}`,accountId:resolved,kind,type:t.meta?.isaTransfer?'isaTransfer':'contribution',date:String(t.date),amount:Number(t.amount)||0,sourceTxId:t.id,source:'integrated',unresolved:!resolved})}return rows}
-function centralIsaContributionRows(year=''){const rows=[];for(const t of integratedOperationalLedger()){if(t.meta?.analysisOnly)continue;if(!['internalTransfer','externalAssetIn'].includes(t.type))continue;if(integratedStore().accounts.find(a=>a.id===t.toAccountId)?.kind!=='isa')continue;if(year&&!String(t.date).startsWith(String(year)))continue;const dated=isaAccountsForDate(t.date),explicit=String(t.meta?.targetIsaAccountId||''),resolved=explicit&&dated.some(a=>a.id===explicit)?explicit:(dated.length===1?dated[0].id:'');rows.push({...t,accountId:resolved,unresolved:!resolved})}return rows}
-function centralIsaReplayRows(account,includeArchived=false){if(!account||(!includeArchived&&!isCurrentAccount(account)))return[];const localCounts=new Map();for(const t of account.transactions||[]){if(t.status==='cancelled'||!['deposit','internalTransferIn'].includes(t.type))continue;const key=`${txDate(t)}|${Number(t.amount)||0}`;localCounts.set(key,(localCounts.get(key)||0)+1)}const out=[];for(const t of centralIsaContributionRows().filter(t=>t.accountId===account.id&&!t.unresolved)){const key=`${String(t.date)}|${Number(t.amount)||0}`,remaining=localCounts.get(key)||0;if(remaining){localCounts.set(key,remaining-1);continue}out.push({id:`virtual-${t.id}`,type:'internalTransferIn',date:String(t.date),amount:Number(t.amount)||0,note:t.note||'통합 납입',status:'posted',sourceTxId:t.id,meta:{centralContribution:true,targetIsaAccountId:account.id}})}return out}
-
-/* v1.9.19 MODULE: financial product rules. Product terms are source-of-truth; balances come from transactions. */
+function centralPensionContributionRows(year = '') { const rows = []; for (const t of integratedOperationalLedger()) {
+    if (t.meta?.analysisOnly)
+        continue;
+    if (!['internalTransfer', 'externalAssetIn'].includes(t.type))
+        continue;
+    const kind = integratedStore().accounts.find(a => a.id === t.toAccountId)?.kind;
+    if (!['pension', 'irp'].includes(kind))
+        continue;
+    if (year && !String(t.date).startsWith(String(year)))
+        continue;
+    const explicit = String(t.meta?.pensionAccountId || t.meta?.targetPensionAccountId || ''), dated = pensionStore().accounts.filter(a => a.kind === kind && pensionAccountActiveOnDate(a, t.date)), resolved = explicit && pensionStore().accounts.some(a => a.id === explicit && a.kind === kind) ? explicit : (dated.length === 1 ? dated[0].id : '');
+    rows.push({ id: `central-${t.id}`, accountId: resolved, kind, type: t.meta?.isaTransfer ? 'isaTransfer' : 'contribution', date: String(t.date), amount: Number(t.amount) || 0, sourceTxId: t.id, source: 'integrated', unresolved: !resolved });
+} return rows; }
+function centralIsaContributionRows(year = '') { const rows = []; for (const t of integratedOperationalLedger()) {
+    if (t.meta?.analysisOnly)
+        continue;
+    if (!['internalTransfer', 'externalAssetIn'].includes(t.type))
+        continue;
+    if (integratedStore().accounts.find(a => a.id === t.toAccountId)?.kind !== 'isa')
+        continue;
+    if (year && !String(t.date).startsWith(String(year)))
+        continue;
+    const dated = isaAccountsForDate(t.date), explicit = String(t.meta?.targetIsaAccountId || ''), resolved = explicit && dated.some(a => a.id === explicit) ? explicit : (dated.length === 1 ? dated[0].id : '');
+    rows.push({ ...t, accountId: resolved, unresolved: !resolved });
+} return rows; }
+function centralIsaReplayRows(account, includeArchived = false) { if (!account || (!includeArchived && !isCurrentAccount(account)))
+    return []; const localCounts = new Map(); for (const t of account.transactions || []) {
+    if (t.status === 'cancelled' || !['deposit', 'internalTransferIn'].includes(t.type))
+        continue;
+    const key = `${txDate(t)}|${Number(t.amount) || 0}`;
+    localCounts.set(key, (localCounts.get(key) || 0) + 1);
+} const out = []; for (const t of centralIsaContributionRows().filter(t => t.accountId === account.id && !t.unresolved)) {
+    const key = `${String(t.date)}|${Number(t.amount) || 0}`, remaining = localCounts.get(key) || 0;
+    if (remaining) {
+        localCounts.set(key, remaining - 1);
+        continue;
+    }
+    out.push({ id: `virtual-${t.id}`, type: 'internalTransferIn', date: String(t.date), amount: Number(t.amount) || 0, note: t.note || '통합 납입', status: 'posted', sourceTxId: t.id, meta: { centralContribution: true, targetIsaAccountId: account.id } });
+} return out; }

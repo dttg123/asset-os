@@ -19,6 +19,7 @@ test('runtime bundles contain every production source exactly once and in declar
  assert.equal(new Set(scriptSources).size,scriptSources.length);
  assert.equal(new Set(styleSources).size,styleSources.length);
  for(const source of typedSources)assert.ok(scriptSources.includes(source.replace(/\.ts$/,'.js')),`${source} generated output is not bundled`);
+ assert.deepEqual([...typedSources].map(source=>source.replace(/\.ts$/,'.js')).sort(),[...scriptSources].sort(),'every runtime JavaScript file must be generated from a TypeScript source');
  for(const [output,files] of Object.entries(manifest.scripts))assert.equal(fs.readFileSync(path.join(root,'dist',output),'utf8'),assemble(files,'scripts'),output);
  for(const [output,files] of Object.entries(manifest.styles))assert.equal(fs.readFileSync(path.join(root,'dist',output),'utf8'),assemble(files,'styles'),output);
 });

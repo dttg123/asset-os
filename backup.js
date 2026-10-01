@@ -32,6 +32,19 @@ function validateBackupPayload(payload) { if (!payload || payload.format !== BAC
     next.moduleVerification = { isa: false, pension: false, irp: false }; return next; }
 function downloadBytes(bytes, name, type = 'application/zip') { const blob = new Blob([bytes], { type }), url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1200); }
 function backupFileName() { return typeof assetManagedBackupName === 'function' ? assetManagedBackupName() : `AssetOS_${localYmd().replaceAll('-', '').slice(2)}_${APP_VERSION}.zip`; }
+function backupHealth(now = new Date()) {
+    const managed = typeof assetBackupSettings === 'function' ? assetBackupSettings() : { phoneEnabled: false, lastPhoneBackupAt: '', phonePermission: 'unknown' }, enabled = !!managed.phoneEnabled, last = String(managed.lastPhoneBackupAt || ''), lastTime = Date.parse(last);
+    if (!enabled)
+        return { level: 'setup', label: '백업 폴더 미지정', detail: '휴대폰 백업 폴더를 지정하면 저장할 때 자동으로 사본을 남깁니다.', lastBackupAt: '' };
+    if (!Number.isFinite(lastTime))
+        return { level: 'danger', label: '자동백업 확인 필요', detail: '폴더는 연결됐지만 완료된 자동백업 기록이 없습니다.', lastBackupAt: '' };
+    const ageDays = Math.max(0, Math.floor((now.getTime() - lastTime) / 86400000));
+    if (ageDays <= 2)
+        return { level: 'good', label: '백업 정상', detail: `최근 ${formatDateTime(last)}`, lastBackupAt: last, ageDays };
+    if (ageDays <= 7)
+        return { level: 'warn', label: '백업 다시 확인', detail: `마지막 자동백업 ${ageDays}일 전`, lastBackupAt: last, ageDays };
+    return { level: 'danger', label: '백업 오래됨', detail: `마지막 자동백업 ${ageDays}일 전 · 지금 실행해 주세요.`, lastBackupAt: last, ageDays };
+}
 async function saveZipBackup() {
     const name = backupFileName();
     try {
@@ -108,10 +121,10 @@ catch (e) {
     showNotice('복원 실패', backupErrorMessage(e));
 } }); return true; }
 function openBackupHub() {
-    const pickerWindow = window, size = new Blob([JSON.stringify(backupPayload())]).size, securePicker = typeof pickerWindow.showSaveFilePicker === 'function' && window.isSecureContext, folderApi = typeof pickerWindow.showDirectoryPicker === 'function' && window.isSecureContext, managed = typeof assetBackupSettings === 'function' ? assetBackupSettings() : { phoneEnabled: false, lastPhoneBackupAt: '', phonePermission: 'unknown' };
+    const pickerWindow = window, size = new Blob([JSON.stringify(backupPayload())]).size, securePicker = typeof pickerWindow.showSaveFilePicker === 'function' && window.isSecureContext, folderApi = typeof pickerWindow.showDirectoryPicker === 'function' && window.isSecureContext, managed = typeof assetBackupSettings === 'function' ? assetBackupSettings() : { phoneEnabled: false, lastPhoneBackupAt: '', phonePermission: 'unknown' }, health = backupHealth();
     $('#sheetEyebrow').textContent = '데이터 보호';
     $('#sheetTitle').textContent = '백업·복원';
-    $('#sheetBody').innerHTML = `<div class=backup-grid><button class="backup-action primary" data-phone-folder><strong>휴대폰 백업 폴더 ${managed.phoneEnabled ? '변경' : '지정'}</strong><small>${folderApi ? '한 번 지정하면 같은 폴더에 자동 저장합니다.' : '이 브라우저는 고정 폴더를 지원하지 않아 일반 ZIP 저장을 사용합니다.'}</small></button><button class=backup-action data-phone-now ${managed.phoneEnabled ? '' : 'disabled'}><strong>휴대폰 자동백업 지금 실행</strong><small>${managed.lastPhoneBackupAt ? `마지막 ${formatDateTime(managed.lastPhoneBackupAt)}` : '아직 자동백업 없음'} · 같은 날짜 파일은 교체</small></button><button class=backup-action data-backup-zip><strong>ZIP 백업 · 저장 위치 선택</strong><small>${securePicker ? '저장 위치를 직접 선택합니다.' : 'Downloads에 저장합니다.'}</small></button><button class=backup-action data-backup-drive><strong>Google Drive로 보내기</strong><small>공유 가능한 백업 TXT를 Drive로 보냅니다.</small></button><button class=backup-action data-backup-keep><strong>영구보관 ZIP</strong><small>자동 정리에서 제외되는 _keep 파일을 만듭니다.</small></button><button class=backup-action data-backup-restore><strong>ZIP / JSON / TXT 복원</strong><small>schema 4~${SCHEMA_VERSION} 파일을 검증하고 정상일 때만 교체합니다.</small></button></div><div class=backup-status-note>현재 원본 약 ${Math.max(1, Math.round(size / 1024))}KB · schema ${SCHEMA_VERSION}<br>백업 파일은 최근 30일 일별·이전 월 1개를 보관하고, _pre / _keep은 삭제하지 않습니다.<br>앱 잔고는 최근 6개월 일별·이전 월별로 보존합니다.</div>`;
+    $('#sheetBody').innerHTML = `<div class="backup-health ${health.level}"><span>${health.level === 'good' ? '✓' : health.level === 'setup' ? '○' : '!'}</span><div><strong>${health.label}</strong><small>${health.detail}</small></div></div><div class=backup-grid><button class="backup-action primary" data-phone-folder><strong>휴대폰 백업 폴더 ${managed.phoneEnabled ? '변경' : '지정'}</strong><small>${folderApi ? '한 번 지정하면 같은 폴더에 자동 저장합니다.' : '이 브라우저는 고정 폴더를 지원하지 않아 일반 ZIP 저장을 사용합니다.'}</small></button><button class=backup-action data-phone-now ${managed.phoneEnabled ? '' : 'disabled'}><strong>휴대폰 자동백업 지금 실행</strong><small>${managed.lastPhoneBackupAt ? `마지막 ${formatDateTime(managed.lastPhoneBackupAt)}` : '아직 자동백업 없음'} · 같은 날짜 파일은 교체</small></button><button class=backup-action data-backup-zip><strong>ZIP 백업 · 저장 위치 선택</strong><small>${securePicker ? '저장 위치를 직접 선택합니다.' : 'Downloads에 저장합니다.'}</small></button><button class=backup-action data-backup-drive><strong>Google Drive로 보내기</strong><small>공유 가능한 백업 TXT를 Drive로 보냅니다.</small></button><button class=backup-action data-backup-keep><strong>영구보관 ZIP</strong><small>자동 정리에서 제외되는 _keep 파일을 만듭니다.</small></button><button class=backup-action data-backup-restore><strong>ZIP / JSON / TXT 복원</strong><small>schema 4~${SCHEMA_VERSION} 파일을 검증하고 정상일 때만 교체합니다.</small></button></div><div class=backup-status-note>현재 원본 약 ${Math.max(1, Math.round(size / 1024))}KB · schema ${SCHEMA_VERSION}<br>백업 파일은 최근 30일 일별·이전 월 1개를 보관하고, _pre / _keep은 삭제하지 않습니다.<br>앱 잔고는 최근 6개월 일별·이전 월별로 보존합니다.</div>`;
     if (typeof appendInitialImportBackupAction === 'function')
         appendInitialImportBackupAction($('#sheetBody .backup-grid'));
     openSheet('#detailSheet');

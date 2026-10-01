@@ -1,6 +1,6 @@
 'use strict';
 
-type FinancialHistoryRow={type:string;date?:string;amount?:unknown;delta?:unknown;toAccountId?:string;[key:string]:unknown};
+type FinancialHistoryRow={type:string;date?:string;amount?:unknown;delta?:unknown;toAccountId?:string;meta?:{financeInterest?:boolean;[key:string]:unknown};[key:string]:unknown};
 type FinancialHistorySnapshot={date?:string;value?:unknown;totalValue?:unknown;meta?:{qaFixture?:boolean};pension?:{value?:unknown};irp?:{value?:unknown};[key:string]:unknown};
 type FinancialHistoryAccount={id:string;kind?:string;productId?:string;openedAt?:string;baselineDate?:string;closedAt?:string;assetSnapshots?:FinancialHistorySnapshot[];[key:string]:unknown};
 type FinancialHistoryLiability={id:string;productId?:string;[key:string]:unknown};
@@ -88,7 +88,7 @@ function historicalFinancialModel(asOf:string=localYmd()){
 function financialGrowthBreakdown(startDate:string,endDate:string){
  const earliest=financialAnalysisEarliestDate(),effectiveStart=String(startDate)<earliest?earliest:String(startDate),start=historicalFinancialModel(effectiveStart),end=historicalFinancialModel(endDate),rows=integratedAnalysisBalanceLedger().filter(transaction=>String(transaction.date||'')>String(start.asOf)&&String(transaction.date||'')<=String(end.asOf));
  let externalNet=0,adjustment=0;
- for(const transaction of rows){const amount=Number(transaction.amount)||0;if(['externalIncome','externalAssetIn','externalDebtPrincipal'].includes(transaction.type)||(transaction.type==='refund'&&transaction.toAccountId))externalNet+=amount;else if(['expense','externalWithdrawal','externalAssetOut','debtInterest'].includes(transaction.type))externalNet-=amount;else if(transaction.type==='adjustment')adjustment+=Number(transaction.delta)||0}
+ for(const transaction of rows){const amount=Number(transaction.amount)||0;if((['externalIncome','externalAssetIn','externalDebtPrincipal'].includes(transaction.type)&&!transaction.meta?.financeInterest)||(transaction.type==='refund'&&transaction.toAccountId))externalNet+=amount;else if(['expense','externalWithdrawal','externalAssetOut','debtInterest'].includes(transaction.type))externalNet-=amount;else if(transaction.type==='adjustment')adjustment+=Number(transaction.delta)||0}
  const netChange=end.netAssets-start.netAssets,assetChange=end.totalAssets-start.totalAssets,debtReduction=start.totalDebt-end.totalDebt,residual=netChange-externalNet-adjustment,rate=start.coverage.complete&&end.coverage.complete&&start.netAssets>0?netChange/start.netAssets*100:null;
  return{start,end,netChange,assetChange,debtReduction,rate,externalNet,adjustment,residual,reconciled:Math.abs(netChange-(externalNet+adjustment+residual))<.01}
 }

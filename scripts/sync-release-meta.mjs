@@ -32,10 +32,10 @@ function synchronizedFiles(){
   files.set(name,`${JSON.stringify(data,null,2)}\n`);
  }
 
- let core=read('core-config.js');
+ let core=read('core-config.ts');
  core=replaceRequired(core,/APP_VERSION='v\d+\.\d+\.\d+'/g,`APP_VERSION='${display}'`,'core APP_VERSION');
  core=replaceRequired(core,/SCHEMA_VERSION=\d+/g,`SCHEMA_VERSION=${meta.schemaVersion}`,'core SCHEMA_VERSION');
- files.set('core-config.js',core);
+ files.set('core-config.ts',core);
 
  let html=read('index.html');
  html=replaceRequired(html,/Asset OS v\d+\.\d+\.\d+/g,`Asset OS ${display}`,'HTML title');
@@ -49,10 +49,10 @@ function synchronizedFiles(){
  worker=replaceRequired(worker,/v=\d+\.\d+\.\d+&build=[\w.-]+/g,query,'service worker asset query');
  files.set('service-worker.js',worker);
 
- let pwa=read('pwa.js');
+ let pwa=read('pwa.ts');
  pwa=replaceRequired(pwa,/v=\d+\.\d+\.\d+&build=[\w.-]+/g,query,'PWA worker query');
  pwa=replaceRequired(pwa,/asset-os-sw-reload-\d+\.\d+\.\d+-build[\w.-]+/g,`asset-os-sw-reload-${version}-build${meta.build}`,'PWA reload key');
- files.set('pwa.js',pwa);
+ files.set('pwa.ts',pwa);
 
  let manual=read('qa-manual.html');
  manual=replaceRequired(manual,/v=\d+\.\d+\.\d+&build=[\w.-]+/g,query,'manual QA asset query');

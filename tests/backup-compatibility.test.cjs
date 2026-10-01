@@ -85,4 +85,12 @@ for(let schema=4;schema<=21;schema++){
 for(const schema of [3,22]){context.__payload={format:'asset-os-backup-v1',schemaVersion:schema,data:{}};assert.throws(()=>run('validateBackupPayload(__payload)'),/지원하지 않는 데이터 구조/)}
 context.__payload={format:'asset-os-backup-v1',schemaVersion:20,appVersion:'v0.6.4',environment:'qa',data:{accounts:[],pension:{},integrated:{ledger:[]}}};
 assert.throws(()=>run('validateBackupPayload(__payload)'),/QA 백업은 운영 화면에 복원할 수 없습니다/);
+context.assetBackupSettings=()=>({phoneEnabled:false,lastPhoneBackupAt:''});
+assert.equal(run('backupHealth(new Date("2026-10-01T00:00:00Z")).level'),'setup');
+context.assetBackupSettings=()=>({phoneEnabled:true,lastPhoneBackupAt:'2026-09-30T00:00:00Z'});
+assert.equal(run('backupHealth(new Date("2026-10-01T00:00:00Z")).level'),'good');
+context.assetBackupSettings=()=>({phoneEnabled:true,lastPhoneBackupAt:'2026-09-25T00:00:00Z'});
+assert.equal(run('backupHealth(new Date("2026-10-01T00:00:00Z")).level'),'warn');
+context.assetBackupSettings=()=>({phoneEnabled:true,lastPhoneBackupAt:'2026-09-01T00:00:00Z'});
+assert.equal(run('backupHealth(new Date("2026-10-01T00:00:00Z")).level'),'danger');
 console.log('backup schema 4-21 real-normalization compatibility tests: PASS');

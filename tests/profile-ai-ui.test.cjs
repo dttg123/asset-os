@@ -5,12 +5,12 @@ const path=require('node:path');
 const root=path.resolve(__dirname,'..');
 const read=name=>fs.readFileSync(path.join(root,name),'utf8');
 const html=read('index.html');
-const pages=read('pension-pages.js');
-const sheets=read('ui-sheets.js');
-const income=read('chart-income.js');
-const dividends=read('chart-dividends.js');
-const ai=read('ai-strategy.js');
-const boot=read('boot.js');
+const pages=read('pension-pages.ts');
+const sheets=read('ui-sheets.ts');
+const income=read('chart-income.ts');
+const dividends=read('chart-dividends.ts');
+const ai=read('ai-strategy.ts');
+const boot=read('boot.ts');
 
 assert.doesNotMatch(html,/data-profile-action="(?:source-archive|install)"/,'removed profile rows must stay removed');
 assert.doesNotMatch(html,/data-profile-action="accounts"/,'ISA account management must stay in policy management, not profile');

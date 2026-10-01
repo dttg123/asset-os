@@ -250,6 +250,51 @@ function saveIntegratedTransaction(form) {
     toast('거래를 저장했습니다.');
     haptic('light');
 }
+function openCashReconcileForm() {
+    const date = integratedEntryDateForMonth(), store = integratedStore(), current = Number(integratedReplay(store.ledger.filter(row => String(row.date || '') <= date), store).assets['cash-main'] || 0);
+    $('#formEyebrow').textContent = '통합 · 가계부';
+    $('#formTitle').textContent = '현금 잔액 맞추기';
+    $('#formBody').innerHTML = `<form id="cashReconcileForm" class="form"><div class="finance-form-note real">통장·현금의 실제 잔액을 입력하면 현재 기록과의 차이만 보정 원장으로 남깁니다. 기존 수입·지출 기록은 바꾸지 않습니다.</div><div class="form-grid"><div class="field"><label>확인일</label><input name="date" type="date" value="${escapeHtml(date)}" required></div><div class="field"><label>실제 잔액</label><input name="actualBalance" type="number" min="0" step="1" value="${escapeHtml(Math.round(current))}" required></div></div><div class="finance-settlement-box"><strong>기록상 잔액 ${won(current)}</strong>저장 전 확인일 기준으로 다시 계산합니다.</div><div class="field"><label>메모 <small>선택</small></label><input name="note" placeholder="예: 은행 앱 잔액 확인"></div><div class="form-error" role="alert" aria-live="polite" hidden></div><button class="integrated-form-save" type="submit">잔액 맞추기</button></form>`;
+    openSheet('#formSheet', { mode: 'input' });
+    const form = $('#cashReconcileForm');
+    form.addEventListener('submit', (event) => { event.preventDefault(); saveCashReconcile(event.currentTarget); });
+}
+function saveCashReconcile(form) {
+    const data = new FormData(form), date = String(data.get('date') || ymd()), actual = Number(data.get('actualBalance')), note = String(data.get('note') || '').trim(), dateError = postedDateError(date);
+    if (dateError) {
+        formShowError(form, dateError, 'date');
+        return;
+    }
+    if (!Number.isFinite(actual) || actual < 0 || !financialNumberInRange(actual)) {
+        formShowError(form, '실제 잔액은 0원 이상 정확한 숫자로 입력해 주세요.', 'actualBalance');
+        return;
+    }
+    const store = integratedStore(), rows = store.ledger.filter(row => String(row.date || '') <= date), current = Number(integratedReplay(rows, store).assets['cash-main'] || 0), delta = actual - current;
+    if (Math.abs(delta) < .5) {
+        formShowError(form, '이미 실제 잔액과 일치합니다.', 'actualBalance');
+        return;
+    }
+    const candidate = { id: uid('igl'), date, type: 'adjustment', accountId: 'cash-main', delta, category: '현금 잔액 맞춤', note, meta: { reconciliation: true, previousBalance: current, recordedBalance: actual } };
+    const error = integratedValidateCandidate(candidate, '');
+    if (error) {
+        formShowError(form, error, 'actualBalance');
+        return;
+    }
+    store.ledger.push(candidate);
+    store.mode = 'live';
+    store.label = '내 통합 거래기록';
+    setting().integratedMonth = integratedMonthKey(date);
+    integratedLedgerSearch = '';
+    integratedSearchDisplayLimit = 50;
+    setting().integratedLedgerFilter = 'all';
+    if (!persist())
+        return;
+    sheetDirty = false;
+    closeSheets({ all: true });
+    nav('integrated', 'summary');
+    toast(`현금 잔액을 ${won(actual)}으로 맞췄습니다.`);
+    haptic('light');
+}
 function deleteIntegratedTransaction(id) {
     const tx = integratedStore().ledger.find(t => t.id === id);
     if (!tx) {

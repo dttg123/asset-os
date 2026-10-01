@@ -7,10 +7,10 @@ const vm=require('node:vm');
 const root=path.join(__dirname,'..');
 
 test('long-term transaction search is available without changing stored ledgers',()=>{
- const integrated=fs.readFileSync(path.join(root,'integrated-pages.js'),'utf8');
- const pension=fs.readFileSync(path.join(root,'pension-forms.js'),'utf8');
- const ui=fs.readFileSync(path.join(root,'ui-render.js'),'utf8');
- const store=fs.readFileSync(path.join(root,'store-state.js'),'utf8');
+ const integrated=fs.readFileSync(path.join(root,'integrated-pages.ts'),'utf8');
+ const pension=fs.readFileSync(path.join(root,'pension-forms.ts'),'utf8');
+ const ui=fs.readFileSync(path.join(root,'ui-render.ts'),'utf8');
+ const store=fs.readFileSync(path.join(root,'store-state.ts'),'utf8');
  assert.match(integrated,/전체 기간 날짜·금액·분류·메모 검색/);
  assert.match(integrated,/searching\?integratedLedger\(\):integratedRowsForMonth\(month\)/);
  assert.match(integrated,/integratedTransactionSearchText\(t\)\.includes\(needle\)/);
