@@ -38,6 +38,7 @@ main{padding:15px 18px 30px}.stack{display:grid;gap:14px}
 .hero .label{font-size:13px;font-weight:850;color:rgba(255,255,255,.78)}
 .heroamount{font-size:clamp(32px,9.5vw,43px);font-weight:950;letter-spacing:-.065em;margin-top:12px;position:relative;z-index:1}
 .change{font-size:13px;font-weight:850;margin-top:9px;color:#dff7ed;position:relative;z-index:1}
+.home-change{display:grid;gap:3px}.home-change strong{font-size:13px}.home-change span{font-size:11px;color:rgba(255,255,255,.78);font-weight:750;line-height:1.35}
 .heropeek{width:36px;height:36px;border-radius:13px;background:rgba(255,255,255,.17);display:grid;place-items:center;font-size:18px;position:relative;z-index:2}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .summary-card{min-width:0;overflow:hidden;position:relative;display:flex;flex-direction:column;min-height:170px;transition:transform .14s ease,box-shadow .14s ease;background:color-mix(in srgb,var(--surface) 98%,var(--bg))}

@@ -1,18 +1,36 @@
 'use strict';
-function sourceArchiveRecords(){return state.sourceArchives?.records||[]}
-function pensionArchiveKinds(scope='all',type='all'){
- const prefix=scope==='pension'?['pension']:scope==='irp'?['irp']:['pension','irp'],suffix=type==='realized'?['Realized']:type==='income'?['Dividend']:['Realized','Dividend'];return prefix.flatMap(p=>suffix.map(s=>p+s))
+function sourceArchiveRecords() { return state.sourceArchives?.records || []; }
+function pensionArchiveKinds(scope = 'all', type = 'all') {
+    const prefix = scope === 'pension' ? ['pension'] : scope === 'irp' ? ['irp'] : ['pension', 'irp'], suffix = type === 'realized' ? ['Realized'] : type === 'income' ? ['Dividend'] : ['Realized', 'Dividend'];
+    return prefix.flatMap(p => suffix.map(s => p + s));
 }
-function pensionArchivePerformanceRows(scope='all'){
- const kinds=new Set(pensionArchiveKinds(scope)),months=new Map();for(const r of sourceArchiveRecords()){if(!kinds.has(r.kind)||!/^\d{4}-\d{2}/.test(String(r.date)))continue;const key=String(r.date).slice(0,7),row=months.get(key)||{key,date:`${key}-01`,label:key.slice(2).replace('-','.'),realized:0,income:0,total:0,cumulativeRealized:0,cumulativeIncome:0,cumulativeTotal:0};if(String(r.kind).endsWith('Realized'))row.realized+=Number(r.amount)||0;else row.income+=Number(r.amount)||0;row.total=row.realized+row.income;months.set(key,row)}let realized=0,income=0;return [...months.values()].sort((a,b)=>a.date.localeCompare(b.date)).map(row=>{realized+=row.realized;income+=row.income;return{...row,cumulativeRealized:realized,cumulativeIncome:income,cumulativeTotal:realized+income}})
+function pensionArchivePerformanceRows(scope = 'all') {
+    const kinds = new Set(pensionArchiveKinds(scope)), months = new Map();
+    for (const r of sourceArchiveRecords()) {
+        if (!kinds.has(r.kind) || !/^\d{4}-\d{2}/.test(String(r.date)))
+            continue;
+        const key = String(r.date).slice(0, 7), row = months.get(key) || { key, date: `${key}-01`, label: key.slice(2).replace('-', '.'), realized: 0, income: 0, total: 0, cumulativeRealized: 0, cumulativeIncome: 0, cumulativeTotal: 0 };
+        if (String(r.kind).endsWith('Realized'))
+            row.realized += Number(r.amount) || 0;
+        else
+            row.income += Number(r.amount) || 0;
+        row.total = row.realized + row.income;
+        months.set(key, row);
+    }
+    let realized = 0, income = 0;
+    return [...months.values()].sort((a, b) => String(a.date).localeCompare(String(b.date))).map(row => { realized += Number(row.realized) || 0; income += Number(row.income) || 0; return { ...row, cumulativeRealized: realized, cumulativeIncome: income, cumulativeTotal: realized + income }; });
 }
-function pensionArchivePerformanceSummary(scope='all'){
- const rows=pensionArchivePerformanceRows(scope),last=rows.at(-1)||{cumulativeRealized:0,cumulativeIncome:0,cumulativeTotal:0};return{scope,rows,count:sourceArchiveRecords().filter(r=>pensionArchiveKinds(scope).includes(r.kind)).length,realized:last.cumulativeRealized,income:last.cumulativeIncome,total:last.cumulativeTotal}
+function pensionArchivePerformanceSummary(scope = 'all') {
+    const rows = pensionArchivePerformanceRows(scope), last = rows.at(-1) || { cumulativeRealized: 0, cumulativeIncome: 0, cumulativeTotal: 0 };
+    return { scope, rows, count: sourceArchiveRecords().filter(r => pensionArchiveKinds(scope).includes(r.kind)).length, realized: last.cumulativeRealized, income: last.cumulativeIncome, total: last.cumulativeTotal };
 }
-function pensionArchiveIncomeRecords(scope='all'){
- const kinds=new Set(pensionArchiveKinds(scope,'income'));return sourceArchiveRecords().filter(r=>kinds.has(r.kind)&&/^\d{4}-\d{2}/.test(String(r.date))&&(Number(r.amount)||0)>0).map(r=>({id:r.id,accountId:'',holdingId:'',accountKind:String(r.kind).startsWith('irp')?'irp':'pension',type:'dividend',date:r.date,amount:Number(r.amount)||0,label:r.label,source:'source-archive'}))
+function pensionArchiveIncomeRecords(scope = 'all') {
+    const kinds = new Set(pensionArchiveKinds(scope, 'income'));
+    return sourceArchiveRecords().filter(r => kinds.has(r.kind) && /^\d{4}-\d{2}/.test(String(r.date)) && (Number(r.amount) || 0) > 0).map(r => ({ id: r.id, accountId: '', holdingId: '', accountKind: String(r.kind).startsWith('irp') ? 'irp' : 'pension', type: 'dividend', date: r.date, amount: Number(r.amount) || 0, label: r.label, source: 'source-archive' }));
 }
-function pensionArchiveTransactionRows(scope='all'){
- const kinds=new Set(pensionArchiveKinds(scope));return sourceArchiveRecords().filter(r=>kinds.has(r.kind)&&/^\d{4}-\d{2}/.test(String(r.date))).map(r=>{const kind=String(r.kind||''),accountKind=kind.startsWith('irp')?'irp':'pension',income=kind.endsWith('Dividend');return{id:r.id,archive:true,readOnly:true,source:'source-archive',accountKind,type:income?'dividend':'realized',date:String(r.date),amount:Number(r.amount)||0,label:String(r.label||''),note:String(r.note||''),meta:r.meta||{}}}).sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.id).localeCompare(String(a.id)))
+function pensionArchiveTransactionRows(scope = 'all') {
+    const kinds = new Set(pensionArchiveKinds(scope));
+    return sourceArchiveRecords().filter(r => kinds.has(r.kind) && /^\d{4}-\d{2}/.test(String(r.date))).map(r => { const kind = String(r.kind || ''), accountKind = kind.startsWith('irp') ? 'irp' : 'pension', income = kind.endsWith('Dividend'); return { id: r.id, archive: true, readOnly: true, source: 'source-archive', accountKind, type: income ? 'dividend' : 'realized', date: String(r.date), amount: Number(r.amount) || 0, label: String(r.label || ''), note: String(r.note || ''), meta: r.meta || {} }; }).sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.id).localeCompare(String(a.id)));
 }
-function openPensionArchiveRecord(id){const r=sourceArchiveRecords().find(x=>String(x.id)===String(id));if(!r)return toast('과거자료를 찾지 못했습니다.');const reconciled=typeof pensionIncomeRecords==='function'?pensionIncomeRecords('all').find(x=>x.id===id&&x.archive):null;const kind=String(r.kind||''),income=kind.endsWith('Dividend'),account=kind.startsWith('irp')?'IRP':'연금저축';$('#sheetEyebrow').textContent=`${account} · 과거자료`;$('#sheetTitle').textContent=income?'배당':'실현손익';$('#sheetBody').innerHTML=`<div class="profitbox"><div class="metric"><span>금액</span><strong class="${escapeHtml(Number(r.amount)<0?'negative':'positive')}">${income?won(r.amount):signed(r.amount)}</strong></div><div class="metric"><span>기준일</span><strong>${formatDate(r.date)}</strong></div></div><div class="sheetrows"><div class="sheetrow"><span>계좌</span><strong>${account}</strong></div><div class="sheetrow"><span>원본 구분</span><strong>${escapeHtml(r.label||(income?'배당':'실현손익'))}</strong></div><div class="sheetrow"><span>저장 상태</span><strong>원본 확정 · 읽기 전용</strong></div></div>${reconciled?.reconciledAmount?`<div class="source-note">원본 월합계 ${won(reconciled.originalAmount)} 중 개별 내역 ${won(reconciled.reconciledAmount)}을 제외한 ${won(reconciled.amount)}만 합산합니다. 원본 기록은 유지됩니다.</div>`:''}<div class="source-note">증권사 과거 내역에서 옮긴 확정자료입니다. 현재 잔고·평단·거래 가능 현금 계산에는 다시 더하지 않습니다.</div>`;openSheet('#detailSheet')}
+function openPensionArchiveRecord(id) { const r = sourceArchiveRecords().find(x => String(x.id) === String(id)); if (!r)
+    return toast('과거자료를 찾지 못했습니다.'); const reconciled = typeof pensionIncomeRecords === 'function' ? pensionIncomeRecords('all').find(x => x.id === id && x.archive) : null; const kind = String(r.kind || ''), income = kind.endsWith('Dividend'), account = kind.startsWith('irp') ? 'IRP' : '연금저축'; $('#sheetEyebrow').textContent = `${account} · 과거자료`; $('#sheetTitle').textContent = income ? '배당' : '실현손익'; $('#sheetBody').innerHTML = `<div class="profitbox"><div class="metric"><span>금액</span><strong class="${escapeHtml(Number(r.amount) < 0 ? 'negative' : 'positive')}">${income ? won(r.amount) : signed(r.amount)}</strong></div><div class="metric"><span>기준일</span><strong>${formatDate(r.date)}</strong></div></div><div class="sheetrows"><div class="sheetrow"><span>계좌</span><strong>${account}</strong></div><div class="sheetrow"><span>원본 구분</span><strong>${escapeHtml(r.label || (income ? '배당' : '실현손익'))}</strong></div><div class="sheetrow"><span>저장 상태</span><strong>원본 확정 · 읽기 전용</strong></div></div>${reconciled?.reconciledAmount ? `<div class="source-note">원본 월합계 ${won(reconciled.originalAmount)} 중 개별 내역 ${won(reconciled.reconciledAmount)}을 제외한 ${won(reconciled.amount)}만 합산합니다. 원본 기록은 유지됩니다.</div>` : ''}<div class="source-note">증권사 과거 내역에서 옮긴 확정자료입니다. 현재 잔고·평단·거래 가능 현금 계산에는 다시 더하지 않습니다.</div>`; openSheet('#detailSheet'); }
