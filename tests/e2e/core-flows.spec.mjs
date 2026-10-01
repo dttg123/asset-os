@@ -87,3 +87,22 @@ test('@core finance interest and backup health work through their real sheets',a
  await expect(page.locator('#sheetBody').getByText('백업 오래됨',{exact:true})).toBeVisible();
  expect(appErrors).toEqual([]);
 });
+
+test('@core integrated input rejects unsafe amounts and saves a valid transaction',async({page})=>{
+ await preparePage(page);
+ await page.goto(app);
+ const before=await page.evaluate(()=>window.__assetOS.getState().integrated.ledger.length);
+ await page.evaluate(()=>openIntegratedTransactionForm());
+ const form=page.locator('#integratedTxForm');
+ await expect(form).toBeVisible();
+ await form.locator('input[name="amount"]').fill('999999999999999999');
+ await form.locator('button[type="submit"]').click();
+ await expect(form.locator('[data-form-error]')).toBeVisible();
+ expect(await page.evaluate(()=>window.__assetOS.getState().integrated.ledger.length)).toBe(before);
+ await form.locator('input[name="amount"]').fill('100000');
+ await form.locator('button[type="submit"]').click();
+ await expect(form).toBeHidden();
+ const added=await page.evaluate(count=>window.__assetOS.getState().integrated.ledger.slice(count).map(row=>({type:row.type,amount:row.amount})),before);
+ expect(added).toEqual([{type:'externalIncome',amount:100000}]);
+ expect(appErrors).toEqual([]);
+});
