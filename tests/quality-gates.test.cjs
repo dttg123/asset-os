@@ -29,7 +29,7 @@ test('release metadata gate keeps package, UI, runtime and PWA cache aligned',()
  const script=fs.readFileSync(path.join(root,'scripts/sync-release-meta.mjs'),'utf8');
  assert.match(script,/release-meta\.json/);
  assert.match(script,/package-lock\.json/);
- assert.match(script,/core-config\.js/);
+ assert.match(script,/core-config\.ts/);
  assert.match(script,/service-worker\.js/);
  const result=spawnSync(process.execPath,['scripts/sync-release-meta.mjs','--check'],{cwd:root,encoding:'utf8'});
  assert.equal(result.status,0,result.stdout+result.stderr);

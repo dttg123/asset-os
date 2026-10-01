@@ -59,7 +59,7 @@ test('ordinary pension contributions stop at 18 million while ISA transfers stay
 });
 
 test('ISA transfer window, unified refresh and conditional KIS token cache are wired',()=>{
- const maturity=source('isa-maturity-policy.js'),home=source('home.js'),release=source('release-v069.js'),settings=source('ui-settings.js'),edge=source('supabase/functions/kis-read/index.ts');
+ const maturity=source('isa-maturity-policy.ts'),home=source('home.ts'),release=source('release-v069.ts'),settings=source('ui-settings.ts'),edge=source('supabase/functions/kis-read/index.ts');
  assert.match(maturity,/transferWindowDays/);
  assert.match(maturity,/isaDateAddDays\(terminationDate/);
  assert.match(home,/data-investment-refresh-all/);
@@ -77,7 +77,7 @@ test('ISA transfer window, unified refresh and conditional KIS token cache are w
 });
 
 test('home unified refresh runs once, reports progress and keeps partial account results',async()=>{
- const settings=source('ui-settings.js'),refreshSource=settings.slice(settings.indexOf('let investmentRefreshPromise='),settings.indexOf('async function syncKisHistory'));
+ const settings=source('ui-settings.ts'),refreshSource=settings.slice(settings.indexOf('let investmentRefreshPromise='),settings.indexOf('async function syncKisHistory'));
  const calls=[],buttons=[{disabled:false,textContent:''}];
  let releaseIsa;
  const isaGate=new Promise(resolve=>{releaseIsa=resolve});
@@ -98,7 +98,7 @@ test('home unified refresh runs once, reports progress and keeps partial account
 });
 
 test('failed-only refresh retries only the failed account and keeps successful accounts untouched',async()=>{
- const settings=source('ui-settings.js'),refreshSource=settings.slice(settings.indexOf('let investmentRefreshPromise='),settings.indexOf('async function syncKisHistory'));
+ const settings=source('ui-settings.ts'),refreshSource=settings.slice(settings.indexOf('let investmentRefreshPromise='),settings.indexOf('async function syncKisHistory'));
  const calls=[],buttons=[{disabled:false,textContent:''}];let errors=['irp'];
  const context=vm.createContext({console,currentAccount:()=>null,isaQuoteLinks:()=>[],kisConnectedAccount:kind=>kind==='irp',investmentRefreshStatus:()=>({errors}),refreshIsaQuotes:async()=>{calls.push('isa');return{ok:true}},refreshBrokerKisManually:async kinds=>{calls.push(kinds[0]);errors=[];return{ok:true,results:[{ok:true}]}},$$:()=>buttons,renderKeepingScroll:()=>calls.push('render'),toast:message=>calls.push(message)});
  vm.runInContext(refreshSource,context);
@@ -111,7 +111,7 @@ test('failed-only refresh retries only the failed account and keeps successful a
 });
 
 test('PWA registration, shell assets and worker cache use one build id',()=>{
- const index=source('index.html'),pwa=source('pwa.js'),worker=source('service-worker.js');
+ const index=source('index.html'),pwa=source('pwa.ts'),worker=source('service-worker.js');
  const indexBuild=index.match(/build=(\d{8}-\d+)/)?.[1],pwaBuild=pwa.match(/build(?:=)?(\d{8}-\d+)/)?.[1],workerBuild=worker.match(/build(\d{8}-\d+)/)?.[1];
  assert.ok(indexBuild&&pwaBuild&&workerBuild);
  assert.equal(pwaBuild,indexBuild);

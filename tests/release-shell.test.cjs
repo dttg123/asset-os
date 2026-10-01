@@ -9,7 +9,7 @@ const releaseMeta=JSON.parse(read('release-meta.json')),releaseQuery=`v=${releas
 const regexEscape=value=>String(value).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 
 test('current release views and export assets are shipped in the PWA shell',()=>{
- const html=read('index.html'),worker=read('service-worker.js'),pwa=read('pwa.js'),release=read('release-v069.js'),home=read('home.js');
+ const html=read('index.html'),worker=read('service-worker.js'),pwa=read('pwa.ts'),release=read('release-v069.ts'),home=read('home.ts');
  const bundles=JSON.parse(read('runtime-bundles.json'));
  assert.ok(bundles.scripts['asset-core.js'].includes('export-csv.js'));
  assert.ok(bundles.scripts['asset-ui.js'].includes('release-v069.js'));
@@ -30,7 +30,7 @@ test('current release views and export assets are shipped in the PWA shell',()=>
  assert.match(home,/homeInvestmentRefreshMarkup\(\)/);
  assert.match(home,/data-investment-refresh-all/);
  assert.doesNotMatch(release,/integrated-investment-refresh/);
- const boot=read('boot.js');
+ const boot=read('boot.ts');
  assert.match(boot,/addEventListener\('storage'/);
  assert.match(boot,/qaRenderStats/);
  assert.match(boot,/다른 화면의 최신 변경사항을 반영했습니다/);
@@ -70,7 +70,7 @@ test('Excel CSV output is UTF-8 BOM, quoted safely, and neutralizes formulas',()
 });
 
 test('cross-tab sync closes a dirty input before replacing state',()=>{
- const boot=read('boot.js');
+ const boot=read('boot.ts');
  const source=boot.match(/function applyExternalSavedState\(saved\)\{[\s\S]*?\n\}/)?.[0];
  assert.ok(source,'storage application helper must exist');
  const calls=[];
