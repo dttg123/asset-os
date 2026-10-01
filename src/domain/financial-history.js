@@ -1,19 +1,15 @@
 'use strict';
 // The runtime is assembled as ordered classic scripts; these names are supplied by earlier bundles.
 function financialHistoryState() {
-    // @ts-ignore runtime global supplied by store-state.js
     return state;
 }
 function financialHistoryStore() {
-    // @ts-ignore runtime global supplied by integrated-ledger.js
     return integratedStore();
 }
 function financialHistoryReplay(rows, store) {
-    // @ts-ignore runtime global supplied by integrated-ledger.js
     return integratedReplay(rows, store);
 }
 function financialHistoryQaMode() {
-    // @ts-ignore runtime global supplied by core-config.js
     return QA_MODE;
 }
 function financialProductActiveOnDate(product, asOf) {

@@ -1,4 +1,15 @@
 'use strict';
+declare function integratedStore():LedgerValidationStore;
+declare function postedDateError(date:unknown):string;
+declare function isaAccountsForDate(date:unknown):Array<{id:string}>;
+declare function pensionAccountsForKind(kind:string,date:unknown):Array<{id:string}>;
+declare function isQaIntegratedFixture(t:LedgerValidationRow):boolean;
+declare function integratedReplay(rows:LedgerValidationRow[],store:LedgerValidationStore):LedgerValidationReplay;
+declare function financialProducts():LedgerValidationProduct[];
+declare function financeProductAccountId(id:string):string;
+declare function financeProductLiabilityId(id:string):string;
+declare function won(value:number):string;
+
 
 type LedgerValidationAccount={id?:string;kind?:string;[key:string]:unknown};
 type LedgerValidationLiability={id?:string;[key:string]:unknown};
@@ -9,43 +20,33 @@ type LedgerValidationReplay={assets:Record<string,number>;liabilities:Record<str
 type LedgerValidationProduct={id:string;name:string;type:string;status?:string};
 
 function validationIntegratedStore(){
- // @ts-ignore runtime global supplied by integrated-ledger.js
  return integratedStore() as LedgerValidationStore
 }
 function validationPostedDateError(date:unknown){
- // @ts-ignore runtime global supplied by core-config.js
  return postedDateError(date) as string
 }
 function validationIsaAccounts(date:unknown){
- // @ts-ignore runtime global supplied by isa-ledger.js
  return isaAccountsForDate(date) as Array<{id:string}>
 }
 function validationPensionAccounts(kind:string,date:unknown){
- // @ts-ignore runtime global supplied by pension-ledger.js
  return pensionAccountsForKind(kind,date) as Array<{id:string}>
 }
 function validationIsQaFixture(transaction:LedgerValidationRow){
- // @ts-ignore runtime global supplied by integrated-ledger.js
  return isQaIntegratedFixture(transaction) as boolean
 }
 function validationReplay(rows:LedgerValidationRow[],store:LedgerValidationStore){
- // @ts-ignore runtime global supplied by integrated-ledger.js
  return integratedReplay(rows,store) as LedgerValidationReplay
 }
 function validationFinancialProducts(){
- // @ts-ignore runtime global supplied by integrated-finance-engine.js
  return financialProducts() as LedgerValidationProduct[]
 }
 function validationProductAccountId(id:string){
- // @ts-ignore runtime global supplied by integrated-finance-engine.js
  return financeProductAccountId(id) as string
 }
 function validationProductLiabilityId(id:string){
- // @ts-ignore runtime global supplied by integrated-finance-engine.js
  return financeProductLiabilityId(id) as string
 }
 function validationWon(value:number){
- // @ts-ignore runtime global supplied by core-visual-utils.js
  return won(value) as string
 }
 

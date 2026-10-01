@@ -1,11 +1,10 @@
-// @ts-nocheck
 'use strict';
 function integratedUiType(t) { if (!t)
     return 'externalIncome'; if (t.type === 'expense')
     return 'lifeExpense'; if (['externalAssetIn', 'internalTransfer'].includes(t.type) && ['isa', 'pension', 'irp', 'deposit', 'savings'].includes(integratedStore().accounts.find(a => a.id === t.toAccountId)?.kind))
     return 'savingInvestment'; if (['debtPrincipal', 'externalDebtPrincipal', 'debtInterest', 'debtInterestExternal'].includes(t.type))
     return 'loanPayment'; return t.type; }
-function integratedDefaultCategory(uiType) { return ({ externalIncome: '월급', lifeExpense: '생활비', savingInvestment: '저축·투자', loanPayment: '대출 납부' })[uiType] || ''; }
+function integratedDefaultCategory(uiType) { const categories = { externalIncome: '월급', lifeExpense: '생활비', savingInvestment: '저축·투자', loanPayment: '대출 납부' }; return categories[uiType] || ''; }
 function integratedFormAccountOptions(selected = '') { const activeIds = new Set(activeFinancialProducts().map(p => p.id)); return integratedStore().accounts.filter(a => !['isa', 'pension', 'irp'].includes(a.kind) && (!a.productId || activeIds.has(a.productId))).map(a => `<option value="${escapeHtml(a.id)}" ${a.id === selected ? 'selected' : ''}>${escapeHtml(a.name)}</option>`).join(''); }
 function integratedInvestmentTargetOptions(selected = '') { const activeIds = new Set(activeFinancialProducts().map(p => p.id)); return integratedStore().accounts.filter(a => ['isa', 'pension', 'irp', 'deposit', 'savings'].includes(a.kind) && (!a.productId || activeIds.has(a.productId))).map(a => `<option value="${escapeHtml(a.id)}" ${a.id === selected ? 'selected' : ''}>${escapeHtml(a.name)}</option>`).join(''); }
 function integratedFormLiabilityOptions(selected = '') { return integratedStore().liabilities.filter(a => { const p = a.productId ? financialProduct(a.productId) : null; return !p || p.status === 'active'; }).map(a => `<option value="${escapeHtml(a.id)}" ${a.id === selected ? 'selected' : ''}>${escapeHtml(a.name)}</option>`).join(''); }
@@ -49,7 +48,7 @@ function syncIntegratedFormFields() { const f = $('#integratedTxForm'); if (!f |
     c.value = integratedDefaultCategory(type);
     c.dataset.auto = '1';
 } }
-function placeholderPage() { return `<div class="stack"><section class="modulehero"><div class="eyebrow">경로 확인 필요</div><h2>지원하지 않는 화면</h2><div class="modulebalance">화면 오류</div></section><section class="card placeholder"><div><strong>이 화면 경로를 찾지 못했습니다.</strong><span>하단 메뉴에서 다시 이동해 주세요.</span></div></section></div>`; }
+function placeholderPage(_root) { return `<div class="stack"><section class="modulehero"><div class="eyebrow">경로 확인 필요</div><h2>지원하지 않는 화면</h2><div class="modulebalance">화면 오류</div></section><section class="card placeholder"><div><strong>이 화면 경로를 찾지 못했습니다.</strong><span>하단 메뉴에서 다시 이동해 주세요.</span></div></section></div>`; }
 function storageWarningMarkup() { const msg = state.system?.saveError || state.system?.loadWarning, usage = state.system?.storageUsage, capacity = usage?.level === 'critical' ? `저장공간을 ${Math.round((Number(usage.bytes) || 0) / 10000) / 100}MB 사용 중입니다. ZIP 백업과 데이터 상태를 확인해 주세요.` : usage?.level === 'warning' ? `저장공간을 ${Math.round((Number(usage.bytes) || 0) / 10000) / 100}MB 사용 중입니다. 여유 있을 때 ZIP 백업을 권장합니다.` : ''; return msg || capacity ? `<div class="warningbox" style="margin-bottom:12px"><strong>데이터 확인 필요</strong><br>${escapeHtml(msg || capacity)}</div>` : ''; }
 function render() { const r = route(); document.body.dataset.root = r.root; $('#title').textContent = r.root === 'home' ? '홈' : r.root === 'isa' ? 'ISA' : r.root === 'pension' ? '개인연금' : '통합'; const page = r.root === 'home' ? home() : r.root === 'isa' ? isaPage(r.tab) : r.root === 'pension' ? pensionPage(r.tab) : r.root === 'integrated' ? integratedPage(r.tab) : placeholderPage(r.root); $('#main').innerHTML = storageWarningMarkup() + page + '<div id="globalScrollGuard" class="global-scroll-guard" aria-hidden="true"></div>'; $$('.nav').forEach(b => b.classList.toggle('active', b.dataset.root === r.root)); applyTheme(); bind(); bindTransactionSearch(); updateDiagnostics(); }
 function bindTransactionSearch() { const integratedForm = $('[data-integrated-search-form]'); if (integratedForm)

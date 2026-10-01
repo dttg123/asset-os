@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use strict';
 function pensionStore() { return state.pension; }
 function pensionAccount(id) { return pensionStore().accounts.find(a => a.id === id) || null; }
@@ -87,7 +86,7 @@ function pensionContributionBatchCandidate(input = {}) {
             return { ok: false, error: `${pensionAccountKindLabel(kind)}의 납입 월을 하나 이상 선택해 주세요.` };
         if ((amount || selected.length) && !account)
             return { ok: false, error: `운영 중인 ${pensionAccountKindLabel(kind)} 계좌를 선택해 주세요.` };
-        const scheduleId = pensionContributionBatchScheduleId(kind), generatedIds = new Set((nextIntegrated.ledger || []).filter(t => t.meta?.pensionBatch && t.meta?.batchYear === data.year && t.meta?.batchKind === kind).map(t => t.id));
+        const ledger = nextIntegrated.ledger || [], scheduleId = pensionContributionBatchScheduleId(kind), generatedIds = new Set(ledger.filter(t => t.meta?.pensionBatch && t.meta?.batchYear === data.year && t.meta?.batchKind === kind).map(t => t.id));
         const manualRows = centralPensionContributionRows(data.year).filter(r => r.kind === kind && !generatedIds.has(r.sourceTxId));
         for (const month of selected) {
             const monthKey = `${data.year}-${String(month).padStart(2, '0')}`, manual = manualRows.filter(r => String(r.date).startsWith(monthKey)).reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
@@ -102,7 +101,7 @@ function pensionContributionBatchCandidate(input = {}) {
             summary.total += delta;
             summary.count++;
         }
-        nextIntegrated.ledger = (nextIntegrated.ledger || []).filter(t => !(t.meta?.pensionBatch && t.meta?.batchYear === data.year && t.meta?.batchKind === kind));
+        nextIntegrated.ledger = ledger.filter(t => !(t.meta?.pensionBatch && t.meta?.batchYear === data.year && t.meta?.batchKind === kind));
         nextIntegrated.ledger.push(...generated.filter(t => t.meta.batchKind === kind));
         if (account && selected.length) {
             const first = `${data.year}-${String(selected[0]).padStart(2, '0')}-${String(data.day).padStart(2, '0')}`;

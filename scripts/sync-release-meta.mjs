@@ -55,6 +55,9 @@ function synchronizedFiles(){
  files.set('pwa.ts',pwa);
 
  let manual=read('qa-manual.html');
+ manual=replaceRequired(manual,/Asset OS v\d+\.\d+\.\d+/g,`Asset OS ${display}`,'manual QA title');
+ manual=replaceRequired(manual,/v\d+\.\d+\.\d+ LIVE/g,`${display} LIVE`,'manual QA live version');
+ manual=replaceRequired(manual,/class="appversion">v\d+\.\d+\.\d+</g,`class="appversion">${display}<`,'manual QA badge version');
  manual=replaceRequired(manual,/v=\d+\.\d+\.\d+&build=[\w.-]+/g,query,'manual QA asset query');
  files.set('qa-manual.html',manual);
  return files;

@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use strict';
 function normalizeInvestmentRole(value, h = null) {
     const v = String(value || '');
@@ -28,7 +27,7 @@ function investmentThemeTag(h) { const explicit = String(h?.themeTag || '').trim
     return '채권'; return ''; }
 function investmentRoleMeta(h) { const role = investmentRoleForHolding(h), tag = investmentThemeTag(h); return tag ? `${role} · ${tag}` : role; }
 function pensionTransactions(scope = 'all') { return pensionStore().transactions.filter(t => { const a = pensionAccount(t.accountId); return a && (scope === 'all' || a.kind === scope); }).sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.createdAt || '').localeCompare(String(a.createdAt || ''))); }
-function pensionTradeLabel(type) { return ({ contribution: '납입', isaTransfer: 'ISA 만기 이전', buy: '매수', sell: '매도', dividend: '배당금', distribution: '분배금', interest: '이자', other_right: '기타 권리', adjustment: '보정' })[type] || type; }
+function pensionTradeLabel(type) { return { contribution: '납입', isaTransfer: 'ISA 만기 이전', buy: '매수', sell: '매도', dividend: '배당금', distribution: '분배금', interest: '이자', other_right: '기타 권리', adjustment: '보정' }[type] || type; }
 function pensionPositionFromLedger(h, transactions = pensionStore().transactions) { return calculatePensionPosition(h, transactions); }
 function syncPensionDerivedHoldings(target = state) { const ps = target?.pension; if (!ps)
     return; const txs = Array.isArray(ps.transactions) ? ps.transactions : []; for (const h of ps.holdings || []) {

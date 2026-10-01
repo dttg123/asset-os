@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use strict';
 function pensionAssetScope() { return ['all', 'pension', 'irp'].includes(setting().pensionAssetScope) ? setting().pensionAssetScope : 'all'; }
 function pensionAssetLens() { return 'assetClass'; }
@@ -15,7 +14,9 @@ function pensionKisRiskClassification(holding) { const manual = setting().irpRis
     return { risky: false, riskClassification: '퇴직연금 100% 편입 가능 채권혼합형', riskSource: 'IBK 상품 분류' }; if (/KODEX미국AI테크TOP10/i.test(name))
     return { risky: true, riskClassification: '주식형 위험자산', riskSource: '삼성자산운용 상품 분류' }; return { risky: null, riskClassification: '분류 확인 필요', riskSource: '' }; }
 function openPensionRiskClassificationForm() { const unknown = pensionAssetMetrics('irp').holdings.filter(h => h.risky !== true && h.risky !== false); if (!unknown.length)
-    return toast('확인할 미분류 종목이 없습니다.'); $('#formEyebrow').textContent = 'IRP · 위험자산'; $('#formTitle').textContent = '종목 분류 확인'; $('#formBody').innerHTML = `<form id="irpRiskClassificationForm" class="form"><div class="source-note">금융회사 상품 상세의 ‘퇴직연금 위험자산’ 여부를 확인한 뒤 선택하세요. 미확인 종목은 한도 여유에서 제외됩니다.</div>${unknown.map((h, i) => `<div class="field"><label>${escapeHtml(h.name)}</label><select name="risk-${i}" data-risk-key="${escapeHtml(pensionRiskClassificationKey(h))}"><option value="">확인 필요</option><option value="risky">위험자산</option><option value="safe">비위험자산·100% 편입 가능</option></select></div>`).join('')}<button class="form-btn primary">분류 저장</button></form>`; openSheet('#formSheet', { mode: 'input' }); $('#irpRiskClassificationForm').onsubmit = e => { e.preventDefault(); const map = { ...(setting().irpRiskClassifications || {}) }; for (const select of e.currentTarget.querySelectorAll('[data-risk-key]')) {
+    return toast('확인할 미분류 종목이 없습니다.'); $('#formEyebrow').textContent = 'IRP · 위험자산'; $('#formTitle').textContent = '종목 분류 확인'; $('#formBody').innerHTML = `<form id="irpRiskClassificationForm" class="form"><div class="source-note">금융회사 상품 상세의 ‘퇴직연금 위험자산’ 여부를 확인한 뒤 선택하세요. 미확인 종목은 한도 여유에서 제외됩니다.</div>${unknown.map((h, i) => `<div class="field"><label>${escapeHtml(h.name)}</label><select name="risk-${i}" data-risk-key="${escapeHtml(pensionRiskClassificationKey(h))}"><option value="">확인 필요</option><option value="risky">위험자산</option><option value="safe">비위험자산·100% 편입 가능</option></select></div>`).join('')}<button class="form-btn primary">분류 저장</button></form>`; openSheet('#formSheet', { mode: 'input' }); $('#irpRiskClassificationForm').onsubmit = (e) => { e.preventDefault(); const map = { ...(setting().irpRiskClassifications || {}) }; for (const select of e.currentTarget.querySelectorAll('[data-risk-key]')) {
+    if (!select.dataset.riskKey)
+        continue;
     if (select.value)
         map[select.dataset.riskKey] = select.value;
     else
@@ -117,7 +118,7 @@ function pensionReconcileIncome(details, archives) {
     // Archives are historical monthly totals, not individual cash movements.
     // Retain their unitemized remainder; never drop a whole month for one payment.
     const rows = [], remaining = new Map(), matched = new Set();
-    const key = x => { const holding = x.holdingId && typeof pensionHoldingById === 'function' ? pensionHoldingById(x.holdingId) : null, product = x.productCode || holding?.productCode || holding?.code; return x.accountId && product ? [x.accountId, product, x.date, brokerKisIncomeCategory(x.type), Number(x.amount) || 0, Number(x.tax) || 0].join('|') : ''; };
+    const key = (x) => { const holding = x.holdingId && typeof pensionHoldingById === 'function' ? pensionHoldingById(x.holdingId) : null, product = x.productCode || holding?.productCode || holding?.code; return x.accountId && product ? [x.accountId, product, x.date, brokerKisIncomeCategory(x.type), Number(x.amount) || 0, Number(x.tax) || 0].join('|') : ''; };
     const broker = details.filter(x => x.brokerRight);
     for (const x of details) {
         if (!x.brokerRight) {
@@ -148,6 +149,6 @@ function pensionReconcileIncome(details, archives) {
 function pensionVisibleTransactionRows(scope = 'all') {
     const incomes = pensionIncomeRecords(scope), manual = pensionTransactions(scope).filter(x => !['dividend', 'distribution', 'interest', 'other_right'].includes(x.type)), orders = brokerKisVisibleOrders(state.brokerKis, scope);
     const realized = typeof pensionArchiveTransactionRows === 'function' ? pensionArchiveTransactionRows(scope).filter(x => x.type !== 'dividend') : [];
-    const contributions = typeof centralPensionContributionRows === 'function' ? centralPensionContributionRows().filter(t => scope === 'all' || t.kind === scope).map(t => ({ ...t, accountKind: t.kind, linkedContribution: true })) : [];
+    const contributions = typeof centralPensionContributionRows === 'function' ? centralPensionContributionRows().filter(t => scope === 'all' || t.kind === scope).map((t) => ({ ...t, accountKind: t.kind, linkedContribution: true })) : [];
     return [...manual, ...orders, ...incomes, ...realized, ...contributions].sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.time || '').localeCompare(String(a.time || '')) || String(b.id).localeCompare(String(a.id)));
 }

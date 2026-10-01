@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use strict';
 function normalizeFinanceSchedules(input) { const src = input && typeof input === 'object' ? input : { items: [] }, items = Array.isArray(src.items) ? src.items : []; return { items: items.map((x, i) => ({ id: String(x.id || `schedule-${i + 1}`), name: String(x.name || `일정 ${i + 1}`), kind: ['income', 'investment', 'saving', 'loan', 'insurance', 'expense'].includes(x.kind) ? x.kind : 'expense', amount: Math.max(0, Number(x.amount) || 0), amountMode: x.amountMode === 'estimate' ? 'estimate' : 'fixed', day: (x.day === 0 || x.day === '0') ? 0 : Math.min(31, Math.max(1, Number(x.day) || DEFAULT_FINANCE_DAY)), recurrence: x.recurrence === 'monthly' ? 'monthly' : 'monthly', startDate: String(x.startDate || ''), endDate: String(x.endDate || ''), targetKind: String(x.targetKind || ''), targetAccountId: String(x.targetAccountId || ''), targetPensionAccountId: String(x.targetPensionAccountId || ''), targetIsaAccountId: String(x.targetIsaAccountId || ''), productId: String(x.productId || ''), liabilityId: String(x.liabilityId || ''), active: x.active !== false, note: String(x.note || ''), source: String(x.source || 'user'), needsDate: !!x.needsDate, attention: String(x.attention || '') })) }; }
 function financeSchedules() { return state.financeSchedules?.items || []; }
@@ -27,13 +26,13 @@ function scheduleDateForMonth(s, month) { if (!s.active || !s.day)
     return ''; if (s.endDate && date > s.endDate)
     return ''; return date; }
 function scheduleFallbackMatches(s, date, t) { if (!s || String(t.date) !== String(date) || (Number(t.amount) || 0) !== (Number(s.amount) || 0))
-    return false; const account = integratedStore().accounts.find(a => a.id === t.toAccountId), sameName = normalizeName(t.category) === normalizeName(s.name); if (s.kind === 'income')
+    return false; const account = integratedStore().accounts.find((a) => a.id === t.toAccountId), sameName = normalizeName(t.category) === normalizeName(s.name); if (s.kind === 'income')
     return t.type === 'externalIncome' && sameName; if (['investment', 'saving'].includes(s.kind)) {
     if (!['internalTransfer', 'externalAssetIn'].includes(t.type))
         return false;
     if (s.productId)
         return account?.productId === s.productId;
-    const targetKind = s.targetKind || integratedStore().accounts.find(a => a.id === scheduleTargetAccount(s))?.kind || '';
+    const targetKind = s.targetKind || integratedStore().accounts.find((a) => a.id === scheduleTargetAccount(s))?.kind || '';
     return account?.kind === targetKind && (sameName || ['isa', 'pension', 'irp'].includes(targetKind));
 } if (s.kind === 'loan')
     return ['debtInterest', 'debtInterestExternal', 'debtPrincipal', 'externalDebtPrincipal'].includes(t.type) && (String(t.liabilityId || '') === String(s.liabilityId || '') || String(t.productId || '') === String(s.productId || '') || sameName); if (['insurance', 'expense'].includes(s.kind))
@@ -43,11 +42,11 @@ function scheduleCompletionTx(scheduleId, date, sourceRows = null) { const rows 
 function scheduleOccurrenceStatus(s, date, knownTx) { const tx = arguments.length >= 3 ? knownTx : scheduleCompletionTx(s.id, date); if (tx)
     return 'done'; const today = localYmd(); if (date < today)
     return 'overdue'; if (date === today)
-    return 'today'; const diff = Math.round((new Date(date + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000); return diff <= 3 ? 'soon' : 'planned'; }
-function scheduleStatusLabel(st) { return ({ done: '완료', overdue: '미완료', today: '오늘', soon: '임박', planned: '예정' })[st] || '예정'; }
+    return 'today'; const diff = Math.round((new Date(date + 'T00:00:00').getTime() - new Date(today + 'T00:00:00').getTime()) / 86400000); return diff <= 3 ? 'soon' : 'planned'; }
+function scheduleStatusLabel(st) { return { done: '완료', overdue: '미완료', today: '오늘', soon: '임박', planned: '예정' }[st] || '예정'; }
 function scheduleOccurrences(month = integratedSelectedMonth()) { const rows = integratedOperationalLedger(); return financeSchedules().map(s => { const date = scheduleDateForMonth(s.active ? s : { ...s, active: true }, month); if (!date)
     return null; const tx = scheduleCompletionTx(s.id, date, rows); if (!s.active && !tx)
-    return null; return { schedule: s, date, status: scheduleOccurrenceStatus(s, date, tx), tx }; }).filter(o => o && (o.schedule.kind !== 'income' || o.status === 'done')).sort((a, b) => a.date.localeCompare(b.date) || String(a.schedule.name).localeCompare(String(b.schedule.name), 'ko')); }
+    return null; return { schedule: s, date, status: scheduleOccurrenceStatus(s, date, tx), tx }; }).filter((o) => !!o && (o.schedule.kind !== 'income' || o.status === 'done')).sort((a, b) => a.date.localeCompare(b.date) || String(a.schedule.name).localeCompare(String(b.schedule.name), 'ko')); }
 function scheduleUrgentOccurrences() { const today = localYmd(), months = new Set([today.slice(0, 7)]); const d = new Date(today + 'T00:00:00'); d.setDate(d.getDate() + 4); months.add(localYmd(d).slice(0, 7)); const dated = [...months].flatMap(m => scheduleOccurrences(m)).filter(x => x.schedule.kind !== 'income' && ['overdue', 'today', 'soon'].includes(x.status)), undated = financeSchedules().filter(x => x.active && x.needsDate && x.attention === 'overdue').map(s => ({ schedule: s, date: '날짜 미설정', status: 'overdue', tx: null, undated: true })); return [...undated, ...dated].sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.schedule.name).localeCompare(String(b.schedule.name), 'ko')); }
 function scheduleTargetAccount(s) { if (s.targetAccountId)
     return s.targetAccountId; if (s.targetKind === 'pension')
@@ -60,7 +59,7 @@ function pensionAccountActiveOnDate(a, date) { if (!a)
     return false; if (end && d > end)
     return false; return true; }
 function pensionAccountsForKind(kind, date = '') { return pensionStore().accounts.filter(a => a.kind === kind && (!date ? pensionAccount(a.id)?.status === 'active' : pensionAccountActiveOnDate(a, date))); }
-function schedulePensionKind(sc) { const linkedKind = integratedStore().accounts.find(a => a.id === sc?.targetAccountId)?.kind; return ['pension', 'irp'].includes(sc?.targetKind) ? sc.targetKind : (['pension', 'irp'].includes(linkedKind) ? linkedKind : ''); }
+function schedulePensionKind(sc) { const linkedKind = integratedStore().accounts.find((a) => a.id === sc?.targetAccountId)?.kind; return ['pension', 'irp'].includes(sc?.targetKind) ? sc.targetKind : (['pension', 'irp'].includes(linkedKind) ? linkedKind : ''); }
 function resolveSchedulePensionAccount(sc, explicit = '', date = '') { const kind = schedulePensionKind(sc); if (!kind)
     return ''; const candidates = pensionAccountsForKind(kind, date || ''); const requested = String(explicit || sc?.targetPensionAccountId || ''); if (requested && candidates.some(a => a.id === requested))
     return requested; return candidates.length === 1 ? candidates[0].id : ''; }
@@ -96,12 +95,12 @@ function centralPensionContributionRows(year = '') { const rows = []; for (const
         continue;
     if (!['internalTransfer', 'externalAssetIn'].includes(t.type))
         continue;
-    const kind = integratedStore().accounts.find(a => a.id === t.toAccountId)?.kind;
+    const accounts = integratedStore().accounts || [], pensionAccounts = pensionStore().accounts || [], kind = accounts.find(a => a.id === t.toAccountId)?.kind;
     if (!['pension', 'irp'].includes(kind))
         continue;
     if (year && !String(t.date).startsWith(String(year)))
         continue;
-    const explicit = String(t.meta?.pensionAccountId || t.meta?.targetPensionAccountId || ''), dated = pensionStore().accounts.filter(a => a.kind === kind && pensionAccountActiveOnDate(a, t.date)), resolved = explicit && pensionStore().accounts.some(a => a.id === explicit && a.kind === kind) ? explicit : (dated.length === 1 ? dated[0].id : '');
+    const explicit = String(t.meta?.pensionAccountId || t.meta?.targetPensionAccountId || ''), dated = pensionAccounts.filter(a => a.kind === kind && pensionAccountActiveOnDate(a, t.date)), resolved = explicit && pensionAccounts.some(a => a.id === explicit && a.kind === kind) ? explicit : (dated.length === 1 ? dated[0].id : '');
     rows.push({ id: `central-${t.id}`, accountId: resolved, kind, type: t.meta?.isaTransfer ? 'isaTransfer' : 'contribution', date: String(t.date), amount: Number(t.amount) || 0, sourceTxId: t.id, source: 'integrated', unresolved: !resolved });
 } return rows; }
 function centralIsaContributionRows(year = '') { const rows = []; for (const t of integratedOperationalLedger()) {
@@ -109,7 +108,8 @@ function centralIsaContributionRows(year = '') { const rows = []; for (const t o
         continue;
     if (!['internalTransfer', 'externalAssetIn'].includes(t.type))
         continue;
-    if (integratedStore().accounts.find(a => a.id === t.toAccountId)?.kind !== 'isa')
+    const accounts = integratedStore().accounts || [];
+    if (accounts.find(a => a.id === t.toAccountId)?.kind !== 'isa')
         continue;
     if (year && !String(t.date).startsWith(String(year)))
         continue;
