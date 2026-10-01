@@ -55,3 +55,35 @@ test('@release authentication gate exposes only safe conflict actions',async({pa
  expect(labels).toEqual(['클라우드 최신본 불러오기','이 기기 백업 후 덮어쓰기']);
  await expect(page.locator('#assetAuthConflict')).toBeHidden();
 });
+
+test('@core finance interest and backup health work through their real sheets',async({page})=>{
+ await preparePage(page);
+ await page.goto(app);
+ await page.evaluate(()=>{
+  const next=window.__assetOS.getState(),id='e2e-deposit',accountId=`finance-asset-${id}`;
+  next.financialProducts=next.financialProducts||{items:[],events:[]};
+  next.financialProducts.items=next.financialProducts.items.filter(product=>product.id!==id);
+  next.financialProducts.events=next.financialProducts.events.filter(event=>event.productId!==id);
+  next.financialProducts.items.push({id,type:'deposit',name:'E2E 정기예금',institution:'테스트은행',status:'active',startDate:'2060-01-01',maturityDate:'2060-12-31',annualRate:3.5,rateType:'fixed',interestMethod:'simple',taxMode:'general',taxRate:15.4,rateHistory:[{effectiveFrom:'2060-01-01',rate:3.5}]});
+  next.integrated.accounts=next.integrated.accounts.filter(account=>account.id!==accountId);
+  next.integrated.accounts.push({id:accountId,kind:'deposit',name:'E2E 정기예금',productId:id});
+  next.integrated.ledger=next.integrated.ledger.filter(row=>row.productId!==id);
+  next.integrated.ledger.push({id:'e2e-opening',date:'2060-01-01',type:'openingAsset',amount:1000000,toAccountId:accountId,productId:id});
+  next.settings.backupV04={...(next.settings.backupV04||{}),phoneEnabled:true,lastPhoneBackupAt:'2060-11-01T00:00:00.000Z'};
+  window.__assetOS.replaceState(next);
+ });
+ await page.evaluate(()=>openFinancialProductDetail('e2e-deposit'));
+ await page.getByRole('button',{name:'이자 입금'}).click();
+ await page.locator('#financeInterestCreditForm input[name="date"]').fill('2060-12-30');
+ await page.locator('#financeInterestCreditForm input[name="amount"]').fill('1234');
+ await page.getByRole('button',{name:'이자 저장'}).click();
+ await expect(page.getByText('최근 확인 이자')).toBeVisible();
+ const recorded=await page.evaluate(()=>{
+  const current=window.__assetOS.getState();
+  return{ledger:current.integrated.ledger.some(row=>row.productId==='e2e-deposit'&&row.meta?.financeInterest&&row.amount===1234),event:current.financialProducts.events.some(event=>event.productId==='e2e-deposit'&&event.type==='interestObserved'&&event.amount===1234)};
+ });
+ expect(recorded).toEqual({ledger:true,event:true});
+ await page.evaluate(()=>openBackupHub());
+ await expect(page.getByText('백업 오래됨')).toBeVisible();
+ expect(appErrors).toEqual([]);
+});
