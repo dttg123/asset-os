@@ -1,33 +1,33 @@
 'use strict';
-type DividendRecord=Record<string,any>;
+type DividendRecord=Record<string,unknown>&{id?:string;holdingId?:string;amount?:number;date?:string;type?:string};
 type DividendPoint={key:string;label:string;short:string;value:number};
 declare let dividendDisplayLimit:number;
 declare function dividendModel(account:DividendRecord,includeAll?:boolean):{ds:DividendRecord[];total:number};
 declare function localYmd():string;
-declare function setting():DividendRecord;
+declare function setting():{dividendKey?:string;dividendPeriod?:string};
 declare function txDate(tx:DividendRecord):string;
 declare function currentAccount():DividendRecord;
 declare function incomeYearRangePoints(points:DividendPoint[],range:string):DividendPoint[];
-declare function dividendYieldFor(account:DividendRecord,key:string,period:string,value:number):DividendRecord;
+declare function dividendYieldFor(account:DividendRecord,key:string,period:string,value:number):{principal:number;rate:number|null};
 declare function txSequence(tx:DividendRecord):number;
 declare function escapeHtml(value:unknown):string;
-declare function holdingName(account:DividendRecord,holdingId:string):string;
+declare function holdingName(account:DividendRecord,holdingId:unknown):string;
 declare function formatDate(value:string):string;
 declare function won(value:unknown):string;
 declare function commonIncomeAnalysisMarkup(options:DividendRecord):string;
 declare function incomeRecordSpanYears(rows:DividendRecord[]):number;
 declare function dividendAnalysisRecords(account:DividendRecord):DividendRecord[];
-declare function $(selector:string):any;
-declare function $$(selector:string):any[];
+declare function $(selector:string):HTMLElement;
+declare function $$(selector:string):HTMLElement[];
 declare function captureIncomeChartScroll():DividendRecord;
 declare function restoreIncomeChartScroll(saved:DividendRecord,preferLatest:boolean):void;
 declare function persist(notify?:boolean):boolean;
-declare function openTransactionDetail(id:string):void;
+declare function openTransactionDetail(id?:string):void;
 declare function openSheet(selector:string,options?:DividendRecord):void;
 declare function dividendNetAmount(tx:DividendRecord):number;
 declare function closeSheets(options?:DividendRecord):void;
 declare function toast(message:string):void;
-declare function openTransactionForm(type:string,tx:unknown,holdingId:string,sourceId?:string):void;
+declare function openTransactionForm(type:string,tx:unknown,holdingId?:string,sourceId?:string):void;
 let dividendYearRange='10y',dividendChartMode='bar';
 function dividendPeriodData(a:DividendRecord,period:string){
  const d=dividendModel(a,true),year=localYmd().slice(0,4),key=setting().dividendKey||'';
@@ -44,7 +44,7 @@ function dividendAnalysisMarkup(a:DividendRecord=currentAccount(),initialPeriod:
  return commonIncomeAnalysisMarkup({mode:period,points,selected,rate:yieldData?.rate??null,modeAttr:'data-dividend-period',pointAttr:'data-dividend-key',amountTerm:'배당금',rateTerm:'배당수익률',focusNote:selected?(yieldData&&yieldData.principal>0?`${period==='month'?'월말':'연말'} 투자원금 ${won(yieldData.principal)} 기준`:'해당 기간 투자원금 없음'):'',recentHtml,yearly:period==='year',caption:period==='year'&&dividendChartMode==='line'?'연간 배당금의 장기 성장 흐름입니다. 점을 누르면 해당 연도를 확인합니다.':'막대를 누르면 해당 기간 배당금과 배당수익률을 확인합니다.',yearRange:dividendYearRange,rangeAttr:'data-dividend-range',chartMode:dividendChartMode,chartModeAttr:'data-dividend-chart',totalYearCount:incomeRecordSpanYears(dividendAnalysisRecords(a))})
 }
 function dividendAnalysisSheetMarkup(a:DividendRecord=currentAccount(),initialPeriod:string=''){const d=dividendModel(a,true),year=localYmd().slice(0,4),yearTotal=d.ds.filter(x=>txDate(x).startsWith(year)).reduce((n,x)=>n+(Number(x.amount)||0),0),yearRate=dividendYieldFor(a,year,'year',yearTotal).rate,latest=d.ds[0];return `<div class="analysis-sheet-summary"><div class="dividend-metrics compact-four"><div class="dividend-metric emphasis"><span>누적 배당</span><strong>${won(d.total)}</strong></div><div class="dividend-metric"><span>${year}년 수령</span><strong>${won(yearTotal)}</strong></div><div class="dividend-metric"><span>${year} 배당률</span><strong>${yearRate==null?'계산 전':yearRate.toFixed(2)+'%'}</strong></div><div class="dividend-metric"><span>최근 수령</span><strong>${latest?won(latest.amount):'-'}</strong><small>${latest?escapeHtml(holdingName(a,latest.holdingId)):'내역 없음'}</small></div></div></div>${dividendAnalysisMarkup(a,initialPeriod)}`}
-function bindDividendAnalysisInline(){const rerender=(preferLatest=false)=>{const body=$('#sheetBody');if(!body)return;const saved=captureIncomeChartScroll();body.innerHTML=dividendAnalysisSheetMarkup(currentAccount());bindDividendAnalysisInline();restoreIncomeChartScroll(saved,preferLatest)},selectKey=(key:string)=>{setting().dividendKey=setting().dividendKey===key?'':key;dividendDisplayLimit=50;persist();rerender(false)};$$('[data-dividend-period]').forEach(b=>b.onclick=()=>{setting().dividendPeriod=b.dataset.dividendPeriod;setting().dividendKey='';dividendDisplayLimit=50;persist();rerender(true)});$$('[data-dividend-range]').forEach(b=>b.onclick=()=>{dividendYearRange=['5y','10y','20y','all'].includes(b.dataset.dividendRange)?b.dataset.dividendRange:'10y';setting().dividendKey='';rerender(true)});$$('[data-dividend-chart]').forEach(b=>b.onclick=()=>{dividendChartMode=b.dataset.dividendChart==='line'?'line':'bar';setting().dividendKey='';rerender(false)});$$('[data-dividend-key]').forEach(b=>{b.onclick=()=>selectKey(b.dataset.dividendKey);b.onkeydown=(e:KeyboardEvent)=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectKey(b.dataset.dividendKey)}}});$('[data-dividend-clear]')?.addEventListener('click',()=>{setting().dividendKey='';dividendDisplayLimit=50;persist();rerender(false)});$$('[data-d-detail]').forEach(b=>b.onclick=()=>openTransactionDetail(b.dataset.dDetail))}
+function bindDividendAnalysisInline(){const rerender=(preferLatest=false)=>{const body=$('#sheetBody');if(!body)return;const saved=captureIncomeChartScroll();body.innerHTML=dividendAnalysisSheetMarkup(currentAccount());bindDividendAnalysisInline();restoreIncomeChartScroll(saved,preferLatest)},selectKey=(key:string)=>{setting().dividendKey=setting().dividendKey===key?'':key;dividendDisplayLimit=50;persist();rerender(false)};$$('[data-dividend-period]').forEach(b=>b.onclick=()=>{setting().dividendPeriod=(b.dataset.dividendPeriod||'');setting().dividendKey='';dividendDisplayLimit=50;persist();rerender(true)});$$('[data-dividend-range]').forEach(b=>b.onclick=()=>{dividendYearRange=['5y','10y','20y','all'].includes((b.dataset.dividendRange||''))?(b.dataset.dividendRange||''):'10y';setting().dividendKey='';rerender(true)});$$('[data-dividend-chart]').forEach(b=>b.onclick=()=>{dividendChartMode=(b.dataset.dividendChart||'')==='line'?'line':'bar';setting().dividendKey='';rerender(false)});$$('[data-dividend-key]').forEach(b=>{b.onclick=()=>selectKey((b.dataset.dividendKey||''));b.onkeydown=(e:KeyboardEvent)=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectKey((b.dataset.dividendKey||''))}}});$('[data-dividend-clear]')?.addEventListener('click',()=>{setting().dividendKey='';dividendDisplayLimit=50;persist();rerender(false)});$$('[data-d-detail]').forEach(b=>b.onclick=()=>openTransactionDetail((b.dataset.dDetail||'')))}
 function openDividendAnalysis(initialPeriod:string=''){dividendDisplayLimit=50;dividendYearRange='10y';dividendChartMode='bar';if(['month','year','recent'].includes(initialPeriod))setting().dividendPeriod=initialPeriod;$('#sheetEyebrow').textContent='ISA';$('#sheetTitle').textContent='배당 분석';$('#sheetBody').innerHTML=dividendAnalysisSheetMarkup(currentAccount(),initialPeriod);openSheet('#detailSheet',{variant:'income-analysis'});setTimeout(bindDividendAnalysisInline,0)}
 
 function openDividendSaved(tx:DividendRecord){$('#actionTitle').textContent='배당 저장 완료';$('#actionGrid').innerHTML=`<button class="action" data-dividend-done><strong>완료</strong><small>계좌 현금에 ${won(dividendNetAmount(tx))} 반영</small></button><button class="action" data-dividend-buy><strong>이어서 매수</strong><small>같은 종목의 매수 화면 열기</small></button>`;openSheet('#actionSheet');$('[data-dividend-done]').onclick=()=>{closeSheets();toast('배당금을 저장했습니다.')};$('[data-dividend-buy]').onclick=()=>openTransactionForm('buy',null,tx.holdingId,tx.id)}

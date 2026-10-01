@@ -1,11 +1,12 @@
 'use strict';
 
-type IntegratedRecord=Record<string,any>;
-type IntegratedStore={accounts:IntegratedRecord[];liabilities:IntegratedRecord[];ledger:IntegratedRecord[];mode?:string;label?:string;[key:string]:any};
-type RefundResult={ok:boolean;error?:string;row?:IntegratedRecord};
+type IntegratedRecord=Record<string,unknown>&{id?:string;type?:string;date?:string;kind?:string;name?:string;category?:string;toAccountId?:string;fromAccountId?:string;accountId?:string;liabilityId?:string;productId?:string;baselineDate?:string;sourceModule?:string;meta?:Record<string,unknown>};
+type IntegratedStore={accounts:IntegratedRecord[];liabilities:IntegratedRecord[];ledger:IntegratedRecord[];mode?:string;label?:string;[key:string]:unknown};
+type RefundResult={ok:false;error:string}|{ok:true;row:IntegratedRecord};
+type IntegratedInputForm=HTMLFormElement&{elements:HTMLFormControlsCollection&{category?:HTMLInputElement;uiType?:HTMLSelectElement;toAccountId?:HTMLSelectElement;date?:HTMLInputElement}};
 
-declare let state:IntegratedRecord,sheetDirty:boolean,integratedLedgerSearch:string,integratedSearchDisplayLimit:number;
-declare const $:(selector:string)=>any;
+declare let state:{accounts:IntegratedRecord[];integrated?:IntegratedStore},sheetDirty:boolean,integratedLedgerSearch:string,integratedSearchDisplayLimit:number;
+declare const $:<T extends HTMLElement=HTMLElement>(selector:string)=>T;
 declare function integratedStore():IntegratedStore;
 declare function isaContributionModel(account:IntegratedRecord,date:string,store:IntegratedStore):{overage:number};
 declare function isCurrentAccount(account:IntegratedRecord):boolean;
@@ -62,9 +63,9 @@ function integratedPolicyLimitIssues(store:IntegratedStore=integratedStore()):st
  for(const year of years){
   let ordinary=0;
   for(const t of store.ledger||[]){
-   if(!String(t.date||'').startsWith(year)||t.meta?.analysisOnly||t.meta?.isaTransfer||!['internalTransfer','externalAssetIn'].includes(t.type))continue;
+   if(!String(t.date||'').startsWith(year)||t.meta?.analysisOnly||t.meta?.isaTransfer||!['internalTransfer','externalAssetIn'].includes(t.type||''))continue;
    const kind=accountMap.get(t.toAccountId)?.kind;
-   if(['pension','irp'].includes(kind))ordinary+=Number(t.amount)||0;
+   if(['pension','irp'].includes(kind||''))ordinary+=Number(t.amount)||0;
   }
   const limit=Number(policyForYear('pension',year).annualContributionLimit)||18000000;
   if(ordinary>limit+.5)issues.push(`${year}년 연금계좌 일반 납입한도를 ${won(ordinary-limit)} 초과합니다.`);
@@ -93,12 +94,12 @@ function openIntegratedTransactionForm(id='',preset:IntegratedRecord={}):void{
  const formPreset=tx||{...preset,date:preset.date||integratedEntryDateForMonth()};
  $('#formEyebrow').textContent='통합 · 거래기록';$('#formTitle').textContent=tx?'거래 수정':'거래 추가';$('#formBody').innerHTML=integratedFormMarkup(tx,formPreset);
  openSheet('#formSheet',{mode:'input'});syncIntegratedFormFields();
- const form=$('#integratedTxForm') as HTMLFormElement&{elements:any};
+ const form=$('#integratedTxForm') as IntegratedInputForm;
  if(form.elements.category)form.elements.category.dataset.auto=tx||formPreset.category?'0':'1';
  form.elements.uiType?.addEventListener('change',()=>{if(form.elements.category)form.elements.category.dataset.auto='1';syncIntegratedFormFields();formClearError(form);sheetDirty=true});
  form.elements.toAccountId?.addEventListener('change',()=>{syncIntegratedFormFields();formClearError(form);sheetDirty=true});
  form.elements.date?.addEventListener('change',()=>{syncIntegratedFormFields();sheetDirty=true});
- form.addEventListener('input',(event:Event)=>{sheetDirty=true;const name=(event.target as HTMLInputElement)?.name;if(['amount','principal','interest','date','targetPensionAccountId','targetIsaAccountId'].includes(name)){const error=integratedFormLiveError(form);if(error)formShowError(form,error);else formClearError(form)}});
+ form.addEventListener('input',(event:Event)=>{sheetDirty=true;const target=event.target;if(!(target instanceof HTMLInputElement||target instanceof HTMLSelectElement||target instanceof HTMLTextAreaElement))return;const name=target.name;if(['amount','principal','interest','date','targetPensionAccountId','targetIsaAccountId'].includes(name)){const error=integratedFormLiveError(form);if(error)formShowError(form,error);else formClearError(form)}});
  form.addEventListener('submit',(event:SubmitEvent)=>{event.preventDefault();saveIntegratedTransaction(event.currentTarget as HTMLFormElement)});
 }
 
@@ -150,29 +151,29 @@ function integratedCandidatesFromForm(form:HTMLFormElement):IntegratedRecord[]{
 function integratedValidateCandidate(candidate:IntegratedRecord,editingId=''):string{
  if(candidate.meta?.pensionRoutingRequired)return'복수 연금계좌 중 실제 납입 계좌를 선택해 주세요.';
  if(candidate.meta?.isaRoutingRequired)return'복수 ISA 중 실제 납입 계좌를 선택해 주세요.';
- const dateError=postedDateError(candidate.date);if(dateError)return dateError;
+ const dateError=postedDateError(candidate.date||'');if(dateError)return dateError;
  const accountMap=new Map((integratedStore().accounts||[]).map(a=>[a.id,a])),targetKind=accountMap.get(candidate.toAccountId)?.kind||'',explicitPension=String(candidate.meta?.targetPensionAccountId||''),explicitIsa=String(candidate.meta?.targetIsaAccountId||'');
- if(['internalTransfer','externalAssetIn'].includes(candidate.type)&&['pension','irp'].includes(targetKind)){
-  const eligible=pensionAccountsForKind(targetKind,candidate.date);
+ if(['internalTransfer','externalAssetIn'].includes(candidate.type||'')&&['pension','irp'].includes(targetKind)){
+  const eligible=pensionAccountsForKind(targetKind,candidate.date||'');
   if(explicitPension&&!eligible.some(a=>a.id===explicitPension))return'선택한 연금 납입 계좌가 해당 날짜에 운영 중이 아닙니다.';
   if(eligible.length>1&&!explicitPension)return'복수 연금계좌 중 실제 납입 계좌를 선택해 주세요.';
   if(!eligible.length)return'해당 날짜에 운영 중인 연금 납입 계좌가 없습니다.';
  }
- if(['internalTransfer','externalAssetIn'].includes(candidate.type)&&targetKind==='isa'){
-  const eligible=isaAccountsForDate(candidate.date);
+ if(['internalTransfer','externalAssetIn'].includes(candidate.type||'')&&targetKind==='isa'){
+  const eligible=isaAccountsForDate(candidate.date||'');
   if(explicitIsa&&!eligible.some(a=>a.id===explicitIsa))return'선택한 ISA가 해당 날짜에 운영 중이 아닙니다.';
   if(eligible.length>1&&!explicitIsa)return'복수 ISA 중 실제 납입 계좌를 선택해 주세요.';
   if(!eligible.length)return'해당 날짜에 운영 중인 ISA가 없습니다.';
   const target=eligible.find(a=>a.id===(explicitIsa||eligible[0]?.id));
-  if(target?.baselineDate&&candidate.date<=target.baselineDate)return`초기 잔고 기준일 ${formatDate(target.baselineDate)} 이후 납입만 추가해 주세요.`;
+  if(target?.baselineDate&&(candidate.date||'')<=target.baselineDate)return`초기 잔고 기준일 ${formatDate(target.baselineDate)} 이후 납입만 추가해 주세요.`;
  }
  for(const id of [candidate.fromAccountId,candidate.toAccountId,candidate.accountId].filter(Boolean)){
-  const account=accountMap.get(id),product=account?.productId?financialProduct(account.productId):null;
-  if(account&&product&&!financialProductActiveOnDate(product,candidate.date))return`${account.name} 상품의 운영기간 밖 거래는 저장할 수 없습니다.`;
+  const account=accountMap.get(id||''),product=account?.productId?financialProduct(account.productId||''):null;
+  if(account&&product&&!financialProductActiveOnDate(product,candidate.date||''))return`${account.name} 상품의 운영기간 밖 거래는 저장할 수 없습니다.`;
  }
  if(candidate.liabilityId){
-  const liability=(integratedStore().liabilities||[]).find(x=>x.id===candidate.liabilityId),product=liability?.productId?financialProduct(liability.productId):null;
-  if(liability&&product&&!financialProductActiveOnDate(product,candidate.date))return`${liability.name} 대출의 운영기간 밖 거래는 저장할 수 없습니다.`;
+  const liability=(integratedStore().liabilities||[]).find(x=>x.id===candidate.liabilityId),product=liability?.productId?financialProduct(liability.productId||''):null;
+  if(liability&&product&&!financialProductActiveOnDate(product,candidate.date||''))return`${liability.name} 대출의 운영기간 밖 거래는 저장할 수 없습니다.`;
  }
  if(candidate.type==='adjustment'){
   if(!Number.isFinite(Number(candidate.delta)))return'보정금액은 올바른 숫자여야 합니다.';
@@ -197,7 +198,7 @@ function saveIntegratedTransaction(form:HTMLFormElement):void{
  const combinedIssues=[...integratedCandidateIssues(test),...integratedPolicyLimitIssues(test)];
  if(combinedIssues.length){const message=combinedIssues[0].replace('자산 잔액 음수:','잔액이 부족합니다:').replace('부채 잔액 음수:','대출잔액보다 많이 상환할 수 없습니다:'),isLoan=rows.some(row=>row.type==='loanPayment');formShowError(form,message,isLoan?'principal':'amount');toast(message);return}
  if(editingId)integratedStore().ledger=integratedStore().ledger.filter(t=>t.id!==editingId);
- integratedStore().ledger.push(...rows);integratedStore().mode='live';integratedStore().label='내 통합 거래기록';setting().integratedMonth=integratedMonthKey(rows[0].date);integratedLedgerSearch='';integratedSearchDisplayLimit=50;setting().integratedLedgerFilter='all';
+ integratedStore().ledger.push(...rows);integratedStore().mode='live';integratedStore().label='내 통합 거래기록';setting().integratedMonth=integratedMonthKey(rows[0].date||'');integratedLedgerSearch='';integratedSearchDisplayLimit=50;setting().integratedLedgerFilter='all';
  if(!persist())return;sheetDirty=false;closeSheets({all:true});nav('integrated','ledger');toast('거래를 저장했습니다.');haptic('light');
 }
 
@@ -233,12 +234,12 @@ function eventTarget(event:Event):HTMLElement{return event.currentTarget as HTML
 
 function openIntegratedTransactionDetail(id:string):void{
  const tx=integratedLedger().find(x=>x.id===id);if(!tx){toast('거래를 찾지 못했습니다.');return}
- const linkedProduct=!!tx.productId,productLinkedManaged=linkedProduct&&['externalAssetIn','externalAssetOut','externalDebtPrincipal','debtInterestExternal','openingAsset','openingLiability'].includes(tx.type);
+ const linkedProduct=!!tx.productId,productLinkedManaged=linkedProduct&&['externalAssetIn','externalAssetOut','externalDebtPrincipal','debtInterestExternal','openingAsset','openingLiability'].includes(tx.type||'');
  $('#sheetEyebrow').textContent='통합 · 거래';$('#sheetTitle').textContent=tx.category||integratedTxLabel(tx);
- const sourceBox=tx.readonly?`<div class="source-note">${tx.sourceModule==='isa'?'ISA':'개인연금'}의 실제 기록을 자동으로 읽은 거래입니다. 통합에서 중복 수정하지 않습니다.</div><button class="diagnostic-action" data-linked-source="${escapeHtml(tx.sourceModule)}">원본 화면 열기</button>`:productLinkedManaged?`<div class="source-note">금융상품과 연결된 거래입니다. 통합에서 따로 수정하면 상품 잔액과 어긋날 수 있어 상품 화면에서 관리합니다.</div><button class="diagnostic-action" data-linked-product="${escapeHtml(tx.productId)}">금융상품 열기</button>`:`<div class="integrated-detail-note">수정·삭제하면 통합 수치가 즉시 다시 계산됩니다.</div><div class="integrated-detail-actions"><button data-integrated-edit="${escapeHtml(tx.id)}">수정</button><button class="danger" data-integrated-delete-detail="${escapeHtml(tx.id)}">삭제</button></div>`;
- $('#sheetBody').innerHTML=`<div class="sheetrows"><div class="sheetrow"><span>날짜</span><strong>${escapeHtml(tx.date)}</strong></div><div class="sheetrow"><span>유형</span><strong>${escapeHtml(integratedTxLabel(tx))}</strong></div><div class="sheetrow"><span>금액</span><strong>${tx.type==='adjustment'?signed(Number(tx.delta)||0):won(tx.amount)}</strong></div>${integratedTxAccountsText(tx)?`<div class="sheetrow"><span>계좌</span><strong>${escapeHtml(integratedTxAccountsText(tx))}</strong></div>`:''}${tx.note?`<div class="sheetrow"><span>메모</span><strong>${escapeHtml(tx.note)}</strong></div>`:''}</div>${sourceBox}${['expense','externalExpense'].includes(tx.type)?`<button class="diagnostic-action" data-refund="${escapeHtml(tx.id)}">환불·부분취소</button>`:''}`;
+ const sourceBox=tx.readonly?`<div class="source-note">${tx.sourceModule==='isa'?'ISA':'개인연금'}의 실제 기록을 자동으로 읽은 거래입니다. 통합에서 중복 수정하지 않습니다.</div><button class="diagnostic-action" data-linked-source="${escapeHtml(tx.sourceModule)}">원본 화면 열기</button>`:productLinkedManaged?`<div class="source-note">금융상품과 연결된 거래입니다. 통합에서 따로 수정하면 상품 잔액과 어긋날 수 있어 상품 화면에서 관리합니다.</div><button class="diagnostic-action" data-linked-product="${escapeHtml(tx.productId)}">금융상품 열기</button>`:`<div class="integrated-detail-note">수정·삭제하면 통합 수치가 즉시 다시 계산됩니다.</div><div class="integrated-detail-actions"><button data-integrated-edit="${escapeHtml(tx.id||'')}">수정</button><button class="danger" data-integrated-delete-detail="${escapeHtml(tx.id||'')}">삭제</button></div>`;
+ $('#sheetBody').innerHTML=`<div class="sheetrows"><div class="sheetrow"><span>날짜</span><strong>${escapeHtml(tx.date)}</strong></div><div class="sheetrow"><span>유형</span><strong>${escapeHtml(integratedTxLabel(tx))}</strong></div><div class="sheetrow"><span>금액</span><strong>${tx.type==='adjustment'?signed(Number(tx.delta)||0):won(tx.amount)}</strong></div>${integratedTxAccountsText(tx)?`<div class="sheetrow"><span>계좌</span><strong>${escapeHtml(integratedTxAccountsText(tx))}</strong></div>`:''}${tx.note?`<div class="sheetrow"><span>메모</span><strong>${escapeHtml(tx.note)}</strong></div>`:''}</div>${sourceBox}${['expense','externalExpense'].includes(tx.type||'')?`<button class="diagnostic-action" data-refund="${escapeHtml(tx.id||'')}">환불·부분취소</button>`:''}`;
  openSheet('#detailSheet');
- $('[data-refund]')?.addEventListener('click',()=>openIntegratedRefundForm(tx.id));
+ $('[data-refund]')?.addEventListener('click',()=>openIntegratedRefundForm(tx.id||''));
  $('[data-integrated-edit]')?.addEventListener('click',(event:Event)=>openIntegratedTransactionForm(eventTarget(event).dataset.integratedEdit));
  $('[data-integrated-delete-detail]')?.addEventListener('click',(event:Event)=>deleteIntegratedTransaction(String(eventTarget(event).dataset.integratedDeleteDetail||'')));
  $('[data-linked-source]')?.addEventListener('click',(event:Event)=>{closeSheets();eventTarget(event).dataset.linkedSource==='isa'?nav('isa','transactions'):nav('pension','contribution')});
@@ -247,7 +248,7 @@ function openIntegratedTransactionDetail(id:string):void{
 
 function recordIntegratedRefund(originalId:string,date:string,amount:number):RefundResult{
  const original=integratedStore().ledger.find(t=>t.id===originalId);
- if(!original||!['expense','externalExpense'].includes(original.type))return{ok:false,error:'환불할 지출 기록을 찾지 못했습니다.'};
+ if(!original||!['expense','externalExpense'].includes(original.type||''))return{ok:false,error:'환불할 지출 기록을 찾지 못했습니다.'};
  const row={id:uid('refund'),date,type:'refund',amount:Number(amount),toAccountId:original.type==='expense'?original.fromAccountId:'',category:original.category,fixed:original.fixed,note:'원거래 환불',meta:{refundOf:original.id}};
  const error=integratedValidateCandidate(row);if(error)return{ok:false,error};integratedStore().ledger.push(row);return{ok:true,row};
 }

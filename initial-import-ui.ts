@@ -1,6 +1,6 @@
 'use strict';
 
-declare const $:(selector:string)=>any;
+declare function $(selector:string):HTMLElement;
 
 function appendInitialImportBackupAction(grid:Element|null|undefined):boolean{
  if(!grid||grid.querySelector('[data-initial-import]'))return false;

@@ -30,7 +30,7 @@ test('30 years are entered one user action at a time and every month stays consi
   state.pension.accounts=[{id:'ps-30y',kind:'pension',name:'장기 연금저축',status:'active',openedAt:'2031-01-01'},{id:'irp-30y',kind:'irp',name:'장기 IRP',status:'active',openedAt:'2031-01-01'}];
   state.pension.holdings=[{id:'ps-etf',accountId:'ps-30y',name:'연금지수 ETF',investmentRole:'성장',assetClass:'성장',baselineQty:0,baselineAvgPrice:0,qty:0,avgPrice:0,currentPrice:100000},{id:'irp-etf',accountId:'irp-30y',name:'IRP지수 ETF',investmentRole:'성장',assetClass:'성장',baselineQty:0,baselineAvgPrice:0,qty:0,avgPrice:0,currentPrice:150000,risky:true}];
   setting().selectedAccountId='isa-30y';
-  globalThis.userSave=(values,dataset={})=>{const before=state.integrated.ledger.length;saveIntegratedTransaction({values,dataset});return state.integrated.ledger.length-before};
+  globalThis.userSave=(values,dataset={})=>{const before=state.integrated.ledger.length;saveIntegratedTransaction({values,dataset,querySelector:()=>null,querySelectorAll:()=>[],classList:{add(){},remove(){}},elements:{namedItem:()=>null}});return state.integrated.ledger.length-before};
   globalThis.isaSave=(candidate)=>{const a=state.accounts[0],date=String(candidate.date),tx={...candidate,id:uid('tx'),tradeDate:date,date,sequence:nextSequence(a,date),createdAt:date+'T12:00:00.000Z'};tx.idempotencyKey=stableTxKey(tx);if(findDuplicateTransaction(a,tx))return{ok:false,error:'duplicate'};const next=[...a.transactions.map(t=>({...t})),tx],result=replay(a,next);if(!result.valid)return{ok:false,error:result.error};a.transactions=next;rebuildLedgerIndexes(a);return{ok:true,tx}};
  `);
 

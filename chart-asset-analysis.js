@@ -69,7 +69,7 @@ function updateIsaAnalysisPoint(clientX) { const svg = $('#isaAnalysisChart'), h
     $('#isaAnalysisRate').textContent = pct(rate);
     $('#isaAnalysisRate').className = rate < 0 ? 'negative' : 'positive';
 } }
-function bindIsaAssetAnalysis() { $$('[data-isa-analysis-period]').forEach(b => b.onclick = () => { isaAnalysisPeriod = ['3m', '6m', '1y', '3y', '5y', 'all'].includes(b.dataset.isaAnalysisPeriod) ? b.dataset.isaAnalysisPeriod : '1y'; isaAnalysisSelectedKey = ''; $('#sheetBody').innerHTML = isaAnalysisMarkup(currentAccount()); bindIsaAssetAnalysis(); }); const track = $('[data-isa-analysis-track]'); if (track) {
+function bindIsaAssetAnalysis() { $$('[data-isa-analysis-period]').forEach(b => b.onclick = () => { isaAnalysisPeriod = ['3m', '6m', '1y', '3y', '5y', 'all'].includes((b.dataset.isaAnalysisPeriod || '')) ? (b.dataset.isaAnalysisPeriod || '') : '1y'; isaAnalysisSelectedKey = ''; $('#sheetBody').innerHTML = isaAnalysisMarkup(currentAccount()); bindIsaAssetAnalysis(); }); const track = $('[data-isa-analysis-track]'); if (track) {
     let active = false, pid = null;
     track.style.touchAction = 'none';
     track.onpointerdown = (e) => { active = true; pid = e.pointerId; e.preventDefault(); e.stopPropagation(); try {
@@ -156,7 +156,7 @@ function updatePensionAnalysisPoint(clientX) { const svg = $('#pensionAnalysisCh
     $('#pensionAnalysisRate').textContent = pct(rate);
     $('#pensionAnalysisRate').className = rate < 0 ? 'negative' : 'positive';
 } }
-function bindPensionAssetAnalysis() { $$('[data-pension-analysis-mode]').forEach(b => b.onclick = () => { pensionAnalysisMode = b.dataset.pensionAnalysisMode; pensionAnalysisSelectedKey = ''; renderPensionAssetAnalysis(); }); $$('[data-pension-analysis-period]').forEach(b => b.onclick = () => { pensionAnalysisPeriod = ['3m', '6m', '1y', '3y', '5y', 'all'].includes(b.dataset.pensionAnalysisPeriod) ? b.dataset.pensionAnalysisPeriod : '1y'; pensionAnalysisSelectedKey = ''; renderPensionAssetAnalysis(); }); $('[data-pension-analysis-period-select]')?.addEventListener('change', (e) => { pensionAnalysisPeriod = ['3m', '6m', '1y', '3y', '5y', 'all'].includes(e.currentTarget.value) ? e.currentTarget.value : '1y'; pensionAnalysisSelectedKey = ''; renderPensionAssetAnalysis(); }); const track = $('[data-pension-analysis-track]'); if (track) {
+function bindPensionAssetAnalysis() { $$('[data-pension-analysis-mode]').forEach(b => b.onclick = () => { pensionAnalysisMode = (b.dataset.pensionAnalysisMode || ''); pensionAnalysisSelectedKey = ''; renderPensionAssetAnalysis(); }); $$('[data-pension-analysis-period]').forEach(b => b.onclick = () => { pensionAnalysisPeriod = ['3m', '6m', '1y', '3y', '5y', 'all'].includes((b.dataset.pensionAnalysisPeriod || '')) ? (b.dataset.pensionAnalysisPeriod || '') : '1y'; pensionAnalysisSelectedKey = ''; renderPensionAssetAnalysis(); }); $('[data-pension-analysis-period-select]')?.addEventListener('change', (e) => { pensionAnalysisPeriod = ['3m', '6m', '1y', '3y', '5y', 'all'].includes(e.currentTarget.value) ? e.currentTarget.value : '1y'; pensionAnalysisSelectedKey = ''; renderPensionAssetAnalysis(); }); const track = $('[data-pension-analysis-track]'); if (track) {
     let active = false, pid = null;
     track.style.touchAction = 'none';
     track.onpointerdown = (e) => { active = true; pid = e.pointerId; e.preventDefault(); e.stopPropagation(); try {

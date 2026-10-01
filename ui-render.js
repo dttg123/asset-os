@@ -1,9 +1,9 @@
 'use strict';
 function integratedUiType(t) { if (!t)
     return 'externalIncome'; if (t.type === 'expense')
-    return 'lifeExpense'; if (['externalAssetIn', 'internalTransfer'].includes(t.type) && ['isa', 'pension', 'irp', 'deposit', 'savings'].includes(integratedStore().accounts.find(a => a.id === t.toAccountId)?.kind))
-    return 'savingInvestment'; if (['debtPrincipal', 'externalDebtPrincipal', 'debtInterest', 'debtInterestExternal'].includes(t.type))
-    return 'loanPayment'; return t.type; }
+    return 'lifeExpense'; if (['externalAssetIn', 'internalTransfer'].includes(t.type || '') && ['isa', 'pension', 'irp', 'deposit', 'savings'].includes(integratedStore().accounts.find(a => a.id === t.toAccountId)?.kind || ''))
+    return 'savingInvestment'; if (['debtPrincipal', 'externalDebtPrincipal', 'debtInterest', 'debtInterestExternal'].includes(t.type || ''))
+    return 'loanPayment'; return t.type || ''; }
 function integratedDefaultCategory(uiType) { const categories = { externalIncome: '월급', lifeExpense: '생활비', savingInvestment: '저축·투자', loanPayment: '대출 납부' }; return categories[uiType] || ''; }
 function integratedFormAccountOptions(selected = '') { const activeIds = new Set(activeFinancialProducts().map(p => p.id)); return integratedStore().accounts.filter(a => !['isa', 'pension', 'irp'].includes(a.kind) && (!a.productId || activeIds.has(a.productId))).map(a => `<option value="${escapeHtml(a.id)}" ${a.id === selected ? 'selected' : ''}>${escapeHtml(a.name)}</option>`).join(''); }
 function integratedInvestmentTargetOptions(selected = '') { const activeIds = new Set(activeFinancialProducts().map(p => p.id)); return integratedStore().accounts.filter(a => ['isa', 'pension', 'irp', 'deposit', 'savings'].includes(a.kind) && (!a.productId || activeIds.has(a.productId))).map(a => `<option value="${escapeHtml(a.id)}" ${a.id === selected ? 'selected' : ''}>${escapeHtml(a.name)}</option>`).join(''); }
@@ -63,7 +63,7 @@ function updateDiagnostics() { const h = state.accounts.reduce((sum, a) => sum +
 } if ($('#storageUsageStatus')) {
     const mb = Math.round((Number(usage?.bytes) || 0) / 10000) / 100, pctUsed = Math.round((Number(usage?.bytes) || 0) / (Number(usage?.limit) || MAX_STATE_BYTES) * 100);
     $('#storageUsageStatus').textContent = usage ? `${mb}MB · ${pctUsed}%` : '저장 후 계산';
-    $('#storageUsageStatus').className = `diagnostic-value ${['warning', 'critical'].includes(usage?.level) ? 'wait' : 'ok'}`;
+    $('#storageUsageStatus').className = `diagnostic-value ${['warning', 'critical'].includes(usage?.level || '') ? 'wait' : 'ok'}`;
 } if ($('#backupStatus'))
     $('#backupStatus').textContent = '준비됨'; }
 function selectAccount(id) { setting().selectedAccountId = id; persist(); render(); haptic('light'); }
@@ -72,10 +72,11 @@ function bind() {
         transactionDisplayLimit = 50; nav(b.dataset.route, b.dataset.tab || 'summary'); });
     $$('[data-integrated-tab]').forEach(b => b.onclick = () => nav('integrated', b.dataset.integratedTab));
     $$('[data-integrated-tab-go]').forEach(b => b.onclick = () => nav('integrated', b.dataset.integratedTabGo));
-    $('[data-integrated-month-select]')?.addEventListener('change', e => { const month = e.target.value; if (!/^\d{4}-\d{2}$/.test(month))
+    $('[data-integrated-month-select]')?.addEventListener('change', e => { const target = e.target; if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement))
+        return; const month = target.value; if (!/^\d{4}-\d{2}$/.test(month))
         return; setting().integratedMonth = month; persist(false); render(); });
     $$('[data-integrated-month-shift]').forEach(b => b.onclick = () => integratedShiftMonth(Number(b.dataset.integratedMonthShift) || 0));
-    $$('[data-integrated-filter]').forEach(b => b.onclick = () => { setting().integratedLedgerFilter = b.dataset.integratedFilter; persist(false); render(); });
+    $$('[data-integrated-filter]').forEach(b => b.onclick = () => { setting().integratedLedgerFilter = b.dataset.integratedFilter || ''; persist(false); render(); });
     $$('[data-integrated-new]').forEach(b => b.onclick = () => openIntegratedTransactionForm());
     $$('[data-integrated-tx]').forEach(b => b.onclick = () => openIntegratedTransactionDetail(b.dataset.integratedTx));
     $$('[data-integrated-month-detail]').forEach(b => b.onclick = () => openIntegratedMonthDetail(b.dataset.integratedMonthDetail));
@@ -90,17 +91,17 @@ function bind() {
     $$('[data-schedule-day]').forEach(b => b.onclick = () => openScheduleDay(b.dataset.scheduleDay));
     $('[data-empty-new-isa]')?.addEventListener('click', () => openNewIsaAccount(policyGroup('isa').activePolicyId));
     $$('[data-detail]').forEach(b => b.onclick = e => { e.stopPropagation(); openDetail(b.dataset.detail); });
-    $$('[data-account]').forEach(b => b.onclick = () => selectAccount(b.dataset.account));
+    $$('[data-account]').forEach(b => b.onclick = () => selectAccount(b.dataset.account || ''));
     $$('[data-archive-open]').forEach(b => b.onclick = () => openArchivedAccountDetail(b.dataset.archiveOpen));
     $$('[data-isa-tab]').forEach(b => b.onclick = () => { if (b.dataset.isaTab === 'transactions')
         transactionDisplayLimit = 50; nav('isa', b.dataset.isaTab); });
     $$('[data-holding]').forEach(b => b.onclick = () => openHolding(b.dataset.holding));
     $$('[data-tx]').forEach(b => b.onclick = () => openTransactionDetail(b.dataset.tx));
-    $$('[data-tx-filter]').forEach(b => b.onclick = () => { setting().txFilter = b.dataset.txFilter; transactionDisplayLimit = 50; persist(); render(); });
+    $$('[data-tx-filter]').forEach(b => b.onclick = () => { setting().txFilter = b.dataset.txFilter || ''; transactionDisplayLimit = 50; persist(); render(); });
     $('[data-tx-more]')?.addEventListener('click', () => { transactionDisplayLimit += 50; render(); });
     $$('[data-register]').forEach(b => b.onclick = openRegisterChoice);
     $$('[data-new-tx]').forEach(b => b.onclick = openTransactionChoice);
-    $$('[data-inline-group],[data-inline-donut]').forEach(b => b.onclick = () => { const group = b.dataset.inlineGroup || b.dataset.inlineDonut, next = setting().compositionFocus === group ? '' : group; setting().compositionGroup = next; setting().compositionFocus = next; persist(); renderKeepingScroll(); });
+    $$('[data-inline-group],[data-inline-donut]').forEach(b => b.onclick = () => { const group = b.dataset.inlineGroup || b.dataset.inlineDonut || '', next = setting().compositionFocus === group ? '' : group; setting().compositionGroup = next; setting().compositionFocus = next; persist(); renderKeepingScroll(); });
     $('[data-isa-holdings-toggle]')?.addEventListener('click', e => { const panel = $('[data-isa-holdings-extra]'), guard = $('[data-isa-holdings-guard]'); isaHoldingsExpanded = !isaHoldingsExpanded; stableInlineToggle(e.currentTarget, panel, guard, isaHoldingsExpanded); e.currentTarget.textContent = isaHoldingsExpanded ? '숨기기 ∧' : '펼치기 ∨'; e.currentTarget.setAttribute('aria-expanded', isaHoldingsExpanded ? 'true' : 'false'); });
     $('[data-pension-holdings-toggle]')?.addEventListener('click', e => { const panel = $('[data-pension-holdings-extra]'), guard = $('[data-pension-holdings-guard]'); pensionHoldingsExpanded = !pensionHoldingsExpanded; stableInlineToggle(e.currentTarget, panel, guard, pensionHoldingsExpanded); e.currentTarget.textContent = pensionHoldingsExpanded ? '숨기기 ∧' : '펼치기 ∨'; e.currentTarget.setAttribute('aria-expanded', pensionHoldingsExpanded ? 'true' : 'false'); });
     $$('[data-dividend-analysis]').forEach(b => b.onclick = () => { dividendDisplayLimit = 50; openDividendAnalysis(b.dataset.period || ''); });
@@ -132,9 +133,9 @@ function bind() {
         return; integratedAssetsExpanded = !integratedAssetsExpanded; stableInlineToggle(e.currentTarget, body, guard, integratedAssetsExpanded); card.classList.toggle('open', integratedAssetsExpanded); e.currentTarget.setAttribute('aria-expanded', integratedAssetsExpanded ? 'true' : 'false'); });
     $('[data-fixed-cost-toggle]')?.addEventListener('click', e => { const card = e.currentTarget.closest('[data-fixed-cost-card]'), body = card?.querySelector('[data-fixed-cost-body]'); if (!card || !body)
         return; integratedFixedCostsExpanded = !integratedFixedCostsExpanded; body.hidden = !integratedFixedCostsExpanded; card.classList.toggle('open', integratedFixedCostsExpanded); e.currentTarget.setAttribute('aria-expanded', integratedFixedCostsExpanded ? 'true' : 'false'); });
-    $$('[data-pension-scope]').forEach(b => b.onclick = () => { setting().pensionAssetScope = b.dataset.pensionScope; setting().pensionAssetFocus = ''; pensionExpandedAssetGroup = ''; pensionHoldingsExpanded = false; pensionAnalysisScope = b.dataset.pensionScope; pensionAnalysisSelectedKey = ''; persist(); renderKeepingScroll(); });
-    $$('[data-pension-group],[data-pension-donut]').forEach(b => b.onclick = () => { const key = b.dataset.pensionGroup || b.dataset.pensionDonut, next = setting().pensionAssetFocus === key ? '' : key; setting().pensionAssetFocus = next; pensionExpandedAssetGroup = next; persist(); renderKeepingScroll(); });
-    $('[data-pension-group-toggle]')?.addEventListener('click', e => { const key = e.currentTarget.dataset.pensionGroupToggle; pensionExpandedAssetGroup = pensionExpandedAssetGroup === key ? '' : key; renderKeepingScroll(); });
+    $$('[data-pension-scope]').forEach(b => b.onclick = () => { setting().pensionAssetScope = b.dataset.pensionScope || ''; setting().pensionAssetFocus = ''; pensionExpandedAssetGroup = ''; pensionHoldingsExpanded = false; pensionAnalysisScope = b.dataset.pensionScope || ''; pensionAnalysisSelectedKey = ''; persist(); renderKeepingScroll(); });
+    $$('[data-pension-group],[data-pension-donut]').forEach(b => b.onclick = () => { const key = b.dataset.pensionGroup || b.dataset.pensionDonut || '', next = setting().pensionAssetFocus === key ? '' : key; setting().pensionAssetFocus = next; pensionExpandedAssetGroup = next; persist(); renderKeepingScroll(); });
+    $('[data-pension-group-toggle]')?.addEventListener('click', e => { const key = e.currentTarget.dataset.pensionGroupToggle || ''; pensionExpandedAssetGroup = pensionExpandedAssetGroup === key ? '' : key; renderKeepingScroll(); });
     $$('[data-pension-holding]').forEach(b => b.onclick = () => openPensionHoldingDetail(b.dataset.pensionHolding));
     $('[data-isa-asset-analysis]')?.addEventListener('click', openIsaAssetAnalysis);
     $('[data-pension-asset-analysis]')?.addEventListener('click', openPensionAssetAnalysis);

@@ -36,6 +36,6 @@ catch { } ; updatePensionFuturePoint(e.clientX); }; const move = (e) => { if (!a
     return; if (e.pointerType === 'mouse' && !e.buttons)
     return; e.preventDefault(); e.stopPropagation(); updatePensionFuturePoint(e.clientX); }; const release = (e) => { if (!active)
     return; e.preventDefault(); e.stopPropagation(); updatePensionFuturePoint(e.clientX); active = false; try {
-    track.releasePointerCapture(pointerId);
+    track.releasePointerCapture(pointerId ?? e.pointerId);
 }
 catch { } ; pointerId = null; }; track.style.touchAction = 'none'; track.onpointerdown = lock; track.onpointermove = move; track.onpointerup = release; track.onpointercancel = release; track.onlostpointercapture = () => { active = false; pointerId = null; }; }

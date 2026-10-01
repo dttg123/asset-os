@@ -4,8 +4,8 @@ type SheetCallback=(()=>void)|null;
 type SheetOptions={variant?:string;mode?:string;dirty?:boolean;all?:boolean;fromPop?:boolean};
 type DialogOptions={title?:string;message?:string;confirmText?:string;cancelText?:string;danger?:boolean;oneButton?:boolean};
 
-declare function $(selector:string):any;
-declare function $$(selector:string):any[];
+declare function $(selector:string):HTMLElement;
+declare function $$(selector:string):HTMLElement[];
 declare let holdingRegistrationDraft:unknown;
 
 let lockedScrollY=0;
