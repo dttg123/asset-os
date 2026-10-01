@@ -84,6 +84,6 @@ test('@core finance interest and backup health work through their real sheets',a
  });
  expect(recorded).toEqual({ledger:true,event:true});
  await page.evaluate(()=>openBackupHub());
- await expect(page.getByText('백업 오래됨')).toBeVisible();
+ await expect(page.locator('#sheetBody').getByText('백업 오래됨',{exact:true})).toBeVisible();
  expect(appErrors).toEqual([]);
 });
