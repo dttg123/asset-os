@@ -75,7 +75,16 @@ const negativeMismatch=vm.runInContext('aiStrategyPreflight(__payload,3000000,"n
 assert.equal(negativeMismatch.ready,true,'외부 자금·보유종목 분석은 연금 차액을 경고하고 계속할 수 있어야 한다');
 assert.match(negativeMismatch.warnings.join(' '),/500,000원/);
 const cashMismatch=vm.runInContext('aiStrategyPreflight(__payload,3000000,"account_cash")',Object.assign(context,{__payload:preflightPayload}));
-assert.equal(cashMismatch.ready,false,'구성 차액이 있는 계좌 현금을 투자금으로 쓸 때만 공유를 막아야 한다');
+assert.equal(cashMismatch.ready,false,'차액을 반영한 실제 가용현금보다 큰 요청만 막아야 한다');
+preflightPayload.isa.accounts=[];
+preflightPayload.pensionSavings.accounts[0].summary={componentDelta:-309716,cashConfirmed:true,availableCash:1000000,cash:1000000};
+const adjustedCash=vm.runInContext('aiStrategyPreflight(__payload,100000,"account_cash")',Object.assign(context,{__payload:preflightPayload}));
+assert.equal(adjustedCash.ready,true,'차액이 있어도 확인된 가용현금 안의 분석은 공유할 수 있어야 한다');
+assert.equal(vm.runInContext('aiStrategyAvailableCash(__payload.pensionSavings.accounts[0].summary)',context),690284);
+const excessiveCash=vm.runInContext('aiStrategyPreflight(__payload,800000,"account_cash")',context);
+assert.equal(excessiveCash.ready,false);
+assert.match(excessiveCash.blockers.join(' '),/690,284/);
+assert.equal(vm.runInContext('aiStrategyAvailableCash({cash:1000000,availableCash:690284,reportedAvailableCash:1000000,componentDelta:-309716})',context),690284,'내보낸 조정 현금에서 차액을 두 번 빼면 안 된다');
 const zeroRebalancePayload=JSON.parse(JSON.stringify(payload));
 zeroRebalancePayload.request.purpose='리밸런싱';
 const zeroRebalance=vm.runInContext('aiStrategyPreflight(__payload,0,"new_money")',Object.assign(context,{__payload:zeroRebalancePayload}));

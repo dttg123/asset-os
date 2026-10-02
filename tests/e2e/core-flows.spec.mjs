@@ -258,3 +258,33 @@ test('@core haptic settings control vibration and unsupported browsers remain us
  await expect(page.getByRole('heading',{name:'홈',exact:true})).toBeVisible();
  expect(appErrors).toEqual([]);
 });
+
+test('@core AI sharing uses pension cash after a balance discrepancy without blocking a funded request',async({page})=>{
+ await preparePage(page);
+ await page.goto(app);
+ await page.evaluate(()=>{
+  const next=window.__assetOS.getState();
+  next.accounts=[];
+  next.pension.accounts=[{id:'e2e-ai-pension',name:'QA 연금',kind:'pension',status:'active',openedAt:'2026-01-01'}];
+  next.pension.holdings=[];next.pension.transactions=[];
+  next.brokerKis={};
+  next.settings.aiStrategy={purpose:'buy',fundingSource:'account_cash',amount:100000,includedScopes:['pension']};
+  window.__assetOS.replaceState(next);
+  const result=window.__assetOS.brokerKis.importBalance({cash:1000000,cashDetail:{depositCash:1000000,settledCash:1000000,availableCash:1000000},securitiesValue:2000000,totalValue:2690284,holdings:[{productCode:'005930',productName:'QA 종목',quantity:100,avgPrice:20000,currentPrice:20000,marketValue:2000000}]},'pension','e2e-ai-pension',new Date().toISOString());
+  if(!result.ok)throw new Error(JSON.stringify(result));
+  Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>true});
+  Object.defineProperty(navigator,'share',{configurable:true,value:async({files})=>{window.__qaAiShare=JSON.parse(await files[0].text())}});
+  openAiStrategy();
+ });
+ await page.locator('#aiStrategyForm').getByRole('button',{name:'분석파일 만들기'}).click();
+ await page.locator('[data-ai-share]').click();
+ await expect(page.getByText('투자분석 자료를 공유했습니다.',{exact:true})).toBeVisible();
+ const exported=await page.evaluate(()=>window.__qaAiShare);
+ const summary=exported.pensionSavings.accounts[0].summary;
+ expect(summary.componentDelta).toBe(-309716);
+ expect(summary.reportedAvailableCash).toBe(1000000);
+ expect(summary.availableCash).toBe(690284);
+ expect(exported.dataQuality).toEqual({ready:true,blockers:[]});
+ await expect(page.locator('#confirmDialog')).toBeHidden();
+ expect(appErrors).toEqual([]);
+});
