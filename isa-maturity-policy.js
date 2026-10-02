@@ -120,7 +120,7 @@ function recordIsaLifecycle(accountId, input) {
         a.lifecycleHistory = [...(a.lifecycleHistory || []), { action: 'pending', date }];
         return { ok: true };
     }
-    if (!['close', 'transfer'].includes(input.action))
+    if (!['close', 'transfer'].includes(input.action || ''))
         return { ok: false, error: '처리 유형을 선택해 주세요.' };
     if (input.action === 'transfer') {
         const terminationDate = String(input.terminationDate || date), eligibleFrom = [String(a.maturityAt || ''), isaDateAddYears(String(a.openedAt || ''), Number(policy('isa', a).mandatoryYears) || 3)].filter(Boolean).sort()[0] || '';

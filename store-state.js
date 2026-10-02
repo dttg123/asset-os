@@ -4,14 +4,14 @@ function normalizeState(data) {
     const next = clone((data || seed));
     next.settings = { ...clone(seed.settings), ...(next.settings || {}) };
     next.settings.monthlyLivingBudget = Math.max(0, Math.round(Number(next.settings.monthlyLivingBudget) || 0));
-    if (!['month', 'year', 'recent'].includes(next.settings.dividendPeriod))
+    if (!['month', 'year', 'recent'].includes(next.settings.dividendPeriod || ''))
         next.settings.dividendPeriod = 'month';
     next.system = { loadWarning: '', saveError: '', ...(next.system || {}) };
     next.policies = next.policies || clone(seed.policies);
     next.accounts = Array.isArray(next.accounts) ? next.accounts : clone(seed.accounts);
     next.pension = { ...clone(seed.pension), ...(next.pension || {}) };
     next.pension.goal = { ...clone(seed.pension.goal), ...(next.pension.goal || {}) };
-    next.pension.accounts = (Array.isArray(next.pension.accounts) ? next.pension.accounts : clone(seed.pension.accounts)).map((a, i) => ({ ...a, id: String(a.id || `pension-account-${i + 1}`), kind: a.kind === 'irp' ? 'irp' : 'pension', name: String(a.name || `${a.kind === 'irp' ? 'IRP' : '연금저축'} ${i + 1}`), provider: String(a.provider || ''), status: ['active', 'closed', 'archived'].includes(a.status) ? a.status : 'active', openedAt: String(a.openedAt || ''), closedAt: String(a.closedAt || ''), policyId: String(a.policyId || ((a.kind === 'irp' ? next.policies?.irp?.activePolicyId : next.policies?.pension?.activePolicyId) || '')), policyHistory: Array.isArray(a.policyHistory) ? a.policyHistory : [] }));
+    next.pension.accounts = (Array.isArray(next.pension.accounts) ? next.pension.accounts : clone(seed.pension.accounts)).map((a, i) => ({ ...a, id: String(a.id || `pension-account-${i + 1}`), kind: a.kind === 'irp' ? 'irp' : 'pension', name: String(a.name || `${a.kind === 'irp' ? 'IRP' : '연금저축'} ${i + 1}`), provider: String(a.provider || ''), status: ['active', 'closed', 'archived'].includes(a.status || '') ? a.status : 'active', openedAt: String(a.openedAt || ''), closedAt: String(a.closedAt || ''), policyId: String(a.policyId || ((a.kind === 'irp' ? next.policies?.irp?.activePolicyId : next.policies?.pension?.activePolicyId) || '')), policyHistory: Array.isArray(a.policyHistory) ? a.policyHistory : [] }));
     next.pension.contributions = Array.isArray(next.pension.contributions) ? next.pension.contributions : clone(seed.pension.contributions);
     next.pension.transactions = Array.isArray(next.pension.transactions) ? next.pension.transactions : clone(seed.pension.transactions || []);
     next.pension.holdings = Array.isArray(next.pension.holdings) ? next.pension.holdings : clone(seed.pension.holdings);
@@ -45,11 +45,11 @@ function normalizeState(data) {
     next.moduleVerification = { isa: false, pension: false, irp: false, ...(next.moduleVerification || {}) };
     syncFinancialProductStructures(next);
     clampEndedProductSchedules(next);
-    if (!['all', 'income', 'expense', 'saving', 'debt'].includes(next.settings.integratedLedgerFilter))
+    if (!['all', 'income', 'expense', 'saving', 'debt'].includes(next.settings.integratedLedgerFilter || ''))
         next.settings.integratedLedgerFilter = 'all';
     if (!/^\d{4}-\d{2}$/.test(String(next.settings.integratedMonth || '')))
         next.settings.integratedMonth = '';
-    if (!['all', 'pension', 'irp'].includes(next.settings.pensionAssetScope))
+    if (!['all', 'pension', 'irp'].includes(next.settings.pensionAssetScope || ''))
         next.settings.pensionAssetScope = 'all';
     next.settings.pensionAssetLens = 'assetClass';
     next.settings.pensionTaxProfile = next.settings.pensionTaxProfile && typeof next.settings.pensionTaxProfile === 'object' ? next.settings.pensionTaxProfile : {};
@@ -89,16 +89,16 @@ function normalizeState(data) {
         group.versions.forEach((p) => { if (!p.version)
             p.version = '기존'; if (!p.verifiedAt)
             p.verifiedAt = String(p.effectiveFrom || fallback.verifiedAt); if (!p.reviewAfter && typeof policyDateAddDays === 'function')
-            p.reviewAfter = policyDateAddDays(p.verifiedAt, 180); if (!p.sourceLabel)
+            p.reviewAfter = policyDateAddDays(p.verifiedAt || '', 180); if (!p.sourceLabel)
             p.sourceLabel = p.userEdited ? '사용자 설정' : fallback.sourceLabel; if (!p.sourceUrl && !p.userEdited)
             p.sourceUrl = fallback.sourceUrl; });
         next.policies[kind] = group;
     }
     next.pension.accounts = next.pension.accounts.map((a, i) => ({ ...a, id: a.id || `pension-account-${i + 1}`, kind: a.kind === 'irp' ? 'irp' : 'pension', name: a.name || `${a.kind === 'irp' ? 'IRP' : '연금저축'} ${i + 1}`, status: a.status || 'active', openedAt: a.openedAt || '2025-01-01' }));
     next.pension.contributions = next.pension.contributions.map((x, i) => ({ ...x, id: x.id || `pension-contribution-${i + 1}`, type: x.type === 'isaTransfer' ? 'isaTransfer' : 'contribution', date: String(x.date || ymd()), amount: Number(x.amount) || 0, createdAt: x.createdAt || `${String(x.date || ymd())}T00:00:${String(i % 60).padStart(2, '0')}` }));
-    next.pension.transactions = next.pension.transactions.map((t, i) => ({ ...t, id: String(t.id || `pension-tx-${i + 1}`), accountId: String(t.accountId || ''), holdingId: String(t.holdingId || ''), type: ['buy', 'sell', 'dividend', 'distribution', 'interest', 'other_right', 'adjustment'].includes(t.type) ? t.type : 'buy', date: String(t.date || ymd()), qty: Math.max(0, Number(t.qty) || 0), price: Math.max(0, Number(t.price) || 0), amount: Math.max(0, Number(t.amount) || 0), fee: Math.max(0, Number(t.fee) || 0), tax: Math.max(0, Number(t.tax) || 0), setQty: Math.max(0, Number(t.setQty) || 0), setAvg: Math.max(0, Number(t.setAvg) || 0), note: String(t.note || ''), createdAt: t.createdAt || `${String(t.date || ymd())}T00:00:${String(i % 60).padStart(2, '0')}` }));
-    next.pension.holdings = next.pension.holdings.map((h, i) => { const legacyRole = ['성장', '배당', '현금흐름', '안정', '현금'].includes(h.investmentRole) ? h.investmentRole : { 방어: '안정', 테마: '성장', '현금성 자산': '현금' }[h.assetClass] || (['성장', '배당', '현금흐름'].includes(h.assetClass) ? h.assetClass : '성장'), risky = h.risky === true ? true : h.risky === false ? false : null; return { ...h, id: h.id || `pension-holding-${i + 1}`, accountId: String(h.accountId || ''), name: String(h.name || `연금 종목 ${i + 1}`), investmentRole: legacyRole, themeTag: String(h.themeTag || (/반도체|SOX/i.test(String(h.name || '')) ? '반도체' : '')), assetClass: legacyRole, productType: h.productType || 'ETF', baselineQty: Math.max(0, Number(h.baselineQty ?? h.qty) || 0), baselineAvgPrice: Math.max(0, Number(h.baselineAvgPrice ?? h.avgPrice) || 0), qty: Math.max(0, Number(h.qty) || 0), avgPrice: Math.max(0, Number(h.avgPrice) || 0), currentPrice: Math.max(0, Number(h.currentPrice) || 0), risky, order: Number(h.order) || i + 1 }; });
-    next.pension.incomes = next.pension.incomes.map((x, i) => ({ ...x, id: x.id || `pension-income-${i + 1}`, accountId: String(x.accountId || ''), holdingId: String(x.holdingId || ''), type: ['dividend', 'distribution', 'interest', 'other_right'].includes(x.type) ? x.type : 'dividend', date: String(x.date || ymd()), amount: Math.max(0, Number(x.amount) || 0) }));
+    next.pension.transactions = next.pension.transactions.map((t, i) => ({ ...t, id: String(t.id || `pension-tx-${i + 1}`), accountId: String(t.accountId || ''), holdingId: String(t.holdingId || ''), type: ['buy', 'sell', 'dividend', 'distribution', 'interest', 'other_right', 'adjustment'].includes(t.type || '') ? t.type : 'buy', date: String(t.date || ymd()), qty: Math.max(0, Number(t.qty) || 0), price: Math.max(0, Number(t.price) || 0), amount: Math.max(0, Number(t.amount) || 0), fee: Math.max(0, Number(t.fee) || 0), tax: Math.max(0, Number(t.tax) || 0), setQty: Math.max(0, Number(t.setQty) || 0), setAvg: Math.max(0, Number(t.setAvg) || 0), note: String(t.note || ''), createdAt: t.createdAt || `${String(t.date || ymd())}T00:00:${String(i % 60).padStart(2, '0')}` }));
+    next.pension.holdings = next.pension.holdings.map((h, i) => { const legacyRole = ['성장', '배당', '현금흐름', '안정', '현금'].includes(h.investmentRole || '') ? h.investmentRole : { 방어: '안정', 테마: '성장', '현금성 자산': '현금' }[h.assetClass] || (['성장', '배당', '현금흐름'].includes(h.assetClass || '') ? h.assetClass : '성장'), risky = h.risky === true ? true : h.risky === false ? false : null; return { ...h, id: h.id || `pension-holding-${i + 1}`, accountId: String(h.accountId || ''), name: String(h.name || `연금 종목 ${i + 1}`), investmentRole: legacyRole, themeTag: String(h.themeTag || (/반도체|SOX/i.test(String(h.name || '')) ? '반도체' : '')), assetClass: legacyRole, productType: h.productType || 'ETF', baselineQty: Math.max(0, Number(h.baselineQty ?? h.qty) || 0), baselineAvgPrice: Math.max(0, Number(h.baselineAvgPrice ?? h.avgPrice) || 0), qty: Math.max(0, Number(h.qty) || 0), avgPrice: Math.max(0, Number(h.avgPrice) || 0), currentPrice: Math.max(0, Number(h.currentPrice) || 0), risky, order: Number(h.order) || i + 1 }; });
+    next.pension.incomes = next.pension.incomes.map((x, i) => ({ ...x, id: x.id || `pension-income-${i + 1}`, accountId: String(x.accountId || ''), holdingId: String(x.holdingId || ''), type: ['dividend', 'distribution', 'interest', 'other_right'].includes(x.type || '') ? x.type : 'dividend', date: String(x.date || ymd()), amount: Math.max(0, Number(x.amount) || 0) }));
     next.accounts.forEach((a) => {
         a.holdings = Array.isArray(a.holdings) ? a.holdings : [];
         a.transactions = Array.isArray(a.transactions) ? a.transactions : [];
@@ -116,7 +116,7 @@ function normalizeState(data) {
             h.order = i + 1; if (h.baselineQty == null)
             h.baselineQty = Number(h.snapshotQty) || 0; if (h.baselineAvg == null)
             h.baselineAvg = Number(h.snapshotAvg) || 0; if (h.currentPrice == null)
-            h.currentPrice = Number(h.snapshotPrice) || 0; h.priceScale = Number.isFinite(Number(h.priceScale)) && Number(h.priceScale) > 0 ? Number(h.priceScale) : 1; h.quantityUnit = h.quantityUnit === 'face' ? 'face' : 'share'; h.instrumentCode = String(h.instrumentCode || '').trim().toUpperCase(); h.quoteType = ['stock', 'bond'].includes(h.quoteType) ? h.quoteType : ''; h.quoteSource = h.quoteSource === 'kis' ? 'kis' : ''; if (!h.lifecycleStatus)
+            h.currentPrice = Number(h.snapshotPrice) || 0; h.priceScale = Number.isFinite(Number(h.priceScale)) && Number(h.priceScale) > 0 ? Number(h.priceScale) : 1; h.quantityUnit = h.quantityUnit === 'face' ? 'face' : 'share'; h.instrumentCode = String(h.instrumentCode || '').trim().toUpperCase(); h.quoteType = ['stock', 'bond'].includes(h.quoteType || '') ? h.quoteType : ''; h.quoteSource = h.quoteSource === 'kis' ? 'kis' : ''; if (!h.lifecycleStatus)
             h.lifecycleStatus = (Number(h.baselineQty) || 0) > 0 ? 'active' : 'archived'; if (!h.securityKey)
             h.securityKey = normalizeName(h.name); });
         const perDate = {};
@@ -125,18 +125,18 @@ function normalizeState(data) {
             x.sequence = perDate[x.tradeDate];
         }
         else
-            perDate[x.tradeDate] = Math.max(perDate[x.tradeDate] || 0, Number(x.sequence)); x.createdAt = x.createdAt || `${x.tradeDate}T00:00:${String(i % 60).padStart(2, '0')}`; x.fee = Number(x.fee) || 0; x.tax = Number(x.tax) || 0; x.transferId = x.transferId || (['internalTransferIn', 'internalTransferOut'].includes(x.type) ? `transfer-${x.id}` : null); x.revisions = Array.isArray(x.revisions) ? x.revisions : []; if (x.status === 'cancelled' && x.cancelledAt && !x.revisions.some((r) => r.action === 'cancel')) {
+            perDate[x.tradeDate] = Math.max(perDate[x.tradeDate] || 0, Number(x.sequence)); x.createdAt = x.createdAt || `${x.tradeDate}T00:00:${String(i % 60).padStart(2, '0')}`; x.fee = Number(x.fee) || 0; x.tax = Number(x.tax) || 0; x.transferId = x.transferId || (['internalTransferIn', 'internalTransferOut'].includes(x.type || '') ? `transfer-${x.id}` : null); x.revisions = Array.isArray(x.revisions) ? x.revisions : []; if (x.status === 'cancelled' && x.cancelledAt && !x.revisions.some((r) => r.action === 'cancel')) {
             const before = transactionSnapshot({ ...x, status: undefined, cancelledAt: undefined });
             x.revisions.push({ id: uid('revision'), action: 'cancel', changedAt: x.cancelledAt, reason: '이전 버전 취소 기록', before, after: transactionSnapshot(x) });
         } x.idempotencyKey = stableTxKey(x); return x; });
         const reversalUsage = new Map();
         for (const t of sortTxs(a.transactions)) {
-            if (['deposit', 'internalTransferIn'].includes(t.type))
+            if (['deposit', 'internalTransferIn'].includes(t.type || ''))
                 continue;
             if (t.type !== 'depositReversal')
                 continue;
             if (!t.reversesTransactionId) {
-                const source = sortTxs(a.transactions).filter((src) => ['deposit', 'internalTransferIn'].includes(src.type) && src.status !== 'cancelled' && txDate(src) <= txDate(t)).reverse().find((src) => { const used = reversalUsage.get(src.id) || 0; return (Number(src.amount) || 0) - used >= Number(t.amount || 0); });
+                const source = sortTxs(a.transactions).filter((src) => ['deposit', 'internalTransferIn'].includes(src.type || '') && src.status !== 'cancelled' && txDate(src) <= txDate(t)).reverse().find((src) => { const used = reversalUsage.get(src.id) || 0; return (Number(src.amount) || 0) - used >= Number(t.amount || 0); });
                 if (source)
                     t.reversesTransactionId = source.id;
             }
@@ -145,7 +145,7 @@ function normalizeState(data) {
             t.idempotencyKey = stableTxKey(t);
         }
         if (isCurrentAccount(a) && a.contributionBaseline == null) {
-            const deposits = a.transactions.filter((t) => ['deposit', 'internalTransferIn'].includes(t.type) && txDate(t).startsWith(year)).reduce((sum, t) => sum + (Number(t.amount) || 0), 0) - a.transactions.filter((t) => t.type === 'depositReversal' && txDate(t).startsWith(year)).reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+            const deposits = a.transactions.filter((t) => ['deposit', 'internalTransferIn'].includes(t.type || '') && txDate(t).startsWith(year)).reduce((sum, t) => sum + (Number(t.amount) || 0), 0) - a.transactions.filter((t) => t.type === 'depositReversal' && txDate(t).startsWith(year)).reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
             a.contributionBaseline = Math.max(0, (Number(a.annualContribution) || 0) - deposits);
             a.contributionBaselineYear = year;
         }

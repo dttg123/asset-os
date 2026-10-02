@@ -1,15 +1,17 @@
 'use strict';
 
-type QaRecord=Record<string,any>;
+type QaRecord=Record<string,unknown>&{transactions?:QaRecord[];holdings?:QaRecord[];assetSnapshots?:QaRecord[];meta?:Record<string,unknown>;revisions?:QaRecord[]};
+type QaAccount=QaRecord&{transactions:QaRecord[];holdings:QaRecord[];assetSnapshots:QaRecord[]};
+type QaState=Record<string,unknown>&{accounts:QaAccount[];policies:Record<string,QaRecord>;settings:QaRecord;pension:QaRecord&{accounts:QaRecord[];holdings:QaRecord[];transactions:QaRecord[];assetSnapshots:QaRecord[]};integrated:QaRecord&{ledger:QaRecord[]};system:QaRecord&{qaDataset?:QaRecord}};
 type QaCost=[string,number,boolean,number];
 
-declare const seed:QaRecord;
+declare const seed:QaState;
 declare const APP_VERSION:string;
 declare const QA_MODE:boolean;
 declare const QA_STORAGE_KEY:string;
 declare const nf:Intl.NumberFormat;
-declare let state:QaRecord;
-declare let lastPersistedState:QaRecord;
+declare let state:QaState;
+declare let lastPersistedState:QaState;
 declare let transactionDisplayLimit:number;
 declare let dividendDisplayLimit:number;
 declare let pensionTransactionDisplayLimit:number;
@@ -18,14 +20,14 @@ declare let integratedLedgerSearch:string;
 declare let integratedSearchDisplayLimit:number;
 declare function clone<T>(value:T):T;
 declare function buildIntegratedSeed():QaRecord;
-declare function normalizeState(value:QaRecord):QaRecord;
-declare function brokerKisImportBalanceSnapshot(...args:any[]):void;
-declare function brokerKisImportOrderSnapshots(...args:any[]):void;
-declare function brokerKisImportRights(...args:any[]):void;
-declare function brokerKisCompleteSync(...args:any[]):void;
+declare function normalizeState(value:QaState):QaState;
+declare function brokerKisImportBalanceSnapshot(...args:unknown[]):void;
+declare function brokerKisImportOrderSnapshots(...args:unknown[]):void;
+declare function brokerKisImportRights(...args:unknown[]):void;
+declare function brokerKisCompleteSync(...args:unknown[]):void;
 declare function integratedFinancialModel():QaRecord;
-declare function $(selector:string):any;
-declare function $$(selector:string):any[];
+declare function $(selector:string):HTMLElement;
+declare function $$(selector:string):HTMLElement[];
 declare function displayWon(value:unknown):string;
 declare function setting():QaRecord;
 declare function persist(notify?:boolean):boolean;
@@ -39,7 +41,7 @@ declare function showDialog(options:QaRecord,onConfirm:()=>unknown):void;
 const QA_START_YEAR=2026,QA_END_YEAR=2060,QA_MONTHS=(QA_END_YEAR-QA_START_YEAR+1)*12;
 const QA_ISA_SKIP_YEARS=new Set([2027,2031,2036,2042,2049,2054,2058]);
 const QA_PENSION_SKIP_YEARS=new Set([2033,2041,2052]);
-function qaStorageState(input:QaRecord){
+function qaStorageState(input:QaState){
  const out=clone(input),dropZero=(row:QaRecord,key:string)=>{if(!Number(row[key]))delete row[key]},dropEmpty=(row:QaRecord,key:string)=>{if(row[key]===''||row[key]==null)delete row[key]};
  for(const account of out.accounts||[]){
   for(const key of ['ledgerIndex','contributionLedger','cashLedger','securityLedger','adjustmentLedger'])delete account[key];
@@ -52,7 +54,7 @@ function qaStorageState(input:QaRecord){
  return out
 }
 function qaPad(value:unknown){return String(value).padStart(2,'0')}
-function qaStamp(date:string,index=0){return `${date}T12:00:00.${String(index%1000).padStart(3,'0')}Z`}
+function qaStamp(date:unknown,index=0){return `${date}T12:00:00.${String(index%1000).padStart(3,'0')}Z`}
 function qaRound(value:unknown,unit=1000){return Math.max(unit,Math.round(Number(value||0)/unit)*unit)}
 function qaMarketPrice(year:number,month:number,base=100000){
  const age=year-QA_START_YEAR,trend=Math.pow(1.045,age),wave=1+Math.sin((age*12+month)*.37)*.08;
@@ -67,7 +69,7 @@ function qaMonthlyContribution(total:number,index:number,count:number,year:numbe
 }
 
 function qaBuildThirtyFiveYearState(){
- const next:QaRecord=clone(seed),ledger:QaRecord[]=[],isaAccounts:QaRecord[]=[],pensionTransactions:QaRecord[]=[],pensionSnapshots:QaRecord[]=[];let sequence=0;
+ const next:QaState=clone(seed),ledger:QaRecord[]=[],isaAccounts:QaAccount[]=[],pensionTransactions:QaRecord[]=[],pensionSnapshots:QaRecord[]=[];let sequence=0;
  const add=(row:QaRecord)=>ledger.push({...row,sequence:++sequence,createdAt:qaStamp(row.date,sequence),meta:{...(row.meta||{}),qaGenerated:true}});
  const financialItems:QaRecord[]=[
   {id:'qa-home-loan',type:'loan',name:'QA 주택담보대출',institution:'테스트은행',status:'active',startDate:'2030-01-01',maturityDate:'2079-12-31',annualRate:4,rateType:'variable',repaymentMethod:'equalPrincipal',contractPrincipal:230000000,termMonths:600,paymentDay:26,rateHistory:[{effectiveFrom:'2030-01-01',rate:4},{effectiveFrom:'2040-01-01',rate:5.2},{effectiveFrom:'2050-01-01',rate:3.4}]},
@@ -82,7 +84,7 @@ function qaBuildThirtyFiveYearState(){
  for(let cycle=0;cycle<12;cycle++){
   const start=QA_START_YEAR+cycle*3,end=start+2,lastYear=Math.min(end,QA_END_YEAR),count=(lastYear-start+1)*12,id=`qa-isa-${start}`,holdingId=`qa-isa-h-${start}`;
   const targets=[20000000,50000000,60000000],target=Math.round(targets[cycle%3]*count/36),scenario=`납입 ${Math.round(target/10000).toLocaleString('ko-KR')}만원`;
-  const account:QaRecord={id,name:`QA ISA ${start} · ${scenario}`,type:cycle%4===0?'서민형':'일반형',status:end<=QA_END_YEAR?'closed':'active',openedAt:`${start}-01-01`,closedAt:end<=QA_END_YEAR?`${end}-12-31`:'',maturityAt:`${end}-12-31`,policyId:next.policies.isa.activePolicyId,policyHistory:[],baseline:{date:`${start}-01-01`,cash:0,contribution:0},baselineDate:`${start}-01-01`,baselineCash:0,reconciliationTolerance:10,holdings:[{id:holdingId,name:'QA 미국지수 ETF',securityKey:`QAUSINDEX${start}`,instrumentCode:'379800',quoteType:'stock',quoteSource:'kis',investmentRole:'성장',baselineQty:0,baselineAvg:0,currentPrice:qaMarketPrice(lastYear,12,100000)}],transactions:[],assetSnapshots:[]};
+  const account:QaAccount={id,name:`QA ISA ${start} · ${scenario}`,type:cycle%4===0?'서민형':'일반형',status:end<=QA_END_YEAR?'closed':'active',openedAt:`${start}-01-01`,closedAt:end<=QA_END_YEAR?`${end}-12-31`:'',maturityAt:`${end}-12-31`,policyId:next.policies.isa.activePolicyId,policyHistory:[],baseline:{date:`${start}-01-01`,cash:0,contribution:0},baselineDate:`${start}-01-01`,baselineCash:0,reconciliationTolerance:10,holdings:[{id:holdingId,name:'QA 미국지수 ETF',securityKey:`QAUSINDEX${start}`,instrumentCode:'379800',quoteType:'stock',quoteSource:'kis',investmentRole:'성장',baselineQty:0,baselineAvg:0,currentPrice:qaMarketPrice(lastYear,12,100000)}],transactions:[],assetSnapshots:[]};
   let txSequence=0,totalQty=0,cash=0,paid=0;
   for(let i=0;i<count;i++){
    const year=start+Math.floor(i/12),month=i%12+1,md=qaPad(month),date=`${year}-${md}-25`,skip=QA_ISA_SKIP_YEARS.has(year)&&month===5;

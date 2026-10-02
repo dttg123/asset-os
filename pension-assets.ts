@@ -1,15 +1,15 @@
 'use strict';
-type PensionAssetRecord=Record<string,any>;
-type PensionAssetStore=PensionAssetRecord&{accounts:PensionAssetRecord[];holdings:PensionAssetRecord[];transactions:PensionAssetRecord[];incomes:PensionAssetRecord[]};
-type PensionAssetSnapshot=PensionAssetRecord&{holdings:PensionAssetRecord[]};
+type PensionAssetRecord=Record<string,unknown>&{id?:string;kind?:string;type?:string;startDate?:string;endDate?:string;targetKind?:string;targetAccountId?:string;accountId?:string;holdingId?:string};
+type PensionAssetStore=PensionAssetRecord&{accounts:PensionAssetRecord[];holdings:PensionAssetRecord[];transactions:PensionAssetRecord[];incomes:PensionAssetRecord[];projection?:Record<string,unknown>};
+type PensionAssetSnapshot=PensionAssetRecord&{holdings:PensionAssetRecord[];cashDetail?:Record<string,unknown>};
 declare const state:PensionAssetRecord;
-declare const seed:PensionAssetRecord;
+declare const seed:{pension:{projection:Record<string,unknown>}};
 declare let sheetDirty:boolean;
 declare const INVESTMENT_ROLES:string[];
 declare function pensionStore():PensionAssetStore;
 declare function pensionAccount(id:unknown):PensionAssetRecord|null;
-declare function brokerKisLatestBalance(state:unknown,kind:string,id:string):PensionAssetSnapshot|null;
-declare function brokerKisVisibleOrders(state:unknown,scope:string):PensionAssetRecord[];
+declare function brokerKisLatestBalance(state:unknown,kind:string|undefined,id:string|undefined):PensionAssetSnapshot|null;
+declare function brokerKisVisibleOrders(state:unknown,scope:string|undefined):PensionAssetRecord[];
 declare function brokerKisRightIncomeRecords(state:unknown,scope:string):PensionAssetRecord[];
 declare function brokerKisIncomeCategory(type:unknown):string;
 declare function centralPensionContributionRows():PensionAssetRecord[];
@@ -24,13 +24,13 @@ declare function pensionSnapshotRows(scope:string):PensionAssetRecord[];
 declare function investmentRoleForHolding(h:PensionAssetRecord):string;
 declare function policy(kind:string):PensionAssetRecord;
 declare function policyGroup(kind:string):PensionAssetRecord;
-declare function setting():PensionAssetRecord;
+declare function setting():PensionAssetRecord&{pensionAssetScope:string;irpRiskClassifications?:Record<string,string>};
 declare function localYmd(date?:Date):string;
 declare function ymd():string;
 declare function postedDateError(date:string):string;
 declare function uid(prefix:string):string;
 declare function pensionAccountKindLabel(kind:string):string;
-declare function $(selector:string):any;
+declare function $(selector:string):HTMLElement;
 declare function openSheet(selector:string,options?:{mode:string}):void;
 declare function persist(notify?:boolean):boolean;
 declare function closeSheets():void;
@@ -54,7 +54,7 @@ function pensionKisViewHoldings(account:PensionAssetRecord,snapshot:PensionAsset
 function pensionLocalAccountCash(accountId:unknown){let total=0;for(const x of centralPensionContributionRows())if(x.accountId===accountId)total+=Number(x.amount)||0;for(const t of pensionStore().transactions||[])if(t.accountId===accountId)total+=pensionTradeCashDelta(t);return Math.max(0,total)}
 function pensionLinkedScopeValue(scope:string){if(typeof integratedReplay!=='function')return 0;const assets=integratedReplay()?.assets||{},pension=Math.max(0,Number(assets['pension-link'])||0),irp=Math.max(0,Number(assets['irp-link'])||0);return scope==='pension'?pension:scope==='irp'?irp:pension+irp}
 function pensionAccountCashStatus(account:PensionAssetRecord,snapshot=pensionKisSnapshot(account)){if(!snapshot)return{displayCash:pensionLocalAccountCash(account?.id),availableCash:pensionLocalAccountCash(account?.id),confirmed:true,pendingBuy:0,label:'거래 가능 현금'};const detail=snapshot.cashDetail||{},hasSettlement=detail.settledCash!==null&&detail.settledCash!==undefined||detail.nextDayCash!==null&&detail.nextDayCash!==undefined,available=hasSettlement?Math.max(0,Number(detail.availableCash)||0):null,day=String(snapshot.date||snapshot.fetchedAt||'').slice(0,10),pendingBuy=brokerKisVisibleOrders(state.brokerKis,account.kind).filter(x=>x.accountId===account.id&&x.date===day&&x.type==='buy').reduce((sum,x)=>sum+(Number(x.amount)||0),0);return{displayCash:Math.max(0,Number(snapshot.cash)||0),availableCash:available,confirmed:hasSettlement||pendingBuy<=0,pendingBuy,label:hasSettlement?'결제 반영 가능현금':pendingBuy>0?'예수금 · 당일 체결 확인 필요':'예수금'}}
-function pensionAccountView(account:PensionAssetRecord){const snapshot=pensionKisSnapshot(account),kis=pensionKisSnapshotUsable(snapshot),holdings=kis?pensionKisViewHoldings(account,snapshot):pensionStore().holdings.filter(h=>h.accountId===account.id),cash=kis?Math.max(0,Number(snapshot.cash)||0):pensionLocalAccountCash(account.id),cashStatus=pensionAccountCashStatus(account,snapshot),holdingValue=holdings.reduce((sum,h)=>sum+pensionHoldingValue(h),0),total=kis?Math.max(0,Number(snapshot.totalValue)||cash+holdingValue):cash+holdingValue,componentDelta=total-cash-holdingValue,unallocated=Math.max(0,componentDelta);return{account,snapshot,kis,holdings,cash,cashStatus,holdingValue,total,componentDelta,unallocated}}
+function pensionAccountView(account:PensionAssetRecord){const snapshot=pensionKisSnapshot(account),kis=pensionKisSnapshotUsable(snapshot),holdings:PensionAssetRecord[]=kis?pensionKisViewHoldings(account,snapshot):pensionStore().holdings.filter(h=>h.accountId===account.id),cash=kis?Math.max(0,Number(snapshot.cash)||0):pensionLocalAccountCash(account.id),cashStatus=pensionAccountCashStatus(account,snapshot),holdingValue=holdings.reduce((sum,h)=>sum+pensionHoldingValue(h),0),total=kis?Math.max(0,Number(snapshot.totalValue)||cash+holdingValue):cash+holdingValue,componentDelta=total-cash-holdingValue,unallocated=Math.max(0,componentDelta);return{account,snapshot,kis,holdings,cash,cashStatus,holdingValue,total,componentDelta,unallocated}}
 function pensionScopedHoldings(scope=pensionAssetScope()){
  return pensionStore().accounts.filter(a=>a.status==='active'&&(scope==='all'||a.kind===scope)).flatMap(a=>pensionAccountView(a).holdings)
 }
@@ -71,7 +71,7 @@ function pensionAssetMetrics(scope=pensionAssetScope()){
 }
 function pensionAssetScopeLabel(scope=pensionAssetScope()){return scope==='pension'?'연금저축':scope==='irp'?'IRP':'전체'}
 function pensionAssetModel(scope=pensionAssetScope(),lens='assetClass'){
- const m=pensionAssetMetrics(scope),colors=['#2f6fed','#15977e','#735ddd','#d18a1f','#7b8798'],groups=new Map();
+ const m=pensionAssetMetrics(scope),colors=['#2f6fed','#15977e','#735ddd','#d18a1f','#7b8798'],groups=new Map<string,{key:string;name:string;value:number;cost:number;count:number;holdingIds:Array<string|undefined>;detail?:string}>();
  for(const h of m.holdings){const key=investmentRoleForHolding(h),entry=groups.get(key)||{key,name:key,value:0,cost:0,count:0,holdingIds:[]};entry.value+=pensionHoldingValue(h);entry.cost+=pensionHoldingCost(h);entry.count++;entry.holdingIds.push(h.id);groups.set(key,entry)}
  if(m.cash>0){const key='현금',entry=groups.get(key)||{key,name:key,value:0,cost:0,count:0,holdingIds:[]};entry.value+=m.cash;entry.cost+=m.cash;groups.set(key,entry)}
  for(const row of m.unallocatedRows){const key=row.key,entry={key,name:row.name,value:row.value,cost:row.value,count:0,holdingIds:[],detail:row.detail};groups.set(key,entry)}
@@ -81,17 +81,17 @@ function pensionAssetModel(scope=pensionAssetScope(),lens='assetClass'){
 function pensionAssetGroupHoldings(scope:string,role:string){const m=pensionAssetMetrics(scope);return m.holdings.filter(h=>investmentRoleForHolding(h)===role).sort((a,b)=>pensionHoldingValue(b)-pensionHoldingValue(a)||String(a.name).localeCompare(String(b.name),'ko'))}
 function pensionRiskMetrics(){const m=pensionAssetMetrics('irp'),risky=m.holdings.filter(h=>h.risky===true).reduce((s,h)=>s+pensionHoldingValue(h),0),unknown=m.holdings.filter(h=>h.risky!==true&&h.risky!==false).reduce((s,h)=>s+pensionHoldingValue(h),0),ratio=m.value?risky/m.value*100:0,maxRatio=m.value?(risky+unknown)/m.value*100:0,limit=Math.max(0,Math.min(100,(Number(policy('irp').riskyAssetLimit)||.70)*100));return{...m,risky,unknown,ratio,maxRatio,limit,remaining:limit-ratio,classificationComplete:unknown<=.5}}
 function pensionIncomeRecords(scope=pensionAssetScope()){
- const allowedAccounts=new Set(pensionStore().accounts.filter(a=>scope==='all'||a.kind===scope).map(a=>a.id)),allowedHoldings=new Set(pensionStore().holdings.filter(h=>allowedAccounts.has(h.accountId)).map(h=>h.id)),legacy=pensionStore().incomes.filter(x=>allowedAccounts.has(x.accountId)&&(x.holdingId?allowedHoldings.has(x.holdingId):true)),txIncome=(pensionStore().transactions||[]).filter(t=>['dividend','distribution','interest','other_right'].includes(t.type)&&allowedAccounts.has(t.accountId)&&(t.holdingId?allowedHoldings.has(t.holdingId):true)).map(t=>({...t,id:t.id,accountId:t.accountId,holdingId:t.holdingId,type:t.type,date:t.date,amount:Math.max(0,(Number(t.amount)||0)-(Number(t.fee)||0)-(Number(t.tax)||0)),grossAmount:Number(t.amount)||0,tax:Number(t.tax)||0,fee:Number(t.fee)||0,source:'transaction'})),kisRights=typeof brokerKisRightIncomeRecords==='function'?brokerKisRightIncomeRecords(state.brokerKis,scope==='all'?'':scope).filter(x=>allowedAccounts.has(x.accountId)):[],ledger=[...legacy,...txIncome,...kisRights];return pensionReconcileIncome(ledger,typeof pensionArchiveIncomeRecords==='function'?pensionArchiveIncomeRecords(scope):[])
+ const allowedAccounts=new Set(pensionStore().accounts.filter(a=>scope==='all'||a.kind===scope).map(a=>a.id)),allowedHoldings=new Set(pensionStore().holdings.filter(h=>allowedAccounts.has(h.accountId)).map(h=>h.id)),legacy=pensionStore().incomes.filter(x=>allowedAccounts.has(x.accountId)&&(x.holdingId?allowedHoldings.has(x.holdingId):true)),txIncome=(pensionStore().transactions||[]).filter(t=>['dividend','distribution','interest','other_right'].includes(t.type||'')&&allowedAccounts.has(t.accountId)&&(t.holdingId?allowedHoldings.has(t.holdingId):true)).map(t=>({...t,id:t.id,accountId:t.accountId,holdingId:t.holdingId,type:t.type,date:t.date,amount:Math.max(0,(Number(t.amount)||0)-(Number(t.fee)||0)-(Number(t.tax)||0)),grossAmount:Number(t.amount)||0,tax:Number(t.tax)||0,fee:Number(t.fee)||0,source:'transaction'})),kisRights=typeof brokerKisRightIncomeRecords==='function'?brokerKisRightIncomeRecords(state.brokerKis,scope==='all'?'':scope).filter(x=>allowedAccounts.has(x.accountId)):[],ledger=[...legacy,...txIncome,...kisRights];return pensionReconcileIncome(ledger,typeof pensionArchiveIncomeRecords==='function'?pensionArchiveIncomeRecords(scope):[])
 
 }
 function pensionIncomePrincipalAt(scope:string,key='',mode=''){const rows=pensionSnapshotRows(scope);if(!rows.length)return key?null:pensionAssetMetrics(scope).cost;let end=localYmd();if(mode==='month'&&/^\d{4}-\d{2}$/.test(String(key))){const [y,m]=String(key).split('-').map(Number);end=localYmd(new Date(y,m,0))}else if(mode==='year'&&/^\d{4}$/.test(String(key)))end=`${key}-12-31`;const snap=rows.filter(x=>String(x.date||'')<=end).at(-1);return Math.max(0,Number(snap?.cost)||0)}
-function pensionIncomeRate(scope:string,amount:unknown,key='',mode=''){const cost=key?pensionIncomePrincipalAt(scope,key,mode):pensionAssetMetrics(scope).cost;return cost>0?(Number(amount)||0)/cost*100:null}
+function pensionIncomeRate(scope:string,amount:unknown,key='',mode=''){const cost=key?pensionIncomePrincipalAt(scope,key,mode):pensionAssetMetrics(scope).cost;return cost!==null&&cost>0?(Number(amount)||0)/cost*100:null}
 function pensionIncomeSummary(scope=pensionAssetScope()){
  const records=pensionIncomeRecords(scope),year=localYmd().slice(0,4),total=records.reduce((s,x)=>s+(Number(x.amount)||0),0),yearTotal=records.filter(x=>String(x.date).startsWith(year)).reduce((s,x)=>s+(Number(x.amount)||0),0),yieldRate=pensionIncomeRate(scope,yearTotal,year,'year'),totalYieldRate=pensionIncomeRate(scope,total);return{records,total,yearTotal,yieldRate,totalYieldRate,year,count:records.length}
 }
 function pensionIncomeMonths(scope=pensionAssetScope(),year=localYmd().slice(0,4)){const rows=Array.from({length:12},(_,i)=>({key:`${year}-${String(i+1).padStart(2,'0')}`,month:i+1,label:`${i+1}월`,amount:0}));for(const x of pensionIncomeRecords(scope).filter(x=>String(x.date).startsWith(year))){const m=Number(String(x.date).slice(5,7));if(rows[m-1])rows[m-1].amount+=Number(x.amount)||0}return rows}
 function pensionIncomeYears(scope=pensionAssetScope()){const current=Number(localYmd().slice(0,4)),records=pensionIncomeRecords(scope),recordYears=records.map(x=>Number(String(x.date).slice(0,4))).filter(Number.isFinite),start=recordYears.length?Math.min(...recordYears):current,years=[];for(let y=start;y<=current;y++){const amount=records.filter(x=>String(x.date).startsWith(String(y))).reduce((sum,x)=>sum+(Number(x.amount)||0),0);years.push({key:String(y),year:y,label:String(y),amount})}return years}
-function pensionProjectionScheduledMonthly(){if(typeof financeSchedules!=='function')return 0;const today=localYmd(),accountKinds=new Map((typeof integratedStore==='function'?integratedStore().accounts:[]).map(account=>[account.id,account.kind]));return financeSchedules().filter(schedule=>schedule.active!==false&&(!schedule.startDate||schedule.startDate<=today)&&(!schedule.endDate||schedule.endDate>=today)).filter(schedule=>['pension','irp'].includes(schedule.targetKind)||['pension','irp'].includes(accountKinds.get(schedule.targetAccountId))).reduce((sum,schedule)=>sum+Math.max(0,Number(schedule.amount)||0),0)}
+function pensionProjectionScheduledMonthly(){if(typeof financeSchedules!=='function')return 0;const today=localYmd(),accountKinds=new Map((typeof integratedStore==='function'?integratedStore().accounts:[]).map(account=>[account.id,account.kind]));return financeSchedules().filter(schedule=>schedule.active!==false&&(!schedule.startDate||schedule.startDate<=today)&&(!schedule.endDate||schedule.endDate>=today)).filter(schedule=>['pension','irp'].includes(schedule.targetKind||'')||['pension','irp'].includes(accountKinds.get(schedule.targetAccountId)||'')).reduce((sum,schedule)=>sum+Math.max(0,Number(schedule.amount)||0),0)}
 function pensionProjection(){const p=pensionStore().projection||{},m=pensionAssetMetrics('all'),currentYear=Number(localYmd().slice(0,4)),birthYear=Math.max(1900,Math.min(currentYear,Math.round(Number(p.birthYear)||Number(seed.pension.projection.birthYear)||currentYear))),retirementAge=Math.max(1,Math.min(100,Math.round(Number(p.retirementAge)||Number(seed.pension.projection.retirementAge)||65))),currentAge=Math.max(0,currentYear-birthYear),years=Math.max(0,retirementAge-currentAge),scheduled=pensionProjectionScheduledMonthly(),monthly=Math.max(0,Number(p.monthlyContribution)||scheduled||0),annual=Math.max(0,Number(p.annualReturn)||0),r=annual/12,n=Math.round(years*12),future=r>0?m.value*Math.pow(1+r,n)+monthly*(Math.pow(1+r,n)-1)/r:m.value+monthly*n,withdrawal=Math.max(0,Number(p.withdrawalRate)||0),inflation=Math.max(0,Number(p.inflationRate)||0),monthlyPension=future*withdrawal/12,futureReal=inflation>0?future/Math.pow(1+inflation,years):future,monthlyPensionReal=futureReal*withdrawal/12;return{...p,birthYear,current:m.value,years,yearsToRetire:years,monthly,annual,future,withdrawal,monthlyPension,inflation,retirementAge,currentAge,futureReal,monthlyPensionReal}}
 function pensionPerformanceContribution(scope=pensionAssetScope()){const model=pensionAssetModel(scope,'assetClass'),base=Math.max(0,model.cost),rows=model.segments.map(x=>({name:x.name,key:x.key,value:x.value,cost:x.cost,profit:x.profit,rate:x.cost?x.profit/x.cost*100:0,contribution:base?x.profit/base*100:0,pct:x.pct,color:x.color}));return{scope,totalRate:model.rate,totalProfit:model.profit,totalCost:model.cost,rows,ranked:[...rows].sort((a,b)=>Math.abs(b.contribution)-Math.abs(a.contribution))}}
 function pensionHoldingById(id:unknown){return pensionScopedHoldings('all').find(h=>h.id===id)||null}
@@ -99,7 +99,7 @@ function pensionHoldingById(id:unknown){return pensionScopedHoldings('all').find
 function pensionReconcileIncome(details:PensionAssetRecord[],archives:PensionAssetRecord[]){
  // Archives are historical monthly totals, not individual cash movements.
  // Retain their unitemized remainder; never drop a whole month for one payment.
- const rows:PensionAssetRecord[]=[],remaining=new Map<string,number>(),matched=new Set<string>();
+ const rows:PensionAssetRecord[]=[],remaining=new Map<string,number>(),matched=new Set<string|undefined>();
  const key=(x:PensionAssetRecord)=>{const holding=x.holdingId&&typeof pensionHoldingById==='function'?pensionHoldingById(x.holdingId):null,product=x.productCode||holding?.productCode||holding?.code;return x.accountId&&product?[x.accountId,product,x.date,brokerKisIncomeCategory(x.type),Number(x.amount)||0,Number(x.tax)||0].join('|'):''};
  const broker=details.filter(x=>x.brokerRight);
  for(const x of details){
@@ -108,7 +108,7 @@ function pensionReconcileIncome(details:PensionAssetRecord[],archives:PensionAss
   rows.push({...x});
  }
  for(const x of rows){
-  if(!['dividend','distribution'].includes(x.type))continue;
+  if(!['dividend','distribution'].includes(x.type||''))continue;
   const kind=x.accountKind||pensionAccount(x.accountId)?.kind;
   const key=kind+'|'+String(x.date).slice(0,7);
   remaining.set(key,(remaining.get(key)||0)+(Number(x.amount)||0));
@@ -121,7 +121,7 @@ function pensionReconcileIncome(details:PensionAssetRecord[],archives:PensionAss
  return rows.sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.id).localeCompare(String(a.id)));
 }
 function pensionVisibleTransactionRows(scope='all'){
- const incomes=pensionIncomeRecords(scope),manual=pensionTransactions(scope).filter(x=>!['dividend','distribution','interest','other_right'].includes(x.type)),orders=brokerKisVisibleOrders(state.brokerKis,scope);
+ const incomes=pensionIncomeRecords(scope),manual=pensionTransactions(scope).filter(x=>!['dividend','distribution','interest','other_right'].includes(x.type||'')),orders=brokerKisVisibleOrders(state.brokerKis,scope);
  const realized=typeof pensionArchiveTransactionRows==='function'?pensionArchiveTransactionRows(scope).filter(x=>x.type!=='dividend'):[];
  const contributions=typeof centralPensionContributionRows==='function'?centralPensionContributionRows().filter(t=>scope==='all'||t.kind===scope).map((t):PensionAssetRecord=>({...t,accountKind:t.kind,linkedContribution:true})):[];
  return [...manual,...orders,...incomes,...realized,...contributions].sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.time||'').localeCompare(String(a.time||''))||String(b.id).localeCompare(String(a.id)));

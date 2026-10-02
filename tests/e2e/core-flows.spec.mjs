@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {readFile} from 'node:fs/promises';
 
 const app='/index.html?qa=1#/home';
 const appErrors=[];
@@ -135,5 +136,36 @@ test('@core ISA and pension interest save through typed form controls',async({pa
  await pensionForm.locator('button:not([type])').click();
  await expect(page.locator('#formSheet')).toHaveAttribute('aria-hidden','true');
  expect(await page.evaluate(()=>window.__assetOS.getState().pension.transactions.map(row=>({type:row.type,amount:row.amount})))).toEqual([{type:'interest',amount:2000}]);
+ expect(appErrors).toEqual([]);
+});
+
+
+test('@core AI form presets produce a scoped zero-funding rebalance download',async({page})=>{
+ await preparePage(page);
+ await page.goto(app);
+ await page.evaluate(()=>{
+  const next=window.__assetOS.getState();
+  next.accounts=[];
+  next.settings.aiStrategy={purpose:'buy',fundingSource:'new_money',amount:0,includedScopes:['isa']};
+  window.__assetOS.replaceState(next);
+  openAiStrategy();
+ });
+ const form=page.locator('#aiStrategyForm');
+ await form.locator('[data-ai-amount="1000000"]').click();
+ await expect(form.locator('[name="amount"]')).toHaveValue('1000000');
+ await form.locator('[data-ai-purpose="rebalance"]').click();
+ await expect(form.locator('[name="amount"]')).toHaveAttribute('placeholder','0원도 가능');
+ await form.locator('[name="amount"]').fill('0');
+ await form.getByRole('button',{name:'분석파일 만들기'}).click();
+ await expect(page.locator('.ai-review-summary')).toContainText('리밸런싱');
+ const pendingDownload=page.waitForEvent('download');
+ await page.locator('[data-ai-download]').click();
+ const download=await pendingDownload;
+ expect(download.suggestedFilename()).toBe('투자분석.txt');
+ const exported=JSON.parse(await readFile(await download.path(),'utf8'));
+ expect(exported.request.purpose).toBe('리밸런싱');
+ expect(exported.request.additionalInvestmentWon).toBe(0);
+ expect(exported.request.includedScopes).toEqual(['isa']);
+ expect(exported.dataQuality).toEqual({ready:true,blockers:[]});
  expect(appErrors).toEqual([]);
 });

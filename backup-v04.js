@@ -18,7 +18,7 @@ finally {
     db.close();
 } }
 async function assetBackupHandleSet(handle) { const db = await assetOpenBackupDb(); try {
-    await new Promise((resolve, reject) => { const tx = db.transaction(ASSET_BACKUP_STORE, 'readwrite'); tx.objectStore(ASSET_BACKUP_STORE).put(handle, ASSET_PHONE_HANDLE_KEY); tx.oncomplete = resolve; tx.onerror = () => reject(tx.error); });
+    await new Promise((resolve, reject) => { const tx = db.transaction(ASSET_BACKUP_STORE, 'readwrite'); tx.objectStore(ASSET_BACKUP_STORE).put(handle, ASSET_PHONE_HANDLE_KEY); tx.oncomplete = () => resolve(undefined); tx.onerror = () => reject(tx.error); });
 }
 finally {
     db.close();

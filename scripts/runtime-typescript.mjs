@@ -18,8 +18,7 @@ export function compileRuntimeTypeScript(root,sourceNames){
   for(const [index,sourceName] of sourceNames.entries()){
    const source=fs.readFileSync(path.join(root,sourceName),'utf8');
    if(/^\s*\/\/\s*@ts-(?:nocheck|ignore)\b/m.test(source))throw new Error(`runtime type-check suppression is forbidden: ${sourceName}`);
-   const jsonBoundary=sourceName.startsWith('src/')||['backup.ts','initial-import.ts','supabase-sync.ts','ui-sheets.ts','initial-import-ui.ts','export-csv.ts','source-archive.ts','core-visual-utils.ts','chart-pension-future.ts','ui-render.ts','chart-income.ts','chart-dividends.ts','chart-asset-analysis.ts','chart-financial-growth.ts','integrated-forms.ts','isa-registration.ts','pension-forms.ts','core-accessors.ts','isa-quotes.ts','insurance.ts','integrated-finance-ui.ts','pension-ledger.ts','pension-contributions.ts'].includes(sourceName);
-   if(jsonBoundary&&/\bany\b/.test(source))throw new Error(`untyped data is forbidden at a JSON/domain boundary: ${sourceName}`);
+   if(/\bany\b/.test(source))throw new Error(`untyped runtime data is forbidden: ${sourceName}`);
    const sourceOutputRoot=path.join(outputRoot,String(index));
    execFileSync(path.join(root,'node_modules','.bin','tsc'),['--ignoreConfig','--target','ES2024','--module','preserve','--strict','--skipLibCheck','--outDir',sourceOutputRoot,sourceName],{cwd:root,stdio:'pipe'});
    compiled[sourceName]=fs.readFileSync(path.join(sourceOutputRoot,path.basename(runtimeJavaScriptName(sourceName))),'utf8');
