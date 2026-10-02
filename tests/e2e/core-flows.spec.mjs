@@ -169,3 +169,91 @@ test('@core AI form presets produce a scoped zero-funding rebalance download',as
  expect(exported.dataQuality).toEqual({ready:true,blockers:[]});
  expect(appErrors).toEqual([]);
 });
+
+test('@core secure mobile backup downloads a restorable ZIP when file pickers are unavailable',async({page})=>{
+ await preparePage(page);
+ await page.goto(app);
+ await page.evaluate(()=>{
+  Object.defineProperty(window,'showSaveFilePicker',{configurable:true,value:undefined});
+  Object.defineProperty(window,'showDirectoryPicker',{configurable:true,value:undefined});
+  const next=window.__assetOS.getState();
+  next.settings.haptics=false;
+  window.__assetOS.replaceState(next);
+  openBackupHub();
+ });
+ expect(await page.evaluate(()=>window.isSecureContext)).toBe(true);
+ await expect(page.locator('[data-backup-zip]')).toContainText('ZIP 백업 · 다운로드');
+ const pending=page.waitForEvent('download');
+ await page.locator('[data-backup-zip]').click();
+ const download=await pending;
+ expect(download.suggestedFilename()).toMatch(/^AssetOS_QA_.*\.zip$/);
+ await expect(page.getByText('ZIP 다운로드를 시작했습니다.',{exact:true})).toBeVisible();
+ await expect(page.getByText(/이 브라우저는 저장 위치 선택을 지원하지 않아/)).toBeVisible();
+ const bytes=Array.from(await readFile(await download.path()));
+ const restored=await page.evaluate(bytes=>{
+  const payload=parseBackupZipBytes(new Uint8Array(bytes));
+  return{format:payload.format,schema:payload.schemaVersion,environment:payload.environment,haptics:payload.data.settings.haptics};
+ },bytes);
+ expect(restored).toEqual({format:'asset-os-backup-v1',schema:21,environment:'qa',haptics:false});
+ expect(appErrors).toEqual([]);
+});
+
+test('@core Drive backup shares TXT, respects cancellation, and downloads ZIP after permission denial',async({page})=>{
+ await preparePage(page);
+ await page.goto(app);
+ let downloads=0;
+ page.on('download',()=>downloads++);
+ for(const outcome of ['success','AbortError','NotAllowedError']){
+  await page.evaluate(outcome=>{
+   Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>true});
+   Object.defineProperty(navigator,'share',{configurable:true,value:async({files})=>{
+    if(outcome!=='success')throw new DOMException('QA simulated browser response',outcome);
+    window.__qaSharedBackup={name:files[0].name,type:files[0].type,payload:JSON.parse(await files[0].text())};
+   }});
+   openBackupHub();
+  },outcome);
+  if(outcome==='NotAllowedError'){
+   const pending=page.waitForEvent('download');
+   await page.locator('[data-backup-drive]').click();
+   const download=await pending;
+   expect(download.suggestedFilename()).toMatch(/\.zip$/);
+   await expect(page.getByText('공유 대신 ZIP을 저장했습니다.',{exact:true})).toBeVisible();
+  }else{
+   await page.locator('[data-backup-drive]').click();
+   if(outcome==='success'){
+    await expect(page.getByText('공유창으로 백업을 보냈습니다.',{exact:true})).toBeVisible();
+    const shared=await page.evaluate(()=>window.__qaSharedBackup);
+    expect(shared.name).toMatch(/^AssetOS_QA_.*\.txt$/);
+    expect(shared.type).toBe('text/plain');
+    expect(shared.payload.format).toBe('asset-os-backup-v1');
+    expect(shared.payload.environment).toBe('qa');
+   }else{
+    expect(await page.locator('[role="dialog"]:visible').count()).toBe(0);
+   }
+   expect(downloads).toBe(0);
+  }
+ }
+ expect(downloads).toBe(1);
+ expect(appErrors).toEqual([]);
+});
+
+test('@core haptic settings control vibration and unsupported browsers remain usable',async({page})=>{
+ await preparePage(page);
+ await page.goto(app);
+ const calls=await page.evaluate(()=>{
+  const patterns=[];
+  Object.defineProperty(navigator,'vibrate',{configurable:true,value:pattern=>{patterns.push(pattern);return true}});
+  setting().haptics=false;
+  haptic('success');
+  setting().haptics=true;
+  haptic();haptic('success');haptic('warning');
+  Object.defineProperty(navigator,'vibrate',{configurable:true,value:()=>{throw new DOMException('QA denied','NotAllowedError')}});
+  haptic('success');
+  Object.defineProperty(navigator,'vibrate',{configurable:true,value:undefined});
+  haptic('warning');
+  return patterns;
+ });
+ expect(calls).toEqual([[8],[10,25,14],[18,40,18]]);
+ await expect(page.getByRole('heading',{name:'홈',exact:true})).toBeVisible();
+ expect(appErrors).toEqual([]);
+});
