@@ -39,7 +39,7 @@ function syncPensionDerivedHoldings(target = state) { const ps = target?.pension
 } }
 function pensionTradeCashDelta(t) { const fee = Math.max(0, Number(t.fee) || 0), tax = Math.max(0, Number(t.tax) || 0); if (t.type === 'buy')
     return -((Number(t.qty) || 0) * (Number(t.price) || 0) + fee + tax); if (t.type === 'sell')
-    return (Number(t.qty) || 0) * (Number(t.price) || 0) - fee - tax; if (['dividend', 'distribution', 'interest', 'other_right'].includes(t.type))
+    return (Number(t.qty) || 0) * (Number(t.price) || 0) - fee - tax; if (['dividend', 'distribution', 'interest', 'other_right'].includes(t.type || ''))
     return (Number(t.amount) || 0) - fee - tax; return 0; }
 function pensionTransactionIssues(transactions = pensionStore().transactions) {
     const issues = [], byHolding = new Map(), cashByAccount = new Map();
@@ -86,7 +86,7 @@ function pensionTransactionIssues(transactions = pensionStore().transactions) {
             issues.push(`${t.id}: 수수료/세금 오류`);
             continue;
         }
-        if (['buy', 'sell', 'adjustment'].includes(t.type)) {
+        if (['buy', 'sell', 'adjustment'].includes(t.type || '')) {
             const h = pensionStore().holdings.find(x => x.id === t.holdingId), pos = byHolding.get(t.holdingId);
             if (!h || !pos || h.accountId !== t.accountId) {
                 issues.push(`${t.id}: 종목/계좌 연결 오류`);
@@ -156,7 +156,7 @@ function pensionTransactionIssues(transactions = pensionStore().transactions) {
                 }
             }
         }
-        else if (['dividend', 'distribution', 'interest', 'other_right'].includes(t.type)) {
+        else if (['dividend', 'distribution', 'interest', 'other_right'].includes(t.type || '')) {
             const amount = Number(t.amount);
             if (!financialNumberInRange(amount) || amount <= 0) {
                 issues.push(`${t.id}: 수령액 오류`);

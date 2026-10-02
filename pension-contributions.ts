@@ -1,19 +1,21 @@
 'use strict';
-type PensionContributionRecord=Record<string,any>;
-type PensionContributionStore=PensionContributionRecord&{accounts:PensionContributionRecord[];contributions:PensionContributionRecord[];transactions:PensionContributionRecord[];holdings:PensionContributionRecord[]};
+type PensionContributionRecord=Record<string,unknown>&{id?:string;accountId?:string;kind?:string;type?:string;date?:string;openedAt?:string;closedAt?:string;status?:string;sourceTxId?:string;meta?:Record<string,unknown>&{batchKind?:string};months?:{pension?:unknown[];irp?:unknown[]}};
+type PensionContributionStore=PensionContributionRecord&{accounts:PensionContributionRecord[];contributions:PensionContributionRecord[];transactions:PensionContributionRecord[];holdings:PensionContributionRecord[];goal?:{pensionSavings?:unknown;irp?:unknown}};
+type PensionContributionIntegrated=Record<string,unknown>&{ledger:PensionContributionRecord[]};
+type PensionContributionSchedules=Record<string,unknown>&{items:PensionContributionRecord[]};
 type PensionKind='pension'|'irp';
 
-declare const state:PensionContributionRecord;
+declare const state:Record<string,unknown>&{pension?:PensionContributionStore;integrated?:PensionContributionIntegrated;financeSchedules?:PensionContributionSchedules};
 declare function localYmd():string;
 declare function centralPensionContributionRows(year?:string):PensionContributionRecord[];
 declare function policyForYear(kind:string,year:string):PensionContributionRecord;
-declare function setting():PensionContributionRecord;
+declare function setting():Record<string,unknown>&{pensionTaxProfile?:Record<string,{grossSalary?:unknown;comprehensiveIncome?:unknown}>};
 declare function clone<T>(value:T):T;
-declare function integratedStore():PensionContributionRecord;
+declare function integratedStore():PensionContributionIntegrated;
 declare function won(value:unknown):string;
-declare function normalizeIntegrated(value:PensionContributionRecord):PensionContributionRecord;
+declare function normalizeIntegrated(value:PensionContributionIntegrated):PensionContributionIntegrated;
 declare function integratedPolicyLimitIssues(value:PensionContributionRecord):string[];
-declare function normalizeFinanceSchedules(value:PensionContributionRecord):PensionContributionRecord;
+declare function normalizeFinanceSchedules(value:PensionContributionSchedules):PensionContributionSchedules;
 
 function pensionStore():PensionContributionStore{return state.pension as PensionContributionStore}
 function pensionAccount(id:unknown){return (pensionStore() as PensionContributionStore).accounts.find(a=>a.id===id)||null}
@@ -21,9 +23,9 @@ function pensionAccountKindLabel(kind:string){return kind==='irp'?'IRP':'연금�
 function pensionYearRecords(year=localYmd().slice(0,4)){return centralPensionContributionRows(year)}
 function pensionTaxCreditProfile(year=localYmd().slice(0,4),p=policyForYear('pension',year)){const profile=setting().pensionTaxProfile?.[String(year)]||{},grossSalary=Math.max(0,Number(profile.grossSalary)||0),comprehensiveIncome=Math.max(0,Number(profile.comprehensiveIncome)||0),qualified=grossSalary?grossSalary<=55000000:comprehensiveIncome?comprehensiveIncome<=45000000:false,configured=!!(grossSalary||comprehensiveIncome),rate=configured&&qualified?(Number(p.lowIncomeTaxCreditRate)||.165):(Number(p.taxCreditRate)||.132);return{year:String(year),grossSalary,comprehensiveIncome,configured,qualified,rate}}
 function pensionSummary(year=localYmd().slice(0,4)){
- const records=pensionYearRecords(year),p=policyForYear('pension',year),isaP=policyForYear('isa',year),accounts=new Map<any,PensionContributionRecord>(pensionStore().accounts.map(a=>[a.id,a] as [any,PensionContributionRecord]));
+ const records=pensionYearRecords(year),p=policyForYear('pension',year),isaP=policyForYear('isa',year),accounts=new Map<string|undefined,PensionContributionRecord>(pensionStore().accounts.map(a=>[a.id,a] as [string|undefined,PensionContributionRecord]));
  let ordinaryPs=0,ordinaryIrp=0,transferPs=0,transferIrp=0;
- for(const x of records){const a=accounts.get(x.accountId),kind=a?.kind||x.kind;if(!['pension','irp'].includes(kind))continue;const amount=Number(x.amount)||0,isIrp=kind==='irp',isTransfer=x.type==='isaTransfer';if(isTransfer){if(isIrp)transferIrp+=amount;else transferPs+=amount}else{if(isIrp)ordinaryIrp+=amount;else ordinaryPs+=amount}}
+ for(const x of records){const a=accounts.get(x.accountId),kind=a?.kind||x.kind;if(!['pension','irp'].includes(kind||''))continue;const amount=Number(x.amount)||0,isIrp=kind==='irp',isTransfer=x.type==='isaTransfer';if(isTransfer){if(isIrp)transferIrp+=amount;else transferPs+=amount}else{if(isIrp)ordinaryIrp+=amount;else ordinaryPs+=amount}}
  const ordinary=ordinaryPs+ordinaryIrp,transfer=transferPs+transferIrp,total=ordinary+transfer,psTotal=ordinaryPs+transferPs,irpTotal=ordinaryIrp+transferIrp;
  const psLimit=Number(p.annualTaxCreditLimit)||6000000,combinedLimit=Number(p.combinedTaxCreditLimit)||9000000,annualContributionLimit=Number(p.annualContributionLimit)||18000000;
  const regularCreditBase=Math.min(Math.min(psTotal,psLimit)+irpTotal,combinedLimit);
@@ -32,8 +34,8 @@ function pensionSummary(year=localYmd().slice(0,4)){
  const goalPs=Number(pensionStore().goal?.pensionSavings)||6000000,goalIrp=Number(pensionStore().goal?.irp)||3000000,goalTotal=goalPs+goalIrp,goalCurrent=Math.min(ordinaryPs,goalPs)+Math.min(ordinaryIrp,goalIrp);
  return{year,records,ordinaryPs,ordinaryIrp,transferPs,transferIrp,ordinary,transfer,total,psTotal,irpTotal,psLimit,combinedLimit,annualContributionLimit,regularCreditBase,extraLimit,totalCreditLimit,creditBase,creditRate,taxProfile,estimatedCredit,remainingCredit:Math.max(0,totalCreditLimit-creditBase),remainingOrdinary:Math.max(0,annualContributionLimit-ordinary),ordinaryOverage:Math.max(0,ordinary-annualContributionLimit),goalPs,goalIrp,goalTotal,goalCurrent}
 }
-function pensionMonthly(year=localYmd().slice(0,4)){const rows=Array.from({length:12},(_,i)=>({month:i+1,pension:0,irp:0,total:0,transfer:0,transferPension:0,transferIrp:0})),accounts=new Map<any,PensionContributionRecord>(pensionStore().accounts.map(a=>[a.id,a] as [any,PensionContributionRecord])),source=pensionYearRecords(year);for(const x of source){const m=Number(String(x.date).slice(5,7)),row=rows[m-1],a=accounts.get(x.accountId),kind=a?.kind||x.kind;if(!row||!['pension','irp'].includes(kind))continue;const amount=Number(x.amount)||0,isIrp=kind==='irp';if(x.type==='isaTransfer'){row.transfer+=amount;if(isIrp)row.transferIrp+=amount;else row.transferPension+=amount}else{row[isIrp?'irp':'pension']+=amount;row.total+=amount}}return rows}
-function pensionCurrentMonthOrdinary(){const key=localYmd().slice(0,7),accounts=new Map<any,PensionContributionRecord>(pensionStore().accounts.map(a=>[a.id,a] as [any,PensionContributionRecord]));let pension=0,irp=0;for(const x of centralPensionContributionRows().filter(x=>x.type==='contribution'&&String(x.date).startsWith(key))){const a=accounts.get(x.accountId),kind=a?.kind||x.kind;if(kind==='irp')irp+=Number(x.amount)||0;else if(kind==='pension')pension+=Number(x.amount)||0}return{pension,irp,total:pension+irp}}
+function pensionMonthly(year=localYmd().slice(0,4)){const rows=Array.from({length:12},(_,i)=>({month:i+1,pension:0,irp:0,total:0,transfer:0,transferPension:0,transferIrp:0})),accounts=new Map<string|undefined,PensionContributionRecord>(pensionStore().accounts.map(a=>[a.id,a] as [string|undefined,PensionContributionRecord])),source=pensionYearRecords(year);for(const x of source){const m=Number(String(x.date).slice(5,7)),row=rows[m-1],a=accounts.get(x.accountId),kind=a?.kind||x.kind;if(!row||!['pension','irp'].includes(kind||''))continue;const amount=Number(x.amount)||0,isIrp=kind==='irp';if(x.type==='isaTransfer'){row.transfer+=amount;if(isIrp)row.transferIrp+=amount;else row.transferPension+=amount}else{row[isIrp?'irp':'pension']+=amount;row.total+=amount}}return rows}
+function pensionCurrentMonthOrdinary(){const key=localYmd().slice(0,7),accounts=new Map<string|undefined,PensionContributionRecord>(pensionStore().accounts.map(a=>[a.id,a] as [string|undefined,PensionContributionRecord]));let pension=0,irp=0;for(const x of centralPensionContributionRows().filter(x=>x.type==='contribution'&&String(x.date).startsWith(key))){const a=accounts.get(x.accountId),kind=a?.kind||x.kind;if(kind==='irp')irp+=Number(x.amount)||0;else if(kind==='pension')pension+=Number(x.amount)||0}return{pension,irp,total:pension+irp}}
 
 function pensionContributionBatchScheduleId(kind:string){return `pension-contribution-${kind}-monthly`}
 function pensionContributionBatchLinkId(kind:string){return kind==='irp'?'irp-link':'pension-link'}
@@ -52,7 +54,7 @@ function pensionContributionBatchCandidate(input:PensionContributionRecord={}){
  const data=pensionContributionBatchInput(input),latest=pensionContributionBatchLatestMonth(data.year,data.day),today=localYmd();
  if(!/^\d{4}$/.test(data.year)||Number(data.year)<2000||Number(data.year)>Number(today.slice(0,4)))return{ok:false,error:'기록 연도를 확인해 주세요.'};
  if(data.throughMonth<1||data.throughMonth>latest)return{ok:false,error:`${data.year}년은 ${latest?latest+'월':'아직'}까지 납입 완료로 기록할 수 있습니다.`};
- const nextIntegrated:PensionContributionRecord=clone(integratedStore()),nextPension:PensionContributionStore=clone(pensionStore()),nextSchedules:PensionContributionRecord=clone(state.financeSchedules||{items:[]}),generated:PensionContributionRecord[]=[],summary:Record<string,number>={pension:0,irp:0,total:0,count:0};
+ const nextIntegrated:PensionContributionIntegrated=clone(integratedStore()),nextPension:PensionContributionStore=clone(pensionStore()),nextSchedules:PensionContributionSchedules=clone(state.financeSchedules||{items:[]}),generated:PensionContributionRecord[]=[],summary:Record<string,number>={pension:0,irp:0,total:0,count:0};
  for(const kind of ['pension','irp'] as PensionKind[]){
   const amount=Number(data[`${kind}Amount`])||0,selected=data.months[kind],accountId=data[`${kind}AccountId`],account=nextPension.accounts.find(a=>a.id===accountId&&a.kind===kind&&a.status==='active');
   if(amount&&!selected.length)return{ok:false,error:`${pensionAccountKindLabel(kind)}의 납입 월을 하나 이상 선택해 주세요.`};
@@ -68,7 +70,7 @@ function pensionContributionBatchCandidate(input:PensionContributionRecord={}){
    summary[kind]+=delta;summary.total+=delta;summary.count++;
   }
   nextIntegrated.ledger=ledger.filter(t=>!(t.meta?.pensionBatch&&t.meta?.batchYear===data.year&&t.meta?.batchKind===kind));
-  nextIntegrated.ledger.push(...generated.filter(t=>t.meta.batchKind===kind));
+  nextIntegrated.ledger.push(...generated.filter(t=>t.meta?.batchKind===kind));
   if(account&&selected.length){const first=`${data.year}-${String(selected[0]).padStart(2,'0')}-${String(data.day).padStart(2,'0')}`;if(!account.openedAt||account.openedAt>first)account.openedAt=first}
   const items:PensionContributionRecord[]=nextSchedules.items||(nextSchedules.items=[]),schedule={id:scheduleId,name:`${pensionAccountKindLabel(kind)} 월 납입`,kind:'investment',amount,amountMode:'fixed',day:data.day,recurrence:'monthly',startDate:`${data.year}-01-${String(data.day).padStart(2,'0')}`,endDate:'',targetKind:kind,targetAccountId:pensionContributionBatchLinkId(kind),targetPensionAccountId:accountId,active:amount>0,note:'월 납입 기록 맞추기에서 관리',source:'pension-contribution-batch'};
   const scheduleIndex=items.findIndex(s=>s.id===scheduleId);if(scheduleIndex>=0)items[scheduleIndex]={...items[scheduleIndex],...schedule};else items.push(schedule)

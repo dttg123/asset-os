@@ -9,7 +9,7 @@ function pensionSummary(year = localYmd().slice(0, 4)) {
     let ordinaryPs = 0, ordinaryIrp = 0, transferPs = 0, transferIrp = 0;
     for (const x of records) {
         const a = accounts.get(x.accountId), kind = a?.kind || x.kind;
-        if (!['pension', 'irp'].includes(kind))
+        if (!['pension', 'irp'].includes(kind || ''))
             continue;
         const amount = Number(x.amount) || 0, isIrp = kind === 'irp', isTransfer = x.type === 'isaTransfer';
         if (isTransfer) {
@@ -35,7 +35,7 @@ function pensionSummary(year = localYmd().slice(0, 4)) {
 }
 function pensionMonthly(year = localYmd().slice(0, 4)) { const rows = Array.from({ length: 12 }, (_, i) => ({ month: i + 1, pension: 0, irp: 0, total: 0, transfer: 0, transferPension: 0, transferIrp: 0 })), accounts = new Map(pensionStore().accounts.map(a => [a.id, a])), source = pensionYearRecords(year); for (const x of source) {
     const m = Number(String(x.date).slice(5, 7)), row = rows[m - 1], a = accounts.get(x.accountId), kind = a?.kind || x.kind;
-    if (!row || !['pension', 'irp'].includes(kind))
+    if (!row || !['pension', 'irp'].includes(kind || ''))
         continue;
     const amount = Number(x.amount) || 0, isIrp = kind === 'irp';
     if (x.type === 'isaTransfer') {
@@ -102,7 +102,7 @@ function pensionContributionBatchCandidate(input = {}) {
             summary.count++;
         }
         nextIntegrated.ledger = ledger.filter(t => !(t.meta?.pensionBatch && t.meta?.batchYear === data.year && t.meta?.batchKind === kind));
-        nextIntegrated.ledger.push(...generated.filter(t => t.meta.batchKind === kind));
+        nextIntegrated.ledger.push(...generated.filter(t => t.meta?.batchKind === kind));
         if (account && selected.length) {
             const first = `${data.year}-${String(selected[0]).padStart(2, '0')}-${String(data.day).padStart(2, '0')}`;
             if (!account.openedAt || account.openedAt > first)

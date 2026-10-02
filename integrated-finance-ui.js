@@ -131,7 +131,7 @@ function saveFinanceSettlement(form) {
     if (rawReceived === null || String(rawReceived).trim() === '' || !Number.isFinite(received) || received < 0)
         return toast('실제 받은 총액을 0원 이상 입력해 주세요.');
     const asset = financeProductAccountId(id), list = integratedStore().ledger;
-    if (list.some((t) => t.date > date && (t.productId === id || t.fromAccountId === asset || t.toAccountId === asset || t.accountId === asset)))
+    if (list.some((t) => String(t.date || '') > date && (t.productId === id || t.fromAccountId === asset || t.toAccountId === asset || t.accountId === asset)))
         return toast('정산일 이후 거래가 있습니다. 이후 거래를 먼저 확인해 주세요.');
     const bal = financeProductBalance(p), rows = [], diff = received - bal;
     if (bal > 0)
@@ -176,5 +176,5 @@ function openFinancialProductTransaction(id, action) { const p = financialProduc
     return openIntegratedTransactionForm('', { uiType: 'openingAsset', toAccountId: asset, category: `${p.name} 기초잔액` }); }
 function endFinancialProduct(id) { const p = financialProduct(id); if (!p || p.status !== 'active')
     return; const bal = financeProductBalance(p); if (bal > 0.5)
-    return showNotice('아직 잔액이 남아 있습니다.', p.type === 'loan' ? `남은 원금 ${won(bal)}을 모두 상환한 뒤 종료할 수 있습니다.` : `${won(bal)}이 남아 있습니다. 만기·해지 정산을 이용해 주세요.`); showDialog({ title: '종료 상품으로 보관할까요?', message: '현재 계산 대상에서는 제외하고 종료된 상품 보관함에 계속 남깁니다.', confirmText: '종료 보관', cancelText: '취소' }, () => { p.status = 'ended'; p.endedAt = ymd(); p.endReason = p.type === 'loan' ? 'paidOff' : 'closed'; p.settlement = p.settlement || { date: p.endedAt, received: 0 }; closeFinanceProductSchedules(p.id, p.endedAt); if (!persist())
+    return showNotice('아직 잔액이 남아 있습니다.', p.type === 'loan' ? `남은 원금 ${won(bal)}을 모두 상환한 뒤 종료할 수 있습니다.` : `${won(bal)}이 남아 있습니다. 만기·해지 정산을 이용해 주세요.`); showDialog({ title: '종료 상품으로 보관할까요?', message: '현재 계산 대상에서는 제외하고 종료된 상품 보관함에 계속 남깁니다.', confirmText: '종료 보관', cancelText: '취소' }, () => { p.status = 'ended'; p.endedAt = ymd(); p.endReason = p.type === 'loan' ? 'paidOff' : 'closed'; p.settlement = p.settlement || { date: p.endedAt, received: 0 }; closeFinanceProductSchedules(p.id, p.endedAt || localYmd()); if (!persist())
     return; closeSheets(); render(); setTimeout(() => openFinancialProductHub(p.type), 60); toast('종료된 상품으로 보관했습니다.'); }); }
