@@ -49,7 +49,7 @@ test('@core long data survives reload and every primary route renders',async({pa
  expect(appErrors).toEqual([]);
 });
 
-test('@release authentication gate exposes only safe conflict actions',async({page})=>{
+test('@core @release authentication gate exposes only safe conflict actions',async({page})=>{
  await page.goto('/index.html');
  await expect(page.getByRole('button',{name:'Google로 로그인'})).toBeVisible();
  const labels=await page.locator('#assetAuthConflict button').allTextContents();
