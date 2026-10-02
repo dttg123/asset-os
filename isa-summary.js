@@ -46,7 +46,7 @@ function transactionFacts(a) { return replay(a).facts; }
 function transactionAmountMarkup(a, t, facts = null) { const f = (facts || transactionFacts(a)).get(t.id) || {}, amount = f.tradeAmount ?? Math.abs(txAmount(t)); if (t.status === 'cancelled')
     return `<span class="rowamount"><span class="loss">취소됨</span><b>${won(amount)}</b></span>`; if (t.type === 'buy')
     return `<span class="rowamount">매수금액<b>${won(amount)}</b></span>`; if (t.type === 'sell')
-    return `<span class="rowamount">매도대금<b>${won(amount)}</b>${Number.isFinite(f.realized) ? `<span class="${escapeHtml(f.realized >= 0 ? 'gain' : 'loss')}">실현손익 ${signed(f.realized)}</span>` : ''}</span>`; if (['dividend', 'distribution', 'interest'].includes(t.type))
+    return `<span class="rowamount">매도대금<b>${won(amount)}</b>${typeof f.realized === 'number' && Number.isFinite(f.realized) ? `<span class="${escapeHtml(f.realized >= 0 ? 'gain' : 'loss')}">실현손익 ${signed(f.realized)}</span>` : ''}</span>`; if (['dividend', 'distribution', 'interest'].includes(t.type))
     return `<span class="rowamount dividend">수령<b>${won(amount)}</b></span>`; if (['deposit', 'internalTransferIn'].includes(t.type))
     return `<span class="rowamount deposit">${t.type === 'internalTransferIn' ? '통합 납입' : '과거 입금'}<b>${won(amount)}</b></span>`; if (['withdrawal', 'internalTransferOut'].includes(t.type))
     return `<span class="rowamount">출금<b>${won(amount)}</b></span>`; return `<span class="rowamount">조정<b>${won(amount)}</b></span>`; }

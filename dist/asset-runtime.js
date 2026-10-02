@@ -853,11 +853,11 @@ function initQaMode() { if (!QA_MODE)
 'use strict';
 if ('serviceWorker' in navigator)
     window.addEventListener('load', async () => { try {
-        const reg = await navigator.serviceWorker.register('./service-worker.js?v=0.6.12&build=20261002-4', { scope: './', updateViaCache: 'none' });
+        const reg = await navigator.serviceWorker.register('./service-worker.js?v=0.6.13&build=20261002-5', { scope: './', updateViaCache: 'none' });
         await reg.update();
         let refreshing = false;
         navigator.serviceWorker.addEventListener('controllerchange', () => { if (refreshing)
-            return; refreshing = true; const key = 'asset-os-sw-reload-0.6.12-build20261002-4'; if (sessionStorage.getItem(key))
+            return; refreshing = true; const key = 'asset-os-sw-reload-0.6.13-build20261002-5'; if (sessionStorage.getItem(key))
             return; sessionStorage.setItem(key, '1'); location.reload(); });
     }
     catch { } });

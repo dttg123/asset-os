@@ -1,5 +1,5 @@
 'use strict';
-function normalizeFinanceSchedules(input) { const src = input && typeof input === 'object' ? input : { items: [] }, items = Array.isArray(src.items) ? src.items : []; return { items: items.map((x, i) => ({ id: String(x.id || `schedule-${i + 1}`), name: String(x.name || `일정 ${i + 1}`), kind: ['income', 'investment', 'saving', 'loan', 'insurance', 'expense'].includes(x.kind) ? x.kind : 'expense', amount: Math.max(0, Number(x.amount) || 0), amountMode: x.amountMode === 'estimate' ? 'estimate' : 'fixed', day: (x.day === 0 || x.day === '0') ? 0 : Math.min(31, Math.max(1, Number(x.day) || DEFAULT_FINANCE_DAY)), recurrence: x.recurrence === 'monthly' ? 'monthly' : 'monthly', startDate: String(x.startDate || ''), endDate: String(x.endDate || ''), targetKind: String(x.targetKind || ''), targetAccountId: String(x.targetAccountId || ''), targetPensionAccountId: String(x.targetPensionAccountId || ''), targetIsaAccountId: String(x.targetIsaAccountId || ''), productId: String(x.productId || ''), liabilityId: String(x.liabilityId || ''), active: x.active !== false, note: String(x.note || ''), source: String(x.source || 'user'), needsDate: !!x.needsDate, attention: String(x.attention || '') })) }; }
+function normalizeFinanceSchedules(input) { const src = input && typeof input === 'object' ? input : { items: [] }, items = Array.isArray(src.items) ? src.items : []; return { items: items.map((x, i) => ({ id: String(x.id || `schedule-${i + 1}`), name: String(x.name || `일정 ${i + 1}`), kind: ['income', 'investment', 'saving', 'loan', 'insurance', 'expense'].includes(x.kind || '') ? x.kind : 'expense', amount: Math.max(0, Number(x.amount) || 0), amountMode: x.amountMode === 'estimate' ? 'estimate' : 'fixed', day: (x.day === 0 || x.day === '0') ? 0 : Math.min(31, Math.max(1, Number(x.day) || DEFAULT_FINANCE_DAY)), recurrence: x.recurrence === 'monthly' ? 'monthly' : 'monthly', startDate: String(x.startDate || ''), endDate: String(x.endDate || ''), targetKind: String(x.targetKind || ''), targetAccountId: String(x.targetAccountId || ''), targetPensionAccountId: String(x.targetPensionAccountId || ''), targetIsaAccountId: String(x.targetIsaAccountId || ''), productId: String(x.productId || ''), liabilityId: String(x.liabilityId || ''), active: x.active !== false, note: String(x.note || ''), source: String(x.source || 'user'), needsDate: !!x.needsDate, attention: String(x.attention || '') })) }; }
 function financeSchedules() { return state.financeSchedules?.items || []; }
 function clampEndedProductSchedules(target = state) { const products = target.financialProducts?.items || [], schedules = target.financeSchedules?.items || []; for (const p of products) {
     if (p.status === 'active')
@@ -22,21 +22,21 @@ function closeFinanceProductSchedules(productId, date) { const end = String(date
 } }
 function scheduleMonthDays(month) { const [y, m] = String(month).split('-').map(Number), days = new Date(y, m, 0).getDate(); return { y, m, days }; }
 function scheduleDateForMonth(s, month) { if (!s.active || !s.day)
-    return ''; const { y, m, days } = scheduleMonthDays(month), day = Math.min(s.day, days), date = `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`; if (s.startDate && date < s.startDate)
+    return ''; const { y, m, days } = scheduleMonthDays(month), day = Math.min(Number(s.day), days), date = `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`; if (s.startDate && date < s.startDate)
     return ''; if (s.endDate && date > s.endDate)
     return ''; return date; }
 function scheduleFallbackMatches(s, date, t) { if (!s || String(t.date) !== String(date) || (Number(t.amount) || 0) !== (Number(s.amount) || 0))
     return false; const account = integratedStore().accounts.find((a) => a.id === t.toAccountId), sameName = normalizeName(t.category) === normalizeName(s.name); if (s.kind === 'income')
-    return t.type === 'externalIncome' && sameName; if (['investment', 'saving'].includes(s.kind)) {
-    if (!['internalTransfer', 'externalAssetIn'].includes(t.type))
+    return t.type === 'externalIncome' && sameName; if (['investment', 'saving'].includes(s.kind || '')) {
+    if (!['internalTransfer', 'externalAssetIn'].includes(t.type || ''))
         return false;
     if (s.productId)
         return account?.productId === s.productId;
     const targetKind = s.targetKind || integratedStore().accounts.find((a) => a.id === scheduleTargetAccount(s))?.kind || '';
     return account?.kind === targetKind && (sameName || ['isa', 'pension', 'irp'].includes(targetKind));
 } if (s.kind === 'loan')
-    return ['debtInterest', 'debtInterestExternal', 'debtPrincipal', 'externalDebtPrincipal'].includes(t.type) && (String(t.liabilityId || '') === String(s.liabilityId || '') || String(t.productId || '') === String(s.productId || '') || sameName); if (['insurance', 'expense'].includes(s.kind))
-    return ['expense', 'externalExpense'].includes(t.type) && sameName; return false; }
+    return ['debtInterest', 'debtInterestExternal', 'debtPrincipal', 'externalDebtPrincipal'].includes(t.type || '') && (String(t.liabilityId || '') === String(s.liabilityId || '') || String(t.productId || '') === String(s.productId || '') || sameName); if (['insurance', 'expense'].includes(s.kind || ''))
+    return ['expense', 'externalExpense'].includes(t.type || '') && sameName; return false; }
 function scheduleCompletionTx(scheduleId, date, sourceRows = null) { const rows = sourceRows || integratedOperationalLedger(), explicit = rows.find(t => t.meta?.scheduleId === scheduleId && t.meta?.scheduleDate === date); if (explicit)
     return explicit; const schedule = financeSchedules().find(s => s.id === scheduleId); return rows.find(t => scheduleFallbackMatches(schedule, date, t)) || null; }
 function scheduleOccurrenceStatus(s, date, knownTx) { const tx = arguments.length >= 3 ? knownTx : scheduleCompletionTx(s.id, date); if (tx)
@@ -59,7 +59,7 @@ function pensionAccountActiveOnDate(a, date) { if (!a)
     return false; if (end && d > end)
     return false; return true; }
 function pensionAccountsForKind(kind, date = '') { return pensionStore().accounts.filter(a => a.kind === kind && (!date ? pensionAccount(a.id)?.status === 'active' : pensionAccountActiveOnDate(a, date))); }
-function schedulePensionKind(sc) { const linkedKind = integratedStore().accounts.find((a) => a.id === sc?.targetAccountId)?.kind; return ['pension', 'irp'].includes(sc?.targetKind) ? sc.targetKind : (['pension', 'irp'].includes(linkedKind) ? linkedKind : ''); }
+function schedulePensionKind(sc) { const linkedKind = integratedStore().accounts.find((a) => a.id === sc?.targetAccountId)?.kind; return ['pension', 'irp'].includes(sc?.targetKind || '') ? sc.targetKind : (['pension', 'irp'].includes(linkedKind || '') ? linkedKind : ''); }
 function resolveSchedulePensionAccount(sc, explicit = '', date = '') { const kind = schedulePensionKind(sc); if (!kind)
     return ''; const candidates = pensionAccountsForKind(kind, date || ''); const requested = String(explicit || sc?.targetPensionAccountId || ''); if (requested && candidates.some(a => a.id === requested))
     return requested; return candidates.length === 1 ? candidates[0].id : ''; }
@@ -93,10 +93,10 @@ function completeScheduleOccurrence(scheduleId, date, amountOverride = 0, target
 function centralPensionContributionRows(year = '') { const rows = []; for (const t of integratedOperationalLedger()) {
     if (t.meta?.analysisOnly)
         continue;
-    if (!['internalTransfer', 'externalAssetIn'].includes(t.type))
+    if (!['internalTransfer', 'externalAssetIn'].includes(t.type || ''))
         continue;
     const accounts = integratedStore().accounts || [], pensionAccounts = pensionStore().accounts || [], kind = accounts.find(a => a.id === t.toAccountId)?.kind;
-    if (!['pension', 'irp'].includes(kind))
+    if (!['pension', 'irp'].includes(kind || ''))
         continue;
     if (year && !String(t.date).startsWith(String(year)))
         continue;
@@ -106,19 +106,19 @@ function centralPensionContributionRows(year = '') { const rows = []; for (const
 function centralIsaContributionRows(year = '') { const rows = []; for (const t of integratedOperationalLedger()) {
     if (t.meta?.analysisOnly)
         continue;
-    if (!['internalTransfer', 'externalAssetIn'].includes(t.type))
+    if (!['internalTransfer', 'externalAssetIn'].includes(t.type || ''))
         continue;
     const accounts = integratedStore().accounts || [];
     if (accounts.find(a => a.id === t.toAccountId)?.kind !== 'isa')
         continue;
     if (year && !String(t.date).startsWith(String(year)))
         continue;
-    const dated = isaAccountsForDate(t.date), explicit = String(t.meta?.targetIsaAccountId || ''), resolved = explicit && dated.some(a => a.id === explicit) ? explicit : (dated.length === 1 ? dated[0].id : '');
+    const dated = isaAccountsForDate(t.date || ''), explicit = String(t.meta?.targetIsaAccountId || ''), resolved = explicit && dated.some(a => a.id === explicit) ? explicit : (dated.length === 1 ? dated[0].id : '');
     rows.push({ ...t, accountId: resolved, unresolved: !resolved });
 } return rows; }
 function centralIsaReplayRows(account, includeArchived = false) { if (!account || (!includeArchived && !isCurrentAccount(account)))
     return []; const localCounts = new Map(); for (const t of account.transactions || []) {
-    if (t.status === 'cancelled' || !['deposit', 'internalTransferIn'].includes(t.type))
+    if (t.status === 'cancelled' || !['deposit', 'internalTransferIn'].includes(t.type || ''))
         continue;
     const key = `${txDate(t)}|${Number(t.amount) || 0}`;
     localCounts.set(key, (localCounts.get(key) || 0) + 1);

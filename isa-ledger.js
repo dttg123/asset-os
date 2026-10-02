@@ -33,11 +33,11 @@ function replay(account, candidateTxs = null, includeCentral = true) {
             break;
         }
         const h = tx.holdingId ? map.get(tx.holdingId) : null, q = Number(tx.qty ?? 0), p = Number(tx.price ?? 0), f = Number(tx.fee ?? 0), tax = Number(tx.tax ?? 0), amount = Number(tx.amount ?? 0);
-        if (['deposit', 'internalTransferIn', 'feeRefund', 'taxRefund'].includes(tx.type)) {
+        if (['deposit', 'internalTransferIn', 'feeRefund', 'taxRefund'].includes(tx.type || '')) {
             cash += amount;
             facts.set(tx.id, { tradeAmount: amount });
         }
-        if (['withdrawal', 'internalTransferOut'].includes(tx.type)) {
+        if (['withdrawal', 'internalTransferOut'].includes(tx.type || '')) {
             if (amount > cash + 1e-8) {
                 error = '계좌 현금보다 큰 출금은 저장할 수 없습니다.';
                 errorTxId = tx.id;
@@ -48,7 +48,7 @@ function replay(account, candidateTxs = null, includeCentral = true) {
         }
         if (tx.type === 'depositReversal') {
             const source = tx.reversesTransactionId ? byId.get(tx.reversesTransactionId) : null;
-            if (!source || !['deposit', 'internalTransferIn'].includes(source.type) || !processed.has(source.id)) {
+            if (!source || !['deposit', 'internalTransferIn'].includes(source.type || '') || !processed.has(source.id)) {
                 error = '입금 취소는 먼저 기록된 원입금 거래를 선택해야 합니다.';
                 errorTxId = tx.id;
                 break;
@@ -68,7 +68,7 @@ function replay(account, candidateTxs = null, includeCentral = true) {
             reversedBySource.set(source.id, used + amount);
             facts.set(tx.id, { tradeAmount: amount, reversesTransactionId: source.id });
         }
-        if (['dividend', 'distribution', 'interest'].includes(tx.type)) {
+        if (['dividend', 'distribution', 'interest'].includes(tx.type || '')) {
             const net = amount - f - tax;
             cash += net;
             income += net;
@@ -76,7 +76,7 @@ function replay(account, candidateTxs = null, includeCentral = true) {
             taxes += tax;
             facts.set(tx.id, { tradeAmount: net, grossAmount: amount });
         }
-        if (['buy', 'openingAllocation'].includes(tx.type)) {
+        if (['buy', 'openingAllocation'].includes(tx.type || '')) {
             if (!h) {
                 error = '등록되지 않은 종목의 매수 기록이 있습니다.';
                 errorTxId = tx.id;
@@ -119,7 +119,7 @@ function replay(account, candidateTxs = null, includeCentral = true) {
                 cash += Number(tx.cashDelta);
             facts.set(tx.id, { tradeAmount: Number(tx.cashDelta) || 0 });
         }
-        if (['split', 'reverseSplit'].includes(tx.type) && h) {
+        if (['split', 'reverseSplit'].includes(tx.type || '') && h) {
             const ratio = Number(tx.ratio) || 1;
             if (ratio <= 0) {
                 error = '분할·병합 비율이 올바르지 않습니다.';
@@ -182,7 +182,7 @@ function taxableBreakdown(a) { const b = { gains: Number(a.taxBreakdown?.gains) 
     if (t.status === 'cancelled' || txDate(t) < (a.baselineDate || a.openedAt || ''))
         continue;
     const f = r.facts.get(t.id) || {};
-    if (t.type === 'sell' && Number.isFinite(f.realized)) {
+    if (t.type === 'sell' && typeof f.realized === 'number' && Number.isFinite(f.realized)) {
         const treatment = isaHoldingTaxTreatment(holdings.get(t.holdingId));
         if (treatment === 'unknown') {
             b.unclassified += Math.abs(f.realized);
@@ -201,7 +201,7 @@ function taxableBreakdown(a) { const b = { gains: Number(a.taxBreakdown?.gains) 
         else
             b.losses += f.realized;
     }
-    if (['dividend', 'distribution', 'interest'].includes(t.type)) {
+    if (['dividend', 'distribution', 'interest'].includes(t.type || '')) {
         b.dividends += Number(f.grossAmount ?? t.amount) || 0;
         b.expenses -= Number(t.fee || 0);
     }
@@ -209,7 +209,7 @@ function taxableBreakdown(a) { const b = { gains: Number(a.taxBreakdown?.gains) 
 function taxableNet(a) { const b = taxableBreakdown(a); return b.gains + b.losses + b.dividends + b.expenses; }
 function exemption(a) { const p = policy('isa', a); return a.type === '서민형' ? p.lowIncomeExemption : a.type === '농어민형' ? p.farmerExemption : p.generalExemption; }
 function expectedTax(a) { return Math.max(0, taxableNet(a) - exemption(a)) * policy('isa', a).taxRate; }
-function dividends(a) { return (a.transactions || []).filter(t => ['dividend', 'distribution'].includes(t.type) && t.status !== 'cancelled').sort((x, y) => txDate(y).localeCompare(txDate(x)) || txSequence(y) - txSequence(x)); }
+function dividends(a) { return (a.transactions || []).filter(t => ['dividend', 'distribution'].includes(t.type || '') && t.status !== 'cancelled').sort((x, y) => txDate(y).localeCompare(txDate(x)) || txSequence(y) - txSequence(x)); }
 function dividendNetAmount(t) { return Math.max(0, (Number(t?.amount) || 0) - (Number(t?.fee) || 0) - (Number(t?.tax) || 0)); }
 function dividendAnalysisRecords(a) { return dividends(a).filter(x => !x.meta?.analysisOnly).sort((x, y) => txDate(y).localeCompare(txDate(x)) || txSequence(y) - txSequence(x)); }
 function periodEndDate(key, period) { if (period === 'month') {
@@ -237,14 +237,14 @@ function consistencyIssues(a) {
             push('duplicate', '중복 거래가 의심됩니다', `${formatDate(txDate(t))} ${typeText(t.type)} 거래가 같은 조건으로 두 번 있습니다.`, 'medium', t.id);
         else
             seen.set(key, t.id);
-        if (t.holdingId && !holdings.some(h => h.id === t.holdingId) && ['buy', 'sell', 'openingAllocation', 'dividend', 'distribution', 'adjustment', 'securityTransferIn', 'securityTransferOut'].includes(t.type))
+        if (t.holdingId && !holdings.some(h => h.id === t.holdingId) && ['buy', 'sell', 'openingAllocation', 'dividend', 'distribution', 'adjustment', 'securityTransferIn', 'securityTransferOut'].includes(t.type || ''))
             push('missing-holding', '거래 종목 연결이 끊겼습니다', `${formatDate(txDate(t))} ${typeText(t.type)} 거래의 종목을 찾지 못했습니다.`, 'high', t.id);
         const closeDate = a.closedAt || a.maturityAt;
         if (!isTradeableAccount(a) && closeDate && txDate(t) > closeDate)
             push('after-close', a.status === 'maturity_pending' ? '만기 후 거래가 있습니다' : '종료 후 거래가 있습니다', `${formatDate(txDate(t))} 거래가 ${a.status === 'maturity_pending' ? '만기일' : '계좌 종료일'} 이후입니다.`, 'high', t.id);
         if (t.type === 'depositReversal') {
             const src = transactions.find(x => x.id === t.reversesTransactionId), used = transactions.filter(x => x.type === 'depositReversal' && x.status !== 'cancelled' && x.reversesTransactionId === t.reversesTransactionId).reduce((sum, x) => sum + (Number(x.amount) || 0), 0);
-            if (!src || !['deposit', 'internalTransferIn'].includes(src.type))
+            if (!src || !['deposit', 'internalTransferIn'].includes(src.type || ''))
                 push('reversal-source', '입금 취소의 원거래가 없습니다', `${formatDate(txDate(t))} 입금 취소 기록을 확인해 주세요.`, 'high', t.id);
             else if (used > (Number(src.amount) || 0) + tol)
                 push('reversal-over', '원입금보다 많이 취소됐습니다', `원입금 ${won(src.amount)}보다 누적 취소액이 큽니다.`, 'high', t.id);
@@ -263,8 +263,8 @@ function consistencyIssues(a) {
             holdingNames.set(key, h.id);
     }
     const latest = [...(a.reconciliations || [])].sort((x, y) => String(y.capturedAt || '').localeCompare(String(x.capturedAt || '')))[0];
-    if (latest?.summary?.missing > 0)
-        push('reconcile-missing', '잔고 대조에서 누락된 종목이 있습니다', `${latest.summary.missing}개 종목은 자동 삭제하지 않았습니다. 원장과 실제 잔고를 확인해 주세요.`, 'medium');
+    if ((latest?.summary?.missing || 0) > 0)
+        push('reconcile-missing', '잔고 대조에서 누락된 종목이 있습니다', `${latest?.summary?.missing}개 종목은 자동 삭제하지 않았습니다. 원장과 실제 잔고를 확인해 주세요.`, 'medium');
     const tax = taxableBreakdown(a);
     if (tax.unclassified > .5)
         push('tax-unclassified', 'ISA 과세분류가 확인되지 않은 매도가 있습니다', `${won(tax.unclassified)} 규모의 실현손익은 예상세금에서 제외했습니다. 종목 자산군을 확인해 주세요.`, 'medium');

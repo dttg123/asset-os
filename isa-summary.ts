@@ -1,26 +1,26 @@
 'use strict';
-type SummaryRecord=Record<string,any>;
+type SummaryRecord=Record<string,unknown>&{investmentRole?:string;maturity?:Record<string,unknown>&{actualSettlement?:number;actualTax?:number};baseline?:Record<string,unknown>};
 type SummaryHolding=SummaryRecord&{id:string;qty:number;marketValue:number;name:string};
 type SummaryTransaction=SummaryRecord&{id:string;type:string;status?:string;holdingId?:string;amount?:number;revisions?:SummaryRecord[]};
 type SummaryAccount=SummaryRecord&{holdings:SummaryHolding[];transactions:SummaryTransaction[]};
-type SummaryMetrics=SummaryRecord&{holdings:SummaryHolding[];facts?:Map<string,SummaryRecord>};
+type SummaryMetrics=SummaryRecord&{holdings:SummaryHolding[];cash:number;profit:number;facts?:Map<string,SummaryRecord&{realized?:number}>};
 declare const state:{accounts:SummaryAccount[]};
 declare const INVESTMENT_ROLES:string[];
 declare const isaHoldingsExpanded:boolean;
 declare const transactionDisplayLimit:number;
 declare function currentAccount():SummaryAccount;
 declare function accountMetrics(a:SummaryAccount):SummaryMetrics;
-declare function setting():SummaryRecord;
-declare function replay(a:SummaryAccount):{facts:Map<string,SummaryRecord>};
+declare function setting():SummaryRecord&{isaAssetLens?:string;isaAssetScope?:string;compositionFocus:string};
+declare function replay(a:SummaryAccount):{facts:Map<string,SummaryRecord&{realized?:number}>};
 declare function centralIsaReplayRows(a:SummaryAccount,includeContributions?:boolean):SummaryTransaction[];
 declare function sortTxs(t:SummaryTransaction[]):SummaryTransaction[];
 declare function dividends(a:SummaryAccount):SummaryTransaction[];
 declare function dividendAnalysisRecords(a:SummaryAccount):SummaryTransaction[];
 declare function dividendNetAmount(t:SummaryTransaction):number;
 declare function dividendYieldFor(a:SummaryAccount,key:string,period:string,amount:number):{rate:number|null};
-declare function policy(kind:string,a:SummaryAccount):SummaryRecord;
-declare function taxableBreakdown(a:SummaryAccount):SummaryRecord;
-declare function isaContributionModel(a:SummaryAccount):SummaryRecord;
+declare function policy(kind:string,a:SummaryAccount):SummaryRecord&{transferDeductionRate:number;transferDeductionMax:number;taxCreditRate:number;taxRate:number};
+declare function taxableBreakdown(a:SummaryAccount):SummaryRecord&{excludedGains:number;excludedLosses:number};
+declare function isaContributionModel(a:SummaryAccount):SummaryRecord&{lifetimePaid:number;accruedLimit:number};
 declare function isaQuoteLinks(a:SummaryAccount):SummaryRecord[];
 declare function getHolding(a:SummaryAccount,id:string):SummaryHolding;
 declare function holdingName(a:SummaryAccount,id:string|undefined):string;
@@ -58,7 +58,7 @@ function maturitySummary(a:SummaryAccount){if(!a.maturity||!isPastAccount(a))ret
 
 function portfolioBucketForHolding(h:SummaryHolding){return normalizeInvestmentRole(h?.investmentRole||'',h)}
 function compositionModel(a:SummaryAccount){
- const m=accountMetrics(a),colors=['#2f6fed','#15977e','#735ddd','#d18a1f','#7b8798'],order=INVESTMENT_ROLES,groups=new Map();
+ const m=accountMetrics(a),colors=['#2f6fed','#15977e','#735ddd','#d18a1f','#7b8798'],order=INVESTMENT_ROLES,groups=new Map<string,{key:string;name:string;value:number;cost:number;count:number;holdingIds:string[]}>();
  for(const h of m.holdings.filter(h=>h.qty>1e-8)){const key=portfolioBucketForHolding(h),entry=groups.get(key)||{key,name:key,value:0,cost:0,count:0,holdingIds:[]};const cost=holdingCostValue(h);entry.value+=h.marketValue;entry.cost+=cost;entry.count++;entry.holdingIds.push(h.id);groups.set(key,entry)}
  if(m.cash>0){const key='현금',entry=groups.get(key)||{key,name:key,value:0,cost:0,count:0,holdingIds:[]};entry.value+=m.cash;entry.cost+=m.cash;groups.set(key,entry)}
  const arr=[...groups.values()].sort((a,b)=>order.indexOf(a.key)-order.indexOf(b.key)||b.value-a.value),total=arr.reduce((sum,x)=>sum+x.value,0)||1;let acc=0;const segments=arr.map((x,i)=>{const pct=x.value/total*100,start=acc;acc+=pct;return{...x,pct,start,end:acc,color:colors[i%colors.length],profit:x.value-x.cost}});return{m,total,segments}
@@ -79,7 +79,7 @@ function quickActions(a:SummaryAccount){if(a.status!=='active')return'';const li
 function secondaryActions(a:SummaryAccount){const past=state.accounts.filter(isPastAccount).length;return `<section class="card isa-compact-manage"><div class="isa-compact-manage-row"><strong>관리</strong><button data-route="isa" data-tab="transactions">거래 <b>${a.transactions.length}</b></button><button data-route="isa" data-tab="tax">세금·만기</button><button data-history-route>이전 <b>${past}</b></button></div></section>`}
 function visibleHoldingCount(a:SummaryAccount){return a?accountMetrics(a).holdings.filter(h=>Number(h.qty)>1e-8).length:0}
 function transactionFacts(a:SummaryAccount){return replay(a).facts}
-function transactionAmountMarkup(a:SummaryAccount,t:SummaryTransaction,facts:Map<string,SummaryRecord>|null=null){const f=(facts||transactionFacts(a)).get(t.id)||{},amount=f.tradeAmount??Math.abs(txAmount(t));if(t.status==='cancelled')return `<span class="rowamount"><span class="loss">취소됨</span><b>${won(amount)}</b></span>`;if(t.type==='buy')return `<span class="rowamount">매수금액<b>${won(amount)}</b></span>`;if(t.type==='sell')return `<span class="rowamount">매도대금<b>${won(amount)}</b>${Number.isFinite(f.realized)?`<span class="${escapeHtml(f.realized>=0?'gain':'loss')}">실현손익 ${signed(f.realized)}</span>`:''}</span>`;if(['dividend','distribution','interest'].includes(t.type))return `<span class="rowamount dividend">수령<b>${won(amount)}</b></span>`;if(['deposit','internalTransferIn'].includes(t.type))return `<span class="rowamount deposit">${t.type==='internalTransferIn'?'통합 납입':'과거 입금'}<b>${won(amount)}</b></span>`;if(['withdrawal','internalTransferOut'].includes(t.type))return `<span class="rowamount">출금<b>${won(amount)}</b></span>`;return `<span class="rowamount">조정<b>${won(amount)}</b></span>`}
+function transactionAmountMarkup(a:SummaryAccount,t:SummaryTransaction,facts:Map<string,SummaryRecord&{realized?:number}>|null=null){const f=(facts||transactionFacts(a)).get(t.id)||{},amount=f.tradeAmount??Math.abs(txAmount(t));if(t.status==='cancelled')return `<span class="rowamount"><span class="loss">취소됨</span><b>${won(amount)}</b></span>`;if(t.type==='buy')return `<span class="rowamount">매수금액<b>${won(amount)}</b></span>`;if(t.type==='sell')return `<span class="rowamount">매도대금<b>${won(amount)}</b>${typeof f.realized==='number'&&Number.isFinite(f.realized)?`<span class="${escapeHtml(f.realized>=0?'gain':'loss')}">실현손익 ${signed(f.realized)}</span>`:''}</span>`;if(['dividend','distribution','interest'].includes(t.type))return `<span class="rowamount dividend">수령<b>${won(amount)}</b></span>`;if(['deposit','internalTransferIn'].includes(t.type))return `<span class="rowamount deposit">${t.type==='internalTransferIn'?'통합 납입':'과거 입금'}<b>${won(amount)}</b></span>`;if(['withdrawal','internalTransferOut'].includes(t.type))return `<span class="rowamount">출금<b>${won(amount)}</b></span>`;return `<span class="rowamount">조정<b>${won(amount)}</b></span>`}
 
 function contributionCard(a:SummaryAccount){
  const p=policy('isa',a),currentAccountState=isCurrentAccount(a),limit=currentAccountState?isaContributionModel(a):null,current=limit?limit!.lifetimePaid:Number(a.annualContribution||0),remain=limit?limit!.remaining:0,ratio=limit?Math.min(100,current/Math.max(1,limit!.accruedLimit)*100):100,net=Math.max(0,taxableNet(a)),ex=exemption(a),applied=Math.min(net,ex),tax=expectedTax(a),pending=a.status==='maturity_pending',baselineContribution=Math.max(0,Number(a.baselineContribution??a.baseline?.contribution)||0);return `<section class="card isa-management"><div class="sectionhead"><h2>ISA 한도·절세</h2><button data-tax-route>${a.status==='active'?ddayLabel(a.maturityAt):pending?'처리 대기':'정산 완료'} ›</button></div>${baselineContribution?`<div class="isa-management-row"><div class="isa-management-head"><span>확인된 누적 납입원금</span><strong>${won(baselineContribution)}</strong></div><small>초기 잔고 기준일 ${formatDate(a.baselineDate||a.baseline?.date)} · 인출해도 납입한도는 복원되지 않음</small></div>`:''}<div class="isa-management-grid"><div class="isa-management-row"><div class="isa-management-head"><span>${currentAccountState?'누적 납입 / 누적 한도':'최종 누적 납입'}</span><strong>${currentAccountState?`${won(current)} / ${won(limit!.accruedLimit)}`:won(current)}</strong></div><small>${currentAccountState?(pending?'만기 처리 대기 중이며 추가 납입은 중단됩니다.':`올해 확인 납입 ${won(limit!.currentYearPaid)} · 지금 추가 가능 ${won(remain)}`):'종료 계좌 기록'}</small><div class="progress ${limit?.overage?'warn':''}"><i style="width:${ratio}%"></i></div></div><div class="isa-management-row"><div class="isa-management-head"><span>예상 비과세 적용</span><strong>${won(applied)}</strong></div><small>${a.type} 한도 ${won(ex)} · 예상세금 ${won(tax)}</small><div class="progress ${net>ex?'warn':''}"><i style="width:${Math.min(100,applied/Math.max(1,ex)*100)}%"></i></div></div></div>${a.status==='active'?`<div class="auto-note">연 ${won(limit!.annualLimit)}씩 미사용 한도를 이월해 누적 ${won(limit!.totalLimit)}까지 계산합니다.${limit!.carryoverAvailable?` 현재 추가 가능액 중 이월분 ${won(limit!.carryoverAvailable)}.`:''}</div>`:pending?'<div class="auto-note">만기 처리 전 자산과 납입 이력은 현재 합산에 유지되지만 새 거래·납입은 입력할 수 없습니다.</div>':''}</section>`

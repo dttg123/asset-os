@@ -451,7 +451,7 @@ function pensionAssetModel(scope = pensionAssetScope(), lens = 'assetClass') {
 function pensionAssetGroupHoldings(scope, role) { const m = pensionAssetMetrics(scope); return m.holdings.filter(h => investmentRoleForHolding(h) === role).sort((a, b) => pensionHoldingValue(b) - pensionHoldingValue(a) || String(a.name).localeCompare(String(b.name), 'ko')); }
 function pensionRiskMetrics() { const m = pensionAssetMetrics('irp'), risky = m.holdings.filter(h => h.risky === true).reduce((s, h) => s + pensionHoldingValue(h), 0), unknown = m.holdings.filter(h => h.risky !== true && h.risky !== false).reduce((s, h) => s + pensionHoldingValue(h), 0), ratio = m.value ? risky / m.value * 100 : 0, maxRatio = m.value ? (risky + unknown) / m.value * 100 : 0, limit = Math.max(0, Math.min(100, (Number(policy('irp').riskyAssetLimit) || .70) * 100)); return { ...m, risky, unknown, ratio, maxRatio, limit, remaining: limit - ratio, classificationComplete: unknown <= .5 }; }
 function pensionIncomeRecords(scope = pensionAssetScope()) {
-    const allowedAccounts = new Set(pensionStore().accounts.filter(a => scope === 'all' || a.kind === scope).map(a => a.id)), allowedHoldings = new Set(pensionStore().holdings.filter(h => allowedAccounts.has(h.accountId)).map(h => h.id)), legacy = pensionStore().incomes.filter(x => allowedAccounts.has(x.accountId) && (x.holdingId ? allowedHoldings.has(x.holdingId) : true)), txIncome = (pensionStore().transactions || []).filter(t => ['dividend', 'distribution', 'interest', 'other_right'].includes(t.type) && allowedAccounts.has(t.accountId) && (t.holdingId ? allowedHoldings.has(t.holdingId) : true)).map(t => ({ ...t, id: t.id, accountId: t.accountId, holdingId: t.holdingId, type: t.type, date: t.date, amount: Math.max(0, (Number(t.amount) || 0) - (Number(t.fee) || 0) - (Number(t.tax) || 0)), grossAmount: Number(t.amount) || 0, tax: Number(t.tax) || 0, fee: Number(t.fee) || 0, source: 'transaction' })), kisRights = typeof brokerKisRightIncomeRecords === 'function' ? brokerKisRightIncomeRecords(state.brokerKis, scope === 'all' ? '' : scope).filter(x => allowedAccounts.has(x.accountId)) : [], ledger = [...legacy, ...txIncome, ...kisRights];
+    const allowedAccounts = new Set(pensionStore().accounts.filter(a => scope === 'all' || a.kind === scope).map(a => a.id)), allowedHoldings = new Set(pensionStore().holdings.filter(h => allowedAccounts.has(h.accountId)).map(h => h.id)), legacy = pensionStore().incomes.filter(x => allowedAccounts.has(x.accountId) && (x.holdingId ? allowedHoldings.has(x.holdingId) : true)), txIncome = (pensionStore().transactions || []).filter(t => ['dividend', 'distribution', 'interest', 'other_right'].includes(t.type || '') && allowedAccounts.has(t.accountId) && (t.holdingId ? allowedHoldings.has(t.holdingId) : true)).map(t => ({ ...t, id: t.id, accountId: t.accountId, holdingId: t.holdingId, type: t.type, date: t.date, amount: Math.max(0, (Number(t.amount) || 0) - (Number(t.fee) || 0) - (Number(t.tax) || 0)), grossAmount: Number(t.amount) || 0, tax: Number(t.tax) || 0, fee: Number(t.fee) || 0, source: 'transaction' })), kisRights = typeof brokerKisRightIncomeRecords === 'function' ? brokerKisRightIncomeRecords(state.brokerKis, scope === 'all' ? '' : scope).filter(x => allowedAccounts.has(x.accountId)) : [], ledger = [...legacy, ...txIncome, ...kisRights];
     return pensionReconcileIncome(ledger, typeof pensionArchiveIncomeRecords === 'function' ? pensionArchiveIncomeRecords(scope) : []);
 }
 function pensionIncomePrincipalAt(scope, key = '', mode = '') { const rows = pensionSnapshotRows(scope); if (!rows.length)
@@ -461,7 +461,7 @@ function pensionIncomePrincipalAt(scope, key = '', mode = '') { const rows = pen
 }
 else if (mode === 'year' && /^\d{4}$/.test(String(key)))
     end = `${key}-12-31`; const snap = rows.filter(x => String(x.date || '') <= end).at(-1); return Math.max(0, Number(snap?.cost) || 0); }
-function pensionIncomeRate(scope, amount, key = '', mode = '') { const cost = key ? pensionIncomePrincipalAt(scope, key, mode) : pensionAssetMetrics(scope).cost; return cost > 0 ? (Number(amount) || 0) / cost * 100 : null; }
+function pensionIncomeRate(scope, amount, key = '', mode = '') { const cost = key ? pensionIncomePrincipalAt(scope, key, mode) : pensionAssetMetrics(scope).cost; return cost !== null && cost > 0 ? (Number(amount) || 0) / cost * 100 : null; }
 function pensionIncomeSummary(scope = pensionAssetScope()) {
     const records = pensionIncomeRecords(scope), year = localYmd().slice(0, 4), total = records.reduce((s, x) => s + (Number(x.amount) || 0), 0), yearTotal = records.filter(x => String(x.date).startsWith(year)).reduce((s, x) => s + (Number(x.amount) || 0), 0), yieldRate = pensionIncomeRate(scope, yearTotal, year, 'year'), totalYieldRate = pensionIncomeRate(scope, total);
     return { records, total, yearTotal, yieldRate, totalYieldRate, year, count: records.length };
@@ -476,7 +476,7 @@ function pensionIncomeYears(scope = pensionAssetScope()) { const current = Numbe
     years.push({ key: String(y), year: y, label: String(y), amount });
 } return years; }
 function pensionProjectionScheduledMonthly() { if (typeof financeSchedules !== 'function')
-    return 0; const today = localYmd(), accountKinds = new Map((typeof integratedStore === 'function' ? integratedStore().accounts : []).map(account => [account.id, account.kind])); return financeSchedules().filter(schedule => schedule.active !== false && (!schedule.startDate || schedule.startDate <= today) && (!schedule.endDate || schedule.endDate >= today)).filter(schedule => ['pension', 'irp'].includes(schedule.targetKind) || ['pension', 'irp'].includes(accountKinds.get(schedule.targetAccountId))).reduce((sum, schedule) => sum + Math.max(0, Number(schedule.amount) || 0), 0); }
+    return 0; const today = localYmd(), accountKinds = new Map((typeof integratedStore === 'function' ? integratedStore().accounts : []).map(account => [account.id, account.kind])); return financeSchedules().filter(schedule => schedule.active !== false && (!schedule.startDate || schedule.startDate <= today) && (!schedule.endDate || schedule.endDate >= today)).filter(schedule => ['pension', 'irp'].includes(schedule.targetKind || '') || ['pension', 'irp'].includes(accountKinds.get(schedule.targetAccountId) || '')).reduce((sum, schedule) => sum + Math.max(0, Number(schedule.amount) || 0), 0); }
 function pensionProjection() { const p = pensionStore().projection || {}, m = pensionAssetMetrics('all'), currentYear = Number(localYmd().slice(0, 4)), birthYear = Math.max(1900, Math.min(currentYear, Math.round(Number(p.birthYear) || Number(seed.pension.projection.birthYear) || currentYear))), retirementAge = Math.max(1, Math.min(100, Math.round(Number(p.retirementAge) || Number(seed.pension.projection.retirementAge) || 65))), currentAge = Math.max(0, currentYear - birthYear), years = Math.max(0, retirementAge - currentAge), scheduled = pensionProjectionScheduledMonthly(), monthly = Math.max(0, Number(p.monthlyContribution) || scheduled || 0), annual = Math.max(0, Number(p.annualReturn) || 0), r = annual / 12, n = Math.round(years * 12), future = r > 0 ? m.value * Math.pow(1 + r, n) + monthly * (Math.pow(1 + r, n) - 1) / r : m.value + monthly * n, withdrawal = Math.max(0, Number(p.withdrawalRate) || 0), inflation = Math.max(0, Number(p.inflationRate) || 0), monthlyPension = future * withdrawal / 12, futureReal = inflation > 0 ? future / Math.pow(1 + inflation, years) : future, monthlyPensionReal = futureReal * withdrawal / 12; return { ...p, birthYear, current: m.value, years, yearsToRetire: years, monthly, annual, future, withdrawal, monthlyPension, inflation, retirementAge, currentAge, futureReal, monthlyPensionReal }; }
 function pensionPerformanceContribution(scope = pensionAssetScope()) { const model = pensionAssetModel(scope, 'assetClass'), base = Math.max(0, model.cost), rows = model.segments.map(x => ({ name: x.name, key: x.key, value: x.value, cost: x.cost, profit: x.profit, rate: x.cost ? x.profit / x.cost * 100 : 0, contribution: base ? x.profit / base * 100 : 0, pct: x.pct, color: x.color })); return { scope, totalRate: model.rate, totalProfit: model.profit, totalCost: model.cost, rows, ranked: [...rows].sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution)) }; }
 function pensionHoldingById(id) { return pensionScopedHoldings('all').find(h => h.id === id) || null; }
@@ -499,7 +499,7 @@ function pensionReconcileIncome(details, archives) {
         rows.push({ ...x });
     }
     for (const x of rows) {
-        if (!['dividend', 'distribution'].includes(x.type))
+        if (!['dividend', 'distribution'].includes(x.type || ''))
             continue;
         const kind = x.accountKind || pensionAccount(x.accountId)?.kind;
         const key = kind + '|' + String(x.date).slice(0, 7);
@@ -513,7 +513,7 @@ function pensionReconcileIncome(details, archives) {
     return rows.sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.id).localeCompare(String(a.id)));
 }
 function pensionVisibleTransactionRows(scope = 'all') {
-    const incomes = pensionIncomeRecords(scope), manual = pensionTransactions(scope).filter(x => !['dividend', 'distribution', 'interest', 'other_right'].includes(x.type)), orders = brokerKisVisibleOrders(state.brokerKis, scope);
+    const incomes = pensionIncomeRecords(scope), manual = pensionTransactions(scope).filter(x => !['dividend', 'distribution', 'interest', 'other_right'].includes(x.type || '')), orders = brokerKisVisibleOrders(state.brokerKis, scope);
     const realized = typeof pensionArchiveTransactionRows === 'function' ? pensionArchiveTransactionRows(scope).filter(x => x.type !== 'dividend') : [];
     const contributions = typeof centralPensionContributionRows === 'function' ? centralPensionContributionRows().filter(t => scope === 'all' || t.kind === scope).map((t) => ({ ...t, accountKind: t.kind, linkedContribution: true })) : [];
     return [...manual, ...orders, ...incomes, ...realized, ...contributions].sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.time || '').localeCompare(String(a.time || '')) || String(b.id).localeCompare(String(a.id)));
@@ -616,11 +616,11 @@ function replay(account, candidateTxs = null, includeCentral = true) {
             break;
         }
         const h = tx.holdingId ? map.get(tx.holdingId) : null, q = Number(tx.qty ?? 0), p = Number(tx.price ?? 0), f = Number(tx.fee ?? 0), tax = Number(tx.tax ?? 0), amount = Number(tx.amount ?? 0);
-        if (['deposit', 'internalTransferIn', 'feeRefund', 'taxRefund'].includes(tx.type)) {
+        if (['deposit', 'internalTransferIn', 'feeRefund', 'taxRefund'].includes(tx.type || '')) {
             cash += amount;
             facts.set(tx.id, { tradeAmount: amount });
         }
-        if (['withdrawal', 'internalTransferOut'].includes(tx.type)) {
+        if (['withdrawal', 'internalTransferOut'].includes(tx.type || '')) {
             if (amount > cash + 1e-8) {
                 error = '계좌 현금보다 큰 출금은 저장할 수 없습니다.';
                 errorTxId = tx.id;
@@ -631,7 +631,7 @@ function replay(account, candidateTxs = null, includeCentral = true) {
         }
         if (tx.type === 'depositReversal') {
             const source = tx.reversesTransactionId ? byId.get(tx.reversesTransactionId) : null;
-            if (!source || !['deposit', 'internalTransferIn'].includes(source.type) || !processed.has(source.id)) {
+            if (!source || !['deposit', 'internalTransferIn'].includes(source.type || '') || !processed.has(source.id)) {
                 error = '입금 취소는 먼저 기록된 원입금 거래를 선택해야 합니다.';
                 errorTxId = tx.id;
                 break;
@@ -651,7 +651,7 @@ function replay(account, candidateTxs = null, includeCentral = true) {
             reversedBySource.set(source.id, used + amount);
             facts.set(tx.id, { tradeAmount: amount, reversesTransactionId: source.id });
         }
-        if (['dividend', 'distribution', 'interest'].includes(tx.type)) {
+        if (['dividend', 'distribution', 'interest'].includes(tx.type || '')) {
             const net = amount - f - tax;
             cash += net;
             income += net;
@@ -659,7 +659,7 @@ function replay(account, candidateTxs = null, includeCentral = true) {
             taxes += tax;
             facts.set(tx.id, { tradeAmount: net, grossAmount: amount });
         }
-        if (['buy', 'openingAllocation'].includes(tx.type)) {
+        if (['buy', 'openingAllocation'].includes(tx.type || '')) {
             if (!h) {
                 error = '등록되지 않은 종목의 매수 기록이 있습니다.';
                 errorTxId = tx.id;
@@ -702,7 +702,7 @@ function replay(account, candidateTxs = null, includeCentral = true) {
                 cash += Number(tx.cashDelta);
             facts.set(tx.id, { tradeAmount: Number(tx.cashDelta) || 0 });
         }
-        if (['split', 'reverseSplit'].includes(tx.type) && h) {
+        if (['split', 'reverseSplit'].includes(tx.type || '') && h) {
             const ratio = Number(tx.ratio) || 1;
             if (ratio <= 0) {
                 error = '분할·병합 비율이 올바르지 않습니다.';
@@ -765,7 +765,7 @@ function taxableBreakdown(a) { const b = { gains: Number(a.taxBreakdown?.gains) 
     if (t.status === 'cancelled' || txDate(t) < (a.baselineDate || a.openedAt || ''))
         continue;
     const f = r.facts.get(t.id) || {};
-    if (t.type === 'sell' && Number.isFinite(f.realized)) {
+    if (t.type === 'sell' && typeof f.realized === 'number' && Number.isFinite(f.realized)) {
         const treatment = isaHoldingTaxTreatment(holdings.get(t.holdingId));
         if (treatment === 'unknown') {
             b.unclassified += Math.abs(f.realized);
@@ -784,7 +784,7 @@ function taxableBreakdown(a) { const b = { gains: Number(a.taxBreakdown?.gains) 
         else
             b.losses += f.realized;
     }
-    if (['dividend', 'distribution', 'interest'].includes(t.type)) {
+    if (['dividend', 'distribution', 'interest'].includes(t.type || '')) {
         b.dividends += Number(f.grossAmount ?? t.amount) || 0;
         b.expenses -= Number(t.fee || 0);
     }
@@ -792,7 +792,7 @@ function taxableBreakdown(a) { const b = { gains: Number(a.taxBreakdown?.gains) 
 function taxableNet(a) { const b = taxableBreakdown(a); return b.gains + b.losses + b.dividends + b.expenses; }
 function exemption(a) { const p = policy('isa', a); return a.type === '서민형' ? p.lowIncomeExemption : a.type === '농어민형' ? p.farmerExemption : p.generalExemption; }
 function expectedTax(a) { return Math.max(0, taxableNet(a) - exemption(a)) * policy('isa', a).taxRate; }
-function dividends(a) { return (a.transactions || []).filter(t => ['dividend', 'distribution'].includes(t.type) && t.status !== 'cancelled').sort((x, y) => txDate(y).localeCompare(txDate(x)) || txSequence(y) - txSequence(x)); }
+function dividends(a) { return (a.transactions || []).filter(t => ['dividend', 'distribution'].includes(t.type || '') && t.status !== 'cancelled').sort((x, y) => txDate(y).localeCompare(txDate(x)) || txSequence(y) - txSequence(x)); }
 function dividendNetAmount(t) { return Math.max(0, (Number(t?.amount) || 0) - (Number(t?.fee) || 0) - (Number(t?.tax) || 0)); }
 function dividendAnalysisRecords(a) { return dividends(a).filter(x => !x.meta?.analysisOnly).sort((x, y) => txDate(y).localeCompare(txDate(x)) || txSequence(y) - txSequence(x)); }
 function periodEndDate(key, period) { if (period === 'month') {
@@ -820,14 +820,14 @@ function consistencyIssues(a) {
             push('duplicate', '중복 거래가 의심됩니다', `${formatDate(txDate(t))} ${typeText(t.type)} 거래가 같은 조건으로 두 번 있습니다.`, 'medium', t.id);
         else
             seen.set(key, t.id);
-        if (t.holdingId && !holdings.some(h => h.id === t.holdingId) && ['buy', 'sell', 'openingAllocation', 'dividend', 'distribution', 'adjustment', 'securityTransferIn', 'securityTransferOut'].includes(t.type))
+        if (t.holdingId && !holdings.some(h => h.id === t.holdingId) && ['buy', 'sell', 'openingAllocation', 'dividend', 'distribution', 'adjustment', 'securityTransferIn', 'securityTransferOut'].includes(t.type || ''))
             push('missing-holding', '거래 종목 연결이 끊겼습니다', `${formatDate(txDate(t))} ${typeText(t.type)} 거래의 종목을 찾지 못했습니다.`, 'high', t.id);
         const closeDate = a.closedAt || a.maturityAt;
         if (!isTradeableAccount(a) && closeDate && txDate(t) > closeDate)
             push('after-close', a.status === 'maturity_pending' ? '만기 후 거래가 있습니다' : '종료 후 거래가 있습니다', `${formatDate(txDate(t))} 거래가 ${a.status === 'maturity_pending' ? '만기일' : '계좌 종료일'} 이후입니다.`, 'high', t.id);
         if (t.type === 'depositReversal') {
             const src = transactions.find(x => x.id === t.reversesTransactionId), used = transactions.filter(x => x.type === 'depositReversal' && x.status !== 'cancelled' && x.reversesTransactionId === t.reversesTransactionId).reduce((sum, x) => sum + (Number(x.amount) || 0), 0);
-            if (!src || !['deposit', 'internalTransferIn'].includes(src.type))
+            if (!src || !['deposit', 'internalTransferIn'].includes(src.type || ''))
                 push('reversal-source', '입금 취소의 원거래가 없습니다', `${formatDate(txDate(t))} 입금 취소 기록을 확인해 주세요.`, 'high', t.id);
             else if (used > (Number(src.amount) || 0) + tol)
                 push('reversal-over', '원입금보다 많이 취소됐습니다', `원입금 ${won(src.amount)}보다 누적 취소액이 큽니다.`, 'high', t.id);
@@ -846,8 +846,8 @@ function consistencyIssues(a) {
             holdingNames.set(key, h.id);
     }
     const latest = [...(a.reconciliations || [])].sort((x, y) => String(y.capturedAt || '').localeCompare(String(x.capturedAt || '')))[0];
-    if (latest?.summary?.missing > 0)
-        push('reconcile-missing', '잔고 대조에서 누락된 종목이 있습니다', `${latest.summary.missing}개 종목은 자동 삭제하지 않았습니다. 원장과 실제 잔고를 확인해 주세요.`, 'medium');
+    if ((latest?.summary?.missing || 0) > 0)
+        push('reconcile-missing', '잔고 대조에서 누락된 종목이 있습니다', `${latest?.summary?.missing}개 종목은 자동 삭제하지 않았습니다. 원장과 실제 잔고를 확인해 주세요.`, 'medium');
     const tax = taxableBreakdown(a);
     if (tax.unclassified > .5)
         push('tax-unclassified', 'ISA 과세분류가 확인되지 않은 매도가 있습니다', `${won(tax.unclassified)} 규모의 실현손익은 예상세금에서 제외했습니다. 종목 자산군을 확인해 주세요.`, 'medium');
