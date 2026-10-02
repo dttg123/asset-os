@@ -212,6 +212,7 @@ test('@core Drive backup shares TXT, respects cancellation, and downloads ZIP af
    }});
    openBackupHub();
   },outcome);
+  await page.getByText('고급 백업 설정',{exact:true}).click();
   if(outcome==='NotAllowedError'){
    const pending=page.waitForEvent('download');
    await page.locator('[data-backup-drive]').click();
