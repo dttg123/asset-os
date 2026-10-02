@@ -100,8 +100,9 @@ async function readValidToken(db: ReturnType<typeof serverClient>, accountKind: 
     .eq('account_type', accountKind).maybeSingle()
   if (error) throw new Error('TOKEN_CACHE_READ_FAILED')
   if (!data?.access_token || !data?.expires_at) return null
-  if (new Date(data.expires_at).getTime() <= Date.now() + REFRESH_MARGIN_MS) return null
-  return data.access_token as string
+  const expiresAt = new Date(data.expires_at).getTime()
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now() + REFRESH_MARGIN_MS) return null
+  return typeof data.access_token === 'string' ? data.access_token : null
 }
 
 function tokenCacheKind(accountKind: AccountKind, cfg: AccountConfig): AccountKind {
@@ -133,6 +134,14 @@ async function accessToken(accountKind: AccountKind, cfg: AccountConfig) {
   }
 
   try {
+    // A previous refresh can finish between the initial cache read and lock acquisition.
+    const completed = await readValidToken(db, cacheKind)
+    if (completed) {
+      const { error } = await db.from('kis_token_cache').update({ refreshing_until: null })
+        .eq('account_type', cacheKind)
+      if (error) throw new Error('TOKEN_CACHE_SAVE_FAILED')
+      return completed
+    }
     const tokenResponse = await kisFetch(`${KIS_BASE}/oauth2/tokenP`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
