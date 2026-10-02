@@ -1,13 +1,13 @@
 'use strict';
-type PensionLedgerRecord=Record<string,any>;
-type PensionLedgerStore={transactions:PensionLedgerRecord[];accounts:PensionLedgerRecord[];holdings:PensionLedgerRecord[]};
+type PensionLedgerRecord=Record<string,unknown>&{id?:string;accountId?:string;holdingId?:string;type?:string;date?:string};
+type PensionLedgerStore={transactions:PensionLedgerRecord[];accounts:Array<PensionLedgerRecord&{id:string;openedAt:string;closedAt?:string}>;holdings:Array<PensionLedgerRecord&{id:string}>};
 
 declare const INVESTMENT_ROLES:string[];
-declare const state:PensionLedgerRecord;
+declare const state:{pension?:PensionLedgerStore};
 declare function pensionStore():PensionLedgerStore;
 declare function pensionAccount(id:unknown):PensionLedgerRecord|null;
-declare function calculatePensionPosition(holding:PensionLedgerRecord,transactions:PensionLedgerRecord[]):PensionLedgerRecord;
-declare function centralPensionContributionRows():PensionLedgerRecord[];
+declare function calculatePensionPosition(holding:PensionLedgerRecord,transactions:PensionLedgerRecord[]): {qty:number;avg:number};
+declare function centralPensionContributionRows():Array<PensionLedgerRecord&{id:string;accountId:string}>;
 declare function validYmdDate(value:unknown):boolean;
 declare function localYmd():string;
 declare function pensionTransactionDateError(account:PensionLedgerRecord,date:unknown):string;
@@ -31,13 +31,13 @@ function investmentRoleMeta(h:PensionLedgerRecord){const role=investmentRoleForH
 function pensionTransactions(scope='all'){return pensionStore().transactions.filter(t=>{const a=pensionAccount(t.accountId);return a&&(scope==='all'||a.kind===scope)}).sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.createdAt||'').localeCompare(String(a.createdAt||'')))}
 function pensionTradeLabel(type:string){return({contribution:'납입',isaTransfer:'ISA 만기 이전',buy:'매수',sell:'매도',dividend:'배당금',distribution:'분배금',interest:'이자',other_right:'기타 권리',adjustment:'보정'} as Record<string,string>)[type]||type}
 function pensionPositionFromLedger(h:PensionLedgerRecord,transactions=pensionStore().transactions){return calculatePensionPosition(h,transactions)}
-function syncPensionDerivedHoldings(target:PensionLedgerRecord=state){const ps=target?.pension;if(!ps)return;const txs:PensionLedgerRecord[]=Array.isArray(ps.transactions)?ps.transactions:[];for(const h of ps.holdings||[]){const pos=pensionPositionFromLedger(h,txs);h.qty=pos.qty;h.avgPrice=pos.avg;h.investmentRole=normalizeInvestmentRole(h.investmentRole||h.assetClass,h);h.assetClass=h.investmentRole}}
-function pensionTradeCashDelta(t:PensionLedgerRecord){const fee=Math.max(0,Number(t.fee)||0),tax=Math.max(0,Number(t.tax)||0);if(t.type==='buy')return-((Number(t.qty)||0)*(Number(t.price)||0)+fee+tax);if(t.type==='sell')return (Number(t.qty)||0)*(Number(t.price)||0)-fee-tax;if(['dividend','distribution','interest','other_right'].includes(t.type))return (Number(t.amount)||0)-fee-tax;return 0}
+function syncPensionDerivedHoldings(target:{pension?:PensionLedgerStore}=state){const ps=target?.pension;if(!ps)return;const txs:PensionLedgerRecord[]=Array.isArray(ps.transactions)?ps.transactions:[];for(const h of ps.holdings||[]){const pos=pensionPositionFromLedger(h,txs);h.qty=pos.qty;h.avgPrice=pos.avg;h.investmentRole=normalizeInvestmentRole(h.investmentRole||h.assetClass,h);h.assetClass=h.investmentRole}}
+function pensionTradeCashDelta(t:PensionLedgerRecord){const fee=Math.max(0,Number(t.fee)||0),tax=Math.max(0,Number(t.tax)||0);if(t.type==='buy')return-((Number(t.qty)||0)*(Number(t.price)||0)+fee+tax);if(t.type==='sell')return (Number(t.qty)||0)*(Number(t.price)||0)-fee-tax;if(['dividend','distribution','interest','other_right'].includes(t.type||''))return (Number(t.amount)||0)-fee-tax;return 0}
 function pensionTransactionIssues(transactions:PensionLedgerRecord[]=pensionStore().transactions){
- const issues:string[]=[],byHolding=new Map<string,{qty:number;avg:number}>(),cashByAccount=new Map<string,number>();
+ const issues:string[]=[],byHolding=new Map<string|undefined,{qty:number;avg:number}>(),cashByAccount=new Map<string|undefined,number>();
  for(const a of pensionStore().accounts||[]){cashByAccount.set(a.id,0);if(!validYmdDate(a.openedAt))issues.push(`${a.id}: 계좌 개설일 오류`);else if(a.openedAt>localYmd())issues.push(`${a.id}: 미래 개설 계좌`);if(a.closedAt&&(!validYmdDate(a.closedAt)||a.closedAt<a.openedAt))issues.push(`${a.id}: 계좌 종료일 오류`) }
  for(const h of pensionStore().holdings){byHolding.set(h.id,{qty:Math.max(0,Number(h.baselineQty??h.qty)||0),avg:Math.max(0,Number(h.baselineAvgPrice??h.avgPrice)||0)})}
- const events:PensionLedgerRecord[]=[];
+ const events:Array<{kind:'contribution';date:string;createdAt:string;id:string;accountId:string;amount:number}|{kind:'transaction';date:string;createdAt:string;id:string;tx:PensionLedgerRecord}>=[];
  for(const c of centralPensionContributionRows()){if(c.unresolved){issues.push(`${c.id}: 납입 대상 계좌 미지정`);continue}events.push({kind:'contribution',date:String(c.date||''),createdAt:'',id:c.id,accountId:c.accountId,amount:Number(c.amount)||0})}
  for(const t of transactions||[])events.push({kind:'transaction',date:String(t.date||''),createdAt:String(t.createdAt||''),id:String(t.id||''),tx:t});
  events.sort((a,b)=>String(a.date).localeCompare(String(b.date))||(a.kind==='contribution'?-1:b.kind==='contribution'?1:String(a.createdAt).localeCompare(String(b.createdAt))||String(a.id).localeCompare(String(b.id))));
@@ -46,14 +46,14 @@ function pensionTransactionIssues(transactions:PensionLedgerRecord[]=pensionStor
   const t=ev.tx,a=pensionAccount(t.accountId);if(!a){issues.push(`${t.id}: 계좌 없음`);continue}
   const dateError=pensionTransactionDateError(a,t.date);if(dateError){issues.push(`${t.id}: ${dateError}`);continue}
   const fee=Number(t.fee??0),tax=Number(t.tax??0),charges=fee+tax;if(!financialCalculationInRange(fee,tax,charges)||fee<0||tax<0){issues.push(`${t.id}: 수수료/세금 오류`);continue}
-  if(['buy','sell','adjustment'].includes(t.type)){
+  if(['buy','sell','adjustment'].includes(t.type||'')){
    const h=pensionStore().holdings.find(x=>x.id===t.holdingId),pos=byHolding.get(t.holdingId);if(!h||!pos||h.accountId!==t.accountId){issues.push(`${t.id}: 종목/계좌 연결 오류`);continue}
    if(t.type==='buy'){
     {const q=Number(t.qty),price=Number(t.price),gross=q*price,need=gross+charges;if(!financialNumberInRange(q)||q<=0||!financialNumberInRange(price)||price<=0)issues.push(`${t.id}: 매수 수량/단가 오류`);else if(!financialCalculationInRange(gross,need)){issues.push(`${t.id}: 매수금액 범위 오류`);continue}else{const cash=cashByAccount.get(t.accountId)||0;if(need>cash+1e-8){issues.push(`${t.id}: 계좌 현금 부족`);continue}const oldCost=pos.qty*pos.avg;pos.qty+=q;pos.avg=pos.qty?(oldCost+need)/pos.qty:0;cashByAccount.set(t.accountId,cash-need)}}
    }else if(t.type==='sell'){
     {const q=Number(t.qty),price=Number(t.price),gross=q*price;if(!financialNumberInRange(q)||q<=0||!financialNumberInRange(price)||price<=0)issues.push(`${t.id}: 매도 수량/단가 오류`);else if(!financialNumberInRange(gross)){issues.push(`${t.id}: 매도금액 범위 오류`);continue}else if(q>pos.qty+1e-8)issues.push(`${t.id}: 보유수량 초과매도`);else if(charges>gross+1e-8)issues.push(`${t.id}: 매도 수수료와 세금이 매도대금을 초과`);else{const cash=(cashByAccount.get(t.accountId)||0)+gross-charges;if(!financialNumberInRange(cash)){issues.push(`${t.id}: 매도 후 현금 범위 오류`);continue}if(cash<-1e-8){issues.push(`${t.id}: 매도 비용으로 계좌 현금 음수`);continue}pos.qty-=q;if(pos.qty<=1e-9){pos.qty=0;pos.avg=0}cashByAccount.set(t.accountId,cash)}}
    }else{const setQty=Number(t.setQty)||0,setAvg=Number(t.setAvg)||0;if(!financialCalculationInRange(setQty,setAvg)||setQty<0||setAvg<0)issues.push(`${t.id}: 보정값 오류`);else{pos.qty=setQty;pos.avg=pos.qty?setAvg:0}}
-  }else if(['dividend','distribution','interest','other_right'].includes(t.type)){
+  }else if(['dividend','distribution','interest','other_right'].includes(t.type||'')){
    const amount=Number(t.amount);if(!financialNumberInRange(amount)||amount<=0){issues.push(`${t.id}: 수령액 오류`);continue}if(charges>amount+1e-8){issues.push(`${t.id}: 수수료와 세금이 세전 수령액을 초과`);continue}if(t.holdingId){const h=pensionStore().holdings.find(x=>x.id===t.holdingId);if(!h||h.accountId!==t.accountId){issues.push(`${t.id}: 수령 종목 연결 오류`);continue}}const cash=(cashByAccount.get(t.accountId)||0)+amount-charges;if(!financialNumberInRange(cash)){issues.push(`${t.id}: 수령 후 현금 범위 오류`);continue}if(cash<-1e-8){issues.push(`${t.id}: 수령 비용으로 계좌 현금 음수`);continue}cashByAccount.set(t.accountId,cash)
   }
  }

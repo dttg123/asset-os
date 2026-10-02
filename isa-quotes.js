@@ -2,7 +2,7 @@
 let isaQuoteRefreshPromise = null;
 function isaQuoteLinks(a = currentAccount()) {
     return (a?.holdings || [])
-        .filter((h) => h.lifecycleStatus !== 'archived' && h.quoteSource === 'kis' && h.instrumentCode && ['stock', 'bond'].includes(h.quoteType))
+        .filter((h) => h.lifecycleStatus !== 'archived' && h.quoteSource === 'kis' && h.instrumentCode && ['stock', 'bond'].includes(h.quoteType || ''))
         .map((h) => ({ holdingId: h.id, type: h.quoteType, code: String(h.instrumentCode).trim().toUpperCase() }));
 }
 function applyIsaQuoteResults(a, quotes, fetchedAt) {
@@ -48,7 +48,7 @@ async function refreshIsaQuotes({ manual = false } = {}) {
         const snapshot = clone(a), applied = applyIsaQuoteResults(a, result.data.quotes, result.data.fetchedAt);
         if (!applied.ok) {
             Object.assign(a, snapshot);
-            return applied;
+            return { ...applied, ok: false };
         }
         if (!persist(false)) {
             Object.assign(a, snapshot);

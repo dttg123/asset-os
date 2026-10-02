@@ -1,11 +1,13 @@
 'use strict';
 
-type IsaQuoteRecord=Record<string,any>;
-type IsaQuoteRefreshResult=IsaQuoteRecord&{ok:boolean};
+type IsaQuoteRecord=Record<string,unknown>&{id?:string;holdingId?:string;type?:string;code?:string;quoteType?:string;instrumentCode?:string;price?:unknown};
+type IsaQuoteAccount=Record<string,unknown>&{holdings:IsaQuoteRecord[];transactions?:unknown[]};
+type IsaQuoteRefreshResult={ok:false;error:string;updated?:number;missing?:number}|{ok:true;updated:number;missing:number;fetchedAt:string};
+type IsaQuoteResponse={ok:false;error:string}|{ok:true;data:{quotes:IsaQuoteRecord[];fetchedAt:string}};
 
 declare const QA_MODE:boolean;
-declare const brokerKisClient:{quotes:(links:IsaQuoteRecord[])=>Promise<IsaQuoteRefreshResult>};
-declare function currentAccount():IsaQuoteRecord|null;
+declare const brokerKisClient:{quotes:(links:IsaQuoteRecord[])=>Promise<IsaQuoteResponse>};
+declare function currentAccount():IsaQuoteAccount|null;
 declare function clone<T>(value:T):T;
 declare function persist(immediate?:boolean):boolean;
 declare function renderKeepingScroll():void;
@@ -13,17 +15,17 @@ declare function toast(message:string):void;
 
 let isaQuoteRefreshPromise:Promise<IsaQuoteRefreshResult>|null=null;
 
-function isaQuoteLinks(a:IsaQuoteRecord|null=currentAccount()):IsaQuoteRecord[]{
+function isaQuoteLinks(a:IsaQuoteAccount|null=currentAccount()):IsaQuoteRecord[]{
  return (a?.holdings||[])
-  .filter((h:IsaQuoteRecord)=>h.lifecycleStatus!=='archived'&&h.quoteSource==='kis'&&h.instrumentCode&&['stock','bond'].includes(h.quoteType))
+  .filter((h:IsaQuoteRecord)=>h.lifecycleStatus!=='archived'&&h.quoteSource==='kis'&&h.instrumentCode&&['stock','bond'].includes(h.quoteType||''))
   .map((h:IsaQuoteRecord)=>({holdingId:h.id,type:h.quoteType,code:String(h.instrumentCode).trim().toUpperCase()}))
 }
 
-function applyIsaQuoteResults(a:IsaQuoteRecord,quotes:IsaQuoteRecord[],fetchedAt:string){
+function applyIsaQuoteResults(a:IsaQuoteAccount,quotes:IsaQuoteRecord[],fetchedAt:string){
  const before={
   cash:a.baselineCash,
   transactions:JSON.stringify(a.transactions||[]),
-  positions:(a.holdings||[]).map((h:IsaQuoteRecord)=>[h.id,h.baselineQty,h.baselineAvg] as [string,unknown,unknown])
+  positions:(a.holdings||[]).map((h:IsaQuoteRecord)=>[h.id,h.baselineQty,h.baselineAvg] as [string|undefined,unknown,unknown])
  };
  const byKey=new Map<string,IsaQuoteRecord>((quotes||[]).map((q:IsaQuoteRecord)=>[`${q.type}:${String(q.code||'').toUpperCase()}`,q]));
  let updated=0;
@@ -36,7 +38,7 @@ function applyIsaQuoteResults(a:IsaQuoteRecord,quotes:IsaQuoteRecord[],fetchedAt
   h.quoteError='';
   updated++
  }
- const unchanged=before.cash===a.baselineCash&&before.transactions===JSON.stringify(a.transactions||[])&&before.positions.every(([id,qty,avg]:[string,unknown,unknown])=>{
+ const unchanged=before.cash===a.baselineCash&&before.transactions===JSON.stringify(a.transactions||[])&&before.positions.every(([id,qty,avg]:[string|undefined,unknown,unknown])=>{
   const h=a.holdings.find((x:IsaQuoteRecord)=>x.id===id);
   return h&&h.baselineQty===qty&&h.baselineAvg===avg
  });
@@ -50,20 +52,20 @@ async function refreshIsaQuotes({manual=false}:{manual?:boolean}={}):Promise<Isa
  const links=isaQuoteLinks(a);
  if(!links.length)return{ok:false,error:'ISA_QUOTES_NOT_LINKED'};
  if(isaQuoteRefreshPromise)return isaQuoteRefreshPromise;
- isaQuoteRefreshPromise=(async()=>{
-  const result=QA_MODE
+ isaQuoteRefreshPromise=(async():Promise<IsaQuoteRefreshResult>=>{
+  const result:IsaQuoteResponse=QA_MODE
    ?{ok:true,data:{quotes:links.map((x:IsaQuoteRecord)=>({...x,price:Number(a.holdings.find((h:IsaQuoteRecord)=>h.id===x.holdingId)?.currentPrice)||1})),fetchedAt:new Date().toISOString()}}
    :await brokerKisClient.quotes(links.map(({type,code}:IsaQuoteRecord)=>({type,code})));
   if(!result.ok)return result;
   const snapshot=clone(a),applied=applyIsaQuoteResults(a,result.data.quotes,result.data.fetchedAt);
-  if(!applied.ok){Object.assign(a,snapshot);return applied}
+  if(!applied.ok){Object.assign(a,snapshot);return{...applied,ok:false}}
   if(!persist(false)){Object.assign(a,snapshot);return{ok:false,error:'PERSIST_FAILED'}}
   if(manual){
    renderKeepingScroll();
    toast(applied.missing?`현재가 ${applied.updated}개 갱신 · ${applied.missing}개 미갱신`:`현재가 ${applied.updated}개 갱신 · 수량·매입가 유지`)
   }
   return{ok:true,updated:applied.updated,missing:applied.missing,fetchedAt:result.data.fetchedAt}
- })().catch((error:unknown)=>({ok:false,error:String(error instanceof Error?error.message:'QUOTE_REFRESH_FAILED')})).finally(()=>{isaQuoteRefreshPromise=null});
+ })().catch((error:unknown):IsaQuoteRefreshResult=>({ok:false,error:String(error instanceof Error?error.message:'QUOTE_REFRESH_FAILED')})).finally(()=>{isaQuoteRefreshPromise=null});
  return isaQuoteRefreshPromise
 }
 
