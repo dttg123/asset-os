@@ -173,7 +173,7 @@ function normalizeInvestmentRole(value, h = null) {
     const text = `${h?.name || ''} ${h?.assetClass || ''} ${h?.productType || ''}`.toLowerCase();
     if (/현금성|머니|kofr|cd금리|mmf|cash/.test(text))
         return '현금';
-    if (/커버드|인컴|월배당|리츠|부동산|인프라|income|reit/.test(text))
+    if (/커버드|인컴|월배당|리츠|부동산|맥쿼리인프라|income|reit/.test(text))
         return '현금흐름';
     if (/배당|dividend|퀄리티/.test(text))
         return '배당';
@@ -183,10 +183,11 @@ function normalizeInvestmentRole(value, h = null) {
 }
 function investmentRoleForHolding(h) { return normalizeInvestmentRole(h?.investmentRole || h?.assetClass, h); }
 function investmentThemeTag(h) { const explicit = String(h?.themeTag || '').trim(); if (explicit)
-    return explicit; const text = String(h?.name || '').toLowerCase(); if (/반도체|sox|필라델피아/.test(text))
+    return explicit; const text = String(h?.name || '').toLowerCase(); if (/ai.*전력/.test(text))
+    return 'AI·전력'; if (/반도체|sox|필라델피아/.test(text))
     return '반도체'; if (/나스닥/.test(text))
     return '미국 성장'; if (/s&p|sp500/.test(text))
-    return '미국 대표'; if (/리츠|부동산|인프라/.test(text))
+    return '미국 대표'; if (/리츠|부동산|맥쿼리인프라/.test(text))
     return '리츠'; if (/국고채|국채|채권/.test(text))
     return '채권'; return ''; }
 function investmentRoleMeta(h) { const role = investmentRoleForHolding(h), tag = investmentThemeTag(h); return tag ? `${role} · ${tag}` : role; }

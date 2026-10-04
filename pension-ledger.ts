@@ -20,13 +20,13 @@ function normalizeInvestmentRole(value:unknown,h:PensionLedgerRecord|null=null){
  const legacy:Record<string,string>={방어:'안정',테마:'성장','현금성 자산':'현금'};if(legacy[v])return legacy[v];
  const text=`${h?.name||''} ${h?.assetClass||''} ${h?.productType||''}`.toLowerCase();
  if(/현금성|머니|kofr|cd금리|mmf|cash/.test(text))return'현금';
- if(/커버드|인컴|월배당|리츠|부동산|인프라|income|reit/.test(text))return'현금흐름';
+ if(/커버드|인컴|월배당|리츠|부동산|맥쿼리인프라|income|reit/.test(text))return'현금흐름';
  if(/배당|dividend|퀄리티/.test(text))return'배당';
  if(/채권|국고채|국채|회사채|bond|골드|금\b/.test(text))return'안정';
  return'성장'
 }
 function investmentRoleForHolding(h:PensionLedgerRecord){return normalizeInvestmentRole(h?.investmentRole||h?.assetClass,h)}
-function investmentThemeTag(h:PensionLedgerRecord){const explicit=String(h?.themeTag||'').trim();if(explicit)return explicit;const text=String(h?.name||'').toLowerCase();if(/반도체|sox|필라델피아/.test(text))return'반도체';if(/나스닥/.test(text))return'미국 성장';if(/s&p|sp500/.test(text))return'미국 대표';if(/리츠|부동산|인프라/.test(text))return'리츠';if(/국고채|국채|채권/.test(text))return'채권';return''}
+function investmentThemeTag(h:PensionLedgerRecord){const explicit=String(h?.themeTag||'').trim();if(explicit)return explicit;const text=String(h?.name||'').toLowerCase();if(/ai.*전력/.test(text))return'AI·전력';if(/반도체|sox|필라델피아/.test(text))return'반도체';if(/나스닥/.test(text))return'미국 성장';if(/s&p|sp500/.test(text))return'미국 대표';if(/리츠|부동산|맥쿼리인프라/.test(text))return'리츠';if(/국고채|국채|채권/.test(text))return'채권';return''}
 function investmentRoleMeta(h:PensionLedgerRecord){const role=investmentRoleForHolding(h),tag=investmentThemeTag(h);return tag?`${role} · ${tag}`:role}
 function pensionTransactions(scope='all'){return pensionStore().transactions.filter(t=>{const a=pensionAccount(t.accountId);return a&&(scope==='all'||a.kind===scope)}).sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.createdAt||'').localeCompare(String(a.createdAt||'')))}
 function pensionTradeLabel(type:string){return({contribution:'납입',isaTransfer:'ISA 만기 이전',buy:'매수',sell:'매도',dividend:'배당금',distribution:'분배금',interest:'이자',other_right:'기타 권리',adjustment:'보정'} as Record<string,string>)[type]||type}
