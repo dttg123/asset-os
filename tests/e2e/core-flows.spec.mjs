@@ -47,6 +47,7 @@ test('@core long data survives reload and every primary route renders',async({pa
   await expect(page).toHaveURL(new RegExp(`${route.hash.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}$`));
   await expect(page.locator('header h1')).toHaveText(route.heading);
   await expectNoHorizontalOverflow(page);
+  await page.screenshot({path:`/tmp/asset-native-populated-${route.name}-${test.info().project.name}.png`});
  }
  await page.reload();
  await expect(page.getByText(/2026-2060 · 7,740건/)).toBeVisible({timeout:15_000});
@@ -319,6 +320,42 @@ test('@core quick entry saves continuously, remembers fields, copies safely and 
  await expectNoHorizontalOverflow(page);
  await page.screenshot({path:`/tmp/asset-input-${test.info().project.name}.png`});
  expect(await page.evaluate(()=>document.fonts.check('16px Pretendard'))).toBe(true);
+ expect(appErrors).toEqual([]);
+});
+
+test('@core native integrated summary opens presets and card installments without silent writes',async({page})=>{
+ await preparePage(page);await page.goto(app);
+ await page.evaluate(()=>{
+  const next=window.__assetOS.getState();next.financialProducts={items:[],events:[]};next.financeSchedules={items:[]};next.integrated.liabilities=[];
+  next.integrated.ledger=[{id:'native-cash',date:'2026-01-01',type:'openingAsset',toAccountId:'cash-main',amount:10000000}];
+  next.settings.integratedMonth='2026-02';next.settings.integratedEntryFavorites=[{uiType:'lifeExpense',category:'식비',amount:25000}];
+  window.__assetOS.replaceState(next);createCardInstallment({name:'TV · 국민카드',purchaseAmount:3100000,months:24,purchaseDate:'2026-01-10',firstPaymentDate:'2026-02-25',interestMode:'free'});
+  financeSchedules().push({id:'native-income',name:'예정 급여',kind:'income',amount:3000000,day:15,startDate:'2026-01-01',active:true});nav('integrated','summary');
+ });
+ await expect(page.locator('.nav.active')).toHaveText('통합');
+ await expect(page.locator('.fixed-cost-head-right b')).toHaveText('129,166원');
+ await expect(page.locator('.fixed-cost-preview')).toContainText('TV · 국민카드');
+ await page.screenshot({path:`/tmp/asset-native-summary-${test.info().project.name}.png`});
+ const before=await page.evaluate(()=>window.__assetOS.getState().integrated.ledger.length);
+ await page.locator('[data-summary-entry]').first().click();
+ const form=page.locator('#integratedTxForm');await expect(form.locator('[name="amount"]')).toHaveValue('25000');
+ expect(await page.evaluate(()=>window.__assetOS.getState().integrated.ledger.length)).toBe(before);
+ await form.locator('[data-entry-category="교통"]').click();await expect(form.locator('[name="category"]')).toHaveValue('교통');
+ await page.screenshot({path:`/tmp/asset-native-input-${test.info().project.name}.png`});
+ await form.locator('.integrated-form-save').click();
+ expect(await page.evaluate(()=>window.__assetOS.getState().integrated.ledger.length)).toBe(before+1);
+ await page.reload();await expect(page.locator('.nav.active')).toHaveText('통합');await page.locator('[data-integrated-tab="summary"]').click();
+ await page.locator('[data-card-hub]').click();await page.locator('[data-card-plan-open]').click();
+ await expect(page.locator('.card-detail-summary')).toContainText('3,100,000원');
+ await expect(page.locator('.card-detail-list')).toContainText('24회 보기');
+ await page.screenshot({path:`/tmp/asset-native-card-${test.info().project.name}.png`});
+ await page.evaluate(()=>closeSheets({all:true}));
+ for(const root of ['home','isa','pension']){await page.evaluate(root=>nav(root,'summary'),root);await expectNoHorizontalOverflow(page);await page.screenshot({path:`/tmp/asset-native-${root}-${test.info().project.name}.png`})}
+ await page.setViewportSize({width:320,height:800});await page.evaluate(()=>nav('integrated','summary'));await expectNoHorizontalOverflow(page);
+ await page.evaluate(()=>{setting().theme='dark';applyTheme()});await expectNoHorizontalOverflow(page);
+ const colors=await page.locator('.integrated-overview-head').evaluate(el=>({foreground:getComputedStyle(el).color,background:getComputedStyle(el.closest('.integrated-overview-hero')).backgroundColor}));expect(colors.foreground).not.toBe(colors.background);
+ await page.screenshot({path:`/tmp/asset-native-dark-${test.info().project.name}.png`});
+ await page.evaluate(()=>document.fonts.ready);expect(await page.evaluate(()=>document.fonts.check('16px Pretendard'))).toBe(true);
  expect(appErrors).toEqual([]);
 });
 
