@@ -349,6 +349,7 @@ test('@core native integrated summary opens presets and card installments withou
  await expect(page.locator('.card-detail-summary')).toContainText('3,100,000원');
  await expect(page.locator('.card-detail-list')).toContainText('24회 보기');
  await page.screenshot({path:`/tmp/asset-native-card-${test.info().project.name}.png`});
+ await page.locator('.card-payment-primary').click();await expect(page.locator('.schedule-detail-list')).toContainText('TV · 국민카드');
  await page.evaluate(()=>closeSheets({all:true}));
  for(const root of ['home','isa','pension']){await page.evaluate(root=>nav(root,'summary'),root);await expectNoHorizontalOverflow(page);await page.screenshot({path:`/tmp/asset-native-${root}-${test.info().project.name}.png`})}
  await page.setViewportSize({width:320,height:800});await page.evaluate(()=>nav('integrated','summary'));await expectNoHorizontalOverflow(page);
@@ -373,7 +374,7 @@ test('@core @release schedule and card sheets connect purchase, payment correcti
  expect(await page.evaluate(id=>schedulePlannedAmount(financeSchedules().find(s=>s.id===id),'2026-03-25'),id)).toBe(111000);
  await page.getByRole('button',{name:'예정금액 수정',exact:true}).click();await form.locator('[name="amount"]').fill('126000');await form.locator('[name="scope"]').selectOption('future');await form.getByRole('button',{name:'수정 저장'}).click();
  expect(await page.evaluate(id=>schedulePlannedAmount(financeSchedules().find(s=>s.id===id),'2026-03-25'),id)).toBe(126000);
- await page.evaluate(()=>closeSheets({all:true}));await page.reload();await page.evaluate(()=>nav('integrated','schedule'));await expect(page.locator('.card-plan-values')).toContainText('1,100,000원');await expect(page.locator('.card-plan-row')).toContainText('113,000원');
+ await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);await page.reload();await page.evaluate(()=>nav('integrated','schedule'));await expect(page.locator('.card-plan-values')).toContainText('1,100,000원');await expect(page.locator('.card-plan-row')).toContainText('113,000원');
  expect(await page.evaluate(()=>integratedSpendingAnalysis('2026-01').total)).toBe(1200000);expect(await page.evaluate(()=>integratedSpendingAnalysis('2026-02').total)).toBe(0);
  await expectNoHorizontalOverflow(page);expect(appErrors).toEqual([]);
 });
