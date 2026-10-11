@@ -1,6 +1,10 @@
 import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 
+test.beforeEach(async({page})=>{
+ if(process.env.ASSET_OS_QA_SDK_PATH){const body=await readFile(process.env.ASSET_OS_QA_SDK_PATH);await page.route('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4',route=>route.fulfill({body,contentType:'text/javascript'}))}
+});
+
 const app='/index.html?qa=1#/home';
 const appErrors=[];
 const preparePage=async page=>{
@@ -97,13 +101,13 @@ test('@core integrated input rejects unsafe amounts and saves a valid transactio
  const form=page.locator('#integratedTxForm');
  await expect(form).toBeVisible();
  await form.locator('input[name="amount"]').fill('999999999999999999');
- await form.locator('button[type="submit"]').click();
+ await form.locator('.integrated-form-save').click();
  await expect(form.locator('[data-form-error]')).toBeVisible();
  expect(await page.evaluate(()=>window.__assetOS.getState().integrated.ledger.length)).toBe(before);
  await form.locator('input[name="amount"]').fill('100000');
  // Respect the application's existing 500 ms duplicate-submit guard.
  await expect.poll(()=>form.evaluate(node=>Date.now()-Number(node.dataset.lastSubmitAt||0))).toBeGreaterThanOrEqual(500);
- await form.locator('button[type="submit"]').click();
+ await form.locator('.integrated-form-save').click();
  await expect(page.locator('#formSheet')).toHaveAttribute('aria-hidden','true');
  const added=await page.evaluate(count=>window.__assetOS.getState().integrated.ledger.slice(count).map(row=>({type:row.type,amount:row.amount})),before);
  expect(added).toEqual([{type:'externalIncome',amount:100000}]);
@@ -286,5 +290,34 @@ test('@core AI sharing uses pension cash after a balance discrepancy without blo
  expect(summary.availableCash).toBe(690284);
  expect(exported.dataQuality).toEqual({ready:true,blockers:[]});
  await expect(page.locator('#confirmDialog')).toBeHidden();
+ expect(appErrors).toEqual([]);
+});
+
+test('@core quick entry saves continuously, remembers fields, copies safely and persists favorites',async({page})=>{
+ await preparePage(page);await page.goto(app);
+ await page.evaluate(()=>openIntegratedTransactionForm());
+ let form=page.locator('#integratedTxForm');
+ await form.locator('[name="amount"]').fill('250000');
+ await form.locator('[name="category"]').fill('입력 QA 급여');
+ await form.locator('.entry-extra summary').click();await form.locator('[name="note"]').fill('즐겨찾기 메모');await form.locator('[name="saveFavorite"]').check();
+ await form.getByRole('button',{name:'저장하고 계속',exact:true}).click();
+ await expect(form).toBeVisible();await expect(form.locator('[name="amount"]')).toHaveValue('');
+ await expect(form.locator('[name="category"]')).toHaveValue('입력 QA 급여');
+ await expect(form.locator('[name="note"]')).toHaveValue('');
+ await form.locator('.entry-library summary').click();await expect(form.locator('[data-entry-preset="favorite:0"]')).toBeVisible();
+ await form.locator('[name="amount"]').fill('75000');await form.locator('.integrated-form-save').click();
+ await expect(page.locator('#formSheet')).toHaveAttribute('aria-hidden','true');
+ const first=await page.evaluate(()=>window.__assetOS.getState().integrated.ledger.find(row=>row.category==='입력 QA 급여'));
+ await page.evaluate(id=>openIntegratedTransactionDetail(id),first.id);await page.getByRole('button',{name:'이 기록 복사',exact:true}).click();
+ await expect(form.locator('[name="amount"]')).toHaveValue('250000');expect(await form.getAttribute('data-edit-id')).toBe('');
+ await form.locator('[name="amount"]').fill('2000');await form.locator('.integrated-form-save').click();
+ const rows=await page.evaluate(()=>window.__assetOS.getState().integrated.ledger.filter(row=>row.category==='입력 QA 급여'));
+ expect(rows.map(row=>row.amount)).toEqual([250000,75000,2000]);expect(new Set(rows.map(row=>row.id)).size).toBe(3);
+ await page.reload();await page.evaluate(()=>openIntegratedTransactionForm());
+ await form.locator('.entry-library summary').click();await expect(form.locator('[data-entry-preset="favorite:0"]')).toBeVisible();await form.locator('[data-entry-preset="favorite:0"]').click();
+ await expect(form.locator('[name="amount"]')).toHaveValue('250000');await expect(form.locator('[name="note"]')).toHaveValue('즐겨찾기 메모');
+ await expectNoHorizontalOverflow(page);
+ await page.screenshot({path:`/tmp/asset-input-${test.info().project.name}.png`});
+ expect(await page.evaluate(()=>document.fonts.check('16px Pretendard'))).toBe(true);
  expect(appErrors).toEqual([]);
 });
