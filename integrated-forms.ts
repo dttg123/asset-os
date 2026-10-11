@@ -113,7 +113,20 @@ function integratedRecentEntryPresets():IntegratedEntryPreset[]{
 function integratedEntryShortcutsMarkup():string{
  const groups:[string,IntegratedEntryPreset[],string][]=[['자주 쓰는 기록',integratedEntryFavorites(),'favorite'],['최근 기록',integratedRecentEntryPresets(),'recent']];
  const content=groups.filter(([,items])=>items.length).map(([label,items,kind])=>`<div class="entry-shortcuts"><span>${label}</span><div class="entry-shortcut-list">${items.map((item,index)=>`<span class="entry-shortcut"><button type="button" data-entry-preset="${escapeHtml(kind+':'+index)}">${escapeHtml(item.category||integratedDefaultCategory(item.uiType))}</button>${kind==='favorite'?`<button type="button" class="entry-shortcut-remove" data-entry-remove="${escapeHtml(index)}" aria-label="${escapeHtml(item.category||'기록')} 즐겨찾기 삭제">×</button>`:''}</span>`).join('')}</div></div>`).join('');
- return content?`<details class="entry-library"><summary>기록 불러오기</summary>${content}</details>`:'';
+ return content?`<details class="entry-library"><summary>최근 기록·즐겨찾기</summary>${content}</details>`:'';
+}
+function integratedSummaryEntryPresets():IntegratedEntryPreset[]{
+ const saved=[...integratedEntryFavorites(),...integratedRecentEntryPresets()],seen=new Set<string>();
+ const entries=saved.filter(x=>{const key=JSON.stringify([x.uiType,x.category,x.toAccountId,x.liabilityId]);if(seen.has(key))return false;seen.add(key);return true}).slice(0,4);
+ if(entries.length)return entries;
+ const pension=integratedStore().accounts.find(a=>a.kind==='pension');
+ return [{uiType:'externalIncome',category:'급여'},...(pension?[{uiType:'savingInvestment',category:'연금 납입',toAccountId:pension.id}]:[]),{uiType:'lifeExpense',category:'생활비'}];
+}
+function integratedSummaryEntryMarkup():string{
+ return `<section class="integrated-quick-presets"><h2>자주 쓰는 기록</h2><div class="integrated-preset-list">${integratedSummaryEntryPresets().map((x,i)=>`<button data-summary-entry="${escapeHtml(i)}">${escapeHtml(x.category||integratedDefaultCategory(x.uiType))}</button>`).join('')}</div></section>`;
+}
+function bindIntegratedSummaryEntries():void{
+ document.querySelectorAll<HTMLButtonElement>('[data-summary-entry]').forEach(b=>b.onclick=()=>{const entry=integratedSummaryEntryPresets()[Number(b.dataset.summaryEntry)];if(entry)openIntegratedTransactionForm('',{...entry,date:integratedEntryDateForMonth()})});
 }
 function integratedFormEntryPreset(form:HTMLFormElement,withAmounts=false):IntegratedEntryPreset|null{
  const data=new FormData(form);return integratedCleanEntryPreset(Object.fromEntries(data.entries()),withAmounts);
@@ -127,13 +140,20 @@ function openIntegratedTransactionForm(id='',preset:IntegratedRecord={}):void{
  if(tx&&tx.meta?.scheduleId){toast('일정에서 생성된 거래는 일정 상세에서 확인해 주세요.');return}
  const remembered=typeof setting==='function'?integratedCleanEntryPreset(setting().integratedEntryLast):null;
  const formPreset=tx||{...(remembered||{}),...preset,date:preset.date||integratedEntryDateForMonth()};
- $('#formEyebrow').textContent='통합 · 거래기록';$('#formTitle').textContent=tx?'거래 수정':'거래 추가';$('#formBody').innerHTML=integratedFormMarkup(tx,formPreset);
+ $('#formEyebrow').textContent='통합';$('#formTitle').textContent=tx?'거래 수정':'거래 입력';$('#formBody').innerHTML=integratedFormMarkup(tx,formPreset);
  openSheet('#formSheet',{mode:'input'});syncIntegratedFormFields();
  const form=$('#integratedTxForm') as IntegratedInputForm;
  if(form.elements.category)form.elements.category.dataset.auto=tx||formPreset.category?'0':'1';
+ const syncTypes=()=>{form.querySelectorAll<HTMLButtonElement>('[data-entry-type]').forEach(b=>{const selected=b.dataset.entryType===form.elements.uiType?.value;b.classList.toggle('active',selected);b.setAttribute('aria-pressed',String(selected))});if(!tx){const labels:Record<string,string>={externalIncome:'수입 입력',lifeExpense:'지출 입력',savingInvestment:'저축·투자 입력',loanPayment:'대출 납부'};$('#formTitle').textContent=labels[form.elements.uiType?.value||'']||'거래 입력'}};
+ form.querySelectorAll<HTMLButtonElement>('[data-entry-type]').forEach(button=>button.onclick=()=>{if(!form.elements.uiType)return;form.elements.uiType.value=button.dataset.entryType||'';form.elements.uiType.dispatchEvent(new Event('change',{bubbles:true}));syncTypes()});
+ form.elements.uiType?.addEventListener('change',syncTypes);
+ syncTypes();
+ const amountInput=form.querySelector<HTMLInputElement>('#entryAmount'),amountDisplay=form.querySelector<HTMLOutputElement>('.entry-amount-display');
+ if(amountInput&&amountDisplay){const displayAmount=()=>{const amount=Number(amountInput.value),valid=!!amountInput.value&&Number.isFinite(amount)&&financialNumberInRange(amount);amountInput.classList.toggle('has-value',valid);amountDisplay.textContent=valid?amount.toLocaleString('ko-KR'):'';amountDisplay.classList.toggle('amount-long',valid&&amountDisplay.textContent.length>13)};amountInput.addEventListener('input',displayAmount);displayAmount()}
  form.elements.uiType?.addEventListener('change',()=>{if(form.elements.category)form.elements.category.dataset.auto='1';syncIntegratedFormFields();formClearError(form);sheetDirty=true});
  form.elements.toAccountId?.addEventListener('change',()=>{syncIntegratedFormFields();formClearError(form);sheetDirty=true});
  form.elements.date?.addEventListener('change',()=>{syncIntegratedFormFields();sheetDirty=true});
+ form.querySelectorAll<HTMLButtonElement>('[data-entry-category]').forEach(button=>button.onclick=()=>{if(!form.elements.category)return;form.elements.category.value=button.dataset.entryCategory||'';form.elements.category.dataset.auto='0';form.querySelectorAll('[data-entry-category]').forEach(b=>b.classList.toggle('active',b===button));sheetDirty=true;formClearError(form)});
  form.addEventListener('input',(event:Event)=>{sheetDirty=true;const target=event.target;if(!(target instanceof HTMLInputElement||target instanceof HTMLSelectElement||target instanceof HTMLTextAreaElement))return;const name=target.name;if(['amount','principal','interest','date','targetPensionAccountId','targetIsaAccountId'].includes(name)){const error=integratedFormLiveError(form);if(error)formShowError(form,error);else formClearError(form)}});
  form.querySelectorAll?.<HTMLButtonElement>('[data-entry-preset]').forEach(button=>button.addEventListener('click',()=>{
   const [kind,index]=String(button.dataset.entryPreset).split(':'),entry=(kind==='favorite'?integratedEntryFavorites():integratedRecentEntryPresets())[Number(index)];if(!entry)return;

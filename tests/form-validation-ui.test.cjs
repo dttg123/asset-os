@@ -48,7 +48,7 @@ test('single input validation marks the field and clearing removes feedback',()=
 });
 test('integrated form ignores non-control event targets and validates a real amount input',()=>{
  class Input{constructor(name){this.name=name;this.dataset={}}}class Select extends Input{}class TextArea extends Input{}
- const handlers={},form={elements:{},addEventListener:(name,fn)=>handlers[name]=fn},nodes={};
+ const handlers={},form={elements:{},querySelectorAll:()=>[],querySelector:()=>null,addEventListener:(name,fn)=>handlers[name]=fn},nodes={};
  const ctx=vm.createContext({HTMLInputElement:Input,HTMLSelectElement:Select,HTMLTextAreaElement:TextArea,$:s=>s==='#integratedTxForm'?form:(nodes[s]??={}),integratedStore:()=>({ledger:[]}),localYmd:()=> '2026-10-02',integratedSelectedMonth:()=> '2026-10',integratedFormMarkup:()=>'',openSheet:()=>{},syncIntegratedFormFields:()=>{},formClearError:()=>{},sheetDirty:false,validationCalls:0});
  vm.runInContext(read('integrated-forms.js'),ctx);
  vm.runInContext("integratedFormLiveError=()=>{validationCalls++;return ''};openIntegratedTransactionForm()",ctx);

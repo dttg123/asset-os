@@ -957,6 +957,7 @@ function openMonthlyLivingBudgetForm() { $('#formEyebrow').textContent = '통합
 function openIntegratedSpendingDetail(scope = 'all', key = '', month = integratedSelectedMonth()) { const analysis = integratedSpendingAnalysis(month), rows = scope === 'fixed' ? analysis.fixedRows : scope === 'variable' ? analysis.variableRows : scope === 'other' ? analysis.rows.filter(row => new Set(analysis.categories.slice(5).map(x => x.key)).has(String(row.category || '기타').trim() || '기타')) : scope === 'category' ? analysis.rows.filter(row => (String(row.category || '기타').trim() || '기타') === key) : analysis.rows; $('#sheetEyebrow').textContent = '통합 · 소비 분석'; $('#sheetTitle').textContent = scope === 'category' ? key : `${integratedMonthLabel(month)} 소비`; $('#sheetBody').innerHTML = `<div class="integrated-ledger-list">${[...rows].reverse().map(t => `<button class="integrated-ledger-row is-clickable" data-integrated-tx="${escapeHtml(t.id)}" style="width:100%;border:0;background:transparent;text-align:left;color:inherit"><div><strong>${escapeHtml(t.category || integratedTxLabel(t))}</strong><small>${escapeHtml(t.date)} · ${t.type === 'expense' ? (t.fixed ? '고정비' : '변동비') : '고정비'}</small></div><div class="integrated-ledger-right">${integratedTxAmountMarkup(t)}<span class="integrated-chevron">›</span></div></button>`).join('') || '<div class="integrated-empty">해당 소비 기록이 없습니다.</div>'}</div>`; openSheet('#detailSheet'); $$('[data-integrated-tx]').forEach(button => button.onclick = () => openIntegratedTransactionDetail(button.dataset.integratedTx || '')); }
 function integratedPage(tab = 'summary') { const safe = ['summary', 'ledger', 'spending', 'schedule'].includes(tab) ? tab : 'summary', content = safe === 'ledger' ? integratedLedgerPage() : safe === 'spending' ? integratedSpendingPage() : safe === 'schedule' ? integratedSchedulePage() : integratedSummaryPage(), tabs = integratedTabs(safe).replace('integrated-tabs four', 'integrated-tabs four module-primary-tabs'), month = integratedMonthBar(); return `<div class="module-page-shell integrated-module-shell">${tabs}${month}<div class="stack">${content}</div></div>`; }
 function bindScheduleTools() {
+    $$('[data-card-plan-open]').forEach(b => b.onclick = () => openCardPlanDetail(b.dataset.cardPlanOpen || ''));
     $$('[data-card-plan-remove]').forEach(b => b.onclick = () => showDialog({ title: '이 구매 기록을 취소할까요?', message: '아직 납부하지 않은 구매와 할부 일정을 함께 삭제합니다.', confirmText: '구매 취소', cancelText: '유지' }, () => { if (removeUnpaidCardInstallment(b.dataset.cardPlanRemove || '')) {
         closeSheets({ all: true });
         render();
@@ -969,7 +970,25 @@ function bindScheduleTools() {
 }
 function scheduleToolsMarkup(month) {
     const cards = financeSchedules().filter(s => s.cardPlan);
-    return `<section class="card schedule-card"><div class="sectionhead"><h2>카드·할부</h2><button data-card-plan-new>＋ 구매 기록</button></div>${cards.map(s => { const x = cardPlanSummary(s, month); return `<div class="card-plan-row"><strong>${escapeHtml(s.name)}</strong><div class="card-plan-values"><span>총 구매액<b>${won(x.purchaseAmount)}</b></span><span>이번 달 예정<b>${won(x.plannedAmount)}</b></span><span>남은 원금<b>${won(x.remainingPrincipal)}</b></span></div><small>이자 예상 ${won(x.estimatedInterest)} · 실제 청구·납부 ${x.actualAmount === null ? '미입력' : won(x.actualAmount)}</small>${x.remainingPrincipal === x.purchaseAmount ? `<button class="diagnostic-action" data-card-plan-remove="${escapeHtml(s.id)}">구매 기록 취소</button>` : ''}</div>`; }).join('') || '<div class="integrated-empty">카드 구매와 납부를 연결해 관리해요.</div>'}</section>`;
+    return `<section class="card schedule-card" id="integratedCardPlans"><div class="sectionhead"><h2>카드·할부</h2><button data-card-plan-new>＋ 구매 기록</button></div>${cards.map(s => { const x = cardPlanSummary(s, month); return `<div class="card-plan-row"><button class="card-plan-open" data-card-plan-open="${escapeHtml(s.id)}"><strong>${escapeHtml(s.name)}</strong><span>회차 보기 ›</span></button><div class="card-plan-values"><span>총 구매액<b>${won(x.purchaseAmount)}</b></span><span>이번 달 예정<b>${won(x.plannedAmount)}</b></span><span>남은 원금<b>${won(x.remainingPrincipal)}</b></span></div><small>이자 예상 ${won(x.estimatedInterest)} · 실제 청구·납부 ${x.actualAmount === null ? '미입력' : won(x.actualAmount)}</small>${x.remainingPrincipal === x.purchaseAmount ? `<button class="diagnostic-action" data-card-plan-remove="${escapeHtml(s.id)}">구매 기록 취소</button>` : ''}</div>`; }).join('') || '<div class="integrated-empty">카드 구매와 납부를 연결해 관리해요.</div>'}</section>`;
+}
+function openCardPlanDetail(id) {
+    const s = financeSchedules().find(x => x.id === id);
+    if (!s?.cardPlan)
+        return;
+    const plan = s.cardPlan, month = integratedSelectedMonth(), summary = cardPlanSummary(s, month), first = plan.firstPaymentDate;
+    const occurrences = Array.from({ length: plan.months }, (_, index) => { const cursor = new Date(Date.UTC(Number(first.slice(0, 4)), Number(first.slice(5, 7)) - 1 + index, 1)), key = cursor.toISOString().slice(0, 7), date = scheduleDateForMonth({ ...s, active: true }, key); return scheduleOccurrences(key).find(o => o.schedule.id === s.id && o.date === date); }).filter((o) => !!o);
+    const paid = occurrences.filter(o => o.status === 'done').length, purchase = integratedLedger().find(t => t.meta?.cardPlanId === id && t.meta?.cardPurchase), row = (o, index) => `<button class="schedule-row" data-fixed-cost-item="${escapeHtml(id)}" data-fixed-cost-date="${escapeHtml(o.date)}"><span class="schedule-copy"><strong>${index + 1}회 · ${escapeHtml(o.date)}</strong><small>예정 ${won(schedulePlannedAmount(s, o.date))}${o.status === 'done' ? ` · 실제 ${won(scheduleOccurrenceDisplayAmount(o))}` : ''}</small></span><strong class="schedule-amount">${won(scheduleOccurrenceDisplayAmount(o))}</strong><span class="schedule-status ${escapeHtml(o.status)}">${scheduleOccurrenceUiLabel(o)}</span></button>`;
+    $('#sheetEyebrow').textContent = '통합';
+    $('#sheetTitle').textContent = '카드·할부';
+    $('#sheetBody').innerHTML = `<section class="card-detail-summary"><h3>${escapeHtml(s.name)}</h3><small>${plan.months}개월 · ${plan.interestMode === 'free' ? '무이자' : '이자 있음'} · 구매 ${escapeHtml(plan.purchaseDate)}</small><div class="card-plan-values"><span>총 구매액<b>${won(summary.purchaseAmount)}</b></span><span>${escapeHtml(integratedMonthLabel(month))} 예정<b>${won(summary.plannedAmount)}</b></span><span>남은 원금<b>${won(summary.remainingPrincipal)}</b></span></div><small>${paid} / ${plan.months}회 납부 · 이자 예상 ${won(summary.estimatedInterest)}<br>이번 달 실제 청구·납부 ${summary.actualAmount === null ? '미입력' : won(summary.actualAmount)}</small></section><section class="card-detail-list"><h3>회차별 납부</h3>${occurrences.slice(0, 3).map(row).join('')}${occurrences.length > 3 ? `<details class="entry-extra"><summary>전체 ${plan.months}회 보기</summary>${occurrences.slice(3).map((o, index) => row(o, index + 3)).join('')}</details>` : ''}</section>${purchase ? `<button class="diagnostic-action" data-schedule-record="${escapeHtml(purchase.id)}">연결된 구매 기록 보기</button>` : ''}<div class="source-note">카드 구매는 소비로 한 번 기록하고, 원금 납부는 부채에서 차감해요.</div>`;
+    openSheet('#detailSheet');
+    bindScheduleTools();
+    $$('#sheetBody [data-fixed-cost-item]').forEach(b => b.onclick = () => openScheduleDay(b.dataset.fixedCostDate || '', b.dataset.fixedCostItem || ''));
+}
+function integratedConsumptionPreview(month) {
+    const x = integratedSpendingAnalysis(month), max = Math.max(1, ...x.trend.map(row => row.amount));
+    return `<section class="card integrated-consumption-preview"><div class="integrated-consumption-head"><h2>이번 달 소비</h2><button data-integrated-tab-go="spending">자세히 ›</button></div><div class="integrated-consumption-value">${won(x.total)}</div><div class="spending-trend">${x.trend.map(row => `<button data-spending-month="${escapeHtml(row.month)}" data-spending-detail="month"><span class="spending-bar"><i style="height:${row.amount ? Math.max(8, row.amount / max * 100) : 2}%"></i></span><strong>${escapeHtml(row.label)}</strong><small>${row.amount ? displayWon(row.amount) : '0원'}</small></button>`).join('')}</div><small>카드 원금 납부는 소비에 다시 더하지 않아요.</small></section>`;
 }
 function openScheduleAmountForm(id, date, actual = false) {
     const s = financeSchedules().find(x => x.id === id), o = scheduleOccurrences(date.slice(0, 7)).find(x => x.schedule.id === id && x.date === date);
@@ -1013,16 +1032,17 @@ function integratedFormMarkup(tx = null, preset = {}) {
         return `<form id="integratedTxForm" class="form" data-edit-id="${escapeHtml(tx?.id || '')}" data-system-type="${escapeHtml(rawType)}"><div class="integrated-form-hint">이 항목은 상품 초기설정용 시스템 기록입니다.</div><div class="form-grid"><div class="field"><label>날짜</label><input name="date" type="date" value="${escapeHtml(date)}" required></div><div class="field"><label>금액</label><input name="amount" type="number" min="1" step="1" value="${escapeHtml(amount || '')}" required></div></div><div class="field"><label>분류</label><input name="category" value="${escapeHtml(category)}"></div>${rawType === 'openingAsset' ? `<div class="field"><label>대상</label><select name="toAccountId">${integratedFormAccountOptions(target)}</select></div>` : ''}${rawType === 'openingLiability' ? `<div class="field"><label>대출</label><select name="liabilityId">${integratedFormLiabilityOptions(liability)}</select></div>` : ''}<div class="field"><label>메모</label><input name="note" value="${escapeHtml(tx?.note || '')}"></div>${formValidationMarkup()}<button class="integrated-form-save">저장</button></form>`;
     }
     return `<form id="integratedTxForm" class="form integrated-entry" data-edit-id="${escapeHtml(tx?.id || '')}" data-pension-account-id="${escapeHtml(tx?.meta?.targetPensionAccountId || preset.targetPensionAccountId || '')}" data-isa-account-id="${escapeHtml(tx?.meta?.targetIsaAccountId || preset.targetIsaAccountId || '')}">
- <div class="field entry-amount" data-simple-field="amount"><label for="entryAmount">금액</label><div class="entry-amount-line"><input id="entryAmount" name="amount" type="number" inputmode="numeric" min="1" step="1" placeholder="0" value="${escapeHtml(amount)}" aria-label="금액"><span>원</span></div></div>
+ <div class="field entry-amount" data-simple-field="amount"><label for="entryAmount">금액</label><div class="entry-amount-line"><input id="entryAmount" name="amount" type="number" inputmode="numeric" min="1" step="1" placeholder="0" value="${escapeHtml(amount)}" aria-label="금액"><output class="entry-amount-display" aria-hidden="true"></output><span>원</span></div></div>
+ <div class="entry-type-buttons" role="group" aria-label="거래 종류">${[['externalIncome', '수입'], ['lifeExpense', '지출'], ['savingInvestment', '저축·투자'], ['loanPayment', '대출 납부']].map(([value, label]) => `<button type="button" data-entry-type="${escapeHtml(value)}" class="${escapeHtml(uiType === value ? 'active' : '')}" aria-pressed="${escapeHtml(uiType === value ? 'true' : 'false')}">${label}</button>`).join('')}</div>
+ <div class="field entry-type-select"><label for="entryType">거래 종류</label><select id="entryType" name="uiType">${[['externalIncome', '수입'], ['lifeExpense', '지출'], ['savingInvestment', '저축·투자'], ['loanPayment', '대출 납부']].map(([value, label]) => `<option value="${escapeHtml(value)}" ${uiType === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div>
  ${!tx ? integratedEntryShortcutsMarkup() : ''}
- <div class="field"><label for="entryType">거래 종류</label><select id="entryType" name="uiType">${[['externalIncome', '수입'], ['lifeExpense', '지출'], ['savingInvestment', '저축·투자'], ['loanPayment', '대출 납부']].map(([value, label]) => `<option value="${escapeHtml(value)}" ${uiType === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div>
  <div class="field" data-simple-field="target"><label for="entryTarget">넣을 계좌</label><select id="entryTarget" name="toAccountId">${integratedInvestmentTargetOptions(target)}</select></div>
  <div class="field hidden-field" data-simple-field="pensionTarget"><label>연금 납입 계좌</label><select name="targetPensionAccountId"></select></div>
  <div class="field hidden-field" data-simple-field="isaTarget"><label>ISA 납입 계좌</label><select name="targetIsaAccountId"></select></div>
  <div data-simple-field="loan"><div class="field"><label>대출</label><select name="liabilityId">${integratedFormLiabilityOptions(liability)}</select></div><div class="form-grid"><div class="field"><label>원금</label><input name="principal" type="number" inputmode="numeric" min="0" step="1" value="${escapeHtml(tx?.type === 'debtPrincipal' ? amount : preset.principal || '0')}"></div><div class="field"><label>이자</label><input name="interest" type="number" inputmode="numeric" min="0" step="1" value="${escapeHtml(tx?.type === 'debtInterest' ? amount : preset.interest || '0')}"></div></div></div>
- <div class="field" data-simple-field="category"><label for="entryCategory">분류</label><input id="entryCategory" name="category" value="${escapeHtml(category)}" list="entryCategories" maxlength="80"><datalist id="entryCategories">${['식비', '교통', '생활용품', '급여', '보험료', '저축', '연금 납입'].map(value => `<option value="${escapeHtml(value)}">`).join('')}</datalist></div>
+ <div class="field" data-simple-field="category"><label for="entryCategory">분류</label><div class="entry-category-chips">${['식비', '교통', '생활용품', '급여', '연금 납입'].map(value => `<button type="button" class="${escapeHtml(category === value ? 'active' : '')}" data-entry-category="${escapeHtml(value)}">${escapeHtml(value)}</button>`).join('')}</div><input id="entryCategory" name="category" value="${escapeHtml(category)}" list="entryCategories" maxlength="80"><datalist id="entryCategories">${['식비', '교통', '생활용품', '급여', '보험료', '저축', '연금 납입'].map(value => `<option value="${escapeHtml(value)}">`).join('')}</datalist></div>
  <div class="field"><label for="entryDate">날짜</label><input id="entryDate" name="date" type="date" value="${escapeHtml(date)}" required></div>
- <details class="entry-extra" ${tx?.note || preset.note ? 'open' : ''}><summary>추가 정보</summary><div class="field"><label for="entryNote">메모</label><input id="entryNote" name="note" value="${escapeHtml(tx?.note || preset.note || '')}" maxlength="500" placeholder="필요할 때만 입력"></div>${!tx ? '<label class="entry-check"><input type="checkbox" name="saveFavorite">자주 쓰는 기록으로 저장</label>' : ''}</details>
+ <details class="entry-extra" ${tx?.note || preset.note ? 'open' : ''}><summary>메모·추가 정보</summary><div class="field"><label for="entryNote">메모</label><input id="entryNote" name="note" value="${escapeHtml(tx?.note || preset.note || '')}" maxlength="500" placeholder="필요할 때만 입력"></div>${!tx ? '<label class="entry-check"><input type="checkbox" name="saveFavorite">자주 쓰는 기록으로 저장</label>' : ''}</details>
  ${formValidationMarkup()}<div class="entry-save-actions">${!tx ? '<button class="entry-continue" type="submit" data-entry-continue>저장하고 계속</button>' : ''}<button class="integrated-form-save" type="submit">저장</button></div></form>`;
 }
 function syncIntegratedFormFields() { const f = $('#integratedTxForm'); if (!f || !f.elements.uiType)
@@ -1253,7 +1273,23 @@ function integratedRecentEntryPresets() {
 function integratedEntryShortcutsMarkup() {
     const groups = [['자주 쓰는 기록', integratedEntryFavorites(), 'favorite'], ['최근 기록', integratedRecentEntryPresets(), 'recent']];
     const content = groups.filter(([, items]) => items.length).map(([label, items, kind]) => `<div class="entry-shortcuts"><span>${label}</span><div class="entry-shortcut-list">${items.map((item, index) => `<span class="entry-shortcut"><button type="button" data-entry-preset="${escapeHtml(kind + ':' + index)}">${escapeHtml(item.category || integratedDefaultCategory(item.uiType))}</button>${kind === 'favorite' ? `<button type="button" class="entry-shortcut-remove" data-entry-remove="${escapeHtml(index)}" aria-label="${escapeHtml(item.category || '기록')} 즐겨찾기 삭제">×</button>` : ''}</span>`).join('')}</div></div>`).join('');
-    return content ? `<details class="entry-library"><summary>기록 불러오기</summary>${content}</details>` : '';
+    return content ? `<details class="entry-library"><summary>최근 기록·즐겨찾기</summary>${content}</details>` : '';
+}
+function integratedSummaryEntryPresets() {
+    const saved = [...integratedEntryFavorites(), ...integratedRecentEntryPresets()], seen = new Set();
+    const entries = saved.filter(x => { const key = JSON.stringify([x.uiType, x.category, x.toAccountId, x.liabilityId]); if (seen.has(key))
+        return false; seen.add(key); return true; }).slice(0, 4);
+    if (entries.length)
+        return entries;
+    const pension = integratedStore().accounts.find(a => a.kind === 'pension');
+    return [{ uiType: 'externalIncome', category: '급여' }, ...(pension ? [{ uiType: 'savingInvestment', category: '연금 납입', toAccountId: pension.id }] : []), { uiType: 'lifeExpense', category: '생활비' }];
+}
+function integratedSummaryEntryMarkup() {
+    return `<section class="integrated-quick-presets"><h2>자주 쓰는 기록</h2><div class="integrated-preset-list">${integratedSummaryEntryPresets().map((x, i) => `<button data-summary-entry="${escapeHtml(i)}">${escapeHtml(x.category || integratedDefaultCategory(x.uiType))}</button>`).join('')}</div></section>`;
+}
+function bindIntegratedSummaryEntries() {
+    document.querySelectorAll('[data-summary-entry]').forEach(b => b.onclick = () => { const entry = integratedSummaryEntryPresets()[Number(b.dataset.summaryEntry)]; if (entry)
+        openIntegratedTransactionForm('', { ...entry, date: integratedEntryDateForMonth() }); });
 }
 function integratedFormEntryPreset(form, withAmounts = false) {
     const data = new FormData(form);
@@ -1279,18 +1315,34 @@ function openIntegratedTransactionForm(id = '', preset = {}) {
     }
     const remembered = typeof setting === 'function' ? integratedCleanEntryPreset(setting().integratedEntryLast) : null;
     const formPreset = tx || { ...(remembered || {}), ...preset, date: preset.date || integratedEntryDateForMonth() };
-    $('#formEyebrow').textContent = '통합 · 거래기록';
-    $('#formTitle').textContent = tx ? '거래 수정' : '거래 추가';
+    $('#formEyebrow').textContent = '통합';
+    $('#formTitle').textContent = tx ? '거래 수정' : '거래 입력';
     $('#formBody').innerHTML = integratedFormMarkup(tx, formPreset);
     openSheet('#formSheet', { mode: 'input' });
     syncIntegratedFormFields();
     const form = $('#integratedTxForm');
     if (form.elements.category)
         form.elements.category.dataset.auto = tx || formPreset.category ? '0' : '1';
+    const syncTypes = () => { form.querySelectorAll('[data-entry-type]').forEach(b => { const selected = b.dataset.entryType === form.elements.uiType?.value; b.classList.toggle('active', selected); b.setAttribute('aria-pressed', String(selected)); }); if (!tx) {
+        const labels = { externalIncome: '수입 입력', lifeExpense: '지출 입력', savingInvestment: '저축·투자 입력', loanPayment: '대출 납부' };
+        $('#formTitle').textContent = labels[form.elements.uiType?.value || ''] || '거래 입력';
+    } };
+    form.querySelectorAll('[data-entry-type]').forEach(button => button.onclick = () => { if (!form.elements.uiType)
+        return; form.elements.uiType.value = button.dataset.entryType || ''; form.elements.uiType.dispatchEvent(new Event('change', { bubbles: true })); syncTypes(); });
+    form.elements.uiType?.addEventListener('change', syncTypes);
+    syncTypes();
+    const amountInput = form.querySelector('#entryAmount'), amountDisplay = form.querySelector('.entry-amount-display');
+    if (amountInput && amountDisplay) {
+        const displayAmount = () => { const amount = Number(amountInput.value), valid = !!amountInput.value && Number.isFinite(amount) && financialNumberInRange(amount); amountInput.classList.toggle('has-value', valid); amountDisplay.textContent = valid ? amount.toLocaleString('ko-KR') : ''; amountDisplay.classList.toggle('amount-long', valid && amountDisplay.textContent.length > 13); };
+        amountInput.addEventListener('input', displayAmount);
+        displayAmount();
+    }
     form.elements.uiType?.addEventListener('change', () => { if (form.elements.category)
         form.elements.category.dataset.auto = '1'; syncIntegratedFormFields(); formClearError(form); sheetDirty = true; });
     form.elements.toAccountId?.addEventListener('change', () => { syncIntegratedFormFields(); formClearError(form); sheetDirty = true; });
     form.elements.date?.addEventListener('change', () => { syncIntegratedFormFields(); sheetDirty = true; });
+    form.querySelectorAll('[data-entry-category]').forEach(button => button.onclick = () => { if (!form.elements.category)
+        return; form.elements.category.value = button.dataset.entryCategory || ''; form.elements.category.dataset.auto = '0'; form.querySelectorAll('[data-entry-category]').forEach(b => b.classList.toggle('active', b === button)); sheetDirty = true; formClearError(form); });
     form.addEventListener('input', (event) => { sheetDirty = true; const target = event.target; if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement))
         return; const name = target.name; if (['amount', 'principal', 'interest', 'date', 'targetPensionAccountId', 'targetIsaAccountId'].includes(name)) {
         const error = integratedFormLiveError(form);
@@ -3141,26 +3193,49 @@ function v069ScheduleGroups(list, scope) { const order = ['income', 'insurance',
 } return order.flatMap(key => { const rows = map.get(key); if (!rows.length)
     return []; const label = v069ScheduleMeta(rows[0].schedule.kind)[1], amount = rows.reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0), open = v069ScheduleGroup[scope] === key, details = rows.map(o => `<button class="schedule-row" ${scope === 'summary' ? `data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"` : `data-schedule-day="${escapeHtml(o.date)}"`}><span class="schedule-copy"><strong>${escapeHtml(o.schedule.name)}</strong><small>${escapeHtml(o.date)} · ${escapeHtml(scheduleKindLabel(o.schedule.kind))}</small></span><strong class="schedule-amount">${won(scheduleOccurrenceDisplayAmount(o))}</strong><span class="schedule-status ${o.status}">${scheduleStatusLabel(o.status)}</span></button>`).join(''); return [`<div class="schedule-category ${open ? 'open' : ''}"><button class="schedule-category-head" data-schedule-category="${escapeHtml(key)}" data-schedule-scope="${escapeHtml(scope)}" aria-expanded="${escapeHtml(open ? 'true' : 'false')}"><span><strong>${label}</strong><small>${rows.length}건</small></span><b>${won(amount)}</b><i>⌄</i></button><div class="schedule-category-body" ${open ? '' : 'hidden'}>${details}</div></div>`]; }).join(''); }
 const v069IntegratedSummary = integratedSummaryPage;
-integratedSummaryPage = function () { const month = integratedSelectedMonth(), f = integratedFinancialModel(), pending = scheduleOccurrences(month).filter(o => o.status !== 'done'), template = document.createElement('template'); template.innerHTML = v069IntegratedSummary(); const label = template.content.querySelector('.integrated-overview-label'); if (label)
-    label.textContent = f.isComplete ? '순금융자산 · 현재 기준' : '확인된 금융자산 · 현재 기준'; const sub = template.content.querySelector('.integrated-overview-sub'); if (sub)
-    sub.innerHTML = `<span>${f.isComplete ? '금융자산' : '확인된 금융자산'} <strong class="${escapeHtml(amountClass(f.totalAssets))}" title="${escapeHtml(won(f.totalAssets))}">${displayWon(f.totalAssets)}</strong></span><span>${f.isComplete ? '부채' : '확인된 부채'} <strong class="${escapeHtml(amountClass(f.totalDebt))}" title="${escapeHtml(won(f.totalDebt))}">${displayWon(f.totalDebt)}</strong></span>`; const list = template.content.querySelector('.integrated-asset-list'); if (list)
-    list.innerHTML = v069AssetGroups(f); const schedule = template.content.querySelector('[data-fixed-cost-card]'), total = pending.reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0); if (schedule) {
-    const title = schedule.querySelector('.fixed-cost-head strong'), small = schedule.querySelector('.fixed-cost-head small'), amount = schedule.querySelector('.fixed-cost-head-right b'), body = schedule.querySelector('[data-fixed-cost-body]');
-    if (title)
-        title.textContent = `${integratedMonthLabel(month)} 남은 납부액`;
-    if (small)
-        small.textContent = pending.length ? `미완료 ${pending.length}건 · 예정액 ${won(total)}` : '이번 달 미완료 일정 없음';
-    if (amount)
-        amount.textContent = won(total);
-    if (body)
-        body.innerHTML = pending.length ? v069ScheduleGroups(pending, 'summary') : '<div class="integrated-empty">이번 달 금융 일정은 모두 처리했습니다.</div>';
-} const monthHead = template.content.querySelector('.integrated-month-mini-head'); if (monthHead) {
-    const strong = monthHead.querySelector('strong'), small = monthHead.querySelector('small');
-    if (strong)
-        strong.textContent = `${integratedMonthLabel(month)} 현금흐름`;
-    small?.remove();
-} const cashLabel = template.content.querySelector('.integrated-month-mini-item.left span'); if (cashLabel)
-    cashLabel.textContent = '가용 현금'; const recent = template.content.querySelectorAll('.integrated-recent .integrated-ledger-row'); [...recent].slice(3).forEach(x => x.remove()); return template.innerHTML; };
+integratedSummaryPage = function () {
+    const month = integratedSelectedMonth(), f = integratedFinancialModel(), pending = scheduleOccurrences(month).filter(o => o.status !== 'done' && o.schedule.kind !== 'income').sort((a, b) => a.date.localeCompare(b.date)), template = document.createElement('template');
+    template.innerHTML = v069IntegratedSummary();
+    const label = template.content.querySelector('.integrated-overview-label');
+    if (label)
+        label.textContent = f.isComplete ? '순금융자산 · 현재 기준' : '확인된 금융자산 · 현재 기준';
+    const sub = template.content.querySelector('.integrated-overview-sub');
+    if (sub)
+        sub.innerHTML = `<span>${f.isComplete ? '금융자산' : '확인된 금융자산'} <strong class="${escapeHtml(amountClass(f.totalAssets))}" title="${escapeHtml(won(f.totalAssets))}">${displayWon(f.totalAssets)}</strong></span><span>${f.isComplete ? '부채' : '확인된 부채'} <strong class="${escapeHtml(amountClass(f.totalDebt))}" title="${escapeHtml(won(f.totalDebt))}">${displayWon(f.totalDebt)}</strong></span>`;
+    const list = template.content.querySelector('.integrated-asset-list');
+    if (list)
+        list.innerHTML = v069AssetGroups(f);
+    const quick = template.content.querySelector('.household-quick');
+    quick?.insertAdjacentHTML('afterend', integratedSummaryEntryMarkup());
+    const schedule = template.content.querySelector('[data-fixed-cost-card]'), total = pending.reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0);
+    if (schedule) {
+        const title = schedule.querySelector('.fixed-cost-head strong'), small = schedule.querySelector('.fixed-cost-head small'), amount = schedule.querySelector('.fixed-cost-head-right b'), body = schedule.querySelector('[data-fixed-cost-body]');
+        if (title)
+            title.textContent = `${integratedMonthLabel(month)} 남은 납부액`;
+        if (small)
+            small.textContent = pending.length ? `미완료 ${pending.length}건` : '이번 달 미완료 일정 없음';
+        if (amount)
+            amount.textContent = won(total);
+        if (body) {
+            body.innerHTML = pending.length ? v069ScheduleGroups(pending, 'summary') : '<div class="integrated-empty">이번 달 금융 일정은 모두 처리했습니다.</div>';
+            body.insertAdjacentHTML('beforebegin', `<div class="fixed-cost-preview">${pending.slice(0, 3).map(o => `<button class="schedule-row" data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"><span class="schedule-copy"><strong>${escapeHtml(o.schedule.name)}</strong><small>${escapeHtml(o.date)}</small></span><strong class="schedule-amount">${won(scheduleOccurrenceDisplayAmount(o))}</strong></button>`).join('')}<button class="diagnostic-action" data-integrated-tab-go="schedule">일정 전체 보기 ›</button></div>`);
+        }
+        schedule.insertAdjacentHTML('afterend', `<button class="card integrated-card-link" data-card-hub><div><strong>카드·할부</strong><small>월 납부액과 남은 원금 확인</small></div><span>›</span></button>` + integratedConsumptionPreview(month));
+    }
+    const monthHead = template.content.querySelector('.integrated-month-mini-head');
+    if (monthHead) {
+        const strong = monthHead.querySelector('strong'), small = monthHead.querySelector('small');
+        if (strong)
+            strong.textContent = `${integratedMonthLabel(month)} 현금흐름`;
+        small?.remove();
+    }
+    const cashLabel = template.content.querySelector('.integrated-month-mini-item.left span');
+    if (cashLabel)
+        cashLabel.textContent = '가용 현금';
+    const recent = template.content.querySelectorAll('.integrated-recent .integrated-ledger-row');
+    [...recent].slice(3).forEach(x => x.remove());
+    return template.innerHTML;
+};
 const v069MonthDetail = openIntegratedMonthDetail;
 openIntegratedMonthDetail = function (month) { v069MonthDetail(month); if ($('#sheetEyebrow'))
     $('#sheetEyebrow').textContent = '통합 · 현금흐름'; if ($('#sheetTitle'))
@@ -3168,7 +3243,7 @@ openIntegratedMonthDetail = function (month) { v069MonthDetail(month); if ($('#s
     label.textContent = '가용 현금'; };
 const v069SchedulePage = integratedSchedulePage;
 integratedSchedulePage = function () {
-    const month = integratedScheduleMonth(), occ = scheduleOccurrences(month), pending = occ.filter(o => o.status !== 'done'), done = occ.length - pending.length, template = document.createElement('template');
+    const month = integratedScheduleMonth(), occ = scheduleOccurrences(month).sort((a, b) => a.date.localeCompare(b.date)), pending = occ.filter(o => o.status !== 'done' && o.schedule.kind !== 'income'), done = occ.filter(o => o.status === 'done').length, template = document.createElement('template');
     template.innerHTML = v069SchedulePage();
     const title = template.content.querySelector('.schedule-head h2'), small = template.content.querySelector('.schedule-head small'), pill = template.content.querySelector('.schedule-head .count-pill'), list = template.content.querySelector('.schedule-card .schedule-list');
     if (title)
@@ -3239,7 +3314,7 @@ openFinancialProductDetail = function (id) { v069FinanceDetail(id); for (const s
         span.textContent = '적용 금리';
 } };
 const v069Bind = bind;
-bind = function () { v069Bind(); bindScheduleTools(); $$('[data-integrated-asset-group]').forEach(button => button.onclick = () => { v069AssetGroup = v069AssetGroup === button.dataset.integratedAssetGroup ? '' : button.dataset.integratedAssetGroup || ''; renderKeepingScroll(); }); $$('[data-schedule-category]').forEach(button => button.onclick = () => { const scope = button.dataset.scheduleScope, key = button.dataset.scheduleCategory; if (!scope || !key)
+bind = function () { v069Bind(); bindScheduleTools(); bindIntegratedSummaryEntries(); $('[data-card-hub]')?.addEventListener('click', () => { nav('integrated', 'schedule'); requestAnimationFrame(() => document.getElementById('integratedCardPlans')?.scrollIntoView({ block: 'start' })); }); $$('[data-integrated-asset-group]').forEach(button => button.onclick = () => { v069AssetGroup = v069AssetGroup === button.dataset.integratedAssetGroup ? '' : button.dataset.integratedAssetGroup || ''; renderKeepingScroll(); }); $$('[data-schedule-category]').forEach(button => button.onclick = () => { const scope = button.dataset.scheduleScope, key = button.dataset.scheduleCategory; if (!scope || !key)
     return; v069ScheduleGroup[scope] = v069ScheduleGroup[scope] === key ? '' : key; renderKeepingScroll(); }); const more = $('[data-tx-more]'); if (more)
     more.onclick = () => { transactionDisplayLimit += 20; renderKeepingScroll(); }; };
 const appearanceMenu = document.querySelector('[data-profile-action="appearance"] small');
