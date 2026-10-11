@@ -883,7 +883,8 @@ function integratedLedgerPage() { const month = integratedSelectedMonth(), filte
 function integratedScheduleMonth() { return integratedSelectedMonth(); }
 function scheduleKindLabel(kind) { return { income: '수입', investment: '저축·투자', saving: '저축·투자', loan: '대출 납부', insurance: '보험료', expense: '고정지출' }[kind] || '금융 일정'; }
 function scheduleActionLabel(kind) { return kind === 'income' ? '수입 확인' : (['investment', 'saving'].includes(kind) ? '납입' : (['loan', 'insurance', 'expense'].includes(kind) ? '납부' : '완료')); }
-function scheduleOccurrenceDisplayAmount(o) { const actual = Number(o?.tx?.meta?.actualAmount); return o?.status === 'done' && Number.isFinite(actual) && actual >= 0 ? actual : Number(o?.schedule?.amount) || 0; }
+function scheduleOccurrenceDisplayAmount(o) { const actual = Number(o?.tx?.meta?.actualAmount ?? o?.tx?.amount); return o?.status === 'done' && Number.isFinite(actual) && actual >= 0 ? actual : schedulePlannedAmount(o.schedule, o.date); }
+function scheduleOccurrenceUiLabel(o) { return o.status === 'done' && Math.abs(scheduleOccurrenceDisplayAmount(o) - schedulePlannedAmount(o.schedule, o.date)) > .5 ? '금액 다름' : scheduleStatusLabel(o.status); }
 function remainingScheduleCard(month = integratedSelectedMonth()) { const list = scheduleOccurrences(month).filter(o => o.status !== 'done'), total = list.reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0); return `<section class="card integrated-fixed-cost-card ${integratedFixedCostsExpanded ? 'open' : ''}" data-fixed-cost-card><button class="fixed-cost-head" data-fixed-cost-toggle aria-expanded="${escapeHtml(integratedFixedCostsExpanded ? 'true' : 'false')}"><span><strong>${escapeHtml(integratedMonthLabel(month))} 남은 일정</strong><small>${list.length ? `${list.length}건 · 납입·대출·보험·고정비 합계` : '이번 달 미완료 일정 없음'}</small></span><span class="fixed-cost-head-right"><b>${won(total)}</b><i>⌄</i></span></button><div class="fixed-cost-body" data-fixed-cost-body ${integratedFixedCostsExpanded ? '' : 'hidden'}>${list.length ? `<div class="schedule-list compact">${list.map(o => `<button class="schedule-row" data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"><span class="schedule-copy"><strong>${escapeHtml(o.schedule.name)}</strong><small>${escapeHtml(o.date)} · ${escapeHtml(scheduleKindLabel(o.schedule.kind))}</small></span><strong class="schedule-amount">${won(scheduleOccurrenceDisplayAmount(o))}</strong><span class="schedule-status ${o.status}">${scheduleStatusLabel(o.status)}</span></button>`).join('')}</div>` : '<div class="integrated-empty">이번 달 금융 일정은 모두 처리했습니다.</div>'}</div></section>`; }
 function integratedSchedulePage() { const month = integratedScheduleMonth(), occ = scheduleOccurrences(month), { y, m, days } = scheduleMonthDays(month), first = new Date(y, m - 1, 1).getDay(), today = localYmd(), byDay = new Map(); for (const o of occ) {
     const d = Number(o.date.slice(-2));
@@ -900,7 +901,7 @@ function openScheduleDay(date, scheduleId = '') { if (date === '날짜 미설정
     persist(false);
     nav('integrated', 'schedule');
     return;
-} const list = scheduleOccurrences(String(date).slice(0, 7)).filter(o => o.date === date && (!scheduleId || o.schedule.id === scheduleId)); $('#sheetEyebrow').textContent = '통합 · 금융 일정'; $('#sheetTitle').textContent = formatDate(date); $('#sheetBody').innerHTML = `<div class="schedule-detail-list">${list.map(o => { const pk = schedulePensionKind(o.schedule), eligible = pk ? pensionAccountsForKind(pk, date) : [], resolved = pk ? resolveSchedulePensionAccount(o.schedule, '', date) : '', isIsa = o.schedule.targetKind === 'isa' || integratedStore().accounts.find(a => a.id === scheduleTargetAccount(o.schedule))?.kind === 'isa', isaEligible = isIsa ? isaAccountsForDate(date) : [], isaResolved = isIsa ? resolveScheduleIsaAccount(o.schedule, '', date) : '', selector = pk && eligible.length > 1 ? `<div class="schedule-account-target"><label>실제 납입 계좌</label><select data-schedule-pension-account="${escapeHtml(o.schedule.id)}"><option value="">계좌 선택</option>${eligible.map(a => `<option value="${escapeHtml(a.id)}" ${a.id === resolved ? 'selected' : ''}>${escapeHtml(a.name)}</option>`).join('')}</select></div>` : pk && eligible.length === 1 ? `<div class="schedule-account-target"><label>납입 계좌</label><strong>${escapeHtml(eligible[0].name)}</strong></div>` : pk ? '<div class="warningbox" style="margin-top:9px">운영 중인 납입 대상 계좌가 없습니다. 개인연금 → 자산 → 계좌 관리에서 계좌를 먼저 준비해 주세요.</div>' : isIsa && isaEligible.length > 1 ? `<div class="schedule-account-target"><label>실제 ISA 납입 계좌</label><select data-schedule-isa-account="${escapeHtml(o.schedule.id)}"><option value="">ISA 선택</option>${isaEligible.map(a => `<option value="${escapeHtml(a.id)}" ${a.id === isaResolved ? 'selected' : ''}>${escapeHtml(a.name)}</option>`).join('')}</select></div>` : isIsa && isaEligible.length === 1 ? `<div class="schedule-account-target"><label>납입 계좌</label><strong>${escapeHtml(isaEligible[0].name)}</strong></div>` : isIsa ? '<div class="warningbox" style="margin-top:9px">운영 중인 ISA가 없습니다.</div>' : '', simpleNote = /^매월\s*\d{1,2}일$/.test(String(o.schedule.note || '').trim()), note = simpleNote ? '' : String(o.schedule.note || '').trim(); return `<div class="schedule-detail-item compact"><div class="top"><div><strong>${escapeHtml(o.schedule.name)}</strong>${note ? `<small>${escapeHtml(note)}</small>` : ''}</div><span class="schedule-status ${o.status}">${scheduleStatusLabel(o.status)}</span></div><div class="schedule-primary-amount"><span>${o.status === 'done' ? '실제 금액' : o.schedule.kind !== 'loan' && o.schedule.amountMode === 'estimate' ? '예상 금액' : '금액'}</span><strong>${won(scheduleOccurrenceDisplayAmount(o))}</strong></div>${selector}${scheduleLoanInputsMarkup(o)}${o.status === 'done' ? `<button class="schedule-complete" disabled>${escapeHtml(scheduleActionLabel(o.schedule.kind))} 완료</button>` : `${o.schedule.kind !== 'loan' && o.schedule.amountMode === 'estimate' ? `<div class="field" style="margin-top:10px"><label>실제 금액</label><input data-schedule-amount="${escapeHtml(o.schedule.id)}" type="number" inputmode="numeric" min="1" step="1" value="${escapeHtml(Number(o.schedule.amount) || 0)}"></div>` : ''}<button class="schedule-complete" data-schedule-complete="${escapeHtml(o.schedule.id)}" data-schedule-date="${escapeHtml(date)}" ${(pk && !eligible.length) || (isIsa && !isaEligible.length) ? 'disabled' : ''}>${escapeHtml(scheduleActionLabel(o.schedule.kind))} 완료로 기록</button>`}</div>`; }).join('') || '<div class="integrated-empty">등록된 일정이 없습니다.</div>'}</div>`; openSheet('#detailSheet'); $$('[data-schedule-complete]').forEach(b => b.onclick = () => { const input = findDataElement(document, "data-schedule-amount", b.dataset.scheduleComplete), account = findDataElement(document, "data-schedule-pension-account", b.dataset.scheduleComplete), isaAccount = findDataElement(document, "data-schedule-isa-account", b.dataset.scheduleComplete), principal = findDataElement(document, "data-schedule-loan-principal", b.dataset.scheduleComplete), interest = findDataElement(document, "data-schedule-loan-interest", b.dataset.scheduleComplete), amount = input ? Number(input.value) || 0 : 0; completeScheduleOccurrence(b.dataset.scheduleComplete, b.dataset.scheduleDate, amount, account?.value || '', isaAccount?.value || '', Number(principal?.value) || 0, Number(interest?.value) || 0); }); }
+} const list = scheduleOccurrences(String(date).slice(0, 7)).filter(o => o.date === date && (!scheduleId || o.schedule.id === scheduleId)); $('#sheetEyebrow').textContent = '통합 · 금융 일정'; $('#sheetTitle').textContent = formatDate(date); $('#sheetBody').innerHTML = `<div class="schedule-detail-list">${list.map(o => { const pk = schedulePensionKind(o.schedule), eligible = pk ? pensionAccountsForKind(pk, date) : [], resolved = pk ? resolveSchedulePensionAccount(o.schedule, '', date) : '', isIsa = o.schedule.targetKind === 'isa' || integratedStore().accounts.find(a => a.id === scheduleTargetAccount(o.schedule))?.kind === 'isa', isaEligible = isIsa ? isaAccountsForDate(date) : [], isaResolved = isIsa ? resolveScheduleIsaAccount(o.schedule, '', date) : '', selector = pk && eligible.length > 1 ? `<div class="schedule-account-target"><label>실제 납입 계좌</label><select data-schedule-pension-account="${escapeHtml(o.schedule.id)}"><option value="">계좌 선택</option>${eligible.map(a => `<option value="${escapeHtml(a.id)}" ${a.id === resolved ? 'selected' : ''}>${escapeHtml(a.name)}</option>`).join('')}</select></div>` : pk && eligible.length === 1 ? `<div class="schedule-account-target"><label>납입 계좌</label><strong>${escapeHtml(eligible[0].name)}</strong></div>` : pk ? '<div class="warningbox" style="margin-top:9px">운영 중인 납입 대상 계좌가 없습니다. 개인연금 → 자산 → 계좌 관리에서 계좌를 먼저 준비해 주세요.</div>' : isIsa && isaEligible.length > 1 ? `<div class="schedule-account-target"><label>실제 ISA 납입 계좌</label><select data-schedule-isa-account="${escapeHtml(o.schedule.id)}"><option value="">ISA 선택</option>${isaEligible.map(a => `<option value="${escapeHtml(a.id)}" ${a.id === isaResolved ? 'selected' : ''}>${escapeHtml(a.name)}</option>`).join('')}</select></div>` : isIsa && isaEligible.length === 1 ? `<div class="schedule-account-target"><label>납입 계좌</label><strong>${escapeHtml(isaEligible[0].name)}</strong></div>` : isIsa ? '<div class="warningbox" style="margin-top:9px">운영 중인 ISA가 없습니다.</div>' : '', simpleNote = /^매월\s*\d{1,2}일$/.test(String(o.schedule.note || '').trim()), note = simpleNote ? '' : String(o.schedule.note || '').trim(); return `<div class="schedule-detail-item compact"><div class="top"><div><strong>${escapeHtml(o.schedule.name)}</strong>${note ? `<small>${escapeHtml(note)}</small>` : ''}</div><span class="schedule-status ${o.status}">${scheduleStatusLabel(o.status)}</span></div><div class="schedule-primary-amount"><span>${o.status === 'done' ? '실제 금액' : o.schedule.kind !== 'loan' && o.schedule.amountMode === 'estimate' ? '예상 금액' : '금액'}</span><strong>${won(scheduleOccurrenceDisplayAmount(o))}</strong></div>${selector}${scheduleLoanInputsMarkup(o)}${o.status === 'done' ? `<button class="schedule-complete" data-schedule-record="${escapeHtml(o.tx?.id)}">연결된 기록 보기</button>${o.tx?.meta?.scheduleId === o.schedule.id ? `<button class="diagnostic-action" data-schedule-actual-edit="${escapeHtml(o.schedule.id)}" data-date="${escapeHtml(date)}">실제 납부 수정</button>` : ''}` : `${o.schedule.kind !== 'loan' && o.schedule.amountMode === 'estimate' ? `<div class="field" style="margin-top:10px"><label>실제 금액</label><input data-schedule-amount="${escapeHtml(o.schedule.id)}" type="number" inputmode="numeric" min="1" step="1" value="${escapeHtml(schedulePlannedAmount(o.schedule, date))}"></div>` : ''}<button class="schedule-complete" data-schedule-complete="${escapeHtml(o.schedule.id)}" data-schedule-date="${escapeHtml(date)}" ${(pk && !eligible.length) || (isIsa && !isaEligible.length) ? 'disabled' : ''}>${escapeHtml(scheduleActionLabel(o.schedule.kind))} 완료로 기록</button>`}<button class="diagnostic-action" data-schedule-plan-edit="${escapeHtml(o.schedule.id)}" data-date="${escapeHtml(date)}">예정금액 수정</button></div>`; }).join('') || '<div class="integrated-empty">등록된 일정이 없습니다.</div>'}</div>`; openSheet('#detailSheet'); bindScheduleTools(); $$('[data-schedule-complete]').forEach(b => b.onclick = () => { const input = findDataElement(document, "data-schedule-amount", b.dataset.scheduleComplete), account = findDataElement(document, "data-schedule-pension-account", b.dataset.scheduleComplete), isaAccount = findDataElement(document, "data-schedule-isa-account", b.dataset.scheduleComplete), principal = findDataElement(document, "data-schedule-loan-principal", b.dataset.scheduleComplete), interest = findDataElement(document, "data-schedule-loan-interest", b.dataset.scheduleComplete), amount = input ? Number(input.value) || 0 : 0; completeScheduleOccurrence(b.dataset.scheduleComplete, b.dataset.scheduleDate, amount, account?.value || '', isaAccount?.value || '', Number(principal?.value) || 0, Number(interest?.value) || 0); }); }
 function scheduleLoanInputsMarkup(o) { const s = o?.schedule; if (!s || s.kind !== 'loan' || o.status === 'done')
     return ''; return `<div class="form-grid" style="margin-top:10px"><div class="field"><label>실제 원금</label><input data-schedule-loan-principal="${escapeHtml(s.id)}" type="number" inputmode="numeric" min="0" step="1" value="0"></div><div class="field"><label>실제 이자</label><input data-schedule-loan-interest="${escapeHtml(s.id)}" type="number" inputmode="numeric" min="0" step="1" value="0"></div></div><div class="source-note">예정금액을 원금과 이자로 자동 추측하지 않습니다. 실제 납부내역대로 입력해 주세요.</div>`; }
 function integratedSummaryPage() {
@@ -955,6 +956,45 @@ function openMonthlyLivingBudgetForm() { $('#formEyebrow').textContent = '통합
     return; sheetDirty = false; closeSheets({ all: true }); nav('integrated', 'spending'); toast(setting().monthlyLivingBudget ? '생활비 목표를 저장했습니다.' : '생활비 목표를 껐습니다.'); }; }
 function openIntegratedSpendingDetail(scope = 'all', key = '', month = integratedSelectedMonth()) { const analysis = integratedSpendingAnalysis(month), rows = scope === 'fixed' ? analysis.fixedRows : scope === 'variable' ? analysis.variableRows : scope === 'other' ? analysis.rows.filter(row => new Set(analysis.categories.slice(5).map(x => x.key)).has(String(row.category || '기타').trim() || '기타')) : scope === 'category' ? analysis.rows.filter(row => (String(row.category || '기타').trim() || '기타') === key) : analysis.rows; $('#sheetEyebrow').textContent = '통합 · 소비 분석'; $('#sheetTitle').textContent = scope === 'category' ? key : `${integratedMonthLabel(month)} 소비`; $('#sheetBody').innerHTML = `<div class="integrated-ledger-list">${[...rows].reverse().map(t => `<button class="integrated-ledger-row is-clickable" data-integrated-tx="${escapeHtml(t.id)}" style="width:100%;border:0;background:transparent;text-align:left;color:inherit"><div><strong>${escapeHtml(t.category || integratedTxLabel(t))}</strong><small>${escapeHtml(t.date)} · ${t.type === 'expense' ? (t.fixed ? '고정비' : '변동비') : '고정비'}</small></div><div class="integrated-ledger-right">${integratedTxAmountMarkup(t)}<span class="integrated-chevron">›</span></div></button>`).join('') || '<div class="integrated-empty">해당 소비 기록이 없습니다.</div>'}</div>`; openSheet('#detailSheet'); $$('[data-integrated-tx]').forEach(button => button.onclick = () => openIntegratedTransactionDetail(button.dataset.integratedTx || '')); }
 function integratedPage(tab = 'summary') { const safe = ['summary', 'ledger', 'spending', 'schedule'].includes(tab) ? tab : 'summary', content = safe === 'ledger' ? integratedLedgerPage() : safe === 'spending' ? integratedSpendingPage() : safe === 'schedule' ? integratedSchedulePage() : integratedSummaryPage(), tabs = integratedTabs(safe).replace('integrated-tabs four', 'integrated-tabs four module-primary-tabs'), month = integratedMonthBar(); return `<div class="module-page-shell integrated-module-shell">${tabs}${month}<div class="stack">${content}</div></div>`; }
+function bindScheduleTools() {
+    $$('[data-card-plan-remove]').forEach(b => b.onclick = () => showDialog({ title: '이 구매 기록을 취소할까요?', message: '아직 납부하지 않은 구매와 할부 일정을 함께 삭제합니다.', confirmText: '구매 취소', cancelText: '유지' }, () => { if (removeUnpaidCardInstallment(b.dataset.cardPlanRemove || '')) {
+        closeSheets({ all: true });
+        render();
+        toast('구매 기록을 취소했어요.');
+    } }));
+    $$('[data-card-plan-new]').forEach(b => b.onclick = () => openCardInstallmentForm());
+    $$('[data-schedule-record]').forEach(b => b.onclick = () => openIntegratedTransactionDetail(b.dataset.scheduleRecord || ''));
+    $$('[data-schedule-plan-edit]').forEach(b => b.onclick = () => openScheduleAmountForm(b.dataset.schedulePlanEdit || '', b.dataset.date || '', false));
+    $$('[data-schedule-actual-edit]').forEach(b => b.onclick = () => openScheduleAmountForm(b.dataset.scheduleActualEdit || '', b.dataset.date || '', true));
+}
+function scheduleToolsMarkup(month) {
+    const cards = financeSchedules().filter(s => s.cardPlan);
+    return `<section class="card schedule-card"><div class="sectionhead"><h2>카드·할부</h2><button data-card-plan-new>＋ 구매 기록</button></div>${cards.map(s => { const x = cardPlanSummary(s, month); return `<div class="card-plan-row"><strong>${escapeHtml(s.name)}</strong><div class="card-plan-values"><span>총 구매액<b>${won(x.purchaseAmount)}</b></span><span>이번 달 예정<b>${won(x.plannedAmount)}</b></span><span>남은 원금<b>${won(x.remainingPrincipal)}</b></span></div><small>이자 예상 ${won(x.estimatedInterest)} · 실제 청구·납부 ${x.actualAmount === null ? '미입력' : won(x.actualAmount)}</small>${x.remainingPrincipal === x.purchaseAmount ? `<button class="diagnostic-action" data-card-plan-remove="${escapeHtml(s.id)}">구매 기록 취소</button>` : ''}</div>`; }).join('') || '<div class="integrated-empty">카드 구매와 납부를 연결해 관리해요.</div>'}</section>`;
+}
+function openScheduleAmountForm(id, date, actual = false) {
+    const s = financeSchedules().find(x => x.id === id), o = scheduleOccurrences(date.slice(0, 7)).find(x => x.schedule.id === id && x.date === date);
+    if (!s || !o)
+        return;
+    const loan = s.kind === 'loan', values = o.tx?.meta || {};
+    $('#formEyebrow').textContent = '통합 · 일정';
+    $('#formTitle').textContent = actual ? '실제 납부 수정' : '예정금액 수정';
+    $('#formBody').innerHTML = `<form id="scheduleAmountForm" class="form"><div class="source-note">${escapeHtml(s.name)} · ${escapeHtml(date)}</div>${actual && loan ? `<div class="form-grid"><div class="field"><label>실제 원금</label><input name="principal" type="number" inputmode="numeric" min="0" step="1" value="${escapeHtml(values.loanPrincipal || 0)}" required></div><div class="field"><label>실제 이자</label><input name="interest" type="number" inputmode="numeric" min="0" step="1" value="${escapeHtml(values.loanInterest || 0)}" required></div></div>` : `<div class="field"><label>${actual ? '실제 납부액' : '예정금액'}</label><input name="amount" type="number" inputmode="numeric" min="1" step="1" value="${escapeHtml(actual ? scheduleOccurrenceDisplayAmount(o) : schedulePlannedAmount(s, date))}" required></div>`}${actual ? '<div class="source-note">연결된 이번 납부 기록만 바뀝니다. 다음 일정의 예정금액은 유지해요.</div>' : '<div class="field"><label>변경 범위</label><select name="scope"><option value="once">이번 건만</option><option value="future">이번 건부터 앞으로</option></select></div><div class="source-note">이미 납부한 실제 기록은 바뀌지 않아요.</div>'}<button class="integrated-form-save" type="submit">수정 저장</button></form>`;
+    openSheet('#formSheet', { mode: 'input' });
+    const form = $('#scheduleAmountForm');
+    form.onsubmit = (e) => { e.preventDefault(); const d = new FormData(form), ok = actual ? updateScheduleActualPayment(id, date, Number(d.get('amount')), Number(d.get('principal')), Number(d.get('interest'))) : updateSchedulePlannedAmount(id, date, Number(d.get('amount')), String(d.get('scope'))); if (!ok)
+        return; sheetDirty = false; closeSheets({ all: true }); render(); openScheduleDay(date, id); toast('수정했어요.'); };
+}
+function openCardInstallmentForm() {
+    $('#formEyebrow').textContent = '통합 · 카드·할부';
+    $('#formTitle').textContent = '카드 구매 기록';
+    $('#formBody').innerHTML = `<form id="cardInstallmentForm" class="form"><div class="field"><label>구매 이름</label><input name="name" maxlength="80" placeholder="예: TV · 국민카드" required></div><div class="field"><label>총 구매액</label><input name="purchaseAmount" type="number" inputmode="numeric" min="1" step="1" required></div><div class="form-grid"><div class="field"><label>구매일</label><input name="purchaseDate" type="date" value="${escapeHtml(localYmd())}" required></div><div class="field"><label>첫 납부일</label><input name="firstPaymentDate" type="date" required></div></div><div class="form-grid"><div class="field"><label>할부 기간</label><select name="months">${[1, 2, 3, 4, 5, 6, 10, 12, 18, 24, 30, 36, 48, 60].map(n => `<option value="${escapeHtml(n)}" ${n === 24 ? 'selected' : ''}>${n === 1 ? '일시불' : n + '개월'}</option>`).join('')}</select></div><div class="field"><label>이자</label><select name="interestMode"><option value="free">무이자</option><option value="paid">이자 있음</option></select></div></div><div class="field" data-card-rate hidden><label>연 이율 (%)</label><input name="annualRate" type="number" min="0" max="100" step="0.01" value="0"></div><div class="source-note">구매일에 소비와 카드 미납 원금을 기록해요. 원금을 납부할 때 소비로 다시 더하지 않습니다. 이자는 남은 원금 기준 예상액이며 실제 청구금액을 확인해 납부 기록을 입력해 주세요.</div><button class="integrated-form-save" type="submit">구매 기록 저장</button></form>`;
+    openSheet('#formSheet', { mode: 'input' });
+    const form = $('#cardInstallmentForm');
+    form.addEventListener('change', () => { const mode = form.elements.namedItem('interestMode').value; const rate = form.querySelector('[data-card-rate]'); if (rate)
+        rate.hidden = mode === 'free'; sheetDirty = true; });
+    form.onsubmit = (e) => { e.preventDefault(); const id = createCardInstallment(Object.fromEntries(new FormData(form).entries())); if (!id)
+        return; sheetDirty = false; closeSheets({ all: true }); nav('integrated', 'schedule'); toast('구매와 할부 일정을 저장했어요.'); };
+}
 ;
 /* asset-os source: ui-render.js */
 'use strict';
@@ -967,9 +1007,24 @@ function integratedDefaultCategory(uiType) { const categories = { externalIncome
 function integratedFormAccountOptions(selected = '') { const activeIds = new Set(activeFinancialProducts().map(p => p.id)); return integratedStore().accounts.filter(a => !['isa', 'pension', 'irp'].includes(a.kind) && (!a.productId || activeIds.has(a.productId))).map(a => `<option value="${escapeHtml(a.id)}" ${a.id === selected ? 'selected' : ''}>${escapeHtml(a.name)}</option>`).join(''); }
 function integratedInvestmentTargetOptions(selected = '') { const activeIds = new Set(activeFinancialProducts().map(p => p.id)); return integratedStore().accounts.filter(a => ['isa', 'pension', 'irp', 'deposit', 'savings'].includes(a.kind) && (!a.productId || activeIds.has(a.productId))).map(a => `<option value="${escapeHtml(a.id)}" ${a.id === selected ? 'selected' : ''}>${escapeHtml(a.name)}</option>`).join(''); }
 function integratedFormLiabilityOptions(selected = '') { return integratedStore().liabilities.filter(a => { const p = a.productId ? financialProduct(a.productId) : null; return !p || p.status === 'active'; }).map(a => `<option value="${escapeHtml(a.id)}" ${a.id === selected ? 'selected' : ''}>${escapeHtml(a.name)}</option>`).join(''); }
-function integratedFormMarkup(tx = null, preset = {}) { const rawType = preset.uiType || integratedUiType(tx), common = ['externalIncome', 'lifeExpense', 'savingInvestment', 'loanPayment'].includes(rawType), uiType = common ? rawType : 'system', amount = Number(tx?.amount) || '', date = tx?.date || preset.date || ymd(), category = tx?.category || preset.category || integratedDefaultCategory(rawType), target = preset.toAccountId || tx?.toAccountId || 'pension-link', liability = preset.liabilityId || tx?.liabilityId || integratedStore().liabilities[0]?.id || ''; if (!common) {
-    return `<form id="integratedTxForm" class="form" data-edit-id="${escapeHtml(tx?.id || '')}" data-system-type="${escapeHtml(rawType)}"><div class="integrated-form-hint">이 항목은 상품 초기설정용 시스템 기록입니다.</div><div class="form-grid"><div class="field"><label>날짜</label><input name="date" type="date" value="${escapeHtml(date)}" required></div><div class="field"><label>금액</label><input name="amount" type="number" min="1" step="1" value="${escapeHtml(amount || '')}" required></div></div><div class="field"><label>분류</label><input name="category" value="${escapeHtml(category)}"></div>${rawType === 'openingAsset' ? `<div class="field"><label>대상</label><select name="toAccountId">${integratedFormAccountOptions(target)}</select></div>` : ''}${rawType === 'openingLiability' ? `<div class="field"><label>대출</label><select name="liabilityId">${integratedFormLiabilityOptions(liability)}</select></div>` : ''}<div class="field"><label>메모</label><input name="note" value="${escapeHtml(tx?.note || '')}"></div>${formValidationMarkup()}<button class="integrated-form-save">저장</button></form>`;
-} return `<form id="integratedTxForm" class="form" data-edit-id="${escapeHtml(tx?.id || '')}" data-pension-account-id="${escapeHtml(tx?.meta?.targetPensionAccountId || preset.targetPensionAccountId || '')}" data-isa-account-id="${escapeHtml(tx?.meta?.targetIsaAccountId || preset.targetIsaAccountId || '')}"><div class="integrated-form-hint">수입은 생활현금으로 들어오고, 생활지출·저축·투자·대출 납부는 그 현금에서 자동으로 빠집니다. 회계용 기능은 화면 뒤에서 처리합니다.</div><div class="field"><label>무엇을 기록할까요?</label><select name="uiType"><option value="externalIncome" ${uiType === 'externalIncome' ? 'selected' : ''}>수입</option><option value="lifeExpense" ${uiType === 'lifeExpense' ? 'selected' : ''}>생활지출</option><option value="savingInvestment" ${uiType === 'savingInvestment' ? 'selected' : ''}>저축·투자</option><option value="loanPayment" ${uiType === 'loanPayment' ? 'selected' : ''}>대출 납부</option></select></div><div class="form-grid"><div class="field"><label>날짜</label><input name="date" type="date" value="${escapeHtml(date)}" required></div><div class="field" data-simple-field="amount"><label>금액</label><input name="amount" type="number" min="1" step="1" value="${escapeHtml(amount || '')}"></div></div><div class="field" data-simple-field="category"><label>분류 · 직접 작성 가능</label><input name="category" value="${escapeHtml(category)}"></div><div class="field" data-simple-field="target"><label>저축·투자 대상</label><select name="toAccountId">${integratedInvestmentTargetOptions(target)}</select></div><div class="field hidden-field" data-simple-field="pensionTarget"><label>연금 납입 계좌</label><select name="targetPensionAccountId"></select></div><div class="field hidden-field" data-simple-field="isaTarget"><label>ISA 납입 계좌</label><select name="targetIsaAccountId"></select></div><div data-simple-field="loan"><div class="field"><label>대출</label><select name="liabilityId">${integratedFormLiabilityOptions(liability)}</select></div><div class="form-grid"><div class="field"><label>원금</label><input name="principal" type="number" min="0" step="1" value="${escapeHtml(tx?.type === 'debtPrincipal' ? amount || '' : '0')}"></div><div class="field"><label>이자</label><input name="interest" type="number" min="0" step="1" value="${escapeHtml(tx?.type === 'debtPrincipal' ? '' : uiType === 'loanPayment' ? amount || '' : '')}"></div></div></div><div class="field"><label>메모 <small>선택</small></label><input name="note" value="${escapeHtml(tx?.note || '')}"></div>${formValidationMarkup()}<button class="integrated-form-save" type="submit">저장</button></form>`; }
+function integratedFormMarkup(tx = null, preset = {}) {
+    const rawType = preset.uiType || integratedUiType(tx), common = ['externalIncome', 'lifeExpense', 'savingInvestment', 'loanPayment'].includes(rawType), uiType = common ? rawType : 'system', amount = Number(tx?.amount ?? preset.amount) || '', date = tx?.date || preset.date || ymd(), category = tx?.category || preset.category || integratedDefaultCategory(rawType), target = preset.toAccountId || tx?.toAccountId || 'pension-link', liability = preset.liabilityId || tx?.liabilityId || integratedStore().liabilities[0]?.id || '';
+    if (!common) {
+        return `<form id="integratedTxForm" class="form" data-edit-id="${escapeHtml(tx?.id || '')}" data-system-type="${escapeHtml(rawType)}"><div class="integrated-form-hint">이 항목은 상품 초기설정용 시스템 기록입니다.</div><div class="form-grid"><div class="field"><label>날짜</label><input name="date" type="date" value="${escapeHtml(date)}" required></div><div class="field"><label>금액</label><input name="amount" type="number" min="1" step="1" value="${escapeHtml(amount || '')}" required></div></div><div class="field"><label>분류</label><input name="category" value="${escapeHtml(category)}"></div>${rawType === 'openingAsset' ? `<div class="field"><label>대상</label><select name="toAccountId">${integratedFormAccountOptions(target)}</select></div>` : ''}${rawType === 'openingLiability' ? `<div class="field"><label>대출</label><select name="liabilityId">${integratedFormLiabilityOptions(liability)}</select></div>` : ''}<div class="field"><label>메모</label><input name="note" value="${escapeHtml(tx?.note || '')}"></div>${formValidationMarkup()}<button class="integrated-form-save">저장</button></form>`;
+    }
+    return `<form id="integratedTxForm" class="form integrated-entry" data-edit-id="${escapeHtml(tx?.id || '')}" data-pension-account-id="${escapeHtml(tx?.meta?.targetPensionAccountId || preset.targetPensionAccountId || '')}" data-isa-account-id="${escapeHtml(tx?.meta?.targetIsaAccountId || preset.targetIsaAccountId || '')}">
+ <div class="field entry-amount" data-simple-field="amount"><label for="entryAmount">금액</label><div class="entry-amount-line"><input id="entryAmount" name="amount" type="number" inputmode="numeric" min="1" step="1" placeholder="0" value="${escapeHtml(amount)}" aria-label="금액"><span>원</span></div></div>
+ ${!tx ? integratedEntryShortcutsMarkup() : ''}
+ <div class="field"><label for="entryType">거래 종류</label><select id="entryType" name="uiType">${[['externalIncome', '수입'], ['lifeExpense', '지출'], ['savingInvestment', '저축·투자'], ['loanPayment', '대출 납부']].map(([value, label]) => `<option value="${escapeHtml(value)}" ${uiType === value ? 'selected' : ''}>${label}</option>`).join('')}</select></div>
+ <div class="field" data-simple-field="target"><label for="entryTarget">넣을 계좌</label><select id="entryTarget" name="toAccountId">${integratedInvestmentTargetOptions(target)}</select></div>
+ <div class="field hidden-field" data-simple-field="pensionTarget"><label>연금 납입 계좌</label><select name="targetPensionAccountId"></select></div>
+ <div class="field hidden-field" data-simple-field="isaTarget"><label>ISA 납입 계좌</label><select name="targetIsaAccountId"></select></div>
+ <div data-simple-field="loan"><div class="field"><label>대출</label><select name="liabilityId">${integratedFormLiabilityOptions(liability)}</select></div><div class="form-grid"><div class="field"><label>원금</label><input name="principal" type="number" inputmode="numeric" min="0" step="1" value="${escapeHtml(tx?.type === 'debtPrincipal' ? amount : preset.principal || '0')}"></div><div class="field"><label>이자</label><input name="interest" type="number" inputmode="numeric" min="0" step="1" value="${escapeHtml(tx?.type === 'debtInterest' ? amount : preset.interest || '0')}"></div></div></div>
+ <div class="field" data-simple-field="category"><label for="entryCategory">분류</label><input id="entryCategory" name="category" value="${escapeHtml(category)}" list="entryCategories" maxlength="80"><datalist id="entryCategories">${['식비', '교통', '생활용품', '급여', '보험료', '저축', '연금 납입'].map(value => `<option value="${escapeHtml(value)}">`).join('')}</datalist></div>
+ <div class="field"><label for="entryDate">날짜</label><input id="entryDate" name="date" type="date" value="${escapeHtml(date)}" required></div>
+ <details class="entry-extra" ${tx?.note || preset.note ? 'open' : ''}><summary>추가 정보</summary><div class="field"><label for="entryNote">메모</label><input id="entryNote" name="note" value="${escapeHtml(tx?.note || preset.note || '')}" maxlength="500" placeholder="필요할 때만 입력"></div>${!tx ? '<label class="entry-check"><input type="checkbox" name="saveFavorite">자주 쓰는 기록으로 저장</label>' : ''}</details>
+ ${formValidationMarkup()}<div class="entry-save-actions">${!tx ? '<button class="entry-continue" type="submit" data-entry-continue>저장하고 계속</button>' : ''}<button class="integrated-form-save" type="submit">저장</button></div></form>`;
+}
 function syncIntegratedFormFields() { const f = $('#integratedTxForm'); if (!f || !f.elements.uiType)
     return; const type = f.elements.uiType.value, targetId = f.elements.toAccountId?.value || '', targetKind = integratedStore().accounts.find(a => a.id === targetId)?.kind || '', isPensionTarget = type === 'savingInvestment' && ['pension', 'irp'].includes(targetKind), isIsaTarget = type === 'savingInvestment' && targetKind === 'isa'; $$('[data-simple-field]').forEach(el => { const k = el.dataset.simpleField, show = k === 'loan' ? type === 'loanPayment' : k === 'target' ? type === 'savingInvestment' : k === 'pensionTarget' ? isPensionTarget : k === 'isaTarget' ? isIsaTarget : k === 'amount' ? type !== 'loanPayment' : k === 'category' ? type !== 'loanPayment' : true; el.classList.toggle('hidden-field', !show); }); const ps = f.elements.targetPensionAccountId; if (ps) {
     if (isPensionTarget) {
@@ -1149,8 +1204,67 @@ function integratedEntryDateForMonth(month = integratedSelectedMonth()) {
     const [year, monthNumber] = m.split('-').map(Number), lastDay = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate(), day = Math.min(Number(today.slice(8, 10)) || 1, lastDay);
     return `${m}-${String(day).padStart(2, '0')}`;
 }
+const integratedEntryTypes = ['externalIncome', 'lifeExpense', 'savingInvestment', 'loanPayment'];
+function integratedCleanEntryPreset(value, withAmounts = false) {
+    if (!value || typeof value !== 'object')
+        return null;
+    const raw = value, uiType = String(raw.uiType || '');
+    if (!integratedEntryTypes.includes(uiType))
+        return null;
+    const out = { uiType };
+    for (const key of ['category', 'toAccountId', 'liabilityId', 'targetPensionAccountId', 'targetIsaAccountId'])
+        if (typeof raw[key] === 'string')
+            out[key] = String(raw[key]).slice(0, 80);
+    if (withAmounts) {
+        for (const key of ['amount', 'principal', 'interest']) {
+            const amount = Number(raw[key]);
+            if (Number.isFinite(amount) && amount >= 0 && financialNumberInRange(amount))
+                out[key] = amount;
+        }
+        out.note = typeof raw.note === 'string' ? raw.note.slice(0, 500) : '';
+    }
+    return out;
+}
+function integratedEntryPresetFromRecord(tx) {
+    if (tx.readonly || tx.productId || tx.meta?.scheduleId || tx.meta?.isaLifecycleAccountId || !['externalIncome', 'expense', 'internalTransfer', 'debtPrincipal', 'debtInterest'].includes(tx.type || ''))
+        return null;
+    return integratedCleanEntryPreset({ uiType: integratedUiType(tx), category: tx.category, toAccountId: tx.toAccountId, liabilityId: tx.liabilityId, amount: tx.amount, principal: tx.type === 'debtPrincipal' ? tx.amount : 0, interest: tx.type === 'debtInterest' ? tx.amount : 0, note: tx.note, targetPensionAccountId: tx.meta?.targetPensionAccountId, targetIsaAccountId: tx.meta?.targetIsaAccountId }, true);
+}
+function integratedEntryFavorites() {
+    const values = setting().integratedEntryFavorites;
+    return Array.isArray(values) ? values.map(value => integratedCleanEntryPreset(value, true)).filter((value) => value !== null).slice(0, 8) : [];
+}
+function integratedRecentEntryPresets() {
+    const seen = new Set(), out = [];
+    for (const tx of [...integratedStore().ledger].reverse()) {
+        const preset = integratedEntryPresetFromRecord(tx);
+        if (!preset)
+            continue;
+        const key = JSON.stringify([preset.uiType, preset.category, preset.toAccountId, preset.liabilityId]);
+        if (seen.has(key))
+            continue;
+        seen.add(key);
+        out.push(preset);
+        if (out.length === 4)
+            break;
+    }
+    return out;
+}
+function integratedEntryShortcutsMarkup() {
+    const groups = [['자주 쓰는 기록', integratedEntryFavorites(), 'favorite'], ['최근 기록', integratedRecentEntryPresets(), 'recent']];
+    const content = groups.filter(([, items]) => items.length).map(([label, items, kind]) => `<div class="entry-shortcuts"><span>${label}</span><div class="entry-shortcut-list">${items.map((item, index) => `<span class="entry-shortcut"><button type="button" data-entry-preset="${escapeHtml(kind + ':' + index)}">${escapeHtml(item.category || integratedDefaultCategory(item.uiType))}</button>${kind === 'favorite' ? `<button type="button" class="entry-shortcut-remove" data-entry-remove="${escapeHtml(index)}" aria-label="${escapeHtml(item.category || '기록')} 즐겨찾기 삭제">×</button>` : ''}</span>`).join('')}</div></div>`).join('');
+    return content ? `<details class="entry-library"><summary>기록 불러오기</summary>${content}</details>` : '';
+}
+function integratedFormEntryPreset(form, withAmounts = false) {
+    const data = new FormData(form);
+    return integratedCleanEntryPreset(Object.fromEntries(data.entries()), withAmounts);
+}
 function openIntegratedTransactionForm(id = '', preset = {}) {
     const tx = id ? integratedStore().ledger.find(t => t.id === id) || null : null;
+    if (tx?.meta?.cardPlanId) {
+        toast('카드 구매는 카드·할부에서 확인해 주세요.');
+        return;
+    }
     if (tx?.meta?.isaLifecycleAccountId) {
         toast('ISA 정산에 연결된 거래입니다. 회차 기록에서 확인해 주세요.');
         return;
@@ -1163,7 +1277,8 @@ function openIntegratedTransactionForm(id = '', preset = {}) {
         toast('일정에서 생성된 거래는 일정 상세에서 확인해 주세요.');
         return;
     }
-    const formPreset = tx || { ...preset, date: preset.date || integratedEntryDateForMonth() };
+    const remembered = typeof setting === 'function' ? integratedCleanEntryPreset(setting().integratedEntryLast) : null;
+    const formPreset = tx || { ...(remembered || {}), ...preset, date: preset.date || integratedEntryDateForMonth() };
     $('#formEyebrow').textContent = '통합 · 거래기록';
     $('#formTitle').textContent = tx ? '거래 수정' : '거래 추가';
     $('#formBody').innerHTML = integratedFormMarkup(tx, formPreset);
@@ -1184,7 +1299,21 @@ function openIntegratedTransactionForm(id = '', preset = {}) {
         else
             formClearError(form);
     } });
-    form.addEventListener('submit', (event) => { event.preventDefault(); saveIntegratedTransaction(event.currentTarget); });
+    form.querySelectorAll?.('[data-entry-preset]').forEach(button => button.addEventListener('click', () => {
+        const [kind, index] = String(button.dataset.entryPreset).split(':'), entry = (kind === 'favorite' ? integratedEntryFavorites() : integratedRecentEntryPresets())[Number(index)];
+        if (!entry)
+            return;
+        const apply = () => { sheetDirty = false; openIntegratedTransactionForm('', { ...entry, date: form.elements.date?.value || integratedEntryDateForMonth() }); sheetDirty = true; };
+        if (sheetDirty)
+            showDialog({ title: '기록을 불러올까요?', message: '입력 중인 내용이 선택한 기록으로 바뀝니다.', confirmText: '불러오기', cancelText: '취소' }, apply);
+        else
+            apply();
+    }));
+    form.querySelectorAll?.('[data-entry-remove]').forEach(button => button.addEventListener('click', () => { const entries = integratedEntryFavorites(), before = clone(setting().integratedEntryFavorites); entries.splice(Number(button.dataset.entryRemove), 1); setting().integratedEntryFavorites = entries; if (!persist()) {
+        setting().integratedEntryFavorites = before;
+        return;
+    } button.closest('.entry-shortcut')?.remove(); toast('자주 쓰는 기록에서 뺐어요.'); }));
+    form.addEventListener('submit', (event) => { event.preventDefault(); saveIntegratedTransaction(event.currentTarget, !!event.submitter?.hasAttribute('data-entry-continue')); });
 }
 function integratedFormLiveError(form) {
     const data = new FormData(form), type = String(data.get('uiType') || ''), systemType = form.dataset.systemType || '';
@@ -1314,7 +1443,7 @@ function integratedValidateCandidate(candidate, editingId = '') {
     const issues = [...integratedCandidateIssues(test), ...integratedPolicyLimitIssues(test)];
     return issues.length ? issues[0].replace('자산 잔액 음수:', '잔액이 부족합니다:').replace('부채 잔액 음수:', '대출잔액보다 많이 상환할 수 없습니다:') : '';
 }
-function saveIntegratedTransaction(form) {
+function saveIntegratedTransaction(form, continueEntry = false) {
     const rows = integratedCandidatesFromForm(form), editingId = form.dataset.editId || '';
     if (!rows.length) {
         const message = '기록할 금액을 입력해 주세요.', isLoan = String(new FormData(form).get('uiType') || '') === 'loanPayment';
@@ -1350,13 +1479,23 @@ function saveIntegratedTransaction(form) {
     integratedLedgerSearch = '';
     integratedSearchDisplayLimit = 50;
     setting().integratedLedgerFilter = 'all';
+    const entry = integratedFormEntryPreset(form), favorite = integratedFormEntryPreset(form, true);
+    if (!editingId && !form.dataset.systemType && entry) {
+        setting().integratedEntryLast = entry;
+        if (new FormData(form).get('saveFavorite') && favorite) {
+            const entries = integratedEntryFavorites().filter(item => JSON.stringify(item) !== JSON.stringify(favorite));
+            setting().integratedEntryFavorites = [favorite, ...entries].slice(0, 8);
+        }
+    }
     if (!persist())
         return;
     sheetDirty = false;
     closeSheets({ all: true });
     nav('integrated', 'ledger');
-    toast('거래를 저장했습니다.');
+    toast('저장했어요.');
     haptic('light');
+    if (continueEntry && !editingId && !form.dataset.systemType)
+        openIntegratedTransactionForm('', { ...(entry || {}), date: rows[0].date });
 }
 function openCashReconcileForm() {
     const date = integratedEntryDateForMonth(), store = integratedStore(), current = Number(integratedReplay(store.ledger.filter(row => String(row.date || '') <= date), store).assets['cash-main'] || 0);
@@ -1409,6 +1548,10 @@ function deleteIntegratedTransaction(id) {
         toast('거래를 찾지 못했습니다.');
         return;
     }
+    if (tx.meta?.cardPlanId) {
+        toast('카드 구매와 미납 원금이 연결된 기록입니다.');
+        return;
+    }
     if (tx.meta?.isaLifecycleAccountId) {
         toast('ISA 정산에 연결된 거래는 개별 삭제할 수 없습니다.');
         return;
@@ -1443,9 +1586,14 @@ function openIntegratedTransactionDetail(id) {
     const linkedProduct = !!tx.productId, productLinkedManaged = linkedProduct && ['externalAssetIn', 'externalAssetOut', 'externalDebtPrincipal', 'debtInterestExternal', 'openingAsset', 'openingLiability'].includes(tx.type || '');
     $('#sheetEyebrow').textContent = '통합 · 거래';
     $('#sheetTitle').textContent = tx.category || integratedTxLabel(tx);
-    const sourceBox = tx.readonly ? `<div class="source-note">${tx.sourceModule === 'isa' ? 'ISA' : '개인연금'}의 실제 기록을 자동으로 읽은 거래입니다. 통합에서 중복 수정하지 않습니다.</div><button class="diagnostic-action" data-linked-source="${escapeHtml(tx.sourceModule)}">원본 화면 열기</button>` : productLinkedManaged ? `<div class="source-note">금융상품과 연결된 거래입니다. 통합에서 따로 수정하면 상품 잔액과 어긋날 수 있어 상품 화면에서 관리합니다.</div><button class="diagnostic-action" data-linked-product="${escapeHtml(tx.productId)}">금융상품 열기</button>` : `<div class="integrated-detail-note">수정·삭제하면 통합 수치가 즉시 다시 계산됩니다.</div><div class="integrated-detail-actions"><button data-integrated-edit="${escapeHtml(tx.id || '')}">수정</button><button class="danger" data-integrated-delete-detail="${escapeHtml(tx.id || '')}">삭제</button></div>`;
-    $('#sheetBody').innerHTML = `<div class="sheetrows"><div class="sheetrow"><span>날짜</span><strong>${escapeHtml(tx.date)}</strong></div><div class="sheetrow"><span>유형</span><strong>${escapeHtml(integratedTxLabel(tx))}</strong></div><div class="sheetrow"><span>금액</span><strong>${tx.type === 'adjustment' ? signed(Number(tx.delta) || 0) : won(tx.amount)}</strong></div>${integratedTxAccountsText(tx) ? `<div class="sheetrow"><span>계좌</span><strong>${escapeHtml(integratedTxAccountsText(tx))}</strong></div>` : ''}${tx.note ? `<div class="sheetrow"><span>메모</span><strong>${escapeHtml(tx.note)}</strong></div>` : ''}</div>${sourceBox}${['expense', 'externalExpense'].includes(tx.type || '') ? `<button class="diagnostic-action" data-refund="${escapeHtml(tx.id || '')}">환불·부분취소</button>` : ''}`;
+    const sourceBox = tx.meta?.cardPlanId ? '<div class="source-note">카드 구매와 미납 원금이 연결된 기록입니다. 통합 → 일정 → 카드·할부에서 확인해 주세요.</div>' : tx.readonly ? `<div class="source-note">${tx.sourceModule === 'isa' ? 'ISA' : '개인연금'}의 실제 기록을 자동으로 읽은 거래입니다. 통합에서 중복 수정하지 않습니다.</div><button class="diagnostic-action" data-linked-source="${escapeHtml(tx.sourceModule)}">원본 화면 열기</button>` : productLinkedManaged ? `<div class="source-note">금융상품과 연결된 거래입니다. 통합에서 따로 수정하면 상품 잔액과 어긋날 수 있어 상품 화면에서 관리합니다.</div><button class="diagnostic-action" data-linked-product="${escapeHtml(tx.productId)}">금융상품 열기</button>` : `<div class="integrated-detail-note">수정·삭제하면 통합 수치가 즉시 다시 계산됩니다.</div><div class="integrated-detail-actions"><button data-integrated-edit="${escapeHtml(tx.id || '')}">수정</button><button class="danger" data-integrated-delete-detail="${escapeHtml(tx.id || '')}">삭제</button></div>`;
+    $('#sheetBody').innerHTML = `<div class="sheetrows"><div class="sheetrow"><span>날짜</span><strong>${escapeHtml(tx.date)}</strong></div><div class="sheetrow"><span>유형</span><strong>${escapeHtml(integratedTxLabel(tx))}</strong></div><div class="sheetrow"><span>금액</span><strong>${tx.type === 'adjustment' ? signed(Number(tx.delta) || 0) : won(tx.amount)}</strong></div>${integratedTxAccountsText(tx) ? `<div class="sheetrow"><span>계좌</span><strong>${escapeHtml(integratedTxAccountsText(tx))}</strong></div>` : ''}${tx.note ? `<div class="sheetrow"><span>메모</span><strong>${escapeHtml(tx.note)}</strong></div>` : ''}</div>${sourceBox}${integratedEntryPresetFromRecord(tx) ? '<button class="diagnostic-action" data-entry-copy>이 기록 복사</button>' : ''}${!tx.meta?.cardPlanId && ['expense', 'externalExpense'].includes(tx.type || '') ? `<button class="diagnostic-action" data-refund="${escapeHtml(tx.id || '')}">환불·부분취소</button>` : ''}`;
     openSheet('#detailSheet');
+    $('[data-entry-copy]')?.addEventListener('click', () => { const preset = integratedEntryPresetFromRecord(tx); if (preset) {
+        closeSheets({ all: true });
+        openIntegratedTransactionForm('', { ...preset, date: integratedEntryDateForMonth() });
+        sheetDirty = true;
+    } });
     $('[data-refund]')?.addEventListener('click', () => openIntegratedRefundForm(tx.id || ''));
     $('[data-integrated-edit]')?.addEventListener('click', (event) => openIntegratedTransactionForm(eventTarget(event).dataset.integratedEdit));
     $('[data-integrated-delete-detail]')?.addEventListener('click', (event) => deleteIntegratedTransaction(String(eventTarget(event).dataset.integratedDeleteDetail || '')));
@@ -2999,11 +3147,11 @@ integratedSummaryPage = function () { const month = integratedSelectedMonth(), f
     list.innerHTML = v069AssetGroups(f); const schedule = template.content.querySelector('[data-fixed-cost-card]'), total = pending.reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0); if (schedule) {
     const title = schedule.querySelector('.fixed-cost-head strong'), small = schedule.querySelector('.fixed-cost-head small'), amount = schedule.querySelector('.fixed-cost-head-right b'), body = schedule.querySelector('[data-fixed-cost-body]');
     if (title)
-        title.textContent = `${integratedMonthLabel(month)} 예정 일정`;
+        title.textContent = `${integratedMonthLabel(month)} 남은 납부액`;
     if (small)
         small.textContent = pending.length ? `미완료 ${pending.length}건 · 예정액 ${won(total)}` : '이번 달 미완료 일정 없음';
     if (amount)
-        amount.textContent = '';
+        amount.textContent = won(total);
     if (body)
         body.innerHTML = pending.length ? v069ScheduleGroups(pending, 'summary') : '<div class="integrated-empty">이번 달 금융 일정은 모두 처리했습니다.</div>';
 } const monthHead = template.content.querySelector('.integrated-month-mini-head'); if (monthHead) {
@@ -3019,11 +3167,29 @@ openIntegratedMonthDetail = function (month) { v069MonthDetail(month); if ($('#s
     $('#sheetTitle').textContent = `${integratedMonthLabel(month || integratedSelectedMonth())} 현금흐름`; const label = $('#sheetBody .integrated-month-cash span'); if (label)
     label.textContent = '가용 현금'; };
 const v069SchedulePage = integratedSchedulePage;
-integratedSchedulePage = function () { const month = integratedScheduleMonth(), occ = scheduleOccurrences(month), pending = occ.filter(o => o.status !== 'done'), done = occ.length - pending.length, template = document.createElement('template'); template.innerHTML = v069SchedulePage(); const title = template.content.querySelector('.schedule-head h2'), small = template.content.querySelector('.schedule-head small'), pill = template.content.querySelector('.schedule-head .count-pill'), list = template.content.querySelector('.schedule-card .schedule-list'); if (title)
-    title.textContent = `${integratedMonthLabel(month)} 예정 일정`; if (small)
-    small.textContent = `미완료 ${pending.length}건 · 예정액 ${won(pending.reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0))}`; if (pill)
-    pill.textContent = `완료 ${done}건`; if (list)
-    list.innerHTML = occ.length ? v069ScheduleGroups(occ, 'page') : '<div class="integrated-empty">이 달의 금융 일정이 없습니다.</div>'; return template.innerHTML; };
+integratedSchedulePage = function () {
+    const month = integratedScheduleMonth(), occ = scheduleOccurrences(month), pending = occ.filter(o => o.status !== 'done'), done = occ.length - pending.length, template = document.createElement('template');
+    template.innerHTML = v069SchedulePage();
+    const title = template.content.querySelector('.schedule-head h2'), small = template.content.querySelector('.schedule-head small'), pill = template.content.querySelector('.schedule-head .count-pill'), list = template.content.querySelector('.schedule-card .schedule-list');
+    if (title)
+        title.textContent = '이번 달 남은 납부액';
+    if (small)
+        small.textContent = `${won(pending.reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0))} · 미완료 ${pending.length}건`;
+    if (pill)
+        pill.textContent = `완료 ${done}건`;
+    if (list)
+        list.innerHTML = occ.map(o => `<button class="schedule-row" data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"><span class="schedule-copy"><strong>${escapeHtml(o.schedule.name)}</strong><small>${escapeHtml(o.date)} · 예정 ${won(schedulePlannedAmount(o.schedule, o.date))}${o.status === 'done' ? ` · 실제 ${won(scheduleOccurrenceDisplayAmount(o))}` : ''}</small></span><strong class="schedule-amount">${won(scheduleOccurrenceDisplayAmount(o))}</strong><span class="schedule-status ${o.status}">${scheduleOccurrenceUiLabel(o)}</span></button>`).join('') || '<div class="integrated-empty">이 달의 금융 일정이 없습니다.</div>';
+    const week = template.content.querySelector('.schedule-week'), grid = template.content.querySelector('.schedule-grid');
+    if (week && grid) {
+        const details = document.createElement('details'), summary = document.createElement('summary');
+        details.className = 'schedule-calendar-toggle';
+        summary.textContent = '달력 보기';
+        details.append(summary);
+        week.before(details);
+        details.append(week, grid);
+    }
+    return template.innerHTML + scheduleToolsMarkup(month);
+};
 const v069SpendingPage = integratedSpendingPage;
 integratedSpendingPage = function () { const analysis = integratedSpendingAnalysis(integratedSelectedMonth()), template = document.createElement('template'); template.innerHTML = v069SpendingPage(); const budget = template.content.querySelector('[data-spending-budget]>span'), hint = template.content.querySelector('[data-spending-budget]>small'); if (budget)
     budget.textContent = '월간 생활비 기준'; if (hint && !setting().monthlyLivingBudget)
@@ -3073,7 +3239,7 @@ openFinancialProductDetail = function (id) { v069FinanceDetail(id); for (const s
         span.textContent = '적용 금리';
 } };
 const v069Bind = bind;
-bind = function () { v069Bind(); $$('[data-integrated-asset-group]').forEach(button => button.onclick = () => { v069AssetGroup = v069AssetGroup === button.dataset.integratedAssetGroup ? '' : button.dataset.integratedAssetGroup || ''; renderKeepingScroll(); }); $$('[data-schedule-category]').forEach(button => button.onclick = () => { const scope = button.dataset.scheduleScope, key = button.dataset.scheduleCategory; if (!scope || !key)
+bind = function () { v069Bind(); bindScheduleTools(); $$('[data-integrated-asset-group]').forEach(button => button.onclick = () => { v069AssetGroup = v069AssetGroup === button.dataset.integratedAssetGroup ? '' : button.dataset.integratedAssetGroup || ''; renderKeepingScroll(); }); $$('[data-schedule-category]').forEach(button => button.onclick = () => { const scope = button.dataset.scheduleScope, key = button.dataset.scheduleCategory; if (!scope || !key)
     return; v069ScheduleGroup[scope] = v069ScheduleGroup[scope] === key ? '' : key; renderKeepingScroll(); }); const more = $('[data-tx-more]'); if (more)
     more.onclick = () => { transactionDisplayLimit += 20; renderKeepingScroll(); }; };
 const appearanceMenu = document.querySelector('[data-profile-action="appearance"] small');

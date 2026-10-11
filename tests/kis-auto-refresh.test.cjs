@@ -4,7 +4,7 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 
 // Keep the clock aligned with the fixture's localYmd and expected query ranges.
-const fixtureNow=Date.parse('2026-09-04T00:00:00Z');
+const fixtureNow=Date.parse('2026-09-04T12:00:00');
 class FixtureDate extends Date{
  constructor(...args){super(...(args.length?args:[fixtureNow]))}
  static now(){return fixtureNow}

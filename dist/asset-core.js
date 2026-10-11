@@ -5,7 +5,7 @@ const BROKER_KIS_PUBLIC_CONFIG = Object.freeze({ projectUrl: 'https://wjrzukoofs
 const QA_MODE = typeof location !== 'undefined' && /(?:^|[?&])qa=1(?:&|$)/.test(String(location.search || ''));
 const QA_STORAGE_KEY = 'asset-os-qa-v0.5', LIVE_STORAGE_KEY = 'asset-os-v1.9.45-live';
 const DEFAULT_FINANCE_DAY = 25;
-const APP_VERSION = 'v0.6.16', APP_ENV = QA_MODE ? 'qa' : 'live', SCHEMA_VERSION = 21, KEY = QA_MODE ? QA_STORAGE_KEY : LIVE_STORAGE_KEY, LEGACY_KEYS = ['asset-os-v1.9.22-central-schedule', 'asset-os-v1.9.20-real-finance', 'asset-os-v1.9.19-finance-linked', 'asset-os-v1.9.18-integrated-ui-refine', 'asset-os-v1.9.17-integrated-complete-stage1', 'asset-os-v1.9.16-integrated-ledger-stage2', 'asset-os-v1.9.9-pension-step2-analysis', 'asset-os-v1.9.7-pension-step2-precision', 'asset-os-v1.9.6-pension-step2-refine', 'asset-os-v1.9.5-pension-step2', 'asset-os-v1.9.4-pension-step1', 'asset-os-v1.9.3-pension-step1', 'asset-os-v1.9.2-isa-review', 'asset-os-v1.9.1-isa-review', 'asset-os-v1.9-isa-review', 'asset-os-v1.8-isa-review', 'asset-os-v1.7-isa-review', 'asset-os-v1.6.1-isa-review', 'asset-os-v1.6-isa-review', 'asset-os-v1.5-isa-review', 'asset-os-v1.4-isa-review', 'asset-os-v1.3-isa-review'];
+const APP_VERSION = 'v0.6.17', APP_ENV = QA_MODE ? 'qa' : 'live', SCHEMA_VERSION = 21, KEY = QA_MODE ? QA_STORAGE_KEY : LIVE_STORAGE_KEY, LEGACY_KEYS = ['asset-os-v1.9.22-central-schedule', 'asset-os-v1.9.20-real-finance', 'asset-os-v1.9.19-finance-linked', 'asset-os-v1.9.18-integrated-ui-refine', 'asset-os-v1.9.17-integrated-complete-stage1', 'asset-os-v1.9.16-integrated-ledger-stage2', 'asset-os-v1.9.9-pension-step2-analysis', 'asset-os-v1.9.7-pension-step2-precision', 'asset-os-v1.9.6-pension-step2-refine', 'asset-os-v1.9.5-pension-step2', 'asset-os-v1.9.4-pension-step1', 'asset-os-v1.9.3-pension-step1', 'asset-os-v1.9.2-isa-review', 'asset-os-v1.9.1-isa-review', 'asset-os-v1.9-isa-review', 'asset-os-v1.8-isa-review', 'asset-os-v1.7-isa-review', 'asset-os-v1.6.1-isa-review', 'asset-os-v1.6-isa-review', 'asset-os-v1.5-isa-review', 'asset-os-v1.4-isa-review', 'asset-os-v1.3-isa-review'];
 const nf = new Intl.NumberFormat('ko-KR');
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const INVESTMENT_ROLES = ['성장', '배당', '현금흐름', '안정', '현금'];
@@ -1169,7 +1169,7 @@ function integratedSpendingAnalysis(month = integratedLatestMonth()) {
 ;
 /* asset-os source: integrated-schedule-engine.js */
 'use strict';
-function normalizeFinanceSchedules(input) { const src = input && typeof input === 'object' ? input : { items: [] }, items = Array.isArray(src.items) ? src.items : []; return { items: items.map((x, i) => ({ id: String(x.id || `schedule-${i + 1}`), name: String(x.name || `일정 ${i + 1}`), kind: ['income', 'investment', 'saving', 'loan', 'insurance', 'expense'].includes(x.kind || '') ? x.kind : 'expense', amount: Math.max(0, Number(x.amount) || 0), amountMode: x.amountMode === 'estimate' ? 'estimate' : 'fixed', day: (x.day === 0 || x.day === '0') ? 0 : Math.min(31, Math.max(1, Number(x.day) || DEFAULT_FINANCE_DAY)), recurrence: x.recurrence === 'monthly' ? 'monthly' : 'monthly', startDate: String(x.startDate || ''), endDate: String(x.endDate || ''), targetKind: String(x.targetKind || ''), targetAccountId: String(x.targetAccountId || ''), targetPensionAccountId: String(x.targetPensionAccountId || ''), targetIsaAccountId: String(x.targetIsaAccountId || ''), productId: String(x.productId || ''), liabilityId: String(x.liabilityId || ''), active: x.active !== false, note: String(x.note || ''), source: String(x.source || 'user'), needsDate: !!x.needsDate, attention: String(x.attention || '') })) }; }
+function normalizeFinanceSchedules(input) { const src = input && typeof input === 'object' ? input : { items: [] }, items = Array.isArray(src.items) ? src.items : []; return { items: items.map((x, i) => ({ ...x, id: String(x.id || `schedule-${i + 1}`), name: String(x.name || `일정 ${i + 1}`), kind: ['income', 'investment', 'saving', 'loan', 'insurance', 'expense'].includes(x.kind || '') ? x.kind : 'expense', amount: Math.max(0, Number(x.amount) || 0), amountMode: x.amountMode === 'estimate' ? 'estimate' : 'fixed', day: (x.day === 0 || x.day === '0') ? 0 : Math.min(31, Math.max(1, Number(x.day) || DEFAULT_FINANCE_DAY)), recurrence: x.recurrence === 'monthly' ? 'monthly' : 'monthly', startDate: String(x.startDate || ''), endDate: String(x.endDate || ''), targetKind: String(x.targetKind || ''), targetAccountId: String(x.targetAccountId || ''), targetPensionAccountId: String(x.targetPensionAccountId || ''), targetIsaAccountId: String(x.targetIsaAccountId || ''), productId: String(x.productId || ''), liabilityId: String(x.liabilityId || ''), active: x.active !== false, note: String(x.note || ''), source: String(x.source || 'user'), needsDate: !!x.needsDate, attention: String(x.attention || '') })) }; }
 function financeSchedules() { return state.financeSchedules?.items || []; }
 function clampEndedProductSchedules(target = state) { const products = target.financialProducts?.items || [], schedules = target.financeSchedules?.items || []; for (const p of products) {
     if (p.status === 'active')
@@ -1194,8 +1194,9 @@ function scheduleMonthDays(month) { const [y, m] = String(month).split('-').map(
 function scheduleDateForMonth(s, month) { if (!s.active || !s.day)
     return ''; const { y, m, days } = scheduleMonthDays(month), day = Math.min(Number(s.day), days), date = `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`; if (s.startDate && date < s.startDate)
     return ''; if (s.endDate && date > s.endDate)
+    return ''; if (s.cardPlan && !cardInstallmentTerms(s, date))
     return ''; return date; }
-function scheduleFallbackMatches(s, date, t) { if (!s || String(t.date) !== String(date) || (Number(t.amount) || 0) !== (Number(s.amount) || 0))
+function scheduleFallbackMatches(s, date, t) { if (!s || String(t.date) !== String(date) || (Number(t.amount) || 0) !== schedulePlannedAmount(s, String(date)))
     return false; const account = integratedStore().accounts.find((a) => a.id === t.toAccountId), sameName = normalizeName(t.category) === normalizeName(s.name); if (s.kind === 'income')
     return t.type === 'externalIncome' && sameName; if (['investment', 'saving'].includes(s.kind || '')) {
     if (!['internalTransfer', 'externalAssetIn'].includes(t.type || ''))
@@ -1300,6 +1301,103 @@ function centralIsaReplayRows(account, includeArchived = false) { if (!account |
     }
     out.push({ id: `virtual-${t.id}`, type: 'internalTransferIn', date: String(t.date), amount: Number(t.amount) || 0, note: t.note || '통합 납입', status: 'posted', sourceTxId: t.id, meta: { centralContribution: true, targetIsaAccountId: account.id } });
 } return out; }
+function cardInstallmentTerms(s, date) {
+    const plan = s.cardPlan;
+    if (!plan)
+        return null;
+    if (!validYmdDate(String(plan.firstPaymentDate)) || !Number.isInteger(plan.months) || plan.months < 1 || plan.months > 60 || !Number.isFinite(plan.purchaseAmount) || plan.purchaseAmount <= 0 || !Number.isFinite(plan.annualRate) || plan.annualRate < 0)
+        return null;
+    const first = String(plan.firstPaymentDate), index = (Number(date.slice(0, 4)) - Number(first.slice(0, 4))) * 12 + Number(date.slice(5, 7)) - Number(first.slice(5, 7));
+    if (index < 0 || index >= plan.months)
+        return null;
+    const base = Math.floor(plan.purchaseAmount / plan.months), principal = index === plan.months - 1 ? plan.purchaseAmount - base * (plan.months - 1) : base;
+    const balance = plan.purchaseAmount - base * index, interest = plan.interestMode === 'free' ? 0 : Math.round(balance * plan.annualRate / 1200);
+    return { index: index + 1, principal, interest, total: principal + interest };
+}
+function schedulePlannedAmount(s, date) {
+    const overrides = s.amountOverrides;
+    if (overrides && Object.hasOwn(overrides, date))
+        return Number(overrides[date]) || 0;
+    const history = Array.isArray(s.amountHistory) ? s.amountHistory : [];
+    const latest = [...history].filter(x => x && validYmdDate(x.effectiveFrom) && Number.isFinite(x.amount) && x.amount > 0 && x.effectiveFrom <= date).sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom)).at(-1);
+    return latest ? latest.amount : cardInstallmentTerms(s, date)?.total || Number(s.amount) || 0;
+}
+function updateSchedulePlannedAmount(id, date, amount, scope) {
+    const s = financeSchedules().find(x => x.id === id);
+    if (!s || !validYmdDate(date) || !['once', 'future'].includes(scope) || !financialNumberInRange(amount) || !Number.isInteger(amount) || amount <= 0) {
+        toast('일정과 금액을 확인해 주세요.');
+        return false;
+    }
+    const before = clone(s);
+    if (scope === 'once')
+        s.amountOverrides = { ...(s.amountOverrides || {}), [date]: amount };
+    else {
+        if (s.amountOverrides)
+            delete s.amountOverrides[date];
+        s.amountHistory = [...(Array.isArray(s.amountHistory) ? s.amountHistory : []).filter(x => x.effectiveFrom !== date), { effectiveFrom: date, amount }];
+    }
+    if (!persist(false)) {
+        Object.assign(s, before);
+        for (const key of ['amountOverrides', 'amountHistory'])
+            if (!(key in before))
+                delete s[key];
+        return false;
+    }
+    return true;
+}
+function cardPlanSummary(s, month) {
+    const plan = s.cardPlan, rows = integratedStore().ledger;
+    const paid = rows.filter(t => t.liabilityId === s.liabilityId && ['debtPrincipal', 'externalDebtPrincipal'].includes(t.type || '')).reduce((sum, t) => sum + Number(t.amount || 0), 0);
+    const date = scheduleDateForMonth({ ...s, active: true }, month), actual = scheduleCompletionTx(s.id, date), terms = cardInstallmentTerms(s, date);
+    return { purchaseAmount: plan.purchaseAmount, remainingPrincipal: Math.max(0, plan.purchaseAmount - paid), plannedAmount: date ? schedulePlannedAmount(s, date) : 0, estimatedInterest: terms?.interest || 0, actualAmount: actual ? Number(actual.meta?.actualAmount ?? actual.amount) || 0 : null };
+}
+function createCardInstallment(input) {
+    const amount = Number(input.purchaseAmount), months = Number(input.months), rate = Number(input.annualRate) || 0, purchaseDate = String(input.purchaseDate || ''), first = String(input.firstPaymentDate || ''), name = String(input.name || '').trim(), mode = String(input.interestMode);
+    if (!name || name.length > 80 || !validYmdDate(purchaseDate) || !validYmdDate(first) || first < purchaseDate || !Number.isInteger(amount) || amount <= 0 || !financialNumberInRange(amount) || !Number.isInteger(months) || months < 1 || months > 60 || amount < months || !['free', 'paid'].includes(mode) || !Number.isFinite(rate) || rate < 0 || rate > 100) {
+        toast('구매금액·기간·첫 납부일을 확인해 주세요.');
+        return '';
+    }
+    const store = integratedStore(), before = clone(store), schedulesBefore = clone(state.financeSchedules), id = uid('card-plan'), liabilityId = uid('card-debt');
+    const liabilities = store.liabilities, ledger = store.ledger;
+    liabilities.push({ id: liabilityId, kind: 'other', name, cardPlanId: id });
+    ledger.push({ id: uid('igl'), date: purchaseDate, type: 'openingLiability', amount, liabilityId, category: name, meta: { cardPlanId: id } }, { id: uid('igl'), date: purchaseDate, type: 'externalExpense', amount, category: name, note: '카드 구매 · 원금 납부는 지출에 다시 포함하지 않음', meta: { cardPlanId: id, cardPurchase: true } });
+    const plan = { purchaseDate, firstPaymentDate: first, purchaseAmount: amount, months, annualRate: mode === 'free' ? 0 : rate, interestMode: mode };
+    const s = { id, name, kind: 'loan', amount: 0, amountMode: 'estimate', day: Number(first.slice(8, 10)), startDate: first, active: true, liabilityId, source: 'user', cardPlan: plan };
+    s.amount = cardInstallmentTerms(s, first)?.total || 0;
+    if (!state.financeSchedules)
+        state.financeSchedules = { items: [] };
+    state.financeSchedules.items.push(s);
+    const issues = integratedCandidateIssues(store);
+    if (issues.length || !persist(false)) {
+        state.integrated = before;
+        state.financeSchedules = schedulesBefore;
+        if (issues.length)
+            toast(issues[0]);
+        return '';
+    }
+    return id;
+}
+function removeUnpaidCardInstallment(id) {
+    const s = financeSchedules().find(x => x.id === id);
+    if (!s?.cardPlan)
+        return false;
+    const store = integratedStore(), rows = store.ledger;
+    if (rows.some(t => t.liabilityId === s.liabilityId && t.type !== 'openingLiability')) {
+        toast('납부 기록이 있어 구매를 취소할 수 없습니다.');
+        return false;
+    }
+    const before = clone(store), schedules = clone(state.financeSchedules);
+    store.ledger = rows.filter(t => t.meta?.cardPlanId !== id);
+    store.liabilities = store.liabilities.filter(x => x.id !== s.liabilityId);
+    if (state.financeSchedules)
+        state.financeSchedules.items = financeSchedules().filter(x => x.id !== id);
+    if (!persist(false)) {
+        state.integrated = before;
+        state.financeSchedules = schedules;
+        return false;
+    }
+    return true;
+}
 ;
 /* asset-os source: src/app/schedule-completion.js */
 'use strict';
@@ -1322,13 +1420,15 @@ function scheduleCompletionCashError(amount) {
     return cash + 1e-8 < amount ? '생활현금이 부족합니다. 월급 또는 현금 유입을 먼저 완료로 기록해 주세요.' : '';
 }
 function calculateLoanScheduleCompletion(schedule, date, principalOverride, interestOverride) {
+    if ([principalOverride, interestOverride].some(x => !financialNumberInRange(x) || !Number.isInteger(Number(x)) || Number(x) < 0))
+        return { ok: false, error: '실제 원금과 이자를 정확한 금액으로 입력해 주세요.' };
     const principal = Math.max(0, Number(principalOverride) || 0), interest = Math.max(0, Number(interestOverride) || 0), amount = principal + interest;
     if (!amount)
         return { ok: false, error: '실제 원금 또는 이자를 입력해 주세요.' };
     const cashError = scheduleCompletionCashError(amount);
     if (cashError)
         return { ok: false, error: cashError };
-    const baseMeta = { scheduleId: schedule.id, scheduleDate: date, scheduledAmount: Number(schedule.amount) || 0, actualAmount: amount, loanPrincipal: principal, loanInterest: interest }, rows = [];
+    const baseMeta = { scheduleId: schedule.id, scheduleDate: date, scheduledAmount: schedulePlannedAmount(schedule, date), actualAmount: amount, loanPrincipal: principal, loanInterest: interest }, rows = [];
     if (principal)
         rows.push({ id: uid('igl'), date, type: 'debtPrincipal', amount: principal, fromAccountId: 'cash-main', liabilityId: schedule.liabilityId, category: `${schedule.name} 원금`, note: '금융 일정에서 완료 기록', productId: schedule.productId, meta: { ...baseMeta, component: 'principal' } });
     if (interest)
@@ -1336,13 +1436,13 @@ function calculateLoanScheduleCompletion(schedule, date, principalOverride, inte
     return { ok: true, rows, checkAggregate: true, successMessage: '원금과 이자를 완료로 기록했습니다.' };
 }
 function calculateStandardScheduleCompletion(schedule, date, amountOverride, targetPensionAccountId, targetIsaAccountId) {
-    const amount = Math.max(0, Number(amountOverride) || Number(schedule.amount) || 0);
+    const amount = Math.max(0, Number(amountOverride) || schedulePlannedAmount(schedule, date));
     if (!amount)
         return { ok: false, error: '금액을 확인해 주세요.' };
     const pensionKind = schedulePensionKind(schedule), isIsa = schedule.targetKind === 'isa' || integratedStore().accounts.find(account => account.id === scheduleTargetAccount(schedule))?.kind === 'isa';
     const resolvedPension = pensionKind ? resolveSchedulePensionAccount(schedule, targetPensionAccountId, date) : '';
     const resolvedIsa = isIsa ? resolveScheduleIsaAccount(schedule, targetIsaAccountId, date) : '';
-    const meta = { scheduleId: schedule.id, scheduleDate: date, scheduledAmount: Number(schedule.amount) || 0, actualAmount: amount };
+    const meta = { scheduleId: schedule.id, scheduleDate: date, scheduledAmount: schedulePlannedAmount(schedule, date), actualAmount: amount };
     if (pensionKind) {
         if (!resolvedPension)
             return { ok: false, error: `${pensionAccountKindLabel(pensionKind)} 납입 계좌를 선택해 주세요.` };
@@ -1404,6 +1504,51 @@ function renderScheduleCompletion(date, message) {
     setTimeout(() => openScheduleDay(date), 60);
     toast(message);
     haptic('light');
+}
+function updateScheduleActualPayment(scheduleId, date, amount, principal = 0, interest = 0) {
+    const schedule = financeSchedules().find(s => s.id === scheduleId);
+    if (!schedule)
+        return false;
+    const store = integratedStore(), original = clone(store.ledger), previous = clone(schedule);
+    const completed = store.ledger.filter(t => t.meta?.scheduleId === scheduleId && t.meta?.scheduleDate === date);
+    if (!completed.length) {
+        toast('연결된 완료 기록을 찾지 못했습니다.');
+        return false;
+    }
+    if ([amount, principal, interest].some(x => !Number.isFinite(x) || !Number.isInteger(x) || x < 0)) {
+        toast('실제 납부금액을 확인해 주세요.');
+        return false;
+    }
+    store.ledger = store.ledger.filter(t => !completed.some(old => old.id === t.id));
+    const draft = schedule.kind === 'loan' ? calculateLoanScheduleCompletion(schedule, date, principal, interest) : calculateStandardScheduleCompletion(schedule, date, amount, String(schedule.targetPensionAccountId || ''), String(schedule.targetIsaAccountId || ''));
+    if (!draft.ok) {
+        store.ledger = original;
+        toast(draft.error);
+        return false;
+    }
+    for (const row of draft.rows) {
+        const prior = completed.find(t => t.type === row.type);
+        if (prior) {
+            row.id = prior.id;
+            for (const key of ['sequence', 'createdAt', 'note'])
+                if (prior[key] !== undefined)
+                    row[key] = prior[key];
+        }
+    }
+    const candidate = { ...integratedStore(), ledger: [...store.ledger, ...draft.rows] }, issues = integratedCandidateIssues(candidate);
+    const validation = validateScheduleCompletionDraft(draft);
+    if (validation || issues.length) {
+        store.ledger = original;
+        toast(validation || issues[0]);
+        return false;
+    }
+    store.ledger.push(...draft.rows);
+    if (!persist(false)) {
+        store.ledger = original;
+        Object.assign(schedule, previous);
+        return false;
+    }
+    return true;
 }
 ;
 /* asset-os source: integrated-finance-engine.js */

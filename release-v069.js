@@ -83,11 +83,11 @@ integratedSummaryPage = function () { const month = integratedSelectedMonth(), f
     list.innerHTML = v069AssetGroups(f); const schedule = template.content.querySelector('[data-fixed-cost-card]'), total = pending.reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0); if (schedule) {
     const title = schedule.querySelector('.fixed-cost-head strong'), small = schedule.querySelector('.fixed-cost-head small'), amount = schedule.querySelector('.fixed-cost-head-right b'), body = schedule.querySelector('[data-fixed-cost-body]');
     if (title)
-        title.textContent = `${integratedMonthLabel(month)} 예정 일정`;
+        title.textContent = `${integratedMonthLabel(month)} 남은 납부액`;
     if (small)
         small.textContent = pending.length ? `미완료 ${pending.length}건 · 예정액 ${won(total)}` : '이번 달 미완료 일정 없음';
     if (amount)
-        amount.textContent = '';
+        amount.textContent = won(total);
     if (body)
         body.innerHTML = pending.length ? v069ScheduleGroups(pending, 'summary') : '<div class="integrated-empty">이번 달 금융 일정은 모두 처리했습니다.</div>';
 } const monthHead = template.content.querySelector('.integrated-month-mini-head'); if (monthHead) {
@@ -103,11 +103,29 @@ openIntegratedMonthDetail = function (month) { v069MonthDetail(month); if ($('#s
     $('#sheetTitle').textContent = `${integratedMonthLabel(month || integratedSelectedMonth())} 현금흐름`; const label = $('#sheetBody .integrated-month-cash span'); if (label)
     label.textContent = '가용 현금'; };
 const v069SchedulePage = integratedSchedulePage;
-integratedSchedulePage = function () { const month = integratedScheduleMonth(), occ = scheduleOccurrences(month), pending = occ.filter(o => o.status !== 'done'), done = occ.length - pending.length, template = document.createElement('template'); template.innerHTML = v069SchedulePage(); const title = template.content.querySelector('.schedule-head h2'), small = template.content.querySelector('.schedule-head small'), pill = template.content.querySelector('.schedule-head .count-pill'), list = template.content.querySelector('.schedule-card .schedule-list'); if (title)
-    title.textContent = `${integratedMonthLabel(month)} 예정 일정`; if (small)
-    small.textContent = `미완료 ${pending.length}건 · 예정액 ${won(pending.reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0))}`; if (pill)
-    pill.textContent = `완료 ${done}건`; if (list)
-    list.innerHTML = occ.length ? v069ScheduleGroups(occ, 'page') : '<div class="integrated-empty">이 달의 금융 일정이 없습니다.</div>'; return template.innerHTML; };
+integratedSchedulePage = function () {
+    const month = integratedScheduleMonth(), occ = scheduleOccurrences(month), pending = occ.filter(o => o.status !== 'done'), done = occ.length - pending.length, template = document.createElement('template');
+    template.innerHTML = v069SchedulePage();
+    const title = template.content.querySelector('.schedule-head h2'), small = template.content.querySelector('.schedule-head small'), pill = template.content.querySelector('.schedule-head .count-pill'), list = template.content.querySelector('.schedule-card .schedule-list');
+    if (title)
+        title.textContent = '이번 달 남은 납부액';
+    if (small)
+        small.textContent = `${won(pending.reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0))} · 미완료 ${pending.length}건`;
+    if (pill)
+        pill.textContent = `완료 ${done}건`;
+    if (list)
+        list.innerHTML = occ.map(o => `<button class="schedule-row" data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"><span class="schedule-copy"><strong>${escapeHtml(o.schedule.name)}</strong><small>${escapeHtml(o.date)} · 예정 ${won(schedulePlannedAmount(o.schedule, o.date))}${o.status === 'done' ? ` · 실제 ${won(scheduleOccurrenceDisplayAmount(o))}` : ''}</small></span><strong class="schedule-amount">${won(scheduleOccurrenceDisplayAmount(o))}</strong><span class="schedule-status ${o.status}">${scheduleOccurrenceUiLabel(o)}</span></button>`).join('') || '<div class="integrated-empty">이 달의 금융 일정이 없습니다.</div>';
+    const week = template.content.querySelector('.schedule-week'), grid = template.content.querySelector('.schedule-grid');
+    if (week && grid) {
+        const details = document.createElement('details'), summary = document.createElement('summary');
+        details.className = 'schedule-calendar-toggle';
+        summary.textContent = '달력 보기';
+        details.append(summary);
+        week.before(details);
+        details.append(week, grid);
+    }
+    return template.innerHTML + scheduleToolsMarkup(month);
+};
 const v069SpendingPage = integratedSpendingPage;
 integratedSpendingPage = function () { const analysis = integratedSpendingAnalysis(integratedSelectedMonth()), template = document.createElement('template'); template.innerHTML = v069SpendingPage(); const budget = template.content.querySelector('[data-spending-budget]>span'), hint = template.content.querySelector('[data-spending-budget]>small'); if (budget)
     budget.textContent = '월간 생활비 기준'; if (hint && !setting().monthlyLivingBudget)
@@ -157,7 +175,7 @@ openFinancialProductDetail = function (id) { v069FinanceDetail(id); for (const s
         span.textContent = '적용 금리';
 } };
 const v069Bind = bind;
-bind = function () { v069Bind(); $$('[data-integrated-asset-group]').forEach(button => button.onclick = () => { v069AssetGroup = v069AssetGroup === button.dataset.integratedAssetGroup ? '' : button.dataset.integratedAssetGroup || ''; renderKeepingScroll(); }); $$('[data-schedule-category]').forEach(button => button.onclick = () => { const scope = button.dataset.scheduleScope, key = button.dataset.scheduleCategory; if (!scope || !key)
+bind = function () { v069Bind(); bindScheduleTools(); $$('[data-integrated-asset-group]').forEach(button => button.onclick = () => { v069AssetGroup = v069AssetGroup === button.dataset.integratedAssetGroup ? '' : button.dataset.integratedAssetGroup || ''; renderKeepingScroll(); }); $$('[data-schedule-category]').forEach(button => button.onclick = () => { const scope = button.dataset.scheduleScope, key = button.dataset.scheduleCategory; if (!scope || !key)
     return; v069ScheduleGroup[scope] = v069ScheduleGroup[scope] === key ? '' : key; renderKeepingScroll(); }); const more = $('[data-tx-more]'); if (more)
     more.onclick = () => { transactionDisplayLimit += 20; renderKeepingScroll(); }; };
 const appearanceMenu = document.querySelector('[data-profile-action="appearance"] small');

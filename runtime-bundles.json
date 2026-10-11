@@ -79,7 +79,8 @@
       "css-shared-common.css",
       "css-shared-investment.css",
       "css-core-hardening.css",
-      "css-release-v069.css"
+      "css-release-v069.css",
+      "css-app-refresh.css"
     ]
   }
 }

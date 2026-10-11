@@ -1,6 +1,10 @@
 import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 
+test.beforeEach(async({page})=>{
+ if(process.env.ASSET_OS_QA_SDK_PATH){const body=await readFile(process.env.ASSET_OS_QA_SDK_PATH);await page.route('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4',route=>route.fulfill({body,contentType:'text/javascript'}))}
+});
+
 const app='/index.html?qa=1#/home';
 const appErrors=[];
 const preparePage=async page=>{
@@ -97,13 +101,13 @@ test('@core integrated input rejects unsafe amounts and saves a valid transactio
  const form=page.locator('#integratedTxForm');
  await expect(form).toBeVisible();
  await form.locator('input[name="amount"]').fill('999999999999999999');
- await form.locator('button[type="submit"]').click();
+ await form.locator('.integrated-form-save').click();
  await expect(form.locator('[data-form-error]')).toBeVisible();
  expect(await page.evaluate(()=>window.__assetOS.getState().integrated.ledger.length)).toBe(before);
  await form.locator('input[name="amount"]').fill('100000');
  // Respect the application's existing 500 ms duplicate-submit guard.
  await expect.poll(()=>form.evaluate(node=>Date.now()-Number(node.dataset.lastSubmitAt||0))).toBeGreaterThanOrEqual(500);
- await form.locator('button[type="submit"]').click();
+ await form.locator('.integrated-form-save').click();
  await expect(page.locator('#formSheet')).toHaveAttribute('aria-hidden','true');
  const added=await page.evaluate(count=>window.__assetOS.getState().integrated.ledger.slice(count).map(row=>({type:row.type,amount:row.amount})),before);
  expect(added).toEqual([{type:'externalIncome',amount:100000}]);
@@ -287,4 +291,52 @@ test('@core AI sharing uses pension cash after a balance discrepancy without blo
  expect(exported.dataQuality).toEqual({ready:true,blockers:[]});
  await expect(page.locator('#confirmDialog')).toBeHidden();
  expect(appErrors).toEqual([]);
+});
+
+test('@core quick entry saves continuously, remembers fields, copies safely and persists favorites',async({page})=>{
+ await preparePage(page);await page.goto(app);
+ await page.evaluate(()=>openIntegratedTransactionForm());
+ let form=page.locator('#integratedTxForm');
+ await form.locator('[name="amount"]').fill('250000');
+ await form.locator('[name="category"]').fill('입력 QA 급여');
+ await form.locator('.entry-extra summary').click();await form.locator('[name="note"]').fill('즐겨찾기 메모');await form.locator('[name="saveFavorite"]').check();
+ await form.getByRole('button',{name:'저장하고 계속',exact:true}).click();
+ await expect(form).toBeVisible();await expect(form.locator('[name="amount"]')).toHaveValue('');
+ await expect(form.locator('[name="category"]')).toHaveValue('입력 QA 급여');
+ await expect(form.locator('[name="note"]')).toHaveValue('');
+ await form.locator('.entry-library summary').click();await expect(form.locator('[data-entry-preset="favorite:0"]')).toBeVisible();
+ await form.locator('[name="amount"]').fill('75000');await form.locator('.integrated-form-save').click();
+ await expect(page.locator('#formSheet')).toHaveAttribute('aria-hidden','true');
+ const first=await page.evaluate(()=>window.__assetOS.getState().integrated.ledger.find(row=>row.category==='입력 QA 급여'));
+ await page.evaluate(id=>openIntegratedTransactionDetail(id),first.id);await page.getByRole('button',{name:'이 기록 복사',exact:true}).click();
+ await expect(form.locator('[name="amount"]')).toHaveValue('250000');expect(await form.getAttribute('data-edit-id')).toBe('');
+ await form.locator('[name="amount"]').fill('2000');await form.locator('.integrated-form-save').click();
+ const rows=await page.evaluate(()=>window.__assetOS.getState().integrated.ledger.filter(row=>row.category==='입력 QA 급여'));
+ expect(rows.map(row=>row.amount)).toEqual([250000,75000,2000]);expect(new Set(rows.map(row=>row.id)).size).toBe(3);
+ await page.reload();await page.evaluate(()=>openIntegratedTransactionForm());
+ await form.locator('.entry-library summary').click();await expect(form.locator('[data-entry-preset="favorite:0"]')).toBeVisible();await form.locator('[data-entry-preset="favorite:0"]').click();
+ await expect(form.locator('[name="amount"]')).toHaveValue('250000');await expect(form.locator('[name="note"]')).toHaveValue('즐겨찾기 메모');
+ await expectNoHorizontalOverflow(page);
+ await page.screenshot({path:`/tmp/asset-input-${test.info().project.name}.png`});
+ expect(await page.evaluate(()=>document.fonts.check('16px Pretendard'))).toBe(true);
+ expect(appErrors).toEqual([]);
+});
+
+test('@core @release schedule and card sheets connect purchase, payment correction and recurrence scope',async({page})=>{
+ await preparePage(page);await page.goto(app);
+ await page.evaluate(()=>{const next=window.__assetOS.getState();next.financialProducts={items:[],events:[]};next.financeSchedules={items:[]};next.integrated.liabilities=[];next.integrated.ledger=[{id:'card-cash',date:'2026-01-01',type:'openingAsset',toAccountId:'cash-main',amount:10000000}];next.settings.integratedMonth='2026-02';window.__assetOS.replaceState(next);nav('integrated','schedule')});
+ await page.getByRole('button',{name:'＋ 구매 기록',exact:true}).click();
+ const card=page.locator('#cardInstallmentForm');await card.locator('[name="name"]').fill('TV · 국민카드');await card.locator('[name="purchaseAmount"]').fill('1200000');await card.locator('[name="purchaseDate"]').fill('2026-01-10');await card.locator('[name="firstPaymentDate"]').fill('2026-02-25');await card.locator('[name="months"]').selectOption('12');await card.locator('[name="interestMode"]').selectOption('paid');await card.locator('[name="annualRate"]').fill('12');await card.getByRole('button',{name:'구매 기록 저장'}).click();
+ await expect(page.locator('.card-plan-values')).toContainText('1,200,000원');await expect(page.locator('.card-plan-values')).toContainText('112,000원');
+ const id=await page.evaluate(()=>window.__assetOS.getState().financeSchedules.items.find(s=>s.cardPlan).id);
+ await page.locator(`.schedule-list [data-fixed-cost-item="${id}"]`).click();await page.locator('[data-schedule-loan-principal]').fill('100000');await page.locator('[data-schedule-loan-interest]').fill('12345');await page.locator('[data-schedule-complete]').click();
+ await expect(page.locator('[data-schedule-actual-edit]')).toBeVisible();await page.getByRole('button',{name:'실제 납부 수정',exact:true}).click();
+ let form=page.locator('#scheduleAmountForm');await form.locator('[name="interest"]').fill('13000');await form.getByRole('button',{name:'수정 저장'}).click();await expect(page.locator('.schedule-primary-amount')).toContainText('113,000원');
+ await page.getByRole('button',{name:'예정금액 수정',exact:true}).click();form=page.locator('#scheduleAmountForm');await form.locator('[name="amount"]').fill('125000');await form.locator('[name="scope"]').selectOption('once');await form.getByRole('button',{name:'수정 저장'}).click();
+ expect(await page.evaluate(id=>schedulePlannedAmount(financeSchedules().find(s=>s.id===id),'2026-03-25'),id)).toBe(111000);
+ await page.getByRole('button',{name:'예정금액 수정',exact:true}).click();await form.locator('[name="amount"]').fill('126000');await form.locator('[name="scope"]').selectOption('future');await form.getByRole('button',{name:'수정 저장'}).click();
+ expect(await page.evaluate(id=>schedulePlannedAmount(financeSchedules().find(s=>s.id===id),'2026-03-25'),id)).toBe(126000);
+ await page.evaluate(()=>closeSheets({all:true}));await page.reload();await page.evaluate(()=>nav('integrated','schedule'));await expect(page.locator('.card-plan-values')).toContainText('1,100,000원');await expect(page.locator('.card-plan-row')).toContainText('113,000원');
+ expect(await page.evaluate(()=>integratedSpendingAnalysis('2026-01').total)).toBe(1200000);expect(await page.evaluate(()=>integratedSpendingAnalysis('2026-02').total)).toBe(0);
+ await expectNoHorizontalOverflow(page);expect(appErrors).toEqual([]);
 });
