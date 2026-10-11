@@ -9,7 +9,7 @@ const root=path.join(__dirname,'..');
 const storage=new Map([['asset-os-v1.9.45-live','LIVE-SENTINEL']]);
 const localStorage={get length(){return storage.size},key:i=>[...storage.keys()][i]??null,getItem:k=>storage.has(k)?storage.get(k):null,setItem:(k,v)=>storage.set(String(k),String(v)),removeItem:k=>storage.delete(String(k))};
 const notices=[];
-class FormDataStub{constructor(form){this.values=form.values||{}}get(name){return Object.hasOwn(this.values,name)?this.values[name]:null}}
+class FormDataStub{constructor(form){this.values=form.values||{}}get(name){return Object.hasOwn(this.values,name)?this.values[name]:null}entries(){return Object.entries(this.values)[Symbol.iterator]()}}
 const context=vm.createContext({
  console,Date,Set,Map,URL,Blob,File:global.File,TextEncoder,TextDecoder,Uint8Array,DataView,ArrayBuffer,Intl,Math,JSON,Number,String,Boolean,Object,RegExp,Promise,
  FormData:FormDataStub,localStorage,navigator:{},location:{search:'?qa=1',hash:'#/integrated/ledger',pathname:'/asset-os/'},history:{replaceState(){}},
