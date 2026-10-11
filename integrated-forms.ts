@@ -118,12 +118,14 @@ function integratedEntryShortcutsMarkup():string{
 function integratedSummaryEntryPresets():IntegratedEntryPreset[]{
  const saved=[...integratedEntryFavorites(),...integratedRecentEntryPresets()],seen=new Set<string>();
  const entries=saved.filter(x=>{const key=JSON.stringify([x.uiType,x.category,x.toAccountId,x.liabilityId]);if(seen.has(key))return false;seen.add(key);return true}).slice(0,4);
- if(entries.length)return entries;
  const pension=integratedStore().accounts.find(a=>a.kind==='pension');
- return [{uiType:'externalIncome',category:'급여'},...(pension?[{uiType:'savingInvestment',category:'연금 납입',toAccountId:pension.id}]:[]),{uiType:'lifeExpense',category:'생활비'}];
+ const defaults:IntegratedEntryPreset[]=[{uiType:'externalIncome',category:'급여'},{uiType:'lifeExpense',category:'생활비'},pension?{uiType:'savingInvestment',category:'연금 납입',toAccountId:pension.id}:{uiType:'lifeExpense',category:'교통'},{uiType:'lifeExpense',category:'식비'}];
+ for(const item of defaults){if(entries.length>=4)break;if(!entries.some(x=>x.uiType===item.uiType&&x.category===item.category))entries.push(item)}
+ return entries;
 }
 function integratedSummaryEntryMarkup():string{
- return `<section class="integrated-quick-presets"><h2>자주 쓰는 기록</h2><div class="integrated-preset-list">${integratedSummaryEntryPresets().map((x,i)=>`<button data-summary-entry="${escapeHtml(i)}">${escapeHtml(x.category||integratedDefaultCategory(x.uiType))}</button>`).join('')}</div></section>`;
+ const paths:Record<string,string>={externalIncome:'M4 8h16v12H4z M8 8V4h8v4 M9 14h6 M12 11v6',lifeExpense:'M4 5h2l2 10h10l2-7H7 M9 19h.01 M17 19h.01',savingInvestment:'M3 20h18 M5 20V9h4v11 M10 20V4h4v16 M15 20v-8h4v8',loanPayment:'M4 8h16v12H4z M7 8V5h10v3 M8 14h8'};
+ return `<section class="integrated-quick-presets"><h2>자주 쓰는 기록</h2><div class="integrated-preset-list">${integratedSummaryEntryPresets().map((x,i)=>`<button data-summary-entry="${escapeHtml(i)}" class="preset-tile preset-tone-${escapeHtml(String(i))}"><span class="preset-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${escapeHtml(paths[x.uiType]||paths.lifeExpense)}"/></svg></span><span class="preset-copy"><strong>${escapeHtml(x.category||integratedDefaultCategory(x.uiType))}</strong><small>${Number(x.amount)>0?won(x.amount):'금액 입력'}</small></span><span class="preset-chevron" aria-hidden="true">›</span></button>`).join('')}</div></section>`;
 }
 function bindIntegratedSummaryEntries():void{
  document.querySelectorAll<HTMLButtonElement>('[data-summary-entry]').forEach(b=>b.onclick=()=>{const entry=integratedSummaryEntryPresets()[Number(b.dataset.summaryEntry)];if(entry)openIntegratedTransactionForm('',{...entry,date:integratedEntryDateForMonth()})});

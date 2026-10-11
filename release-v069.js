@@ -90,7 +90,7 @@ integratedSummaryPage = function () {
     if (list)
         list.innerHTML = v069AssetGroups(f);
     const quick = template.content.querySelector('.household-quick');
-    quick?.insertAdjacentHTML('afterend', integratedSummaryEntryMarkup());
+    quick?.insertAdjacentHTML('beforebegin', integratedSummaryEntryMarkup());
     const schedule = template.content.querySelector('[data-fixed-cost-card]'), total = pending.reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0);
     if (schedule) {
         const title = schedule.querySelector('.fixed-cost-head strong'), small = schedule.querySelector('.fixed-cost-head small'), amount = schedule.querySelector('.fixed-cost-head-right b'), body = schedule.querySelector('[data-fixed-cost-body]');
@@ -105,6 +105,14 @@ integratedSummaryPage = function () {
             body.insertAdjacentHTML('beforebegin', `<div class="fixed-cost-preview">${pending.slice(0, 3).map(o => `<button class="schedule-row" data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"><span class="schedule-copy"><strong>${escapeHtml(o.schedule.name)}</strong><small>${escapeHtml(o.date)}</small></span><strong class="schedule-amount">${won(scheduleOccurrenceDisplayAmount(o))}</strong></button>`).join('')}<button class="diagnostic-action" data-integrated-tab-go="schedule">일정 전체 보기 ›</button></div>`);
         }
         schedule.insertAdjacentHTML('afterend', `<button class="card integrated-card-link" data-card-hub><div><strong>카드·할부</strong><small>월 납부액과 남은 원금 확인</small></div><span>›</span></button>` + integratedConsumptionPreview(month));
+    }
+    const overview = template.content.querySelector('.integrated-overview-hero'), guard = template.content.querySelector('[data-integrated-assets-guard]'), source = [...template.content.children].find(e => e.classList.contains('source-note')), cashflow = template.content.querySelector('.integrated-month-mini');
+    if (overview && cashflow) {
+        cashflow.before(overview);
+        if (guard)
+            overview.after(guard);
+        if (source)
+            (guard || overview).after(source);
     }
     const monthHead = template.content.querySelector('.integrated-month-mini-head');
     if (monthHead) {
