@@ -19,3 +19,6 @@ h1{font-size:26px;letter-spacing:-.035em}.brand{font-weight:700;letter-spacing:.
 @media(max-width:420px){.form-grid{gap:10px}.entry-save-actions{gap:8px}.entry-amount-line input{font-size:30px}}
 
 .entry-library{border:1px solid var(--line);border-radius:16px;padding:0 14px}.entry-library>summary{min-height:48px;display:flex;align-items:center;font-size:14px;cursor:pointer}.entry-library .entry-shortcuts{margin-bottom:12px}
+
+.card-plan-row{padding:16px 0;border-top:1px solid var(--line);overflow-wrap:anywhere}.card-plan-row>strong{font-size:15px}.card-plan-values{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}.card-plan-values span{font-size:12px;color:var(--muted)}.card-plan-values b{display:block;color:var(--text);font-size:14px;font-weight:600;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}.card-plan-row>small{font-size:12px;color:var(--muted)}.schedule-copy{min-width:0}.schedule-copy small{white-space:normal;line-height:1.5}.schedule-amount{overflow-wrap:anywhere}.schedule-head>div>small{display:block;font-size:16px;color:var(--text);margin-top:8px}.schedule-detail-item>.diagnostic-action{margin-top:8px}
+.schedule-calendar-toggle{margin:12px 0}.schedule-calendar-toggle>summary{min-height:44px;cursor:pointer;font-size:14px;color:var(--muted);padding:10px 0}

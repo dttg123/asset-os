@@ -321,3 +321,22 @@ test('@core quick entry saves continuously, remembers fields, copies safely and 
  expect(await page.evaluate(()=>document.fonts.check('16px Pretendard'))).toBe(true);
  expect(appErrors).toEqual([]);
 });
+
+test('@core @release schedule and card sheets connect purchase, payment correction and recurrence scope',async({page})=>{
+ await preparePage(page);await page.goto(app);
+ await page.evaluate(()=>{const next=window.__assetOS.getState();next.financialProducts={items:[],events:[]};next.financeSchedules={items:[]};next.integrated.liabilities=[];next.integrated.ledger=[{id:'card-cash',date:'2026-01-01',type:'openingAsset',toAccountId:'cash-main',amount:10000000}];next.settings.integratedMonth='2026-02';window.__assetOS.replaceState(next);nav('integrated','schedule')});
+ await page.getByRole('button',{name:'＋ 구매 기록',exact:true}).click();
+ const card=page.locator('#cardInstallmentForm');await card.locator('[name="name"]').fill('TV · 국민카드');await card.locator('[name="purchaseAmount"]').fill('1200000');await card.locator('[name="purchaseDate"]').fill('2026-01-10');await card.locator('[name="firstPaymentDate"]').fill('2026-02-25');await card.locator('[name="months"]').selectOption('12');await card.locator('[name="interestMode"]').selectOption('paid');await card.locator('[name="annualRate"]').fill('12');await card.getByRole('button',{name:'구매 기록 저장'}).click();
+ await expect(page.locator('.card-plan-values')).toContainText('1,200,000원');await expect(page.locator('.card-plan-values')).toContainText('112,000원');
+ const id=await page.evaluate(()=>window.__assetOS.getState().financeSchedules.items.find(s=>s.cardPlan).id);
+ await page.locator(`.schedule-list [data-fixed-cost-item="${id}"]`).click();await page.locator('[data-schedule-loan-principal]').fill('100000');await page.locator('[data-schedule-loan-interest]').fill('12345');await page.locator('[data-schedule-complete]').click();
+ await expect(page.locator('[data-schedule-actual-edit]')).toBeVisible();await page.getByRole('button',{name:'실제 납부 수정',exact:true}).click();
+ let form=page.locator('#scheduleAmountForm');await form.locator('[name="interest"]').fill('13000');await form.getByRole('button',{name:'수정 저장'}).click();await expect(page.locator('.schedule-primary-amount')).toContainText('113,000원');
+ await page.getByRole('button',{name:'예정금액 수정',exact:true}).click();form=page.locator('#scheduleAmountForm');await form.locator('[name="amount"]').fill('125000');await form.locator('[name="scope"]').selectOption('once');await form.getByRole('button',{name:'수정 저장'}).click();
+ expect(await page.evaluate(id=>schedulePlannedAmount(financeSchedules().find(s=>s.id===id),'2026-03-25'),id)).toBe(111000);
+ await page.getByRole('button',{name:'예정금액 수정',exact:true}).click();await form.locator('[name="amount"]').fill('126000');await form.locator('[name="scope"]').selectOption('future');await form.getByRole('button',{name:'수정 저장'}).click();
+ expect(await page.evaluate(id=>schedulePlannedAmount(financeSchedules().find(s=>s.id===id),'2026-03-25'),id)).toBe(126000);
+ await page.evaluate(()=>closeSheets({all:true}));await page.reload();await page.evaluate(()=>nav('integrated','schedule'));await expect(page.locator('.card-plan-values')).toContainText('1,100,000원');await expect(page.locator('.card-plan-row')).toContainText('113,000원');
+ expect(await page.evaluate(()=>integratedSpendingAnalysis('2026-01').total)).toBe(1200000);expect(await page.evaluate(()=>integratedSpendingAnalysis('2026-02').total)).toBe(0);
+ await expectNoHorizontalOverflow(page);expect(appErrors).toEqual([]);
+});

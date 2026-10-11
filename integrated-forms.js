@@ -99,6 +99,10 @@ function integratedFormEntryPreset(form, withAmounts = false) {
 }
 function openIntegratedTransactionForm(id = '', preset = {}) {
     const tx = id ? integratedStore().ledger.find(t => t.id === id) || null : null;
+    if (tx?.meta?.cardPlanId) {
+        toast('카드 구매는 카드·할부에서 확인해 주세요.');
+        return;
+    }
     if (tx?.meta?.isaLifecycleAccountId) {
         toast('ISA 정산에 연결된 거래입니다. 회차 기록에서 확인해 주세요.');
         return;
@@ -382,6 +386,10 @@ function deleteIntegratedTransaction(id) {
         toast('거래를 찾지 못했습니다.');
         return;
     }
+    if (tx.meta?.cardPlanId) {
+        toast('카드 구매와 미납 원금이 연결된 기록입니다.');
+        return;
+    }
     if (tx.meta?.isaLifecycleAccountId) {
         toast('ISA 정산에 연결된 거래는 개별 삭제할 수 없습니다.');
         return;
@@ -416,8 +424,8 @@ function openIntegratedTransactionDetail(id) {
     const linkedProduct = !!tx.productId, productLinkedManaged = linkedProduct && ['externalAssetIn', 'externalAssetOut', 'externalDebtPrincipal', 'debtInterestExternal', 'openingAsset', 'openingLiability'].includes(tx.type || '');
     $('#sheetEyebrow').textContent = '통합 · 거래';
     $('#sheetTitle').textContent = tx.category || integratedTxLabel(tx);
-    const sourceBox = tx.readonly ? `<div class="source-note">${tx.sourceModule === 'isa' ? 'ISA' : '개인연금'}의 실제 기록을 자동으로 읽은 거래입니다. 통합에서 중복 수정하지 않습니다.</div><button class="diagnostic-action" data-linked-source="${escapeHtml(tx.sourceModule)}">원본 화면 열기</button>` : productLinkedManaged ? `<div class="source-note">금융상품과 연결된 거래입니다. 통합에서 따로 수정하면 상품 잔액과 어긋날 수 있어 상품 화면에서 관리합니다.</div><button class="diagnostic-action" data-linked-product="${escapeHtml(tx.productId)}">금융상품 열기</button>` : `<div class="integrated-detail-note">수정·삭제하면 통합 수치가 즉시 다시 계산됩니다.</div><div class="integrated-detail-actions"><button data-integrated-edit="${escapeHtml(tx.id || '')}">수정</button><button class="danger" data-integrated-delete-detail="${escapeHtml(tx.id || '')}">삭제</button></div>`;
-    $('#sheetBody').innerHTML = `<div class="sheetrows"><div class="sheetrow"><span>날짜</span><strong>${escapeHtml(tx.date)}</strong></div><div class="sheetrow"><span>유형</span><strong>${escapeHtml(integratedTxLabel(tx))}</strong></div><div class="sheetrow"><span>금액</span><strong>${tx.type === 'adjustment' ? signed(Number(tx.delta) || 0) : won(tx.amount)}</strong></div>${integratedTxAccountsText(tx) ? `<div class="sheetrow"><span>계좌</span><strong>${escapeHtml(integratedTxAccountsText(tx))}</strong></div>` : ''}${tx.note ? `<div class="sheetrow"><span>메모</span><strong>${escapeHtml(tx.note)}</strong></div>` : ''}</div>${sourceBox}${integratedEntryPresetFromRecord(tx) ? '<button class="diagnostic-action" data-entry-copy>이 기록 복사</button>' : ''}${['expense', 'externalExpense'].includes(tx.type || '') ? `<button class="diagnostic-action" data-refund="${escapeHtml(tx.id || '')}">환불·부분취소</button>` : ''}`;
+    const sourceBox = tx.meta?.cardPlanId ? '<div class="source-note">카드 구매와 미납 원금이 연결된 기록입니다. 통합 → 일정 → 카드·할부에서 확인해 주세요.</div>' : tx.readonly ? `<div class="source-note">${tx.sourceModule === 'isa' ? 'ISA' : '개인연금'}의 실제 기록을 자동으로 읽은 거래입니다. 통합에서 중복 수정하지 않습니다.</div><button class="diagnostic-action" data-linked-source="${escapeHtml(tx.sourceModule)}">원본 화면 열기</button>` : productLinkedManaged ? `<div class="source-note">금융상품과 연결된 거래입니다. 통합에서 따로 수정하면 상품 잔액과 어긋날 수 있어 상품 화면에서 관리합니다.</div><button class="diagnostic-action" data-linked-product="${escapeHtml(tx.productId)}">금융상품 열기</button>` : `<div class="integrated-detail-note">수정·삭제하면 통합 수치가 즉시 다시 계산됩니다.</div><div class="integrated-detail-actions"><button data-integrated-edit="${escapeHtml(tx.id || '')}">수정</button><button class="danger" data-integrated-delete-detail="${escapeHtml(tx.id || '')}">삭제</button></div>`;
+    $('#sheetBody').innerHTML = `<div class="sheetrows"><div class="sheetrow"><span>날짜</span><strong>${escapeHtml(tx.date)}</strong></div><div class="sheetrow"><span>유형</span><strong>${escapeHtml(integratedTxLabel(tx))}</strong></div><div class="sheetrow"><span>금액</span><strong>${tx.type === 'adjustment' ? signed(Number(tx.delta) || 0) : won(tx.amount)}</strong></div>${integratedTxAccountsText(tx) ? `<div class="sheetrow"><span>계좌</span><strong>${escapeHtml(integratedTxAccountsText(tx))}</strong></div>` : ''}${tx.note ? `<div class="sheetrow"><span>메모</span><strong>${escapeHtml(tx.note)}</strong></div>` : ''}</div>${sourceBox}${integratedEntryPresetFromRecord(tx) ? '<button class="diagnostic-action" data-entry-copy>이 기록 복사</button>' : ''}${!tx.meta?.cardPlanId && ['expense', 'externalExpense'].includes(tx.type || '') ? `<button class="diagnostic-action" data-refund="${escapeHtml(tx.id || '')}">환불·부분취소</button>` : ''}`;
     openSheet('#detailSheet');
     $('[data-entry-copy]')?.addEventListener('click', () => { const preset = integratedEntryPresetFromRecord(tx); if (preset) {
         closeSheets({ all: true });

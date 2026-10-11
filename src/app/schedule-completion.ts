@@ -14,6 +14,8 @@ declare function integratedReplay():{assets:Record<string,number>};
 declare function uid(prefix:string):string;
 declare function schedulePensionKind(schedule:Schedule):string;
 declare function integratedStore():{accounts:Array<{id:string;kind?:string}>;ledger:LedgerRow[]};
+declare function financialNumberInRange(value:unknown):boolean;
+declare function schedulePlannedAmount(schedule:Schedule,date:string):number;
 declare function scheduleTargetAccount(schedule:Schedule):string;
 declare function resolveSchedulePensionAccount(schedule:Schedule,targetId:string,date:string):string;
 declare function resolveScheduleIsaAccount(schedule:Schedule,targetId:string,date:string):string;
@@ -46,23 +48,24 @@ function scheduleCompletionCashError(amount:number):string{
 }
 
 function calculateLoanScheduleCompletion(schedule:Schedule,date:string,principalOverride:unknown,interestOverride:unknown):CompletionResult{
+ if([principalOverride,interestOverride].some(x=>!financialNumberInRange(x)||!Number.isInteger(Number(x))||Number(x)<0))return{ok:false,error:'실제 원금과 이자를 정확한 금액으로 입력해 주세요.'};
  const principal=Math.max(0,Number(principalOverride)||0),interest=Math.max(0,Number(interestOverride)||0),amount=principal+interest;
  if(!amount)return{ok:false,error:'실제 원금 또는 이자를 입력해 주세요.'};
  const cashError=scheduleCompletionCashError(amount);
  if(cashError)return{ok:false,error:cashError};
- const baseMeta:Record<string,unknown>={scheduleId:schedule.id,scheduleDate:date,scheduledAmount:Number(schedule.amount)||0,actualAmount:amount,loanPrincipal:principal,loanInterest:interest},rows:LedgerRow[]=[];
+ const baseMeta:Record<string,unknown>={scheduleId:schedule.id,scheduleDate:date,scheduledAmount:schedulePlannedAmount(schedule,date),actualAmount:amount,loanPrincipal:principal,loanInterest:interest},rows:LedgerRow[]=[];
  if(principal)rows.push({id:uid('igl'),date,type:'debtPrincipal',amount:principal,fromAccountId:'cash-main',liabilityId:schedule.liabilityId,category:`${schedule.name} 원금`,note:'금융 일정에서 완료 기록',productId:schedule.productId,meta:{...baseMeta,component:'principal'}});
  if(interest)rows.push({id:uid('igl'),date,type:'debtInterest',amount:interest,fromAccountId:'cash-main',liabilityId:schedule.liabilityId,category:`${schedule.name} 이자`,note:'금융 일정에서 완료 기록',productId:schedule.productId,meta:{...baseMeta,component:'interest'}});
  return{ok:true,rows,checkAggregate:true,successMessage:'원금과 이자를 완료로 기록했습니다.'}
 }
 
 function calculateStandardScheduleCompletion(schedule:Schedule,date:string,amountOverride:unknown,targetPensionAccountId:string,targetIsaAccountId:string):CompletionResult{
- const amount=Math.max(0,Number(amountOverride)||Number(schedule.amount)||0);
+ const amount=Math.max(0,Number(amountOverride)||schedulePlannedAmount(schedule,date));
  if(!amount)return{ok:false,error:'금액을 확인해 주세요.'};
  const pensionKind=schedulePensionKind(schedule),isIsa=schedule.targetKind==='isa'||integratedStore().accounts.find(account=>account.id===scheduleTargetAccount(schedule))?.kind==='isa';
  const resolvedPension=pensionKind?resolveSchedulePensionAccount(schedule,targetPensionAccountId,date):'';
  const resolvedIsa=isIsa?resolveScheduleIsaAccount(schedule,targetIsaAccountId,date):'';
- const meta:Record<string,unknown>={scheduleId:schedule.id,scheduleDate:date,scheduledAmount:Number(schedule.amount)||0,actualAmount:amount};
+ const meta:Record<string,unknown>={scheduleId:schedule.id,scheduleDate:date,scheduledAmount:schedulePlannedAmount(schedule,date),actualAmount:amount};
  if(pensionKind){if(!resolvedPension)return{ok:false,error:`${pensionAccountKindLabel(pensionKind)} 납입 계좌를 선택해 주세요.`};meta.targetPensionAccountId=resolvedPension}
  if(isIsa){if(!resolvedIsa)return{ok:false,error:'실제 ISA 납입 계좌를 선택해 주세요.'};meta.targetIsaAccountId=resolvedIsa}
  let transaction:LedgerRow|null=null;
@@ -104,4 +107,22 @@ function commitScheduleCompletion(schedule:Schedule,date:string,draft:Completion
 
 function renderScheduleCompletion(date:string,message:string):void{
  closeSheets();render();setTimeout(()=>openScheduleDay(date),60);toast(message);haptic('light')
+}
+
+function updateScheduleActualPayment(scheduleId:string,date:string,amount:number,principal=0,interest=0):boolean{
+ const schedule=financeSchedules().find(s=>s.id===scheduleId);if(!schedule)return false;
+ const store=integratedStore(),original=clone(store.ledger),previous=clone(schedule);
+ const completed=store.ledger.filter(t=>t.meta?.scheduleId===scheduleId&&t.meta?.scheduleDate===date);
+ if(!completed.length){toast('연결된 완료 기록을 찾지 못했습니다.');return false}
+ if([amount,principal,interest].some(x=>!Number.isFinite(x)||!Number.isInteger(x)||x<0)){toast('실제 납부금액을 확인해 주세요.');return false}
+ store.ledger=store.ledger.filter(t=>!completed.some(old=>old.id===t.id));
+ const draft=schedule.kind==='loan'?calculateLoanScheduleCompletion(schedule,date,principal,interest):calculateStandardScheduleCompletion(schedule,date,amount,String(schedule.targetPensionAccountId||''),String(schedule.targetIsaAccountId||''));
+ if(!draft.ok){store.ledger=original;toast(draft.error);return false}
+ for(const row of draft.rows){const prior=completed.find(t=>t.type===row.type);if(prior){row.id=prior.id;for(const key of ['sequence','createdAt','note'])if(prior[key]!==undefined)row[key]=prior[key]}}
+ const candidate={...integratedStore(),ledger:[...store.ledger,...draft.rows]},issues=integratedCandidateIssues(candidate);
+ const validation=validateScheduleCompletionDraft(draft);
+ if(validation||issues.length){store.ledger=original;toast(validation||issues[0]);return false}
+ store.ledger.push(...draft.rows);
+ if(!persist(false)){store.ledger=original;Object.assign(schedule,previous);return false}
+ return true;
 }
