@@ -46,8 +46,27 @@ else if (hero && !summary.taxProfile.configured) {
     note.className = 'auto-note';
     note.textContent = '총급여를 입력하면 13.2%·16.5% 공제율을 자동 적용합니다.';
     hero.appendChild(note);
-} const batch = template.content.querySelector('[data-pension-contribution-batch]'); if (batch)
-    batch.textContent = '월별 납입 내역 정리'; return template.innerHTML; };
+} const goal = template.content.querySelector('.pension-goal'), monthly = template.content.querySelector('.monthly-card'); if (kpis && hero) {
+    const remaining = [...kpis.children].find(x => x.querySelector('span')?.textContent === '남은 공제한도');
+    if (remaining) {
+        remaining.className = 'pension-remaining';
+        hero.appendChild(remaining);
+    }
+    const facts = document.createElement('section');
+    facts.className = 'card pension-credit-facts';
+    while (kpis.firstChild)
+        facts.appendChild(kpis.firstChild);
+    kpis.remove();
+    if (goal)
+        goal.after(facts);
+    else
+        hero.after(facts);
+} const batch = template.content.querySelector('[data-pension-contribution-batch]'); if (batch) {
+    batch.textContent = '월별 납입 내역 정리';
+    if (monthly)
+        monthly.after(batch);
+} const monthlyNote = monthly?.querySelector('.sectionhead small'); if (monthlyNote)
+    monthlyNote.textContent = '이번 달 납입'; return template.innerHTML; };
 const v069PensionBatch = openPensionContributionBatchForm;
 openPensionContributionBatchForm = function () { v069PensionBatch(); if ($('#formTitle'))
     $('#formTitle').textContent = '월별 납입 내역 정리'; };

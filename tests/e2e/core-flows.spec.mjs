@@ -378,3 +378,31 @@ test('@core @release schedule and card sheets connect purchase, payment correcti
  expect(await page.evaluate(()=>integratedSpendingAnalysis('2026-01').total)).toBe(1200000);expect(await page.evaluate(()=>integratedSpendingAnalysis('2026-02').total)).toBe(0);
  await expectNoHorizontalOverflow(page);expect(appErrors).toEqual([]);
 });
+
+test('@core unified app keeps alerts behind the header bell and preserves account detail actions',async({page})=>{
+ await preparePage(page);await page.goto(app);
+ await page.evaluate(()=>{
+  const next=window.__assetOS.getState();next.accounts=[];next.pension.accounts=[];next.pension.holdings=[];next.pension.transactions=[];next.pension.contributions=[];
+  next.financialProducts={items:[],events:[]};next.financeSchedules={items:[]};next.integrated.ledger=[];next.integrated.liabilities=[];next.brokerKis={connections:{}};next.settings.backupV04={...(next.settings.backupV04||{}),phoneEnabled:false};
+  window.__assetOS.replaceState(next);nav('home');
+ });
+ await expect(page.locator('#alertBell')).toBeVisible();await expect(page.locator('#alertBadge')).toBeHidden();await expect(page.locator('#main .alerts')).toHaveCount(0);
+ await page.locator('#alertBell').click();await expect(page.locator('#sheetBody')).toContainText('지금 처리할 중요 알림이 없습니다.');await expect(page.locator('#sheetBody [data-investment-refresh-all]')).toBeVisible();
+ await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
+ await page.evaluate(()=>{const today=localYmd();financeSchedules().push({id:'bell-schedule',name:'알림 연결 확인',kind:'expense',amount:123456,day:Number(today.slice(-2)),startDate:today,active:true});persist(false);render()});
+ await expect(page.locator('#alertBadge')).toHaveText('1');await page.locator('#alertBell').click();await page.locator('#sheetBody [data-home-schedule]').click();await expect(page.locator('.schedule-detail-list')).toContainText('알림 연결 확인');
+ expect(await page.evaluate(()=>integratedLedger().length)).toBe(0);
+ await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
+ await page.evaluate(()=>{financeSchedules().splice(0);setting().backupV04={...(setting().backupV04||{}),phoneEnabled:true,lastPhoneBackupAt:new Date(Date.now()-10*86400000).toISOString()};persist(false);render()});
+ await expect(page.locator('#alertBadge')).toHaveText('1');await page.locator('#alertBell').click();await page.locator('#sheetBody [data-backup-alert]').click();await expect(page.locator('#sheetBody')).toContainText('백업');
+ await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
+ await page.evaluate(()=>{setting().backupV04.phoneEnabled=false;state.brokerKis.connections.pension.lastError='QA_SYNC_FAILED';render()});await expect(page.locator('#alertBadge')).toHaveText('1');await page.locator('#alertBell').click();await expect(page.locator('#sheetBody [data-investment-refresh-failed]')).toBeVisible();
+ await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
+ await page.evaluate(()=>{const next=window.__assetOS.getState();next.accounts=[{id:'bell-isa',name:'알림 QA ISA',status:'active',openedAt:'2026-01-01',maturityAt:'2029-01-01',baselineDate:'2026-01-01',baselineCash:3189892,holdings:[],transactions:[],reconciliations:[]}];next.settings.selectedAccountId='bell-isa';window.__assetOS.replaceState(next);nav('home')});
+ await page.locator('.home-account-list [data-route="isa"]').click();await expect(page.locator('.isa-summary-facts')).toContainText('평가손익');await expect(page.locator('.isa-summary-facts')).toContainText('계좌 현금');await page.locator('[data-isa-asset-analysis]').click();await expect(page.locator('#detailSheet')).toHaveClass(/open/);
+ await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
+ await page.evaluate(()=>nav('pension','contribution'));await expect(page.locator('.pension-credit-facts')).toContainText('예상 세액공제');await page.locator('[data-pension-goal-toggle]').click();await expect(page.locator('.pension-goal-detail')).toBeVisible();
+ await page.setViewportSize({width:320,height:800});
+ for(const theme of ['light','dark'])for(const accent of ['blue','mint','purple','orange'])for(const root of ['home','isa','pension','integrated']){await page.evaluate(({theme,accent,root})=>{setting().theme=theme;setting().accent=accent;nav(root,'summary')},{theme,accent,root});await expect(page.locator('header h1')).toHaveText(({home:'홈',isa:'ISA',pension:'개인연금',integrated:'통합'})[root]);await expectNoHorizontalOverflow(page)}
+ await page.reload();await expect(page.locator('#alertBell')).toBeVisible();expect(appErrors).toEqual([]);
+});
