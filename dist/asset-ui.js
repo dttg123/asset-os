@@ -107,7 +107,8 @@ function homeFinancialAlerts() { const today = localYmd(), alerts = []; for (con
 function homeSystemAlerts() { const finance = homeFinancialAlerts(), system = systemIntegrityIssues().filter(message => !message.startsWith('ISA:')).map(message => ({ title: message, detail: '통합에서 확인', kind: 'system' })), backup = backupHealth(); if (['warn', 'danger'].includes(backup.level))
     system.push({ title: backup.label, detail: backup.detail, kind: 'backup' }); const refresh = typeof investmentRefreshStatus === 'function' ? investmentRefreshStatus() : { errors: [] }, names = { pension: '개인연금', irp: 'IRP' }; for (const key of (refresh.errors || []))
     system.push({ title: `${names[key] || key} 갱신 확인 필요`, detail: '이전 자료를 유지하고 있습니다.', kind: 'refresh' }); return [...finance, ...system]; }
-function homeChangeMarkup() { const change = homeMonthChange(); return change.available ? `<div class="change home-change"><strong>이번 달 순자산 ${signed(change.netChange)}</strong><span>외부 순유입 ${signed(change.externalNet)} · 평가·기타 ${signed(change.marketOther)}</span></div>` : '<div class="change">ISA·개인연금·현금·예적금 합계 · 월 변화 기준 준비 중</div>'; }
+function homeChangeMarkup() { const change = homeMonthChange(); return change.available ? `<div class="change home-change"><strong>이번 달 순자산 ${signed(change.netChange)}</strong></div>` : '<div class="change">이번 달 변화 준비 중</div>'; }
+function homeChangeDetailMarkup() { const change = homeMonthChange(); return change.available ? `<div class="sheetrows"><div class="sheetrow"><span>이번 달 순자산 변화</span><strong>${signed(change.netChange)}</strong></div><div class="sheetrow"><span>외부 순유입</span><strong>${signed(change.externalNet)}</strong></div><div class="sheetrow"><span>평가·기타</span><strong>${signed(change.marketOther)}</strong></div></div>` : '<div class="source-note">월 변화 기준을 준비 중입니다.</div>'; }
 function homeCard(id) {
     const s = homeSample();
     if (id === 'isa') {
@@ -126,6 +127,13 @@ function homeCard(id) {
     }
     return '';
 }
+function homeAccountRow(id) { const template = document.createElement('template'); template.innerHTML = homeCard(id); const caption = template.content.querySelector('.home-module-caption'), detail = template.content.querySelector('.detail-trigger'); if (caption && detail) {
+    const label = detail.querySelector('span')?.textContent || '상세 보기';
+    caption.setAttribute('title', caption.textContent || '');
+    caption.textContent = id === 'cash' ? '통합에서 확인' : label;
+    detail.setAttribute('aria-label', `${id === 'isa' ? 'ISA' : id === 'pension' ? '개인연금' : '현금·예적금'} ${label}`);
+    detail.innerHTML = '<span aria-hidden="true">›</span>';
+} return template.innerHTML; }
 function homeAlertCount() { const isaReady = homeSample().isaSource === 'asset-os'; return scheduleUrgentOccurrences().length + (isaReady ? allIsaIssues().length : 0) + homeSystemAlerts().length + (isaReady && nearestMaturityAlert() ? 1 : 0); }
 function openAlertsCenter() { const isaReady = homeSample().isaSource === 'asset-os', issues = isaReady ? allIsaIssues() : [], alert = isaReady ? nearestMaturityAlert() : null, urgent = scheduleUrgentOccurrences(), system = homeSystemAlerts(); $('#sheetEyebrow').textContent = '통합 홈'; $('#sheetTitle').textContent = '검토·중요 알림'; $('#sheetBody').innerHTML = `<div class="integrity-list">${urgent.map(o => `<button class="integrity-row" data-home-schedule="${escapeHtml(o.date)}"><i class="integrity-dot ${o.status === 'overdue' ? 'high' : ''}"></i><span class="integrity-copy"><strong>${escapeHtml(o.schedule.name)} · ${scheduleStatusLabel(o.status)}</strong><small>${escapeHtml(o.date)} · ${won(o.schedule.amount)}</small></span><span class="integrity-go">›</span></button>`).join('')}${issues.map(x => `<button class="integrity-row" data-integrity-account="${escapeHtml(x.accountId)}" ${x.transactionId ? `data-integrity-tx="${escapeHtml(x.transactionId)}"` : ''}><i class="integrity-dot ${x.severity === 'high' ? 'high' : ''}"></i><span class="integrity-copy"><strong>${escapeHtml(x.title)}</strong><small>${escapeHtml(state.accounts.find(a => a.id === x.accountId)?.name || 'ISA')} · ${escapeHtml(x.detail)}</small></span><span class="integrity-go">›</span></button>`).join('')}${system.map(item => `<button class="integrity-row" ${item.productId ? `data-finance-alert="${escapeHtml(item.productId)}"` : item.kind === 'backup' ? 'data-backup-alert' : item.kind === 'refresh' ? 'data-refresh-alert' : 'data-system-alert'}><i class="integrity-dot"></i><span class="integrity-copy"><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.detail)}</small></span><span class="integrity-go">›</span></button>`).join('')}${alert ? `<button class="integrity-row" data-maturity-alert="${escapeHtml(alert.account.id)}"><i class="integrity-dot"></i><span class="integrity-copy"><strong>${escapeHtml(alert.account.name)} 만기 ${alert.label}</strong><small>${alert.date}</small></span><span class="integrity-go">›</span></button>` : ''}${!urgent.length && !issues.length && !system.length && !alert ? '<div class="empty-state"><strong>지금 처리할 중요 알림이 없습니다.</strong></div>' : ''}</div>${homeInvestmentRefreshMarkup()}<div class="source-note">일정·원장·연동·정책·예적금·대출에서 확인이 필요한 항목을 한곳에 모았습니다.</div>`; openSheet('#detailSheet'); setTimeout(() => bindIntegrityActions(), 0); }
 function bindIntegrityActions() { $$('[data-home-schedule]').forEach(b => b.onclick = () => { const d = b.dataset.homeSchedule; if (!d)
@@ -140,12 +148,12 @@ function bindIntegrityActions() { $$('[data-home-schedule]').forEach(b => b.oncl
 } setting().selectedAccountId = accountId; persist(); closeSheets(); nav('isa', 'transactions'); }); $$('[data-maturity-alert]').forEach(b => b.onclick = () => { const accountId = b.dataset.maturityAlert; if (!accountId)
     return; setting().selectedAccountId = accountId; persist(); closeSheets(); nav('isa', 'tax'); }); $$('[data-finance-alert]').forEach(b => b.onclick = () => { const id = b.dataset.financeAlert; if (id)
     openFinancialProductDetail(id); }); $$('[data-system-alert]').forEach(b => b.onclick = () => { closeSheets(); nav('integrated', 'summary'); }); $$('[data-refresh-alert]').forEach(b => b.onclick = () => $('#sheetBody .home-investment-refresh')?.scrollIntoView({ block: 'center', behavior: 'smooth' })); $$('[data-backup-alert]').forEach(b => b.onclick = () => openBackupHub()); }
-function home() { const s = homeSample(); return `<div class="stack home-app-stack"><button class="hero" data-detail="total"><div class="herohead"><div class="label">총금융자산</div><span class="heropeek">›</span></div><div class="heroamount ${amountClass(s.total)}" title="${escapeHtml(won(s.total))}">${displayWon(s.total)}</div>${homeChangeMarkup()}</button><section class="card home-account-list"><div class="sectionhead"><h2>내 계좌</h2></div>${['isa', 'pension', 'cash'].map(homeCard).join('')}</section><section class="home-plan">${homeCard('contribution')}</section></div>`; }
+function home() { const s = homeSample(); return `<div class="stack home-app-stack"><button class="hero" data-detail="total"><div class="herohead"><div class="label">총금융자산</div><span class="heropeek">›</span></div><div class="heroamount ${amountClass(s.total)}" title="${escapeHtml(won(s.total))}">${displayWon(s.total)}</div>${homeChangeMarkup()}</button><section class="card home-account-list"><div class="sectionhead"><h2>내 계좌</h2></div>${['isa', 'pension', 'cash'].map(homeAccountRow).join('')}</section><section class="home-plan">${homeCard('contribution')}</section></div>`; }
 ;
 /* asset-os source: isa-summary.js */
 'use strict';
-function accountStrip() { const a = currentAccount(); return `<button class="account-selector" data-account-selector><span class="account-selector-copy"><strong>${escapeHtml(a.name)}</strong><small>${escapeHtml(a.type)}${isCurrentAccount(a) ? ` · 만기 ${formatDate(a.maturityAt)}` : ''}</small></span><span class="account-selector-side"><span class="status-badge">${statusText(a.status)}</span><span class="account-selector-arrow">⌄</span></span></button>`; }
-function isaHero(a) { const m = accountMetrics(a), neg = m.profit < 0, isTransferred = a.status === 'transferred', isClosed = a.status === 'closed', isPending = a.status === 'maturity_pending', isCurrent = isCurrentAccount(a); const valueLabel = isClosed ? '실제 해지금액' : isTransferred ? '실제 연금전환액' : isPending ? '만기 처리 전 평가액' : isCurrent ? '총 평가액' : '보관 평가액', deadline = a.status === 'active' ? ddayLabel(a.maturityAt) : isPending ? '처리 대기' : formatDate(a.maturityAt), displayValue = isTransferred ? (a.maturity?.actualTransferAmount ?? m.value) : m.value, closedLabel = formatDate(a.closedAt || a.maturityAt), closedNote = a.maturity?.note || (a.status === 'archived' ? '보관 계좌' : '만기 완료'); return `<section class="isa-hero"><div class="isa-titleline"><div><div class="eyebrow">투자자산 · ${valueLabel}</div></div><span class="status-badge">${statusText(a.status)}</span></div><div class="isa-value ${amountClass(displayValue)}" title="${escapeHtml(won(displayValue))}">${displayWon(displayValue)}</div>${isCurrent ? `<button class="isa-asset-analysis-open" data-isa-asset-analysis aria-expanded="false"><span>자산 분석</span><b>›</b></button>` : ''}</section><section class="card isa-summary-facts"><div class="isa-profit ${neg ? 'negative' : ''}">${isCurrent ? `<span>평가손익</span><strong>${signed(m.profit)}<small>${pct(m.rate)}</small></strong>${isPending ? ' · 만기 처리 대기' : ''}` : `${closedLabel} · ${escapeHtml(closedNote)}`}</div><div class="isa-stats"><div class="isa-stat"><span>${isCurrent ? '투자원금' : '만기 시점 원금'}</span><strong class="${escapeHtml(amountClass(m.cost))}" title="${escapeHtml(won(m.cost))}">${displayWon(m.cost)}</strong></div><div class="isa-stat"><span>계좌 현금</span><strong class="${escapeHtml(amountClass(m.cash))}" title="${escapeHtml(won(m.cash))}">${displayWon(m.cash)}</strong></div><div class="isa-stat"><span>${a.status === 'active' ? '만기까지' : isPending ? '상태' : '만기일'}</span><strong>${deadline}</strong></div></div></section>`; }
+function accountStrip() { const a = currentAccount(); return `<button class="account-selector" data-account-selector><span class="account-selector-copy"><strong>${escapeHtml(a.name)}</strong><small>${escapeHtml(a.type)}${isCurrentAccount(a) ? ` · 만기 ${formatDate(a.maturityAt)} · ${ddayLabel(a.maturityAt)}` : ''}</small></span><span class="account-selector-side"><span class="status-badge">${statusText(a.status)}</span><span class="account-selector-arrow">⌄</span></span></button>`; }
+function isaHero(a) { const m = accountMetrics(a), neg = m.profit < 0, isTransferred = a.status === 'transferred', isClosed = a.status === 'closed', isPending = a.status === 'maturity_pending', isCurrent = isCurrentAccount(a); const valueLabel = isClosed ? '실제 해지금액' : isTransferred ? '실제 연금전환액' : isPending ? '만기 처리 전 평가액' : isCurrent ? '총 평가액' : '보관 평가액', displayValue = isTransferred ? (a.maturity?.actualTransferAmount ?? m.value) : m.value, closedLabel = formatDate(a.closedAt || a.maturityAt), closedNote = a.maturity?.note || (a.status === 'archived' ? '보관 계좌' : '만기 완료'); return `<section class="isa-hero">${isCurrent ? '<button class="isa-hero-content" data-isa-asset-analysis aria-expanded="false">' : '<div class="isa-hero-content">'}<div class="eyebrow">${valueLabel}</div><div class="isa-value ${amountClass(displayValue)}" title="${escapeHtml(won(displayValue))}">${displayWon(displayValue)}</div>${isCurrent ? '<span class="isa-hero-link">투자 현황 보기 <b aria-hidden="true">›</b></span></button>' : '</div>'}</section><section class="card isa-summary-facts"><div class="isa-profit ${neg ? 'negative' : ''}">${isCurrent ? `<span>평가손익</span><strong>${signed(m.profit)}<small>${pct(m.rate)}</small></strong>${isPending ? ' · 만기 처리 대기' : ''}` : `${closedLabel} · ${escapeHtml(closedNote)}`}</div><div class="isa-stats"><div class="isa-stat"><span>${isCurrent ? '투자원금' : '만기 시점 원금'}</span><strong class="${escapeHtml(amountClass(m.cost))}" title="${escapeHtml(won(m.cost))}">${displayWon(m.cost)}</strong></div><div class="isa-stat"><span>계좌 현금</span><strong class="${escapeHtml(amountClass(m.cash))}" title="${escapeHtml(won(m.cash))}">${displayWon(m.cash)}</strong></div></div></section>`; }
 function maturitySummary(a) { if (!a.maturity || !isPastAccount(a))
     return ''; const m = a.maturity, transfer = m.decision === 'transfer'; return `<section class="card maturity-card"><div class="maturity-head"><div><h3>${transfer ? '연금계좌 전환 완료' : '일반 해지 완료'}</h3><small>${formatDate(a.closedAt || a.maturityAt)} · 읽기 전용 정산 기록</small></div></div><div class="maturity-result"><div class="result-row"><span>${transfer ? '실제 전환금액' : '실제 해지금액'}</span><strong>${won(transfer ? (m.actualTransferAmount ?? m.actualSettlement ?? 0) : (m.actualSettlement ?? 0))}<span class="compare">예상 ${won(transfer ? (m.expectedTransferAmount ?? m.expectedSettlement ?? 0) : (m.expectedSettlement ?? 0))}</span></strong></div><div class="result-row"><span>실제 납부세금</span><strong>${won(m.actualTax || 0)}<span class="compare">예상 ${won(m.expectedTax || 0)}</span></strong></div>${transfer ? `<div class="result-row"><span>전환 대상</span><strong>${escapeHtml(m.transferTarget || '-')}<span class="compare">추가 공제대상 ${won(m.taxDeductionBase || 0)}</span></strong></div><div class="result-row"><span>예상 추가 세액공제</span><strong>${won(m.expectedTaxCredit || 0)}</strong></div>` : `<div class="result-row"><span>실제 수령액</span><strong>${won(m.actualReceived ?? Math.max(0, (m.actualSettlement || 0) - (m.actualTax || 0)))}</strong></div>`}</div></section>`; }
 function portfolioBucketForHolding(h) { return normalizeInvestmentRole(h?.investmentRole || '', h); }
@@ -1993,7 +2001,7 @@ function openDetail(type) { const a = currentAccount(), m = type === 'isa-home' 
     $('[data-go-isa]').onclick = () => nav('isa');
     return;
 } const s = homeSample(); if (type === 'total')
-    $('#sheetBody').innerHTML = `<div class="sheetrows"><div class="sheetrow"><span>총금융자산</span><strong>${won(s.total)}</strong></div><div class="sheetrow"><span>총부채</span><strong>${won(s.debt)}</strong></div><div class="sheetrow total"><span>순금융자산</span><strong>${won(s.total - s.debt)}</strong></div></div><button class="diagnostic-action" data-financial-growth>금융자산 증가 분석 ›</button>`;
+    $('#sheetBody').innerHTML = `<div class="sheetrows"><div class="sheetrow"><span>총금융자산</span><strong>${won(s.total)}</strong></div><div class="sheetrow"><span>총부채</span><strong>${won(s.debt)}</strong></div><div class="sheetrow total"><span>순금융자산</span><strong>${won(s.total - s.debt)}</strong></div></div>${homeChangeDetailMarkup()}<button class="diagnostic-action" data-financial-growth>금융자산 증가 분석 ›</button>`;
 else if (type === 'pension') {
     const pm = pensionAssetMetrics('all'), income = pensionIncomeSummary('all'), proj = pensionProjection();
     $('#sheetBody').innerHTML = `<div class="profitbox"><div class="metric"><span>평가손익</span><strong class="${escapeHtml(pm.profit >= 0 ? 'positive' : '')}">${signed(pm.profit)}</strong></div><div class="metric"><span>수익률</span><strong class="${escapeHtml(pm.rate >= 0 ? 'positive' : '')}">${pct(pm.rate)}</strong></div></div><div class="sheetrows"><div class="sheetrow"><span>현재 평가자산</span><strong>${won(pm.value)}</strong></div><div class="sheetrow"><span>투자원금</span><strong>${won(pm.cost)}</strong></div><div class="sheetrow"><span>보유 종목</span><strong>${pm.holdings.length}개</strong></div><div class="sheetrow"><span>연금 계좌</span><strong>${pm.accounts}개</strong></div><div class="sheetrow"><span>올해 배당·이자</span><strong>${won(income.yearTotal)}</strong></div><div class="sheetrow"><span>${proj.retirementAge}세 예상 월연금</span><strong>${won(proj.monthlyPension)}</strong></div></div><div class="form-actions"><button type="button" class="form-btn" data-go-pension-assets>자산 보기</button><button type="button" class="form-btn primary" data-go-pension-future>미래연금</button></div>`;
@@ -3154,48 +3162,89 @@ openFinancialGrowthAnalysis = function (period) { v069Growth(period); if ($('#sh
     if (span.textContent === '순자산 증가율')
         span.textContent = '순금융자산 증가율'; };
 const v069PensionContribution = pensionContributionPage;
-pensionContributionPage = function () { const template = document.createElement('template'); template.innerHTML = v069PensionContribution(); const year = localYmd().slice(0, 4), summary = pensionSummary(year), kpis = template.content.querySelector('.pension-kpis'); if (kpis) {
-    const current = [...kpis.children].find(x => x.querySelector('span')?.textContent === '현재 공제한도');
-    current?.remove();
-    kpis.classList.add('three');
-} const badge = template.content.querySelector('.pension-credit-year'); if (badge) {
-    const button = document.createElement('button');
-    button.className = 'pension-credit-year';
-    button.dataset.pensionTaxProfile = '';
-    button.textContent = `${year} · ${(summary.creditRate * 100).toFixed(1)}%`;
-    badge.replaceWith(button);
-} const hero = template.content.querySelector('.pension-credit-hero'); if (hero && summary.ordinaryOverage) {
-    const warning = document.createElement('div');
-    warning.className = 'warningbox';
-    warning.textContent = `일반 납입한도 초과 ${won(summary.ordinaryOverage)}`;
-    hero.appendChild(warning);
-}
-else if (hero && !summary.taxProfile.configured) {
-    const note = document.createElement('div');
-    note.className = 'auto-note';
-    note.textContent = '총급여를 입력하면 13.2%·16.5% 공제율을 자동 적용합니다.';
-    hero.appendChild(note);
-} const goal = template.content.querySelector('.pension-goal'), monthly = template.content.querySelector('.monthly-card'); if (kpis && hero) {
-    const remaining = [...kpis.children].find(x => x.querySelector('span')?.textContent === '남은 공제한도');
-    if (remaining) {
-        remaining.className = 'pension-remaining';
-        hero.appendChild(remaining);
+pensionContributionPage = function () {
+    const template = document.createElement('template');
+    template.innerHTML = v069PensionContribution();
+    const year = localYmd().slice(0, 4), summary = pensionSummary(year), hero = template.content.querySelector('.pension-credit-hero'), goal = template.content.querySelector('.pension-goal'), monthly = template.content.querySelector('.monthly-card'), kpis = template.content.querySelector('.pension-kpis');
+    template.content.querySelector('.pension-credit-year')?.remove();
+    const title = hero?.querySelector('h2'), eyebrow = hero?.querySelector('.eyebrow');
+    if (title && eyebrow) {
+        eyebrow.textContent = title.textContent;
+        title.remove();
     }
-    const facts = document.createElement('section');
-    facts.className = 'card pension-credit-facts';
-    while (kpis.firstChild)
-        facts.appendChild(kpis.firstChild);
-    kpis.remove();
-    if (goal)
-        goal.after(facts);
-    else
-        hero.after(facts);
-} const batch = template.content.querySelector('[data-pension-contribution-batch]'); if (batch) {
-    batch.textContent = '월별 납입 내역 정리';
-    if (monthly)
-        monthly.after(batch);
-} const monthlyNote = monthly?.querySelector('.sectionhead small'); if (monthlyNote)
-    monthlyNote.textContent = '이번 달 납입'; return template.innerHTML; };
+    if (kpis && hero) {
+        const items = [...kpis.children], remaining = items.find(x => x.querySelector('span')?.textContent === '남은 공제한도'), credit = items.find(x => x.querySelector('span')?.textContent === '예상 세액공제'), base = items.find(x => x.querySelector('span')?.textContent === '공제 대상액');
+        if (remaining) {
+            remaining.className = 'pension-remaining';
+            hero.appendChild(remaining);
+        }
+        if (goal && credit) {
+            const facts = document.createElement('div');
+            facts.className = 'pension-credit-facts';
+            const button = document.createElement('button');
+            button.className = 'pension-credit-estimate';
+            button.dataset.pensionTaxProfile = '';
+            button.setAttribute('aria-label', `${year} 예상 세액공제·공제율 ${(summary.creditRate * 100).toFixed(1)}% 설정`);
+            button.innerHTML = credit.innerHTML + '<span aria-hidden="true">›</span>';
+            facts.appendChild(button);
+            goal.appendChild(facts);
+        }
+        if (goal && base) {
+            const detail = template.content.querySelector('.pension-goal-detail');
+            if (detail) {
+                const info = document.createElement('div');
+                info.className = 'pension-credit-detail';
+                info.appendChild(base);
+                const note = document.createElement('p');
+                note.textContent = summary.taxProfile.configured ? '공제율·총급여는 위 예상 세액공제에서 변경할 수 있습니다.' : '총급여를 입력하면 13.2%·16.5% 공제율을 자동 적용합니다.';
+                info.appendChild(note);
+                detail.appendChild(info);
+            }
+        }
+        kpis.remove();
+    }
+    if (hero && summary.ordinaryOverage) {
+        const warning = document.createElement('div');
+        warning.className = 'warningbox';
+        warning.textContent = `일반 납입한도 초과 ${won(summary.ordinaryOverage)}`;
+        hero.appendChild(warning);
+    }
+    if (goal) {
+        const head = goal.querySelector('.pension-goal-head'), arrow = head?.querySelector('.pension-goal-arrow');
+        if (arrow)
+            arrow.textContent = `${Math.round(Math.min(100, Number(summary.goalCurrent) / Math.max(1, Number(summary.goalTotal)) * 100))}%`;
+        const total = goal.querySelector('.pension-goal-total'), progress = goal.querySelector(':scope > .progress');
+        if (total && progress) {
+            progress.after(total);
+            total.querySelector('span')?.remove();
+        }
+    }
+    const batch = template.content.querySelector('[data-pension-contribution-batch]');
+    if (batch) {
+        batch.textContent = '납입 기록';
+        if (monthly)
+            monthly.after(batch);
+    }
+    const monthlyNote = monthly?.querySelector('.sectionhead small');
+    if (monthlyNote)
+        monthlyNote.textContent = '최근 3개월';
+    if (monthly) {
+        const now = Number(localYmd().slice(5, 7));
+        monthly.querySelectorAll('.monthly-month').forEach((row, index) => { row.classList.toggle('recent', index + 1 <= now && index + 1 >= Math.max(1, now - 2)); const amounts = row.querySelectorAll('.monthly-row > span'); if (amounts.length === 3) {
+            const details = document.createElement('details');
+            details.className = 'monthly-breakdown';
+            const sum = document.createElement('summary');
+            sum.innerHTML = (row.querySelector('.monthly-row > strong')?.outerHTML || '') + amounts[2].outerHTML + '<span aria-hidden="true">›</span>';
+            details.appendChild(sum);
+            const breakdown = document.createElement('div');
+            breakdown.className = 'monthly-breakdown-values';
+            breakdown.innerHTML = '<span>연금저축</span>' + amounts[0].outerHTML + '<span>IRP</span>' + amounts[1].outerHTML;
+            details.appendChild(breakdown);
+            row.querySelector('.monthly-row')?.replaceWith(details);
+        } });
+    }
+    return template.innerHTML;
+};
 const v069PensionBatch = openPensionContributionBatchForm;
 openPensionContributionBatchForm = function () { v069PensionBatch(); if ($('#formTitle'))
     $('#formTitle').textContent = '월별 납입 내역 정리'; };
