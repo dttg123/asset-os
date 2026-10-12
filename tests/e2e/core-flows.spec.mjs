@@ -406,3 +406,54 @@ test('@core unified app keeps alerts behind the header bell and preserves accoun
  for(const theme of ['light','dark'])for(const accent of ['blue','mint','purple','orange'])for(const root of ['home','isa','pension','integrated']){await page.evaluate(({theme,accent,root})=>{setting().theme=theme;setting().accent=accent;nav(root,'summary')},{theme,accent,root});await expect(page.locator('header h1')).toHaveText(({home:'홈',isa:'ISA',pension:'개인연금',integrated:'통합'})[root]);await expectNoHorizontalOverflow(page)}
  await page.reload();await expect(page.locator('#alertBell')).toBeVisible();expect(appErrors).toEqual([]);
 });
+
+test('@core settings preserve preferences and haptic opt-out across reload',async({page})=>{
+ await preparePage(page);
+ await page.addInitScript(()=>{window.__qaVibrations=[];Object.defineProperty(navigator,'vibrate',{configurable:true,value:pattern=>{window.__qaVibrations.push(pattern);return true}})});
+ await page.goto(app);
+ await page.getByRole('button',{name:'내 Asset OS 열기'}).click();
+ await page.locator('[data-profile-action="appearance"]').click();
+ await expect(page.locator('#appearanceSheet')).toHaveAttribute('aria-hidden','false');
+ await page.getByRole('checkbox',{name:'터치 진동',exact:true}).check();
+ await page.waitForTimeout(100);
+ await page.evaluate(()=>{window.__qaVibrations=[]});
+ await page.getByRole('button',{name:'민트',exact:true}).click();
+ expect(await page.evaluate(()=>window.__qaVibrations.length)).toBe(1);
+ await page.getByRole('checkbox',{name:'터치 진동',exact:true}).uncheck();
+ await page.waitForTimeout(100);
+ await page.evaluate(()=>{window.__qaVibrations=[]});
+ await page.getByRole('button',{name:'퍼플',exact:true}).click();
+ expect(await page.evaluate(()=>window.__qaVibrations)).toEqual([]);
+ await page.getByRole('checkbox',{name:'다크모드',exact:true}).check();
+ await page.reload();
+ await page.getByRole('button',{name:'내 Asset OS 열기'}).click();
+ await page.locator('[data-profile-action="appearance"]').click();
+ await expect(page.getByRole('checkbox',{name:'터치 진동',exact:true})).not.toBeChecked();
+ await expect(page.getByRole('checkbox',{name:'다크모드',exact:true})).toBeChecked();
+ await expect(page.getByRole('button',{name:'퍼플',exact:true})).toHaveClass(/active/);
+ await page.setViewportSize({width:320,height:740});
+ await expectNoHorizontalOverflow(page);
+ await expect(page.locator('#toast')).toHaveAttribute('role','status');
+ expect(appErrors).toEqual([]);
+});
+
+test('@core pension plan stays open when saving fails',async({page})=>{
+ await preparePage(page);
+ await page.goto(app);
+ await page.evaluate(()=>openPensionSettings());
+ const sheet=page.locator('#detailSheet');
+ await expect(sheet).toHaveAttribute('aria-hidden','false');
+ await sheet.locator('[name="birthYear"]').fill('1990');
+ await sheet.locator('[name="retirementAge"]').fill('90');
+ await sheet.locator('[name="monthlyContribution"]').fill('100000');
+ await page.evaluate(()=>{window.__qaOriginalPersist=persist;persist=()=>false});
+ await sheet.getByRole('button',{name:'기준 저장',exact:true}).click();
+ await expect(sheet).toHaveAttribute('aria-hidden','false');
+ await expect(page).toHaveURL(/#\/home$/);
+ await page.waitForTimeout(550);
+ await page.evaluate(()=>{persist=window.__qaOriginalPersist});
+ await sheet.getByRole('button',{name:'기준 저장',exact:true}).click();
+ await expect(sheet).toHaveAttribute('aria-hidden','true');
+ await expect(page).toHaveURL(/#\/pension\/future$/);
+ expect(appErrors).toEqual([]);
+});

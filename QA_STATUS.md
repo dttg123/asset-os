@@ -18,3 +18,14 @@
 - 운영 데이터: 이번 QA에서 사용·변경하지 않음. QA 데이터는 격리 저장소에만 생성
 
 GitHub Actions와 실행 결과를 검증 증빙으로 사용하며, 실패·미실행 검증을 통과 처리하지 않습니다.
+
+
+## Settings and interaction consistency — build 20261013-2
+
+- Preserves approved proposal 2 page layouts. Profile, appearance, advanced menus and shared detail sheets now use the same quiet surfaces, 15px menu labels, 13px descriptions, rounded groups, consistent line icons and 44px color controls. Dark mode and narrow screens remain supported.
+- Adds trusted-click haptic feedback to primary actions and navigation. Existing preference opt-out and unsupported/denied browser fallback remain effective; only repeated vibrations of the same kind within 80ms are coalesced. Toggle confirmation and live-region toast are accessible.
+- Pension plan saving now keeps the editor open after persist failure and only navigates after success. Existing submit debounce, busy refresh controls, failed-account retries, input drafts and sheet scroll restoration remain in place.
+- Local verification: 153 automated tests passed; type, syntax, secret, release and generated-output checks passed; final fixed-build browser run 34/34 passed in 35.4s. New scenarios verify haptic opt-out and preference persistence after reload and pension-plan save failure/retry.
+- Visually reviewed profile/appearance/planning/advanced sheets at 390px and 320px in light/dark mode: no horizontal overflow or page errors in 16 captures.
+- Initial QA caught haptic throttling incorrectly suppressing different success/warning patterns; fixed by coalescing only the same kind. Another mobile reload failed during overlapping rebuild/QA; the final browser run used fixed generated files and passed all 34 without retries. No failed checks are treated as passes.
+- Real Galaxy vibration strength, mobile keyboard positioning and live broker/account sync were not exercised. Browser vibration is platform-dependent. No financial calculation, schema or external data integration changes.

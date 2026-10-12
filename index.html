@@ -13,7 +13,7 @@
 <style>
 html.asset-auth-locked body{overflow:hidden}.asset-auth-locked .app,.asset-auth-locked body>section:not(.asset-auth-gate),.asset-auth-locked #scrim,.asset-auth-locked #dialogScrim,.asset-auth-locked #toast{visibility:hidden!important}.asset-auth-gate{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:24px;background:linear-gradient(160deg,#eef4ff,#f8fbff 55%,#e9f3ff);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#13233d}.asset-auth-gate[hidden]{display:none}.asset-auth-card{width:min(100%,420px);box-sizing:border-box;padding:30px 24px;border:1px solid rgba(47,111,237,.16);border-radius:28px;background:rgba(255,255,255,.94);box-shadow:0 24px 70px rgba(32,69,130,.16);text-align:center}.asset-auth-logo{display:grid;place-items:center;width:72px;height:72px;margin:0 auto 18px;border-radius:22px;background:#2f6fed;color:#fff;font-size:40px;font-weight:800}.asset-auth-card h1{margin:0;font-size:28px}.asset-auth-card p{margin:10px 0 24px;color:#60708a;line-height:1.55}.asset-auth-card button{width:100%;min-height:54px;border:0;border-radius:16px;background:#2f6fed;color:#fff;font-size:17px;font-weight:800}.asset-auth-card button:disabled{opacity:.55}.asset-auth-card button.asset-auth-secondary{margin-top:9px;background:#e9f0ff;color:#1f55c2}.asset-auth-conflict[hidden],.asset-auth-card button[hidden]{display:none}.asset-auth-status{display:block;min-height:22px;margin-top:14px;color:#60708a;font-size:13px}.asset-auth-status.error{color:#b42318}
 </style>
-<link rel="stylesheet" href="./dist/asset-os.css?v=0.6.17&build=20261013-1">
+<link rel="stylesheet" href="./dist/asset-os.css?v=0.6.17&build=20261013-2">
 </head>
 <body>
 <aside id="qaBanner" class="qa-banner" hidden aria-label="QA 테스트 모드">
@@ -49,21 +49,21 @@ html.asset-auth-locked body{overflow:hidden}.asset-auth-locked .app,.asset-auth-
 </div>
 <div id="scrim" class="scrim" hidden></div>
 <section id="detailSheet" class="sheet" aria-hidden="true"><div class="sheet-drag-zone"><div class="handle"></div><div class="sheethead"><div><div id="sheetEyebrow" class="eyebrow">상세</div><h2 id="sheetTitle">상세</h2></div></div></div><div id="sheetBody"></div></section>
-<section id="profileSheet" class="sheet" aria-hidden="true"><div class="sheet-drag-zone"><div class="handle"></div><div class="sheethead"><div><div class="eyebrow">계정 · 설정</div><h2>내 Asset OS</h2></div></div></div><div class="profilehero"><div id="profileAvatar" class="profileavatar">A</div><div class="profilecopy"><strong id="profileName">개인 자산 시스템</strong><small id="profileSub">공통 원장 엔진 + ISA + 개인연금·IRP 거래원장 + 통합 관리</small></div><span class="statuschip">v0.6.17 LIVE</span></div><div class="menulist">
-<button class="menurow" data-profile-action="cloud-auth"><span class="menuico">G</span><span class="menucopy"><strong>Google · 클라우드</strong><small id="cloudAuthMenuStatus">Google 로그인 · Supabase 자동 복원</small></span><span class="menugo">›</span></button>
-<button class="menurow" data-profile-action="appearance"><span class="menuico">◐</span><span class="menucopy"><strong>화면 및 테마</strong><small>포인트색·다크모드·터치 진동</small></span><span class="menugo">›</span></button>
-<button class="menurow" data-profile-action="pension-settings"><span class="menuico">◎</span><span class="menucopy"><strong>개인연금 설정</strong><small>목표비중 · 미래연금 가정</small></span><span class="menugo">›</span></button><button class="menurow" data-profile-action="backup"><span class="menuico">↥</span><span class="menucopy"><strong>백업·복원</strong><small>ZIP 백업·복원 및 클라우드 상태</small></span><span class="menugo">›</span></button>
-<button class="menurow" data-profile-action="insurance"><span class="menuico">＋</span><span class="menucopy"><strong>내 보험</strong><small>계약·보험료·보장·납부 일정</small></span><span class="menugo">›</span></button>
-<button class="menurow" data-profile-action="ai-strategy"><span class="menuico">AI</span><span class="menucopy"><strong>AI 투자전략</strong><small>ISA·연금 추가매수와 리밸런싱 분석</small></span><span class="menugo">›</span></button>
-<button class="menurow" data-profile-action="kis"><span class="menuico">K</span><span class="menucopy"><strong>한국투자 연결</strong><small>연금저축·IRP 잔고와 체결 조회</small></span><span class="menugo">›</span></button>
-<button class="menurow" data-profile-action="advanced"><span class="menuico">⋯</span><span class="menucopy"><strong>고급 설정</strong><small>제도·상품 관리 · 시스템 진단</small></span><span class="menugo">›</span></button>
+<section id="profileSheet" class="sheet" aria-hidden="true"><div class="sheet-drag-zone"><div class="handle"></div><div class="sheethead"><div><div class="eyebrow">계정 · 설정</div><h2>내 Asset OS</h2></div></div></div><div class="profilehero"><div id="profileAvatar" class="profileavatar">A</div><div class="profilecopy"><strong id="profileName">개인 자산 시스템</strong><small id="profileSub">계좌와 기록을 한곳에서 관리해요</small></div><span class="statuschip">v0.6.17 LIVE</span></div><div class="menulist">
+<button class="menurow" data-profile-action="cloud-auth"><span class="menuico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18a5 5 0 0 1-1-9 6 6 0 0 1 11-1 5 5 0 0 1 0 10"/><path d="M12 12v9m-3-3 3 3 3-3"/></svg></span><span class="menucopy"><strong>Google · 클라우드</strong><small id="cloudAuthMenuStatus">Google 로그인 · Supabase 자동 복원</small></span><span class="menugo">›</span></button>
+<button class="menurow" data-profile-action="appearance"><span class="menuico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4v16"/></svg></span><span class="menucopy"><strong>화면 및 테마</strong><small>포인트색·다크모드·터치 진동</small></span><span class="menugo">›</span></button>
+<button class="menurow" data-profile-action="pension-settings"><span class="menuico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M12 10v2l2 1"/></svg></span><span class="menucopy"><strong>개인연금 설정</strong><small>목표비중 · 미래연금 가정</small></span><span class="menugo">›</span></button><button class="menurow" data-profile-action="backup"><span class="menuico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-4 4 4-4 4 4M4 15v5h16v-5"/></svg></span><span class="menucopy"><strong>백업·복원</strong><small>ZIP 백업·복원 및 클라우드 상태</small></span><span class="menugo">›</span></button>
+<button class="menurow" data-profile-action="insurance"><span class="menuico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 4 8 9 8 9s8-5 8-9V6zM8 12h8m-4-4v8"/></svg></span><span class="menucopy"><strong>내 보험</strong><small>계약·보험료·보장·납부 일정</small></span><span class="menugo">›</span></button>
+<button class="menurow" data-profile-action="ai-strategy"><span class="menuico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="3"/><path d="M9 9h6v6H9zM9 2v3m6-3v3M9 19v3m6-3v3M2 9h3m-3 6h3m14-6h3m-3 6h3"/></svg></span><span class="menucopy"><strong>AI 투자전략</strong><small>ISA·연금 추가매수와 리밸런싱 분석</small></span><span class="menugo">›</span></button>
+<button class="menurow" data-profile-action="kis"><span class="menuico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8 6 6a4 4 0 0 1 6-4l3 3a4 4 0 0 1 0 6m1 5 2 2a4 4 0 0 1-6 4l-3-3a4 4 0 0 1 0-6m0 2 6-6"/></svg></span><span class="menucopy"><strong>한국투자 연결</strong><small>연금저축·IRP 잔고와 체결 조회</small></span><span class="menugo">›</span></button>
+<button class="menurow" data-profile-action="advanced"><span class="menuico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="9" cy="18" r="2"/></svg></span><span class="menucopy"><strong>고급 설정</strong><small>제도·상품 관리 · 시스템 진단</small></span><span class="menugo">›</span></button>
 </div></section>
 <section id="cloudSheet" class="sheet" aria-hidden="true"><div class="sheet-drag-zone"><div class="handle"></div><div class="sheethead"><div><div class="eyebrow">계정 · 클라우드</div><h2>Google · Supabase</h2></div></div></div><div id="cloudBody"></div></section>
 <section id="appearanceSheet" class="sheet" aria-hidden="true"><div class="sheet-drag-zone"><div class="handle"></div><div class="sheethead"><div><div class="eyebrow">개인화</div><h2>화면 및 테마</h2></div></div></div><div class="settings">
 <div class="setting"><div class="settinglabel">포인트 색</div><div class="settinghint">카드는 중립적으로 유지하고 핵심 버튼과 선택 상태만 바꿉니다.</div><div class="swatches" id="accentChoices"><button class="swatch" data-value="blue" aria-label="블루"></button><button class="swatch" data-value="mint" aria-label="민트"></button><button class="swatch" data-value="purple" aria-label="퍼플"></button><button class="swatch" data-value="orange" aria-label="오렌지"></button></div></div>
-<div class="setting toggle"><div><div class="settinglabel">다크모드</div><div class="settinghint">기기 설정과 별도로 저장</div></div><input id="themeToggle" class="switch" type="checkbox"></div>
+<div class="setting toggle"><div><div class="settinglabel">다크모드</div><div class="settinghint">기기 설정과 별도로 저장</div></div><input id="themeToggle" class="switch" type="checkbox" aria-label="다크모드"></div>
 <div class="setting toggle hidden"><div><div class="settinglabel">입력 버튼 표시</div></div><input id="fabToggle" class="switch" type="checkbox"></div>
-<div class="setting toggle"><div><div class="settinglabel">터치 진동</div><div class="settinghint">지원하는 Android 브라우저에서 중요한 동작에만 짧게 작동</div></div><input id="hapticToggle" class="switch" type="checkbox"></div>
+<div class="setting toggle"><div><div class="settinglabel">터치 진동</div><div class="settinghint">메뉴 이동과 저장 버튼을 누를 때 짧게 울려요. 기기·브라우저 설정에 따라 작동이 달라요.</div></div><input id="hapticToggle" class="switch" type="checkbox" aria-label="터치 진동"></div>
 </div></section>
 <section id="diagnosticsSheet" class="sheet" aria-hidden="true"><div class="sheet-drag-zone"><div class="handle"></div><div class="sheethead"><div><div class="eyebrow">고급 설정</div><h2>시스템 진단</h2></div></div></div><div class="diagnostic-list">
 <div class="diagnostic-row"><span class="diagnostic-copy"><strong>앱 버전</strong><small>현재 설치된 버전</small></span><span class="diagnostic-value">v0.6.17 LIVE</span></div>
@@ -85,13 +85,13 @@ html.asset-auth-locked body{overflow:hidden}.asset-auth-locked .app,.asset-auth-
 <input id="initialImportInput" type="file" accept=".json,application/json" hidden>
 <div id="dialogScrim" class="dialog-scrim" hidden></div>
 <section id="confirmDialog" class="dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" hidden><h2 id="confirmTitle">확인</h2><p id="confirmMessage"></p><div id="confirmActions" class="dialog-actions"><button id="confirmCancel">취소</button><button id="confirmOk" class="primary">확인</button></div></section>
-<div id="toast" class="toast"></div>
+<div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4" integrity="sha384-yiVMs0R/Jyz7OhoXa/DsEMUSBLjEhr/QJta2ONO+zB6I8/GmNg/7AUFrZmAJV7KV" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="./dist/asset-core.js?v=0.6.17&build=20261013-1"></script>
-<script src="./dist/asset-ledgers.js?v=0.6.17&build=20261013-1"></script>
-<script src="./dist/asset-ui.js?v=0.6.17&build=20261013-1"></script>
-<script src="./dist/asset-runtime.js?v=0.6.17&build=20261013-1"></script>
+<script src="./dist/asset-core.js?v=0.6.17&build=20261013-2"></script>
+<script src="./dist/asset-ledgers.js?v=0.6.17&build=20261013-2"></script>
+<script src="./dist/asset-ui.js?v=0.6.17&build=20261013-2"></script>
+<script src="./dist/asset-runtime.js?v=0.6.17&build=20261013-2"></script>
 
 </body>
 </html>

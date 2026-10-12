@@ -853,11 +853,11 @@ function initQaMode() { if (!QA_MODE)
 'use strict';
 if ('serviceWorker' in navigator)
     window.addEventListener('load', async () => { const hadController = !!navigator.serviceWorker.controller; try {
-        const reg = await navigator.serviceWorker.register('./service-worker.js?v=0.6.17&build=20261013-1', { scope: './', updateViaCache: 'none' });
+        const reg = await navigator.serviceWorker.register('./service-worker.js?v=0.6.17&build=20261013-2', { scope: './', updateViaCache: 'none' });
         await reg.update();
         let refreshing = false;
         navigator.serviceWorker.addEventListener('controllerchange', () => { if (!hadController || refreshing)
-            return; refreshing = true; const key = 'asset-os-sw-reload-0.6.17-build20261013-1'; if (sessionStorage.getItem(key))
+            return; refreshing = true; const key = 'asset-os-sw-reload-0.6.17-build20261013-2'; if (sessionStorage.getItem(key))
             return; sessionStorage.setItem(key, '1'); location.reload(); });
     }
     catch { } });
@@ -938,7 +938,9 @@ else if (x === 'advanced')
     openAdvancedSettings(); });
 $('#themeToggle').onchange = (e) => { setting().theme = e.target.checked ? 'dark' : 'light'; persist(); applyTheme(); };
 $('#fabToggle').onchange = (e) => { setting().fab = false; e.target.checked = false; persist(); applyTheme(); };
-$('#hapticToggle').onchange = (e) => { setting().haptics = e.target.checked; persist(); applyTheme(); };
+$('#hapticToggle').onchange = (e) => { setting().haptics = e.target.checked; if (!persist())
+    return; applyTheme(); if (setting().haptics)
+    haptic('light'); toast(setting().haptics ? '터치 진동을 켰어요.' : '터치 진동을 껐어요.'); };
 $('#backupInput').onchange = async (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f)
     await restoreBackupFile(f); };
 $('#initialImportInput').onchange = async (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f)
@@ -952,6 +954,14 @@ $('#runDiagnostics').onclick = () => { let storageOk = true; try {
 catch {
     storageOk = false;
 } const issues = typeof systemIntegrityIssues === 'function' ? systemIntegrityIssues() : [], ok = storageOk && !issues.length; $('#localStatus').textContent = storageOk ? '정상' : '확인 필요'; $('#localStatus').className = 'diagnostic-value ' + (storageOk ? 'ok' : 'wait'); updateDiagnostics(); toast(ok ? '저장·금융 교차검증이 정상입니다.' : storageOk ? `금융 데이터 확인 필요 · ${issues.length}건` : '로컬 저장 권한을 확인해 주세요.'); };
+// Capture before an action replaces its button; existing save haptics are coalesced.
+document.addEventListener('click', e => {
+    const button = (e.target instanceof Element ? e.target : null)?.closest('button');
+    if (!e.isTrusted || !button || button.disabled || button.getAttribute('aria-disabled') === 'true')
+        return;
+    if (button.matches('.nav,.menurow,.swatch,.primary,.integrated-record-primary,.integrated-form-save,.entry-continue,.pension-contribution-batch-open,[data-new-tx],[data-integrated-new],[data-profile-action],#profile,#alertBell,#confirmOk'))
+        haptic('light');
+}, true);
 $('#fab').onclick = actions;
 document.addEventListener('keydown', e => { if (e.key === 'Escape') {
     if (!$('#confirmDialog').hidden)
