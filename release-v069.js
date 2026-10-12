@@ -25,48 +25,89 @@ openFinancialGrowthAnalysis = function (period) { v069Growth(period); if ($('#sh
     if (span.textContent === '순자산 증가율')
         span.textContent = '순금융자산 증가율'; };
 const v069PensionContribution = pensionContributionPage;
-pensionContributionPage = function () { const template = document.createElement('template'); template.innerHTML = v069PensionContribution(); const year = localYmd().slice(0, 4), summary = pensionSummary(year), kpis = template.content.querySelector('.pension-kpis'); if (kpis) {
-    const current = [...kpis.children].find(x => x.querySelector('span')?.textContent === '현재 공제한도');
-    current?.remove();
-    kpis.classList.add('three');
-} const badge = template.content.querySelector('.pension-credit-year'); if (badge) {
-    const button = document.createElement('button');
-    button.className = 'pension-credit-year';
-    button.dataset.pensionTaxProfile = '';
-    button.textContent = `${year} · ${(summary.creditRate * 100).toFixed(1)}%`;
-    badge.replaceWith(button);
-} const hero = template.content.querySelector('.pension-credit-hero'); if (hero && summary.ordinaryOverage) {
-    const warning = document.createElement('div');
-    warning.className = 'warningbox';
-    warning.textContent = `일반 납입한도 초과 ${won(summary.ordinaryOverage)}`;
-    hero.appendChild(warning);
-}
-else if (hero && !summary.taxProfile.configured) {
-    const note = document.createElement('div');
-    note.className = 'auto-note';
-    note.textContent = '총급여를 입력하면 13.2%·16.5% 공제율을 자동 적용합니다.';
-    hero.appendChild(note);
-} const goal = template.content.querySelector('.pension-goal'), monthly = template.content.querySelector('.monthly-card'); if (kpis && hero) {
-    const remaining = [...kpis.children].find(x => x.querySelector('span')?.textContent === '남은 공제한도');
-    if (remaining) {
-        remaining.className = 'pension-remaining';
-        hero.appendChild(remaining);
+pensionContributionPage = function () {
+    const template = document.createElement('template');
+    template.innerHTML = v069PensionContribution();
+    const year = localYmd().slice(0, 4), summary = pensionSummary(year), hero = template.content.querySelector('.pension-credit-hero'), goal = template.content.querySelector('.pension-goal'), monthly = template.content.querySelector('.monthly-card'), kpis = template.content.querySelector('.pension-kpis');
+    template.content.querySelector('.pension-credit-year')?.remove();
+    const title = hero?.querySelector('h2'), eyebrow = hero?.querySelector('.eyebrow');
+    if (title && eyebrow) {
+        eyebrow.textContent = title.textContent;
+        title.remove();
     }
-    const facts = document.createElement('section');
-    facts.className = 'card pension-credit-facts';
-    while (kpis.firstChild)
-        facts.appendChild(kpis.firstChild);
-    kpis.remove();
-    if (goal)
-        goal.after(facts);
-    else
-        hero.after(facts);
-} const batch = template.content.querySelector('[data-pension-contribution-batch]'); if (batch) {
-    batch.textContent = '월별 납입 내역 정리';
-    if (monthly)
-        monthly.after(batch);
-} const monthlyNote = monthly?.querySelector('.sectionhead small'); if (monthlyNote)
-    monthlyNote.textContent = '이번 달 납입'; return template.innerHTML; };
+    if (kpis && hero) {
+        const items = [...kpis.children], remaining = items.find(x => x.querySelector('span')?.textContent === '남은 공제한도'), credit = items.find(x => x.querySelector('span')?.textContent === '예상 세액공제'), base = items.find(x => x.querySelector('span')?.textContent === '공제 대상액');
+        if (remaining) {
+            remaining.className = 'pension-remaining';
+            hero.appendChild(remaining);
+        }
+        if (goal && credit) {
+            const facts = document.createElement('div');
+            facts.className = 'pension-credit-facts';
+            const button = document.createElement('button');
+            button.className = 'pension-credit-estimate';
+            button.dataset.pensionTaxProfile = '';
+            button.setAttribute('aria-label', `${year} 예상 세액공제·공제율 ${(summary.creditRate * 100).toFixed(1)}% 설정`);
+            button.innerHTML = credit.innerHTML + '<span aria-hidden="true">›</span>';
+            facts.appendChild(button);
+            goal.appendChild(facts);
+        }
+        if (goal && base) {
+            const detail = template.content.querySelector('.pension-goal-detail');
+            if (detail) {
+                const info = document.createElement('div');
+                info.className = 'pension-credit-detail';
+                info.appendChild(base);
+                const note = document.createElement('p');
+                note.textContent = summary.taxProfile.configured ? '공제율·총급여는 위 예상 세액공제에서 변경할 수 있습니다.' : '총급여를 입력하면 13.2%·16.5% 공제율을 자동 적용합니다.';
+                info.appendChild(note);
+                detail.appendChild(info);
+            }
+        }
+        kpis.remove();
+    }
+    if (hero && summary.ordinaryOverage) {
+        const warning = document.createElement('div');
+        warning.className = 'warningbox';
+        warning.textContent = `일반 납입한도 초과 ${won(summary.ordinaryOverage)}`;
+        hero.appendChild(warning);
+    }
+    if (goal) {
+        const head = goal.querySelector('.pension-goal-head'), arrow = head?.querySelector('.pension-goal-arrow');
+        if (arrow)
+            arrow.textContent = `${Math.round(Math.min(100, Number(summary.goalCurrent) / Math.max(1, Number(summary.goalTotal)) * 100))}%`;
+        const total = goal.querySelector('.pension-goal-total'), progress = goal.querySelector(':scope > .progress');
+        if (total && progress) {
+            progress.after(total);
+            total.querySelector('span')?.remove();
+        }
+    }
+    const batch = template.content.querySelector('[data-pension-contribution-batch]');
+    if (batch) {
+        batch.textContent = '납입 기록';
+        if (monthly)
+            monthly.after(batch);
+    }
+    const monthlyNote = monthly?.querySelector('.sectionhead small');
+    if (monthlyNote)
+        monthlyNote.textContent = '최근 3개월';
+    if (monthly) {
+        const now = Number(localYmd().slice(5, 7));
+        monthly.querySelectorAll('.monthly-month').forEach((row, index) => { row.classList.toggle('recent', index + 1 <= now && index + 1 >= Math.max(1, now - 2)); const amounts = row.querySelectorAll('.monthly-row > span'); if (amounts.length === 3) {
+            const details = document.createElement('details');
+            details.className = 'monthly-breakdown';
+            const sum = document.createElement('summary');
+            sum.innerHTML = (row.querySelector('.monthly-row > strong')?.outerHTML || '') + amounts[2].outerHTML + '<span aria-hidden="true">›</span>';
+            details.appendChild(sum);
+            const breakdown = document.createElement('div');
+            breakdown.className = 'monthly-breakdown-values';
+            breakdown.innerHTML = '<span>연금저축</span>' + amounts[0].outerHTML + '<span>IRP</span>' + amounts[1].outerHTML;
+            details.appendChild(breakdown);
+            row.querySelector('.monthly-row')?.replaceWith(details);
+        } });
+    }
+    return template.innerHTML;
+};
 const v069PensionBatch = openPensionContributionBatchForm;
 openPensionContributionBatchForm = function () { v069PensionBatch(); if ($('#formTitle'))
     $('#formTitle').textContent = '월별 납입 내역 정리'; };
