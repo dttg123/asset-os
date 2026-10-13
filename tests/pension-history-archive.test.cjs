@@ -33,7 +33,8 @@ assert.equal(vm.runInContext("pensionAnalysisDisplayRows('all','all').length",co
 for(const scope of ['all','pension','irp']){
  const markup=vm.runInContext(`pensionAnalysisPeriod='all';pensionAnalysisChartMarkup('${scope}','trend','')`,context);
  assert.match(markup,/확정수익 환산자산/);
- assert.match(markup,/월 단위 · 2개/);
+ assert.match(markup,/2025-01-01 ~ 2025-02-01/);
+ assert.match(markup,/data-analysis-seek="pension"/);
  assert.match(markup,/당시 실제 계좌잔액이 아니라/);
 }
 state.pension.assetSnapshots.unshift({date:'2026-08-21',pension:{cost:900,value:1000},irp:{cost:400,value:420}});

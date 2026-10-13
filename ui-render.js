@@ -89,6 +89,7 @@ function updateDiagnostics() { const h = state.accounts.reduce((sum, a) => sum +
     $('#backupStatus').textContent = '준비됨'; }
 function selectAccount(id) { setting().selectedAccountId = id; persist(); render(); haptic('light'); }
 function bind() {
+    $('[data-home-growth]')?.addEventListener('click', () => openFinancialGrowthAnalysis('3m'));
     $$('[data-route]').forEach(b => b.onclick = e => { e.stopPropagation(); if (b.dataset.tab === 'transactions')
         transactionDisplayLimit = 50; nav(b.dataset.route, b.dataset.tab || 'summary'); });
     $$('[data-integrated-tab]').forEach(b => b.onclick = () => nav('integrated', b.dataset.integratedTab));
