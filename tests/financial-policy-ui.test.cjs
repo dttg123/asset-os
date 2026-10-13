@@ -135,9 +135,9 @@ test('refresh summary uses newest data and separates attempted refresh from data
 test('home history preview requires multiple complete records and keeps their actual dates',()=>{
  const home=source('home.js'),fn=home.slice(home.indexOf('function homeTrendMarkup()'),home.indexOf('function home()'));
  const complete=(asOf,netAssets)=>({asOf,netAssets,coverage:{complete:true}});let rows=[complete('2026-10-13',100)];
- const context=vm.createContext({financialGrowthSeries:()=>rows,escapeHtml:value=>String(value)});vm.runInContext(fn,context);
+ const context=vm.createContext({financialGrowthSeries:()=>rows,escapeHtml:value=>String(value),won:value=>`${value}원`,signed:value=>`${value>=0?'+':''}${value}원`});vm.runInContext(fn,context);
  assert.equal(vm.runInContext('homeTrendMarkup()',context),'');rows=[complete('2026-09-30',80),complete('2026-10-13',100)];
- const markup=vm.runInContext('homeTrendMarkup()',context);assert.match(markup,/data-home-growth/);assert.match(markup,/2026-09-30/);assert.match(markup,/2026-10-13/);rows[0].coverage.complete=false;assert.equal(vm.runInContext('homeTrendMarkup()',context),'');
+ const markup=vm.runInContext('homeTrendMarkup()',context);assert.match(markup,/data-home-growth/);assert.match(markup,/2026-09-30/);assert.match(markup,/2026-10-13/);assert.match(markup,/\+20원/);assert.doesNotMatch(markup,/<svg/);rows[0].coverage.complete=false;assert.equal(vm.runInContext('homeTrendMarkup()',context),'');
 });
 
 

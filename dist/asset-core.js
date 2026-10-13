@@ -1599,11 +1599,9 @@ function validFinanceProductEvents(id, type = '') { return financeProductEvents(
 function financialCrossCheckIssues() { const issues = [], model = integratedFinancialModel(); if (Math.abs(model.totalAssets - (model.cash + model.deposit + model.savings + model.isa + model.pension + model.irp + model.other)) > .5)
     issues.push('통합 총자산과 구성 합계가 일치하지 않습니다.'); for (const account of pensionStore().accounts.filter(a => a.status === 'active')) {
     const view = pensionAccountView(account), label = account.kind === 'irp' ? 'IRP' : '연금저축';
-    if (view.kis && view.componentDelta < -.5)
-        issues.push(`${label} ${account.name}의 조회 총액이 현금·종목 합계보다 ${won(Math.abs(view.componentDelta))} 작습니다.`);
     if (view.kis && !view.cashStatus.confirmed)
         issues.push(`${label} 당일 체결 후 사용 가능 현금이 확정되지 않았습니다.`);
-} const risk = pensionRiskMetrics(); if (!risk.classificationComplete)
+} issues.push(...pensionBalanceIssueRows().map(row => row.title)); const risk = pensionRiskMetrics(); if (!risk.classificationComplete)
     issues.push(`IRP 위험자산 미분류 금액 ${Math.round(risk.unknown).toLocaleString('ko-KR')}원이 있습니다.`); for (const kind of ['pension', 'irp']) {
     const connection = state.brokerKis?.connections?.[kind];
     if (connection?.accountId && connection.lastError)

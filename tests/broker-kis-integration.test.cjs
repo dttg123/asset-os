@@ -116,4 +116,29 @@ assert.deepEqual(restored.pension,savedPension,'ZIP 백업·복원에서 연금 
 assert.deepEqual(restored.integrated,savedIntegrated,'ZIP 백업·복원에서 통합 원장이 달라지면 안 된다');
 assert.deepEqual(plain(run('brokerKisIssues(state.brokerKis)')),[]);
 
+
+// Imported zero valuations must stay zero even when quantity/current price are positive.
+run('state.pension.accounts=[{id:"balance-check",kind:"pension",name:"한국투자 연금저축",status:"active",openedAt:"2026-01-01"}];state.brokerKis=brokerKisEmptyStore()');
+run('brokerKisImportBalanceSnapshot(state.brokerKis,{cash:100000,securitiesValue:0,totalValue:100000,holdings:[{productCode:"ZERO",productName:"조회 평가액 0원",quantity:2,avgPrice:17699,currentPrice:17699,marketValue:0}]},"pension","balance-check","2026-10-13T01:00:00Z")');
+assert.equal(run('pensionAccountView(pensionAccount("balance-check")).holdingValue'),0);
+assert.equal(run('pensionAssetMetrics("pension").value'),100000);
+assert.equal(run('pensionBalanceIssueRows().length'),0);
+
+// Match an explicit reported settlement field; never invent cash from the difference.
+run('brokerKisImportBalanceSnapshot(state.brokerKis,{cash:100000,cashDetail:{depositCash:100000,settledCash:64602,nextDayCash:64602,availableCash:64602},securitiesValue:200000,totalValue:264602,holdings:[{productCode:"MATCH",productName:"ETF",quantity:20,avgPrice:9000,currentPrice:10000,marketValue:200000}]},"pension","balance-check","2026-10-13T02:00:00Z")');
+const rawBalance=JSON.stringify(plain(run('brokerKisLatestBalance(state.brokerKis,"pension","balance-check")')));
+const settled=plain(run('pensionAccountView(pensionAccount("balance-check"))'));
+assert.equal(settled.rawComponentDelta,-35398);assert.equal(settled.reportedCash,100000);assert.equal(settled.cash,64602);assert.equal(settled.cashBasis,'settlement');assert.equal(settled.componentDelta,0);
+assert.equal(run('pensionAssetMetrics("pension").value'),264602);assert.equal(run('pensionBalanceIssueRows().length'),0);
+assert.equal(JSON.stringify(plain(run('brokerKisLatestBalance(state.brokerKis,"pension","balance-check")'))),rawBalance);
+
+// Unexplained differences retain a diagnostic while all headline totals use the fetched total.
+run('brokerKisImportBalanceSnapshot(state.brokerKis,{cash:100000,cashDetail:{settledCash:100000,nextDayCash:100000,availableCash:100000},securitiesValue:200000,totalValue:264602,holdings:[{productCode:"MISMATCH",productName:"ETF",quantity:20,avgPrice:9000,currentPrice:10000,marketValue:200000}]},"pension","balance-check","2026-10-13T03:00:00Z")');
+assert.equal(run('pensionAccountView(pensionAccount("balance-check")).cash'),100000);
+assert.equal(run('pensionAccountView(pensionAccount("balance-check")).componentDelta'),-35398);
+assert.equal(run('pensionAssetMetrics("pension").value'),264602);
+assert.equal(run('pensionBalanceIssueRows().length'),1);
+assert.match(run('pensionBalanceIssueRows()[0].detail'),/35,398/);
+assert.equal(run('pensionHoldingValue({qty:2,currentPrice:17699})'),35398,'manual holdings keep their normal valuation');
+
 console.log('broker-kis integration tests: PASS');

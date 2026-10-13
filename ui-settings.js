@@ -245,3 +245,8 @@ function haptic(kind = 'light') { if (!setting().haptics || typeof navigator.vib
 catch { } }
 let toastTimer;
 function toast(msg) { const el = $('#toast'); el.textContent = msg; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2100); }
+function openPensionBalanceDetail(accountId) { const account = pensionAccount(accountId); if (!account)
+    return; const view = pensionAccountView(account), detail = (view.snapshot?.cashDetail || {}), rows = [['조회 총액', view.total], ['종목 평가액 합계', view.holdingValue], ['조회 예수금', view.reportedCash]]; for (const [key, label] of [['settledCash', '가수도 정산금액'], ['nextDayCash', '익일 정산금액']])
+    if (detail[key] !== null && detail[key] !== undefined && Number.isFinite(Number(detail[key])))
+        rows.push([label, Number(detail[key])]); rows.push(['앱 자산 합계에 사용한 현금', view.cash], ['구성 합계와 조회 총액 차이', view.componentDelta]); $('#sheetEyebrow').textContent = '개인연금 · 조회 자료'; $('#sheetTitle').textContent = String(account.name || '조회 금액 확인'); $('#sheetBody').innerHTML = `<div class="sheetrows balance-comparison">${rows.map(([label, value]) => `<div class="sheetrow"><span>${escapeHtml(label)}</span><strong>${won(value)}</strong></div>`).join('')}</div><div class="source-note">${view.cashBasis === 'deposit' ? '조회 예수금을 사용합니다.' : '조회 총액과 종목 평가액에 일치하는 정산금액을 사용합니다.'} 원본 조회 값은 그대로 보관합니다.${view.componentDelta < -.5 ? ' 합계 기준은 추가 확인이 필요합니다.' : ''}</div><button class="diagnostic-action" data-pension-kis-refresh>다시 갱신</button>`; openSheet('#detailSheet'); $('[data-pension-kis-refresh]')?.addEventListener('click', async (event) => { event.stopPropagation(); await refreshPensionKisScope(); if ($('#sheetBody .balance-comparison'))
+    openPensionBalanceDetail(accountId); }); }
