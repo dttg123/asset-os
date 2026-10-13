@@ -23,7 +23,7 @@ assert.match(cloud,/function cloudAuthCallbackFailure/);
 assert.match(cloud,/OAuth Client Secret/);
 assert.match(home,/납입·통합 원장 연결액 · 종목 미연결/);
 assert.match(pensionPages,/한투 기타자산/);
-assert.match(pensionPages,/펀드처럼 종목 상세가 제공되지 않는 금액/);
+assert.match(pensionPages,/종목 미제공 금액/);
 assert.doesNotMatch(pensionPages,/공식 퇴직연금 API/);
 assert.match(home,/function homeMonthActivity/,'home must derive the current month from the full integrated ledger');
 assert.match(home,/contributed:activity\.saving/,'home saving total must include every supported saving and investment account');

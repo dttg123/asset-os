@@ -79,10 +79,10 @@ test('ISA transfer window, unified refresh and conditional KIS token cache are w
 test('home unified refresh runs once, reports progress and keeps partial account results',async()=>{
  const settings=source('ui-settings.js'),refreshSource=settings.slice(settings.indexOf('let investmentRefreshPromise ='),settings.indexOf('async function syncKisHistory'));
  assert.ok(refreshSource.includes('function refreshAllInvestments'), 'refresh tests must execute generated production code');
- const calls=[],buttons=[{disabled:false,textContent:''}];
+ const prefs={},calls=[],buttons=[{disabled:false,textContent:''}];
  let releaseIsa;
  const isaGate=new Promise(resolve=>{releaseIsa=resolve});
- const context=vm.createContext({console,currentAccount:()=>({id:'isa'}),isaQuoteLinks:()=>[{}],kisConnectedAccount:()=>true,investmentRefreshStatus:()=>({errors:[]}),refreshIsaQuotes:async()=>{calls.push('isa');await isaGate;return{ok:true}},refreshBrokerKisManually:async kinds=>{calls.push(kinds[0]);return{ok:kinds[0]!=='irp',results:kinds[0]==='irp'?[{ok:false,error:'KIS_UPSTREAM_FAILED|balance|TEST'}]:[{ok:true}]}},$$:()=>buttons,renderKeepingScroll:()=>calls.push('render'),toast:message=>calls.push(message)});
+ const context=vm.createContext({console,document:{querySelector:()=>null},setting:()=>prefs,persist:()=>true,currentAccount:()=>({id:'isa'}),isaQuoteLinks:()=>[{}],kisConnectedAccount:()=>true,investmentRefreshStatus:()=>({errors:[]}),refreshIsaQuotes:async()=>{calls.push('isa');await isaGate;return{ok:true}},refreshBrokerKisManually:async kinds=>{calls.push(kinds[0]);return{ok:kinds[0]!=='irp',results:kinds[0]==='irp'?[{ok:false,error:'KIS_UPSTREAM_FAILED|balance|TEST'}]:[{ok:true}]}},$$:()=>buttons,renderKeepingScroll:()=>calls.push('render'),toast:message=>calls.push(message)});
  vm.runInContext(refreshSource,context);
  const first=vm.runInContext('refreshAllInvestments()',context),second=vm.runInContext('refreshAllInvestments()',context);
  assert.equal(first,second,'a repeated tap must reuse the in-flight request');
@@ -95,14 +95,16 @@ test('home unified refresh runs once, reports progress and keeps partial account
  assert.match(calls.at(-1),/부분 완료/);
  await Promise.resolve();
  assert.equal(buttons[0].disabled,false);
+ assert.equal(prefs.investmentRefreshResult.results.irp,'failed');
+ assert.ok(Date.parse(prefs.investmentRefreshResult.at)>0);
  assert.equal(buttons[0].textContent,'전체 갱신');
 });
 
 test('failed-only refresh retries only the failed account and keeps successful accounts untouched',async()=>{
  const settings=source('ui-settings.js'),refreshSource=settings.slice(settings.indexOf('let investmentRefreshPromise ='),settings.indexOf('async function syncKisHistory'));
  assert.ok(refreshSource.includes('function refreshAllInvestments'), 'refresh tests must execute generated production code');
- const calls=[],buttons=[{disabled:false,textContent:''}];let errors=['irp'];
- const context=vm.createContext({console,currentAccount:()=>null,isaQuoteLinks:()=>[],kisConnectedAccount:kind=>kind==='irp',investmentRefreshStatus:()=>({errors}),refreshIsaQuotes:async()=>{calls.push('isa');return{ok:true}},refreshBrokerKisManually:async kinds=>{calls.push(kinds[0]);errors=[];return{ok:true,results:[{ok:true}]}},$$:()=>buttons,renderKeepingScroll:()=>calls.push('render'),toast:message=>calls.push(message)});
+ const prefs={},calls=[],buttons=[{disabled:false,textContent:''}];let errors=['irp'];
+ const context=vm.createContext({console,document:{querySelector:()=>null},setting:()=>prefs,persist:()=>true,currentAccount:()=>null,isaQuoteLinks:()=>[],kisConnectedAccount:kind=>kind==='irp',investmentRefreshStatus:()=>({errors}),refreshIsaQuotes:async()=>{calls.push('isa');return{ok:true}},refreshBrokerKisManually:async kinds=>{calls.push(kinds[0]);errors=[];return{ok:true,results:[{ok:true}]}},$$:()=>buttons,renderKeepingScroll:()=>calls.push('render'),toast:message=>calls.push(message)});
  vm.runInContext(refreshSource,context);
  const result=await vm.runInContext('refreshFailedInvestments()',context);
  assert.equal(result.ok,true);
@@ -118,4 +120,29 @@ test('PWA registration, shell assets and worker cache use one build id',()=>{
  assert.ok(indexBuild&&pwaBuild&&workerBuild);
  assert.equal(pwaBuild,indexBuild);
  assert.equal(workerBuild,indexBuild);
+});
+
+
+test('refresh summary uses newest data and separates attempted refresh from data timestamps',()=>{
+ const settings=source('ui-settings.js'),fn=settings.slice(settings.indexOf('function investmentRefreshStatus()'),settings.indexOf('let investmentRefreshPromise ='));
+ const prefs={investmentRefreshResult:{at:'2026-10-13T03:20:00Z',results:{irp:'failed'},errors:{irp:'TEST_FAILED'}}};
+ const context=vm.createContext({state:{accounts:[{holdings:[{quoteUpdatedAt:'2026-09-04T01:17:00Z'}]}],brokerKis:{connections:{pension:{lastCompleteSyncAt:'2026-10-13T03:00:00Z'},irp:{lastCompleteSyncAt:'2026-10-12T03:00:00Z'}}}},isCurrentAccount:()=>true,setting:()=>prefs});
+ vm.runInContext(fn,context);const result=vm.runInContext('investmentRefreshStatus()',context);
+ assert.equal(result.last,'2026-10-13T03:00:00Z');assert.equal(result.oldest,'2026-09-04T01:17:00Z');assert.equal(result.attempt,prefs.investmentRefreshResult.at);assert.deepEqual(Array.from(result.errors),['irp']);assert.equal(result.accounts[0].at,'2026-09-04T01:17:00Z');
+});
+
+
+test('home history preview requires multiple complete records and keeps their actual dates',()=>{
+ const home=source('home.js'),fn=home.slice(home.indexOf('function homeTrendMarkup()'),home.indexOf('function home()'));
+ const complete=(asOf,netAssets)=>({asOf,netAssets,coverage:{complete:true}});let rows=[complete('2026-10-13',100)];
+ const context=vm.createContext({financialGrowthSeries:()=>rows,escapeHtml:value=>String(value)});vm.runInContext(fn,context);
+ assert.equal(vm.runInContext('homeTrendMarkup()',context),'');rows=[complete('2026-09-30',80),complete('2026-10-13',100)];
+ const markup=vm.runInContext('homeTrendMarkup()',context);assert.match(markup,/data-home-growth/);assert.match(markup,/2026-09-30/);assert.match(markup,/2026-10-13/);rows[0].coverage.complete=false;assert.equal(vm.runInContext('homeTrendMarkup()',context),'');
+});
+
+
+test('partial ISA quote responses remain retryable instead of showing refresh complete',async()=>{
+ const settings=source('ui-settings.js'),refreshSource=settings.slice(settings.indexOf('let investmentRefreshPromise ='),settings.indexOf('async function syncKisHistory')),prefs={};
+ const context=vm.createContext({console,document:{querySelector:()=>null},setting:()=>prefs,persist:()=>true,currentAccount:()=>({id:'isa'}),isaQuoteLinks:()=>[{},{}],kisConnectedAccount:()=>false,investmentRefreshStatus:()=>({errors:Object.keys(prefs.investmentRefreshResult?.errors||{})}),refreshIsaQuotes:async()=>({ok:true,updated:1,missing:1}),$$:()=>[],renderKeepingScroll:()=>{},toast:()=>{}});
+ vm.runInContext(refreshSource,context);const result=await vm.runInContext('refreshAllInvestments()',context);assert.equal(result.ok,false);assert.equal(result.results.isa,'failed');assert.equal(prefs.investmentRefreshResult.errors.isa,'QUOTE_PARTIAL');
 });

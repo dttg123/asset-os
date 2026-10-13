@@ -36,6 +36,7 @@ test('@core long data survives reload and every primary route renders',async({pa
  await dialog.getByRole('button',{name:'생성'}).click();
  await expect(page.getByText(/2026-2060 · 7,740건/)).toBeVisible({timeout:30_000});
  await expect(page.getByRole('button',{name:/총금융자산/})).toContainText('13억 4,294만원');
+ await expect(page.locator('[data-home-growth]')).toBeVisible();await page.locator('[data-home-growth]').click();await expect(page.locator('#financialGrowthChart')).toBeVisible();await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
  const nav=page.getByRole('navigation',{name:'주요 메뉴'});
  for(const route of [
   {name:'ISA',heading:'ISA',hash:'#/isa/summary'},
@@ -456,4 +457,54 @@ test('@core pension plan stays open when saving fails',async({page})=>{
  await expect(sheet).toHaveAttribute('aria-hidden','true');
  await expect(page).toHaveURL(/#\/pension\/future$/);
  expect(appErrors).toEqual([]);
+});
+
+test('@core refresh result updates in the open alerts sheet and survives reload',async({page})=>{
+ await preparePage(page);await page.goto(app);
+ await page.evaluate(()=>{
+  state.accounts=[];state.brokerKis.connections.pension.lastCompleteSyncAt='2026-10-13T03:00:00Z';state.brokerKis.connections.irp.lastCompleteSyncAt='2026-09-04T01:17:00Z';
+  kisConnectedAccount=()=>({id:'refresh-test'});
+  window.__qaRefreshCalls=[];
+  refreshBrokerKisManually=async kinds=>{const kind=kinds[0];window.__qaRefreshCalls.push(kind);if(kind==='irp'&&window.__qaRefreshCalls.length<=2)return{ok:false,error:'QA_FAILED'};state.brokerKis.connections[kind].lastCompleteSyncAt=new Date().toISOString();state.brokerKis.connections[kind].lastError='';return{ok:true}};
+  persist(false);render();openAlertsCenter();
+ });
+ await expect(page.locator('[data-refresh-result]')).toContainText('2026. 10. 13.');
+ await page.locator('[data-investment-refresh-all]').click();
+ await expect(page.locator('[data-refresh-result]')).toContainText('일부 실패');
+ await expect(page.locator('[data-investment-refresh-failed]')).toBeEnabled();
+ await expect(page.locator('#sheetBody')).not.toContainText('한곳에 모았습니다');
+ await page.locator('[data-investment-refresh-failed]').click();
+ await expect(page.locator('[data-refresh-result]')).toContainText('갱신 완료');
+ expect(await page.evaluate(()=>window.__qaRefreshCalls)).toEqual(['pension','irp','irp']);
+ await page.reload();await page.locator('#alertBell').click();
+ await expect(page.locator('[data-refresh-result]')).toContainText('갱신 완료');
+ await page.locator('.refresh-account-times summary').click();
+ await expect(page.locator('.refresh-account-times')).toContainText('연금저축');
+ await expectNoHorizontalOverflow(page);expect(appErrors).toEqual([]);
+});
+
+test('@core asset charts select recorded dates at the edges and through native date controls',async({page})=>{
+ await preparePage(page);await page.goto(app);
+ await page.evaluate(()=>{
+  state.pension.assetSnapshots=[{date:'2060-09-04',pension:{cost:39000000,value:40000000},irp:{cost:0,value:0}},{date:'2060-10-13',pension:{cost:39338332,value:43434207},irp:{cost:0,value:0}}];
+  setting().pensionAssetScope='all';openPensionAssetAnalysis();
+ });
+ const chart=page.locator('#sheetBody #pensionAnalysisChart');
+ await chart.click({position:{x:3,y:4}});
+ await expect(page.locator('#pensionAnalysisPointLabel')).toHaveText('2060-09-04 평가자산');
+ await expect(page.locator('#pensionAnalysisValue')).toHaveText('40,000,000원');
+ const seek=page.locator('[data-analysis-seek="pension"]');await seek.focus();await seek.press('End');
+ await expect(page.locator('#pensionAnalysisPointLabel')).toHaveText('2060-10-13 평가자산');
+ await page.locator('[data-pension-analysis-period="6m"]').click();
+ await expect(page.locator('.pension-analysis-period-meta')).toContainText('2060-09-04 ~ 2060-10-13');
+ const rect=await chart.boundingBox();const client=await page.context().newCDPSession(page);
+ await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:rect.x+rect.width-3,y:rect.y+4}]});
+ await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:rect.x+3,y:rect.y+4}]});
+ await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+ await expect(page.locator('#pensionAnalysisPointLabel')).toHaveText('2060-09-04 평가자산');
+ await page.evaluate(()=>{closeSheets({all:true});state.accounts=[{id:'chart-isa',name:'QA ISA',status:'active',openedAt:'2026-01-01',maturityAt:'2062-12-31',holdings:[],transactions:[],assetSnapshots:[{date:'2060-09-04',cost:1000000,value:900000},{date:'2060-10-13',cost:1000000,value:1100000}]}];setting().selectedAccountId='chart-isa';openIsaAssetAnalysis()});
+ await page.locator('#isaAnalysisChart').click({position:{x:3,y:4}});
+ await expect(page.locator('#isaAnalysisPointLabel')).toHaveText('2060-09-04 보유종목');
+ await expect(page.locator('#isaAnalysisValue')).toHaveText('900,000원');
+ await page.setViewportSize({width:320,height:800});await expectNoHorizontalOverflow(page);expect(appErrors).toEqual([]);
 });

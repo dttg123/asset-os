@@ -112,12 +112,24 @@ else
     button.disabled = false;
     button.textContent = '갱신';
 } }
-function investmentRefreshStatus() { const isaTimes = state.accounts.filter(isCurrentAccount).flatMap(a => (a.holdings || []).map(h => h.quoteUpdatedAt || '')).filter(Boolean), pensionTimes = ['pension', 'irp'].map(k => state.brokerKis?.connections?.[k]?.lastCompleteSyncAt || '').filter(Boolean), errors = ['pension', 'irp'].filter(k => state.brokerKis?.connections?.[k]?.lastError); return { last: [...isaTimes, ...pensionTimes].sort().at(0) || '', errors }; }
+function investmentRefreshStatus() {
+    const isaTimes = state.accounts.filter(isCurrentAccount).flatMap(a => (a.holdings || []).map(h => String(h.quoteUpdatedAt || ''))).filter(Boolean), pensionTimes = ['pension', 'irp'].map(k => String(state.brokerKis?.connections?.[k]?.lastCompleteSyncAt || '')).filter(Boolean), times = [...isaTimes, ...pensionTimes].filter(t => Number.isFinite(Date.parse(t))).sort((a, b) => Date.parse(a) - Date.parse(b)), saved = setting().investmentRefreshResult;
+    const errors = [...new Set([...['pension', 'irp'].filter(k => state.brokerKis?.connections?.[k]?.lastError), ...Object.keys(saved?.errors || {})])];
+    return { last: times.at(-1) || '', oldest: times[0] || '', errors, attempt: saved?.at || '', results: saved?.results || {}, accounts: [{ kind: 'isa', at: isaTimes.filter(t => Number.isFinite(Date.parse(t))).sort((a, b) => Date.parse(a) - Date.parse(b)).at(-1) || '' }, ...['pension', 'irp'].map(kind => ({ kind, at: String(state.brokerKis?.connections?.[kind]?.lastCompleteSyncAt || '') }))] };
+}
 let investmentRefreshPromise = null;
 function updateInvestmentRefreshButtons(text = '전체 갱신', disabled = false) { $$('[data-investment-refresh-all],[data-investment-refresh-failed]').forEach(button => { button.disabled = disabled; button.textContent = text; }); }
 function investmentRefreshIdleLabel() { return investmentRefreshStatus().errors.length ? '실패만 재시도' : '전체 갱신'; }
-function investmentResultError(item) { return item?.error || item?.results?.find(result => !result?.ok)?.error || 'SYNC_FAILED'; }
-function finishInvestmentRefresh() { investmentRefreshPromise = null; updateInvestmentRefreshButtons(investmentRefreshIdleLabel(), false); }
+function investmentResultError(item) { return Number(item?.missing) > 0 ? 'QUOTE_PARTIAL' : item?.error || item?.results?.find(result => !result?.ok)?.error || 'SYNC_FAILED'; }
+function finishInvestmentRefresh() { investmentRefreshPromise = null; const row = document.querySelector('.home-investment-refresh'); if (row && typeof homeInvestmentRefreshMarkup === 'function')
+    row.outerHTML = homeInvestmentRefreshMarkup(); updateInvestmentRefreshButtons(investmentRefreshIdleLabel(), false); }
+function saveInvestmentRefreshResult(results, errors) { const prior = setting().investmentRefreshResult, mergedErrors = { ...(prior?.errors || {}) }; for (const key of Object.keys(results))
+    if (results[key] !== 'skipped') {
+        if (errors[key])
+            mergedErrors[key] = errors[key];
+        else
+            delete mergedErrors[key];
+    } setting().investmentRefreshResult = { at: new Date().toISOString(), results: { ...(prior?.results || {}), ...Object.fromEntries(Object.entries(results).filter(([, value]) => value !== 'skipped')) }, errors: mergedErrors }; persist(false); }
 function refreshAllInvestments() { if (investmentRefreshPromise)
     return investmentRefreshPromise; investmentRefreshPromise = (async () => { const results = { isa: 'skipped', pension: 'skipped', irp: 'skipped' }, errors = {}, account = currentAccount(), links = account ? isaQuoteLinks(account) : [], tasks = []; if (links.length)
     tasks.push({ key: 'isa', run: () => refreshIsaQuotes({ manual: false }) }); for (const kind of ['pension', 'irp'])
@@ -130,35 +142,35 @@ function refreshAllInvestments() { if (investmentRefreshPromise)
     updateInvestmentRefreshButtons(`갱신 중 ${index + 1}/${tasks.length}`, true);
     try {
         const item = await task.run();
-        results[task.key] = item?.ok ? 'ok' : 'failed';
-        if (!item?.ok)
+        results[task.key] = item?.ok && !(Number(item?.missing) > 0) ? 'ok' : 'failed';
+        if (results[task.key] === 'failed')
             errors[task.key] = investmentResultError(item);
     }
     catch {
         results[task.key] = 'failed';
         errors[task.key] = 'SYNC_FAILED';
     }
-} const failed = Object.keys(errors), done = Object.values(results).filter(x => x === 'ok').length, names = { isa: 'ISA', pension: '개인연금', irp: 'IRP' }; if (typeof renderKeepingScroll === 'function')
+} const failed = Object.keys(errors), done = Object.values(results).filter(x => x === 'ok').length, names = { isa: 'ISA', pension: '개인연금', irp: 'IRP' }; saveInvestmentRefreshResult(results, errors); if (typeof renderKeepingScroll === 'function')
     renderKeepingScroll(); toast(failed.length ? `갱신 부분 완료 · ${failed.map(key => names[key] || key).join(' · ')} 확인` : `투자계좌 ${done}개 갱신 완료`); return { ok: failed.length === 0, results, errors }; })().finally(finishInvestmentRefresh); return investmentRefreshPromise; }
 function refreshFailedInvestments() { if (investmentRefreshPromise)
-    return investmentRefreshPromise; const targets = investmentRefreshStatus().errors.filter(kind => ['pension', 'irp'].includes(kind) && kisConnectedAccount(kind)); if (!targets.length) {
+    return investmentRefreshPromise; const targets = investmentRefreshStatus().errors.filter(kind => kind === 'isa' ? !!currentAccount() && isaQuoteLinks(currentAccount()).length > 0 : ['pension', 'irp'].includes(kind) && kisConnectedAccount(kind)); if (!targets.length) {
     toast('다시 시도할 실패 계좌가 없습니다.');
     return Promise.resolve({ ok: true, results: {} });
 } investmentRefreshPromise = (async () => { const results = {}, errors = {}; for (let index = 0; index < targets.length; index++) {
     const kind = targets[index];
     updateInvestmentRefreshButtons(`재시도 중 ${index + 1}/${targets.length}`, true);
     try {
-        const item = await refreshBrokerKisManually([kind]);
-        results[kind] = item?.ok ? 'ok' : 'failed';
-        if (!item?.ok)
+        const item = await (kind === 'isa' ? refreshIsaQuotes({ manual: false }) : refreshBrokerKisManually([kind]));
+        results[kind] = item?.ok && !(Number(item?.missing) > 0) ? 'ok' : 'failed';
+        if (results[kind] === 'failed')
             errors[kind] = investmentResultError(item);
     }
     catch {
         results[kind] = 'failed';
         errors[kind] = 'SYNC_FAILED';
     }
-} if (typeof renderKeepingScroll === 'function')
-    renderKeepingScroll(); const failed = Object.keys(errors), names = { pension: '개인연금', irp: 'IRP' }; toast(failed.length ? `${failed.map(key => names[key] || key).join(' · ')} 재시도 실패 · 기존 자료 유지` : `${targets.map(key => names[key] || key).join(' · ')} 갱신 완료`); return { ok: failed.length === 0, results, errors }; })().finally(finishInvestmentRefresh); return investmentRefreshPromise; }
+} saveInvestmentRefreshResult(results, errors); if (typeof renderKeepingScroll === 'function')
+    renderKeepingScroll(); const failed = Object.keys(errors), names = { isa: 'ISA', pension: '개인연금', irp: 'IRP' }; toast(failed.length ? `${failed.map(key => names[key] || key).join(' · ')} 재시도 실패 · 기존 자료 유지` : `${targets.map(key => names[key] || key).join(' · ')} 갱신 완료`); return { ok: failed.length === 0, results, errors }; })().finally(finishInvestmentRefresh); return investmentRefreshPromise; }
 async function syncKisHistory(kind) {
     if (!kind)
         return;
