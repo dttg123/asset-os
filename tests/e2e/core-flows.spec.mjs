@@ -508,3 +508,24 @@ test('@core asset charts select recorded dates at the edges and through native d
  await expect(page.locator('#isaAnalysisValue')).toHaveText('900,000원');
  await page.setViewportSize({width:320,height:800});await expectNoHorizontalOverflow(page);expect(appErrors).toEqual([]);
 });
+
+test('@core imported balance totals stay authoritative and unexplained differences open a comparison',async({page})=>{
+ await preparePage(page);await page.goto(app);
+ await page.evaluate(()=>{
+  const next=window.__assetOS.getState();next.accounts=[];next.pension.accounts=[{id:'balance-ui',kind:'pension',name:'QA 연금저축',status:'active',openedAt:'2026-01-01'}];next.pension.holdings=[];next.pension.transactions=[];next.brokerKis={};next.settings.pensionAssetScope='pension';next.settings.backupV04={phoneEnabled:false};window.__assetOS.replaceState(next);
+  window.__qaBalanceAt=new Date().toISOString();window.__assetOS.brokerKis.importBalance({cash:100000,cashDetail:{depositCash:100000,settledCash:100000,nextDayCash:100000,availableCash:100000},securitiesValue:200000,totalValue:264602,holdings:[{productCode:'CHECK',productName:'QA ETF',quantity:20,avgPrice:9000,currentPrice:10000,marketValue:200000}]},'pension','balance-ui',window.__qaBalanceAt);
+  window.__qaRawBalance=JSON.stringify(state.brokerKis.balanceSnapshots);nav('pension','assets');
+ });
+ await expect(page.locator('.pension-asset-value')).toHaveText('264,602원');
+ await page.locator('#alertBell').click();await page.locator('[data-pension-balance-check="balance-ui"]').click();
+ await expect(page.locator('.balance-comparison')).toBeVisible();
+ await expect(page.locator('.balance-comparison .sheetrow').filter({hasText:'조회 총액'}).first()).toContainText('264,602원');
+ await expect(page.locator('.balance-comparison .sheetrow').filter({hasText:'구성 합계와 조회 총액 차이'})).toContainText('-35,398원');
+ expect(await page.evaluate(()=>JSON.stringify(state.brokerKis.balanceSnapshots)===window.__qaRawBalance)).toBe(true);
+ await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
+ await page.evaluate(()=>{window.__assetOS.brokerKis.importBalance({cash:100000,cashDetail:{depositCash:100000,settledCash:64602,nextDayCash:64602,availableCash:64602},securitiesValue:200000,totalValue:264602,holdings:[{productCode:'CHECK',productName:'QA ETF',quantity:20,avgPrice:9000,currentPrice:10000,marketValue:200000}]},'pension','balance-ui',new Date(Date.parse(window.__qaBalanceAt)+1000).toISOString());render();openAlertsCenter()});
+ await expect(page.locator('[data-pension-balance-check="balance-ui"]')).toHaveCount(0);
+ expect(await page.evaluate(()=>pensionAccountView(pensionAccount('balance-ui')).cash)).toBe(64602);
+ expect(await page.evaluate(()=>pensionAccountView(pensionAccount('balance-ui')).reportedCash)).toBe(100000);
+ await expectNoHorizontalOverflow(page);expect(appErrors).toEqual([]);
+});
