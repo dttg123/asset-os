@@ -66,7 +66,7 @@ function pensionTransactionIssues(transactions = pensionStore().transactions) {
     }
     for (const t of transactions || [])
         events.push({ kind: 'transaction', date: String(t.date || ''), createdAt: String(t.createdAt || ''), id: String(t.id || ''), tx: t });
-    events.sort((a, b) => String(a.date).localeCompare(String(b.date)) || (a.kind === 'contribution' ? -1 : b.kind === 'contribution' ? 1 : String(a.createdAt).localeCompare(String(b.createdAt)) || String(a.id).localeCompare(String(b.id))));
+    events.sort((a, b) => String(a.date).localeCompare(String(b.date)) || (a.kind === 'contribution' && b.kind !== 'contribution' ? -1 : b.kind === 'contribution' && a.kind !== 'contribution' ? 1 : String(a.createdAt).localeCompare(String(b.createdAt))));
     for (const ev of events) {
         if (ev.kind === 'contribution') {
             cashByAccount.set(ev.accountId, (cashByAccount.get(ev.accountId) || 0) + ev.amount);
@@ -189,7 +189,10 @@ function pensionTransactionIssues(transactions = pensionStore().transactions) {
     return issues;
 }
 function pensionTransactionSave(candidate, editingId = '') { const account = pensionAccount(candidate?.accountId); if (!account || account.status !== 'active')
-    return { ok: false, error: '운영 중인 연금저축·IRP 계좌에만 새 거래를 저장할 수 있습니다.', issues: ['비활성 계좌 거래'] }; const tx = { ...candidate, id: editingId || uid('ptx'), createdAt: editingId ? (pensionStore().transactions.find(x => x.id === editingId)?.createdAt || new Date().toISOString()) : new Date().toISOString() }; let list = pensionStore().transactions.filter(x => x.id !== editingId); list.push(tx); const issues = pensionTransactionIssues(list); if (issues.length)
+    return { ok: false, error: '운영 중인 연금저축·IRP 계좌에만 새 거래를 저장할 수 있습니다.', issues: ['비활성 계좌 거래'] }; const list = [...pensionStore().transactions], index = editingId ? list.findIndex(x => x.id === editingId) : -1, tx = { ...candidate, id: editingId || uid('ptx'), createdAt: index >= 0 ? (list[index].createdAt || new Date().toISOString()) : new Date().toISOString() }; if (index >= 0)
+    list[index] = tx;
+else
+    list.push(tx); const issues = pensionTransactionIssues(list); if (issues.length)
     return { ok: false, error: issues[0], issues }; pensionStore().transactions = list; syncPensionDerivedHoldings(); return { ok: true, tx }; }
 let pensionTransactionDeleteError = '';
 function pensionTransactionDelete(id) { pensionTransactionDeleteError = ''; const current = pensionStore().transactions, next = current.filter(x => x.id !== id); if (next.length === current.length) {

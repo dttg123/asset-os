@@ -217,6 +217,10 @@ function brokerKisImportBalanceSnapshot(store, input, accountKind, accountId, fe
     const kind = brokerKisKind(accountKind), timestamp = brokerKisTimestamp(fetchedAt);
     if (!kind || !timestamp)
         return { ok: false, error: 'KIS_RESPONSE_METADATA_INVALID' };
+    // A missing/invalid response is not an authoritative zero balance.
+    const validAmount = (value) => typeof value !== 'boolean' && value !== null && value !== undefined && String(value).trim() !== '' && Number.isFinite(Number(String(value).replaceAll(',', ''))) && Number(String(value).replaceAll(',', '')) >= 0 && Number(String(value).replaceAll(',', '')) <= Number.MAX_SAFE_INTEGER;
+    if (!input || typeof input !== 'object' || !validAmount(input.cash) || !validAmount(input.totalValue) || (input.securitiesValue !== undefined && !validAmount(input.securitiesValue)) || (input.holdings !== undefined && (!Array.isArray(input.holdings) || input.holdings.some(row => !row || typeof row !== 'object' || Array.isArray(row)))))
+        return { ok: false, error: 'KIS_BALANCE_INVALID' };
     const target = store || brokerKisEmptyStore(), snapshot = brokerKisNormalizeBalanceSnapshot({ ...input, authoritative: true }, kind, accountId, timestamp);
     if (!snapshot.accountId)
         return { ok: false, error: 'LOCAL_ACCOUNT_REQUIRED' };
