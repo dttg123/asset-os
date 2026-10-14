@@ -6,7 +6,8 @@ function holdingCostValue(holding, quantity = holding?.qty, price = holding?.avg
 function transactionPositionValue(holding, quantity, price) { return holdingPositionValue(holding, quantity, price); }
 function calculatePensionPosition(holding, transactions) {
     let qty = Math.max(0, Number(holding.baselineQty ?? holding.qty) || 0), avg = Math.max(0, Number(holding.baselineAvgPrice ?? holding.avgPrice) || 0);
-    const rows = transactions.filter(transaction => transaction.holdingId === holding.id && ['buy', 'sell', 'adjustment'].includes(String(transaction.type))).sort((left, right) => String(left.date).localeCompare(String(right.date)) || String(left.createdAt || '').localeCompare(String(right.createdAt || '')) || String(left.id).localeCompare(String(right.id)));
+    // Equal timestamps retain ledger insertion order; random IDs are not trade order.
+    const rows = transactions.filter(transaction => transaction.holdingId === holding.id && ['buy', 'sell', 'adjustment'].includes(String(transaction.type))).sort((left, right) => String(left.date).localeCompare(String(right.date)) || String(left.createdAt || '').localeCompare(String(right.createdAt || '')));
     for (const transaction of rows) {
         if (transaction.type === 'buy') {
             const quantity = Math.max(0, Number(transaction.qty) || 0), price = Math.max(0, Number(transaction.price) || 0), oldCost = qty * avg, newCost = quantity * price + Math.max(0, Number(transaction.fee) || 0) + Math.max(0, Number(transaction.tax) || 0);
@@ -230,7 +231,7 @@ function pensionTransactionIssues(transactions = pensionStore().transactions) {
     }
     for (const t of transactions || [])
         events.push({ kind: 'transaction', date: String(t.date || ''), createdAt: String(t.createdAt || ''), id: String(t.id || ''), tx: t });
-    events.sort((a, b) => String(a.date).localeCompare(String(b.date)) || (a.kind === 'contribution' ? -1 : b.kind === 'contribution' ? 1 : String(a.createdAt).localeCompare(String(b.createdAt)) || String(a.id).localeCompare(String(b.id))));
+    events.sort((a, b) => String(a.date).localeCompare(String(b.date)) || (a.kind === 'contribution' && b.kind !== 'contribution' ? -1 : b.kind === 'contribution' && a.kind !== 'contribution' ? 1 : String(a.createdAt).localeCompare(String(b.createdAt))));
     for (const ev of events) {
         if (ev.kind === 'contribution') {
             cashByAccount.set(ev.accountId, (cashByAccount.get(ev.accountId) || 0) + ev.amount);
@@ -353,7 +354,10 @@ function pensionTransactionIssues(transactions = pensionStore().transactions) {
     return issues;
 }
 function pensionTransactionSave(candidate, editingId = '') { const account = pensionAccount(candidate?.accountId); if (!account || account.status !== 'active')
-    return { ok: false, error: '운영 중인 연금저축·IRP 계좌에만 새 거래를 저장할 수 있습니다.', issues: ['비활성 계좌 거래'] }; const tx = { ...candidate, id: editingId || uid('ptx'), createdAt: editingId ? (pensionStore().transactions.find(x => x.id === editingId)?.createdAt || new Date().toISOString()) : new Date().toISOString() }; let list = pensionStore().transactions.filter(x => x.id !== editingId); list.push(tx); const issues = pensionTransactionIssues(list); if (issues.length)
+    return { ok: false, error: '운영 중인 연금저축·IRP 계좌에만 새 거래를 저장할 수 있습니다.', issues: ['비활성 계좌 거래'] }; const list = [...pensionStore().transactions], index = editingId ? list.findIndex(x => x.id === editingId) : -1, tx = { ...candidate, id: editingId || uid('ptx'), createdAt: index >= 0 ? (list[index].createdAt || new Date().toISOString()) : new Date().toISOString() }; if (index >= 0)
+    list[index] = tx;
+else
+    list.push(tx); const issues = pensionTransactionIssues(list); if (issues.length)
     return { ok: false, error: issues[0], issues }; pensionStore().transactions = list; syncPensionDerivedHoldings(); return { ok: true, tx }; }
 let pensionTransactionDeleteError = '';
 function pensionTransactionDelete(id) { pensionTransactionDeleteError = ''; const current = pensionStore().transactions, next = current.filter(x => x.id !== id); if (next.length === current.length) {
@@ -404,7 +408,7 @@ function pensionAccountView(account) {
     const snapshot = pensionKisSnapshot(account), kis = pensionKisSnapshotUsable(snapshot), holdings = kis ? pensionKisViewHoldings(account, snapshot) : pensionStore().holdings.filter(h => h.accountId === account.id), reportedCash = kis ? Math.max(0, Number(snapshot.cash) || 0) : pensionLocalAccountCash(account.id), cashStatus = pensionAccountCashStatus(account, snapshot), holdingValue = holdings.reduce((sum, h) => sum + pensionHoldingValue(h), 0), providedTotal = snapshot?.totalValue, hasTotal = kis && providedTotal !== null && providedTotal !== undefined && Number.isFinite(Number(providedTotal)), total = hasTotal ? Math.max(0, Number(providedTotal)) : reportedCash + holdingValue, rawComponentDelta = total - reportedCash - holdingValue;
     let cash = reportedCash, cashBasis = 'deposit';
     // Use only an explicit cash field whose value reconciles with the reported total.
-    if (kis && rawComponentDelta < -.5 && Math.abs(Number(snapshot.securitiesValue) - holdingValue) <= .5) {
+    if (kis && Math.abs(rawComponentDelta) > .5 && Math.abs(Number(snapshot.securitiesValue) - holdingValue) <= .5) {
         for (const [field, basis] of [['settledCash', 'settlement'], ['nextDayCash', 'next_day']]) {
             const value = snapshot.cashDetail?.[field];
             if (value !== null && value !== undefined && Number.isFinite(Number(value)) && Number(value) >= 0 && Math.abs(total - Number(value) - holdingValue) <= .5) {
@@ -423,7 +427,7 @@ function pensionScopedHoldings(scope = pensionAssetScope()) {
 }
 function pensionAccountCash(accountId) { const account = pensionAccount(accountId); return account ? pensionAccountView(account).cash : pensionLocalAccountCash(accountId); }
 function pensionSpendableCashStatus(scope = pensionAssetScope()) { const views = pensionStore().accounts.filter(a => a.status === 'active' && (scope === 'all' || a.kind === scope)).map(pensionAccountView), pending = views.filter(v => v.kis && !v.cashStatus.confirmed), allConfirmed = !pending.length, available = views.reduce((sum, v) => sum + (v.kis ? (v.cashStatus.availableCash === null ? v.cash : v.cashStatus.availableCash) : v.cash), 0), display = views.reduce((sum, v) => sum + v.cash, 0), pendingBuy = pending.reduce((sum, v) => sum + v.cashStatus.pendingBuy, 0); return { allConfirmed, available, display, pendingBuy, label: allConfirmed ? '거래 가능 현금' : '예수금 · 정산 확인 필요' }; }
-function pensionAccountExposure(accountId) { const account = pensionAccount(accountId), view = account ? pensionAccountView(account) : null, holdings = view?.holdings || [], qty = holdings.reduce((n, h) => n + Math.max(0, Number(h.qty) || 0), 0), value = view?.total || holdings.reduce((n, h) => n + pensionHoldingValue(h), 0), cash = view?.cash || pensionLocalAccountCash(accountId); return { qty, value, cash, hasAssets: value > .5 || qty > 1e-8 || Math.abs(cash) > .5 }; }
+function pensionAccountExposure(accountId) { const account = pensionAccount(accountId), view = account ? pensionAccountView(account) : null, holdings = view?.holdings || [], qty = holdings.reduce((n, h) => n + Math.max(0, Number(h.qty) || 0), 0), value = view?.total ?? holdings.reduce((n, h) => n + pensionHoldingValue(h), 0), cash = view?.cash ?? pensionLocalAccountCash(accountId); return { qty, value, cash, hasAssets: value > .5 || qty > 1e-8 || Math.abs(cash) > .5 }; }
 function createPensionAccount(input = {}) { const kind = input.kind === 'irp' ? 'irp' : 'pension', openedAt = String(input.openedAt || ymd()), dateError = postedDateError(openedAt); if (dateError)
     return { ok: false, error: dateError }; const name = String(input.name || '').trim() || `${pensionAccountKindLabel(kind)} ${pensionStore().accounts.filter(a => a.kind === kind).length + 1}`, account = { id: uid(kind === 'irp' ? 'irp' : 'ps'), kind, name, provider: String(input.provider || '').trim(), status: 'active', openedAt, closedAt: '', policyId: policyGroup(kind).activePolicyId || '', policyHistory: [] }; pensionStore().accounts.push(account); return { ok: true, account }; }
 function archivePensionAccount(accountId) { const a = pensionAccount(accountId); if (!a || a.status !== 'active')

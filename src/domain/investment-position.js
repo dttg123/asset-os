@@ -5,7 +5,8 @@ function holdingCostValue(holding, quantity = holding?.qty, price = holding?.avg
 function transactionPositionValue(holding, quantity, price) { return holdingPositionValue(holding, quantity, price); }
 function calculatePensionPosition(holding, transactions) {
     let qty = Math.max(0, Number(holding.baselineQty ?? holding.qty) || 0), avg = Math.max(0, Number(holding.baselineAvgPrice ?? holding.avgPrice) || 0);
-    const rows = transactions.filter(transaction => transaction.holdingId === holding.id && ['buy', 'sell', 'adjustment'].includes(String(transaction.type))).sort((left, right) => String(left.date).localeCompare(String(right.date)) || String(left.createdAt || '').localeCompare(String(right.createdAt || '')) || String(left.id).localeCompare(String(right.id)));
+    // Equal timestamps retain ledger insertion order; random IDs are not trade order.
+    const rows = transactions.filter(transaction => transaction.holdingId === holding.id && ['buy', 'sell', 'adjustment'].includes(String(transaction.type))).sort((left, right) => String(left.date).localeCompare(String(right.date)) || String(left.createdAt || '').localeCompare(String(right.createdAt || '')));
     for (const transaction of rows) {
         if (transaction.type === 'buy') {
             const quantity = Math.max(0, Number(transaction.qty) || 0), price = Math.max(0, Number(transaction.price) || 0), oldCost = qty * avg, newCost = quantity * price + Math.max(0, Number(transaction.fee) || 0) + Math.max(0, Number(transaction.tax) || 0);

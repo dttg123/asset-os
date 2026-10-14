@@ -240,7 +240,7 @@ function syncHoldingLifecycle(a) { if (!isCurrentAccount(a))
 function syncCurrentIsaSnapshots() { if (!state?.accounts)
     return; const date = localYmd(); for (const a of state.accounts.filter(isCurrentAccount)) {
     const m = accountMetrics(a), securitiesValue = (m.holdings || []).reduce((sum, h) => sum + (Number(h.marketValue) || 0), 0), cost = Math.max(0, Number(m.cost) || 0), cash = Math.max(0, Number(m.cash) || 0), totalValue = Math.max(0, Number(m.value) || 0);
-    if (!(totalValue > 0 || cost > 0))
+    if (!(totalValue > 0 || cost > 0 || state.moduleVerification?.isa || (a.assetSnapshots || []).some((x) => x.meta?.autoSnapshot === true && !x.meta?.qaFixture)))
         continue;
     const row = { date, cost: Math.round(cost), value: Math.round(securitiesValue), cash: Math.round(cash), totalValue: Math.round(totalValue), meta: { autoSnapshot: true, accountId: a.id, valueBasis: 'securities', totalValueBasis: 'securities_plus_cash', grain: 'day', verified: !!state.moduleVerification?.isa } }, list = Array.isArray(a.assetSnapshots) ? a.assetSnapshots : (a.assetSnapshots = []), idx = list.findIndex((x) => String(x.date || '').slice(0, 10) === date && x.meta?.autoSnapshot === true && !x.meta?.qaFixture), protectedSnapshot = list.some((x) => String(x.date || '').slice(0, 10) === date && x.meta?.autoSnapshot !== true && !x.meta?.qaFixture);
     if (idx >= 0)
@@ -252,7 +252,7 @@ function syncCurrentIsaSnapshots() { if (!state?.accounts)
 function syncCurrentIsaSnapshot() { return syncCurrentIsaSnapshots(); }
 function syncCurrentPensionSnapshot() { if (!state?.pension)
     return; const psVerified = !!state.moduleVerification?.pension, irpVerified = !!state.moduleVerification?.irp, date = localYmd(), month = date.slice(0, 7), list = Array.isArray(state.pension.assetSnapshots) ? state.pension.assetSnapshots : (state.pension.assetSnapshots = []), idx = list.findIndex((x) => String(x.date || '').slice(0, 7) === month && x.meta?.autoSnapshot === true && !x.meta?.qaFixture), protectedSnapshot = list.some((x) => String(x.date || '').slice(0, 7) === month && x.meta?.autoSnapshot !== true && !x.meta?.qaFixture); if (idx < 0 && protectedSnapshot)
-    return; const prior = idx >= 0 ? clone(list[idx]) : { date, pension: { cost: 0, value: 0 }, irp: { cost: 0, value: 0 }, meta: { autoSnapshot: true } }, ps = pensionAssetMetrics('pension'), irp = pensionAssetMetrics('irp'), psUsable = ps.value > .5 || ps.cost > .5, irpUsable = irp.value > .5 || irp.cost > .5; if (!psUsable && !irpUsable)
+    return; const prior = idx >= 0 ? clone(list[idx]) : { date, pension: { cost: 0, value: 0 }, irp: { cost: 0, value: 0 }, meta: { autoSnapshot: true } }, ps = pensionAssetMetrics('pension'), irp = pensionAssetMetrics('irp'), psUsable = ps.value > .5 || ps.cost > .5 || psVerified || ps.source === 'kis' || idx >= 0 && (Number(prior.pension?.value) || 0) > .5, irpUsable = irp.value > .5 || irp.cost > .5 || irpVerified || irp.source === 'kis' || idx >= 0 && (Number(prior.irp?.value) || 0) > .5; if (!psUsable && !irpUsable)
     return; prior.date = date; prior.meta = { ...(prior.meta || {}), autoSnapshot: true, grain: 'month', verified: { pension: psVerified, irp: irpVerified }, source: { pension: ps.source || '', irp: irp.source || '' } }; if (psUsable)
     prior.pension = { cost: Math.round(ps.cost), value: Math.round(ps.value), cash: Math.round(ps.cash || 0) }; if (irpUsable)
     prior.irp = { cost: Math.round(irp.cost), value: Math.round(irp.value), cash: Math.round(irp.cash || 0) }; if (idx >= 0)

@@ -380,6 +380,33 @@ test('@core @release schedule and card sheets connect purchase, payment correcti
  await expectNoHorizontalOverflow(page);expect(appErrors).toEqual([]);
 });
 
+test('@core @release money balances survive settlement, malformed refresh, save failure and explicit zero after reload',async({page})=>{
+ await preparePage(page);await page.goto(app);
+ await page.evaluate(()=>{
+  const next=window.__assetOS.getState();next.accounts=[];next.pension.accounts=[{id:'money-flow',kind:'pension',name:'QA 돈 흐름',status:'active',openedAt:'2026-01-01'}];next.pension.holdings=[];next.pension.transactions=[];next.pension.assetSnapshots=[];next.integrated.ledger=[];next.brokerKis={};next.moduleVerification={isa:true,pension:true,irp:true};next.settings.pensionAssetScope='pension';next.settings.backupV04={phoneEnabled:false};window.__assetOS.replaceState(next);
+  window.__moneyTime=new Date().toISOString();window.__moneyBalance={cash:100000,cashDetail:{depositCash:100000,settledCash:300000,nextDayCash:100000,availableCash:100000},securitiesValue:200000,totalValue:500000,holdings:[{productCode:'MONEY',productName:'QA ETF',quantity:20,avgPrice:9000,currentPrice:10000,marketValue:200000,profitLoss:20000}]};
+  const result=window.__assetOS.brokerKis.importBalance(window.__moneyBalance,'pension','money-flow',window.__moneyTime);if(!result.ok)throw Error('valid balance rejected');nav('pension','assets');
+ });
+ await expect(page.locator('.pension-asset-value')).toHaveText('500,000원');
+ expect(await page.evaluate(()=>({cash:pensionAssetMetrics('pension').cash,other:pensionAssetMetrics('pension').unallocated,home:integratedFinancialModel().pension,history:state.pension.assetSnapshots.at(-1).pension.value}))).toEqual({cash:300000,other:0,home:500000,history:500000});
+ const rejected=await page.evaluate(()=>{
+  const before=JSON.stringify(state.brokerKis),storageBefore=localStorage.getItem(KEY),at=new Date(Date.parse(window.__moneyTime)+1000).toISOString();
+  const invalid=window.__assetOS.brokerKis.importBalance({},'pension','money-flow',at),wrongAccount=window.__assetOS.brokerKis.importBalance(window.__moneyBalance,'irp','money-flow',at);
+  return{invalid:invalid.error,wrongAccount:wrongAccount.error,unchanged:before===JSON.stringify(state.brokerKis)&&storageBefore===localStorage.getItem(KEY)};
+ });
+ expect(rejected).toEqual({invalid:'KIS_BALANCE_INVALID',wrongAccount:'KIS_ACCOUNT_LINK_MISMATCH',unchanged:true});
+ const failed=await page.evaluate(()=>{
+  const before=JSON.stringify(state.brokerKis),storageBefore=localStorage.getItem(KEY),original=Storage.prototype.setItem;Storage.prototype.setItem=function(){throw new DOMException('QA quota','QuotaExceededError')};
+  try{const result=window.__assetOS.brokerKis.importBalance({...window.__moneyBalance,totalValue:800000,cashDetail:{settledCash:600000}},'pension','money-flow',new Date(Date.parse(window.__moneyTime)+2000).toISOString());return{error:result.error,unchanged:before===JSON.stringify(state.brokerKis),total:pensionAssetMetrics('pension').value,stored:storageBefore===localStorage.getItem(KEY)}}finally{Storage.prototype.setItem=original}
+ });
+ expect(failed).toEqual({error:'PERSIST_FAILED',unchanged:true,total:500000,stored:true});
+ await page.reload();await expect(page.locator('.pension-asset-value')).toHaveText('500,000원');
+ await page.evaluate(()=>{const at=new Date(Date.parse(brokerKisLatestBalance(state.brokerKis,'pension','money-flow').fetchedAt)+3000).toISOString(),result=window.__assetOS.brokerKis.importBalance({cash:0,cashDetail:{depositCash:0,settledCash:0,availableCash:0},securitiesValue:0,totalValue:0,holdings:[]},'pension','money-flow',at);if(!result.ok)throw Error('explicit zero rejected');nav('pension','assets')});
+ expect(await page.evaluate(()=>({value:pensionAssetMetrics('pension').value,home:integratedFinancialModel().pension,history:state.pension.assetSnapshots.at(-1).pension.value,exposure:pensionAccountExposure('money-flow').hasAssets}))).toEqual({value:0,home:0,history:0,exposure:false});
+ await page.reload();expect(await page.evaluate(()=>pensionAssetMetrics('pension').value)).toBe(0);expect(await page.evaluate(()=>state.pension.assetSnapshots.at(-1).pension.value)).toBe(0);
+ await expectNoHorizontalOverflow(page);expect(appErrors).toEqual([]);
+});
+
 test('@core unified app keeps alerts behind the header bell and preserves account detail actions',async({page})=>{
  await preparePage(page);await page.goto(app);
  await page.evaluate(()=>{
