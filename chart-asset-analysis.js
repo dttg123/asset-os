@@ -107,7 +107,7 @@ function updateIsaAnalysisPoint(clientX) { const svg = $('#isaAnalysisChart'), h
 function bindIsaAssetAnalysis() { $$('[data-isa-analysis-period]').forEach(b => b.onclick = () => { isaAnalysisPeriod = ['3m', '6m', '1y', '3y', '5y', 'all'].includes((b.dataset.isaAnalysisPeriod || '')) ? (b.dataset.isaAnalysisPeriod || '') : '1y'; isaAnalysisSelectedKey = ''; $('#sheetBody').innerHTML = isaAnalysisMarkup(currentAccount()); bindIsaAssetAnalysis(); }); bindAnalysisGesture('#sheetBody #isaAnalysisChart', 'isa', updateIsaAnalysisPoint); }
 function openIsaAssetAnalysis() { isaAnalysisPeriod = '1y'; isaAnalysisSelectedKey = ''; $('#sheetEyebrow').textContent = 'ISA'; $('#sheetTitle').textContent = '자산 분석'; $('#sheetBody').innerHTML = isaAnalysisMarkup(currentAccount()); openSheet('#detailSheet'); bindIsaAssetAnalysis(); }
 let pensionAnalysisScope = 'all', pensionAnalysisMode = 'trend', pensionAnalysisSelectedKey = '', pensionAnalysisPeriod = '1y';
-function pensionSnapshotRows(scope = 'all') { const raw = pensionStore().assetSnapshots || []; return raw.map(x => { const ps = x.pension || { cost: 0, value: 0 }, irp = x.irp || { cost: 0, value: 0 }; let cost = 0, value = 0; if (scope === 'pension') {
+function pensionSnapshotRows(scope = 'all') { const raw = pensionStore().assetSnapshots || []; return raw.map(x => { const ps = (typeof financialHistoryPensionRow === 'function' ? financialHistoryPensionRow(x, 'pension') : x.pension) || { cost: 0, value: 0 }, irp = (typeof financialHistoryPensionRow === 'function' ? financialHistoryPensionRow(x, 'irp') : x.irp) || { cost: 0, value: 0 }; let cost = 0, value = 0; if (scope === 'pension') {
     cost = Number(ps.cost) || 0;
     value = Number(ps.value) || 0;
 }

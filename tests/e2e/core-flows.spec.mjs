@@ -35,7 +35,7 @@ test('@core long data survives reload and every primary route renders',async({pa
  const dialog=page.getByRole('dialog',{name:'QA 35년 실사용 데이터 생성'});
  await dialog.getByRole('button',{name:'생성'}).click();
  await expect(page.getByText(/2026-2060 · 7,740건/)).toBeVisible({timeout:30_000});
- await expect(page.getByRole('button',{name:/총금융자산/})).toContainText('13억 4,294만원');
+ await expect(page.getByRole('button',{name:/순금융자산/})).toContainText('12억 5,554만원');
  await expect(page.locator('[data-home-growth]')).toBeVisible();await page.locator('[data-home-growth]').click();await expect(page.locator('#financialGrowthChart')).toBeVisible();await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
  const nav=page.getByRole('navigation',{name:'주요 메뉴'});
  for(const route of [
@@ -555,4 +555,28 @@ test('@core imported balance totals stay authoritative and unexplained differenc
  expect(await page.evaluate(()=>pensionAccountView(pensionAccount('balance-ui')).cash)).toBe(64602);
  expect(await page.evaluate(()=>pensionAccountView(pensionAccount('balance-ui')).reportedCash)).toBe(100000);
  await expectNoHorizontalOverflow(page);expect(appErrors).toEqual([]);
+});
+
+test('@core money history uses a covered baseline and explains debt and adjustment sources',async({page})=>{
+ await preparePage(page);await page.goto(app);
+ await page.evaluate(()=>{
+  const next=window.__assetOS.getState(),today=localYmd(),y=Number(today.slice(0,4)),month=today.slice(0,7);
+  next.accounts=[];next.pension.accounts=[{id:'history-p',kind:'pension',status:'active',name:'QA pension',openedAt:`${y-1}-01-01`}];next.pension.holdings=[];next.pension.transactions=[];next.pension.contributions=[];next.brokerKis=brokerKisEmptyStore();
+  next.integrated.accounts=[{id:'cash-main',kind:'cash',name:'QA cash'},{id:'pension-link',kind:'pension',name:'QA pension'}];next.integrated.liabilities=[{id:'history-debt',kind:'loan',name:'QA loan'}];next.integrated.ledger=[{id:'history-open',type:'openingAsset',date:`${y-3}-01-01`,amount:1000000,toAccountId:'cash-main',meta:{}},{id:'history-debt-open',type:'openingLiability',date:`${y-3}-01-01`,amount:200000,liabilityId:'history-debt',meta:{}},{id:'history-support',type:'adjustment',date:today,amount:0,delta:273000,accountId:'cash-main',category:'정부기여금 누계 반영',meta:{analysisOnly:true}},{id:'history-interest',type:'adjustment',date:today,amount:0,delta:4230,accountId:'cash-main',category:'누적 이자 반영',meta:{analysisOnly:true}}];
+  next.integrated.ledger.push({id:'history-pension-cash',type:'externalAssetIn',date:`${month}-01`,amount:100000,toAccountId:'pension-link',meta:{targetPensionAccountId:'history-p'}});
+  next.pension.assetSnapshots=[{date:`${month}-01`,pension:{cost:100000,value:100000},irp:{cost:0,value:0},meta:{autoSnapshot:false}},{date:today,pension:{cost:100000,value:100000},irp:{cost:0,value:0},meta:{autoSnapshot:false}}];
+  next.financialProducts={items:[],events:[]};next.financeSchedules={items:[]};window.__assetOS.replaceState(next);
+  window.__moneyHistoryExpected={start:`${month}-01`,end:today};
+ });
+ await expect(page.locator('.hero .label')).toHaveText('순금융자산');await expect(page.locator('.heroamount')).toHaveAttribute('title','1,177,230원');
+ await page.locator('.hero').click();await expect(page.locator('#sheetTitle')).toHaveText('금융자산·부채 상세');
+ await expect(page.locator('.sheetrow').filter({hasText:'대출·부채 차감'})).toContainText('-200,000원');
+ await page.locator('[data-financial-growth]').click();await expect(page.locator('#sheetTitle')).toHaveText('순금융자산 추이');
+ await expect(page.locator('.finance-growth-note').first()).toContainText('비교 기간');
+ await expect(page.locator('.finance-growth-breakdown')).toContainText('정부기여금 누계 반영');
+ await expect(page.locator('.finance-growth-breakdown')).toContainText('누적 이자 반영');
+ const model=await page.evaluate(()=>{const end=localYmd(),b=financialGrowthBreakdown(financialAnalysisStart('6m',end),end),rows=financialGrowthSeries('6m');return{start:b.start.asOf,expected:window.__moneyHistoryExpected.start,net:b.netChange,adjustment:b.adjustment,residual:b.residual,first:rows[0].asOf}});
+ expect(model).toEqual({start:model.expected,expected:model.expected,net:277230,adjustment:277230,residual:0,first:model.expected});
+ for(const theme of ['light','dark']){await page.evaluate(theme=>{setting().theme=theme;applyTheme()},theme);await page.setViewportSize({width:320,height:900});await expectNoHorizontalOverflow(page);await page.screenshot({path:`/tmp/asset-money-history-${test.info().project.name}-${theme}.png`})}
+ expect(appErrors).toEqual([]);
 });
