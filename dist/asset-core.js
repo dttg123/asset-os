@@ -5,7 +5,7 @@ const BROKER_KIS_PUBLIC_CONFIG = Object.freeze({ projectUrl: 'https://wjrzukoofs
 const QA_MODE = typeof location !== 'undefined' && /(?:^|[?&])qa=1(?:&|$)/.test(String(location.search || ''));
 const QA_STORAGE_KEY = 'asset-os-qa-v0.5', LIVE_STORAGE_KEY = 'asset-os-v1.9.45-live';
 const DEFAULT_FINANCE_DAY = 25;
-const APP_VERSION = 'v0.6.17', APP_ENV = QA_MODE ? 'qa' : 'live', SCHEMA_VERSION = 21, KEY = QA_MODE ? QA_STORAGE_KEY : LIVE_STORAGE_KEY, LEGACY_KEYS = ['asset-os-v1.9.22-central-schedule', 'asset-os-v1.9.20-real-finance', 'asset-os-v1.9.19-finance-linked', 'asset-os-v1.9.18-integrated-ui-refine', 'asset-os-v1.9.17-integrated-complete-stage1', 'asset-os-v1.9.16-integrated-ledger-stage2', 'asset-os-v1.9.9-pension-step2-analysis', 'asset-os-v1.9.7-pension-step2-precision', 'asset-os-v1.9.6-pension-step2-refine', 'asset-os-v1.9.5-pension-step2', 'asset-os-v1.9.4-pension-step1', 'asset-os-v1.9.3-pension-step1', 'asset-os-v1.9.2-isa-review', 'asset-os-v1.9.1-isa-review', 'asset-os-v1.9-isa-review', 'asset-os-v1.8-isa-review', 'asset-os-v1.7-isa-review', 'asset-os-v1.6.1-isa-review', 'asset-os-v1.6-isa-review', 'asset-os-v1.5-isa-review', 'asset-os-v1.4-isa-review', 'asset-os-v1.3-isa-review'];
+const APP_VERSION = 'v0.6.18', APP_ENV = QA_MODE ? 'qa' : 'live', SCHEMA_VERSION = 21, KEY = QA_MODE ? QA_STORAGE_KEY : LIVE_STORAGE_KEY, LEGACY_KEYS = ['asset-os-v1.9.22-central-schedule', 'asset-os-v1.9.20-real-finance', 'asset-os-v1.9.19-finance-linked', 'asset-os-v1.9.18-integrated-ui-refine', 'asset-os-v1.9.17-integrated-complete-stage1', 'asset-os-v1.9.16-integrated-ledger-stage2', 'asset-os-v1.9.9-pension-step2-analysis', 'asset-os-v1.9.7-pension-step2-precision', 'asset-os-v1.9.6-pension-step2-refine', 'asset-os-v1.9.5-pension-step2', 'asset-os-v1.9.4-pension-step1', 'asset-os-v1.9.3-pension-step1', 'asset-os-v1.9.2-isa-review', 'asset-os-v1.9.1-isa-review', 'asset-os-v1.9-isa-review', 'asset-os-v1.8-isa-review', 'asset-os-v1.7-isa-review', 'asset-os-v1.6.1-isa-review', 'asset-os-v1.6-isa-review', 'asset-os-v1.5-isa-review', 'asset-os-v1.4-isa-review', 'asset-os-v1.3-isa-review'];
 const nf = new Intl.NumberFormat('ko-KR');
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const INVESTMENT_ROLES = ['성장', '배당', '현금흐름', '안정', '현금'];
@@ -1024,11 +1024,31 @@ function historicalIsaValue(asOf, replayed) {
     }
     return covered === active.length ? sum : linked;
 }
+// Reconcile only an automatic KIS history point with same-day, complete source evidence.
+// Source snapshots and manually supplied history are never rewritten.
+function financialHistoryPensionRow(snapshot, kind) {
+    const row = snapshot?.[kind];
+    if (!row || row.value == null || !Number.isFinite(Number(row.value)) || snapshot?.meta?.autoSnapshot !== true || snapshot.meta.source?.[kind] !== 'kis')
+        return row;
+    const date = String(snapshot.date || ''), accounts = pensionStore().accounts.filter(account => account.kind === kind && pensionAccountActiveOnDate(account, date));
+    if (!accounts.length)
+        return row;
+    const sources = accounts.map(account => (financialHistoryState().brokerKis?.balanceSnapshots || []).filter(item => item.accountId === account.id && item.accountKind === kind && item.date === date && item.authoritative === true).sort((a, b) => String(a.fetchedAt || '').localeCompare(String(b.fetchedAt || ''))).at(-1));
+    if (sources.some(item => !item || !Number.isFinite(item.totalValue) || !Number.isFinite(item.securitiesValue) || !Number.isFinite(item.cash)))
+        return row;
+    const total = sources.reduce((sum, item) => sum + Number(item.totalValue), 0), components = sources.reduce((sum, item) => sum + Number(item.securitiesValue) + Number(item.cash), 0);
+    if (Math.abs(Number(row.value) - components) > .5 || Math.abs(total - components) <= .5)
+        return row;
+    const securities = sources.reduce((sum, item) => sum + Number(item.securitiesValue), 0), reportedCash = sources.reduce((sum, item) => sum + Number(item.cash), 0), settled = sources.every(item => [item.cashDetail?.settledCash, item.cashDetail?.nextDayCash].some(cash => typeof cash === 'number' && Number.isFinite(cash) && cash >= 0 && Math.abs(Number(item.securitiesValue) + cash - Number(item.totalValue)) <= .5));
+    if (settled && Math.abs(Number(row.cash) - reportedCash) <= .5 && Number.isFinite(Number(row.cost)))
+        return { ...row, value: total, cash: total - securities, cost: Number(row.cost) + total - components };
+    return { ...row, value: total };
+}
 function historicalPensionValue(kind, asOf, replayed) {
     const linkId = kind === 'irp' ? 'irp-link' : 'pension-link', linked = Math.max(0, Number(replayed?.assets?.[linkId] || 0)), snapshot = latestSnapshotAt(financialHistoryState().pension?.assetSnapshots, asOf);
     if (!snapshot)
         return linked;
-    const row = kind === 'irp' ? snapshot.irp : snapshot.pension;
+    const row = financialHistoryPensionRow(snapshot, kind);
     if (!row)
         return linked;
     return Math.max(0, Number(row.value) || 0);
@@ -1079,19 +1099,23 @@ function historicalFinancialModel(asOf = localYmd()) {
     return { asOf: date, cash, deposit, savings, isa, pension, irp, other, totalAssets, totalDebt, netAssets: totalAssets - totalDebt, replay, coverage, isComplete: coverage.complete };
 }
 function financialGrowthBreakdown(startDate, endDate) {
-    const earliest = financialAnalysisEarliestDate(), effectiveStart = String(startDate) < earliest ? earliest : String(startDate), start = historicalFinancialModel(effectiveStart), end = historicalFinancialModel(endDate), rows = integratedAnalysisBalanceLedger().filter(transaction => String(transaction.date || '') > String(start.asOf) && String(transaction.date || '') <= String(end.asOf));
+    const earliest = financialAnalysisEarliestDate(), requested = String(startDate) < earliest ? earliest : String(startDate), effectiveStart = financialComparableStart(requested, endDate), start = historicalFinancialModel(effectiveStart), end = historicalFinancialModel(endDate), rows = integratedAnalysisBalanceLedger().filter(transaction => String(transaction.date || '') > String(start.asOf) && String(transaction.date || '') <= String(end.asOf));
     let externalNet = 0, adjustment = 0;
+    const adjustmentDetails = [];
     for (const transaction of rows) {
         const amount = Number(transaction.amount) || 0;
         if ((['externalIncome', 'externalAssetIn', 'externalDebtPrincipal'].includes(transaction.type) && !transaction.meta?.financeInterest) || (transaction.type === 'refund' && transaction.toAccountId))
             externalNet += amount;
         else if (['expense', 'externalWithdrawal', 'externalAssetOut', 'debtInterest'].includes(transaction.type))
             externalNet -= amount;
-        else if (transaction.type === 'adjustment')
-            adjustment += Number(transaction.delta) || 0;
+        else if (transaction.type === 'adjustment') {
+            const amount = Number(transaction.delta) || 0;
+            adjustment += amount;
+            adjustmentDetails.push({ label: String(transaction.category || '잔액 조정'), amount });
+        }
     }
-    const netChange = end.netAssets - start.netAssets, assetChange = end.totalAssets - start.totalAssets, debtReduction = start.totalDebt - end.totalDebt, residual = netChange - externalNet - adjustment, rate = start.coverage.complete && end.coverage.complete && start.netAssets > 0 ? netChange / start.netAssets * 100 : null;
-    return { start, end, netChange, assetChange, debtReduction, rate, externalNet, adjustment, residual, reconciled: Math.abs(netChange - (externalNet + adjustment + residual)) < .01 };
+    const netChange = end.netAssets - start.netAssets, assetChange = end.totalAssets - start.totalAssets, debtReduction = start.totalDebt - end.totalDebt, residual = netChange - externalNet - adjustment, rate = start.asOf < end.asOf && start.coverage.complete && end.coverage.complete && start.netAssets > 0 ? netChange / start.netAssets * 100 : null;
+    return { start, end, comparable: start.asOf < end.asOf && start.coverage.complete && end.coverage.complete, requestedStart: String(startDate), netChange, assetChange, debtReduction, rate, externalNet, adjustment, adjustmentDetails, residual, reconciled: Math.abs(netChange - (externalNet + adjustment + residual)) < .01 };
 }
 function financialAnalysisEarliestDate() {
     const ledger = integratedAnalysisBalanceLedger(), assetStart = ledger.filter(transaction => ['openingAsset', 'externalIncome', 'externalAssetIn', 'internalTransfer', 'adjustment'].includes(transaction.type) && transaction.date).map(transaction => String(transaction.date).slice(0, 10)).sort()[0];
@@ -1107,6 +1131,35 @@ function financialAnalysisEarliestDate() {
             dates.push(String(snapshot.date).slice(0, 10));
     return [...new Set(dates)].sort().find(date => historicalFinancialCoverage(date).complete) || localYmd();
 }
+function financialComparableStart(start, end) {
+    const requested = String(start) > String(end) ? String(end) : String(start), dates = [requested, String(end)];
+    for (const account of financialHistoryState().accounts || []) {
+        if (account.openedAt)
+            dates.push(String(account.openedAt));
+        if (account.closedAt)
+            dates.push(String(account.closedAt));
+        for (const snapshot of account.assetSnapshots || [])
+            if (snapshot.date && (!snapshot.meta?.qaFixture || financialHistoryQaMode()))
+                dates.push(String(snapshot.date));
+    }
+    for (const account of pensionStore().accounts || []) {
+        if (account.openedAt)
+            dates.push(String(account.openedAt));
+        if (account.closedAt)
+            dates.push(String(account.closedAt));
+    }
+    for (const snapshot of financialHistoryState().pension?.assetSnapshots || [])
+        if (snapshot.date && (!snapshot.meta?.qaFixture || financialHistoryQaMode()))
+            dates.push(String(snapshot.date));
+    let comparableStart = null;
+    for (const date of [...new Set(dates)].filter(date => date >= requested && date <= end).sort()) {
+        if (!historicalFinancialCoverage(date).complete)
+            comparableStart = null;
+        else if (comparableStart === null)
+            comparableStart = date;
+    }
+    return comparableStart || String(end);
+}
 function shiftMonthsYmd(date, delta) {
     const match = String(date || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (!match)
@@ -1119,11 +1172,14 @@ function financialAnalysisStart(period, end = localYmd()) {
 }
 function monthEndYmd(year, monthIndex) { return localYmd(new Date(Number(year), Number(monthIndex) + 1, 0, 12)); }
 function financialGrowthSeries(period = '6m') {
-    const end = localYmd(), requested = financialAnalysisStart(period, end), earliest = financialAnalysisEarliestDate(), start = requested < earliest ? earliest : requested, startDate = new Date(start + 'T12:00:00'), endDate = new Date(end + 'T12:00:00'), raw = [];
+    const end = localYmd(), requested = financialAnalysisStart(period, end), earliest = financialAnalysisEarliestDate(), start = financialComparableStart(requested < earliest ? earliest : requested, end), startDate = new Date(start + 'T12:00:00'), endDate = new Date(end + 'T12:00:00'), raw = [];
+    const initial = historicalFinancialModel(start);
+    if (initial.coverage.complete)
+        raw.push({ ...initial, label: start.slice(2).replaceAll('-', '.') });
     let year = startDate.getFullYear(), month = startDate.getMonth();
     while (year < endDate.getFullYear() || (year === endDate.getFullYear() && month <= endDate.getMonth())) {
         const date = monthEndYmd(year, month), asOf = date > end ? end : date, model = historicalFinancialModel(asOf);
-        if (asOf >= start && model.coverage.complete)
+        if (asOf >= start && model.coverage.complete && !raw.some(row => row.asOf === asOf))
             raw.push({ ...model, label: `${String(year).slice(-2)}.${String(month + 1).padStart(2, '0')}` });
         month++;
         if (month > 11) {
@@ -1143,7 +1199,8 @@ function financialGrowthSeries(period = '6m') {
         const date = new Date(row.asOf + 'T12:00:00'), key = grain === 'year' ? String(date.getFullYear()) : `${date.getFullYear()}-Q${Math.floor(date.getMonth() / 3) + 1}`, label = grain === 'year' ? String(date.getFullYear()) : `${String(date.getFullYear()).slice(-2)} Q${Math.floor(date.getMonth() / 3) + 1}`;
         map.set(key, { ...row, label });
     }
-    return [...map.values()];
+    const grouped = [...map.values()];
+    return grouped[0]?.asOf === raw[0].asOf ? grouped : [raw[0], ...grouped];
 }
 ;
 /* asset-os source: src/domain/integrated-spending.js */
