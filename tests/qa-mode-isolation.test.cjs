@@ -86,11 +86,18 @@ let carBalance=30000000,carInterest=0;for(let i=0;i<60;i++){carInterest+=Math.ro
 assert.equal(run('state.integrated.ledger.filter(t=>t.id.startsWith("qa-home-interest-")).reduce((n,t)=>n+t.amount,0)'),homeInterest);
 assert.equal(run('state.integrated.ledger.filter(t=>t.id.startsWith("qa-car-interest-")).reduce((n,t)=>n+t.amount,0)'),carInterest);
 
-// 분석: QA 그래프가 실제 스냅샷을 읽고 대표 불황기에 하락을 표시한다.
-const growth=plain(run('financialGrowthSeries("all").map(x=>({label:x.label,totalAssets:x.totalAssets,totalDebt:x.totalDebt,netAssets:x.netAssets}))')),byYear=new Map(growth.map(x=>[x.label,x]));
-assert.equal(growth.length,35);for(const year of ['2042','2050','2057'])assert.ok(byYear.get(year).totalAssets<byYear.get(String(Number(year)-1)).totalAssets,`${year} 불황 하락 미반영`);
-assert.equal(growth[0].label,'2026','자산 자료가 없는 부채 단독 시점을 그래프 기준점으로 쓰면 안 됨');
+// The generated ISA replacements first have evidence in March. Do not bridge
+// those January coverage gaps or treat a missing account balance as zero.
+const sparse=plain(run('financialGrowthSeries("all").map(x=>({asOf:x.asOf,complete:x.coverage.complete}))'));
+assert.equal(sparse[0].asOf,'2059-03-28');assert.equal(sparse.length,9);assert.ok(sparse.every(x=>x.complete));
+// Separately verify the entire 35-year plot with explicit opening evidence.
+// These synthetic accounts really start empty; no production fallback is added.
+run(`__completeHistoryOriginal=clone(state);for(const a of state.accounts)a.assetSnapshots.unshift({date:a.openedAt,cost:0,value:0,cash:0,totalValue:0,meta:{qaFixture:true}});state.pension.assetSnapshots.unshift({date:'2026-01-01',pension:{cost:0,value:0,cash:0},irp:{cost:0,value:0,cash:0},meta:{qaFixture:true}})`);
+const growth=plain(run('financialGrowthSeries("all").map(x=>({asOf:x.asOf,label:x.label,totalAssets:x.totalAssets,totalDebt:x.totalDebt,netAssets:x.netAssets}))')),annual=growth.filter(x=>x.asOf.endsWith('-12-31')),byYear=new Map(annual.map(x=>[x.label,x]));
+assert.equal(annual.length,35);assert.equal(growth.length,36);for(const year of ['2042','2050','2057'])assert.ok(byYear.get(year).totalAssets<byYear.get(String(Number(year)-1)).totalAssets,`${year} 불황 하락 미반영`);
+assert.equal(growth[0].asOf,'2026-01-01','완전한 최초 기준점의 날짜와 금액을 보존해야 한다');
 assert.ok(run('financialGrowthSeries("all").every(x=>x.coverage.complete)'));
+run('state=__completeHistoryOriginal');
 close(stats.totalAssets,stats.cash+run('integratedFinancialModel().deposit+integratedFinancialModel().savings+integratedFinancialModel().isa+integratedFinancialModel().pension+integratedFinancialModel().irp+integratedFinancialModel().other'));
 close(stats.netAssets,stats.totalAssets-stats.totalDebt);
 

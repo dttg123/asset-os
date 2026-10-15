@@ -592,7 +592,7 @@ const brokerKisClient = (() => {
         if (!result.ok)
             return result;
         const data = record(result.data);
-        if (data.ok !== true || data.action !== name || (name !== 'quote' && data.accountKind !== body.accountKind) || (name === 'quote' && !Array.isArray(data.quotes)))
+        if (data.ok !== true || data.action !== name || (name !== 'quote' && data.accountKind !== body.accountKind) || (name === 'quote' && !Array.isArray(data.quotes)) || (name === 'orders' && !Array.isArray(data.orders)) || (name === 'rights' && !Array.isArray(data.rights)))
             return { ok: false, error: 'BROKER_RESPONSE_CONTRACT_INVALID' };
         return { ok: true, data };
     }

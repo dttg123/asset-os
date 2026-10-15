@@ -76,7 +76,7 @@ const brokerKisClient=(()=>{
   const allowed=new Set<BrokerAction>(['balance','orders','rights','quote']),name=cleanText(action,30) as BrokerAction;if(!allowed.has(name))return{ok:false,error:'BROKER_ACTION_INVALID'};
   const payload=name==='quote'?{action:name,quotes:Array.isArray(body.quotes)?body.quotes:[]}:{action:name,accountKind:body.accountKind,from:body.from,to:body.to};
   const result=await jsonRequest(`${config.projectUrl}/functions/v1/${config.functionName}`,{method:'POST',headers:publicHeaders({authorization:`Bearer ${session.accessToken}`}),body:JSON.stringify(payload)});
-  if(!result.ok)return result;const data=record(result.data);if(data.ok!==true||data.action!==name||(name!=='quote'&&data.accountKind!==body.accountKind)||(name==='quote'&&!Array.isArray(data.quotes)))return{ok:false,error:'BROKER_RESPONSE_CONTRACT_INVALID'};return{ok:true,data}
+  if(!result.ok)return result;const data=record(result.data);if(data.ok!==true||data.action!==name||(name!=='quote'&&data.accountKind!==body.accountKind)||(name==='quote'&&!Array.isArray(data.quotes))||(name==='orders'&&!Array.isArray(data.orders))||(name==='rights'&&!Array.isArray(data.rights)))return{ok:false,error:'BROKER_RESPONSE_CONTRACT_INVALID'};return{ok:true,data}
  }
  async function sync(action:BrokerAction,accountKind:unknown,localAccountId:unknown,range:Record<string,unknown>={}){
   const result=await invoke(action,{accountKind,from:range.from,to:range.to});if(!result.ok)return result;const data=record(result.data),fetchedAt=data.fetchedAt||new Date().toISOString(),runtime=(typeof assetOsRuntimeApi!=='undefined'&&assetOsRuntimeApi)||(window as unknown as BrokerBrowserWindow).__assetOS,api=runtime?.brokerKis;if(!api)return{ok:false,error:'BROKER_STORE_UNAVAILABLE'};

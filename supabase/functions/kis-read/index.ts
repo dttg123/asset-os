@@ -207,8 +207,9 @@ async function kisPages(
     if (isTokenFailure(upstream, body)) throw new Error('KIS_TOKEN_INVALID')
     if (page === 0) firstBody = body
     if (!upstream.ok || body?.rt_cd !== '0') throw new KisUpstreamError(safeUpstreamCode(body))
-    const nextRows = Array.isArray(body?.[outputKey]) ? body[outputKey] : []
-    collected.push(...nextRows.filter((row: unknown) => row && typeof row === 'object'))
+    const nextRows = body?.[outputKey]
+    if (!Array.isArray(nextRows) || nextRows.some((row: unknown) => !row || typeof row !== 'object' || Array.isArray(row))) throw new Error('KIS_RESULT_INVALID')
+    collected.push(...nextRows)
     trCont = upstream.headers.get('tr_cont') || ''
     if (trCont !== 'M' && trCont !== 'F') break
     const fk100 = String(body?.ctx_area_fk100 || '')
@@ -300,7 +301,7 @@ const safeErrors = new Set([
   'DATE_RANGE_INVALID', 'SERVER_CONFIG_MISSING',
   'TOKEN_CACHE_READ_FAILED', 'TOKEN_REFRESH_LOCK_FAILED', 'TOKEN_REFRESH_BUSY', 'TOKEN_FAILED',
   'TOKEN_CACHE_SAVE_FAILED', 'KIS_REQUEST_TIMEOUT', 'KIS_TOKEN_INVALID', 'KIS_BALANCE_INVALID',
-  'KIS_UPSTREAM_FAILED', 'KIS_RESULT_TRUNCATED',
+  'KIS_UPSTREAM_FAILED', 'KIS_RESULT_TRUNCATED', 'KIS_RESULT_INVALID', 'KIS_ORDERS_INVALID', 'KIS_RIGHTS_INVALID',
   'QUOTE_TYPE_INVALID', 'QUOTE_CODE_INVALID', 'QUOTE_LIST_INVALID', 'QUOTE_EMPTY',
 ])
 
