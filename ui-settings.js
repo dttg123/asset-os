@@ -150,8 +150,8 @@ function refreshAllInvestments() { if (investmentRefreshPromise)
         results[task.key] = 'failed';
         errors[task.key] = 'SYNC_FAILED';
     }
-} const failed = Object.keys(errors), done = Object.values(results).filter(x => x === 'ok').length, names = { isa: 'ISA', pension: '개인연금', irp: 'IRP' }; saveInvestmentRefreshResult(results, errors); if (typeof renderKeepingScroll === 'function')
-    renderKeepingScroll(); toast(failed.length ? `갱신 부분 완료 · ${failed.map(key => names[key] || key).join(' · ')} 확인` : `투자계좌 ${done}개 갱신 완료`); return { ok: failed.length === 0, results, errors }; })().finally(finishInvestmentRefresh); return investmentRefreshPromise; }
+} const failed = Object.keys(errors), names = { isa: 'ISA 시세', pension: '연금저축 잔고·내역', irp: 'IRP 잔고·내역' }; saveInvestmentRefreshResult(results, errors); if (typeof renderKeepingScroll === 'function')
+    renderKeepingScroll(); toast(failed.length ? `갱신 부분 완료 · ${failed.map(key => names[key] || key).join(' · ')} 확인` : `${Object.keys(results).filter(key => results[key] === 'ok').map(key => names[key] || key).join(' · ')} 갱신 완료`); return { ok: failed.length === 0, results, errors }; })().finally(finishInvestmentRefresh); return investmentRefreshPromise; }
 function refreshFailedInvestments() { if (investmentRefreshPromise)
     return investmentRefreshPromise; const targets = investmentRefreshStatus().errors.filter(kind => kind === 'isa' ? !!currentAccount() && isaQuoteLinks(currentAccount()).length > 0 : ['pension', 'irp'].includes(kind) && kisConnectedAccount(kind)); if (!targets.length) {
     toast('다시 시도할 실패 계좌가 없습니다.');
@@ -170,7 +170,7 @@ function refreshFailedInvestments() { if (investmentRefreshPromise)
         errors[kind] = 'SYNC_FAILED';
     }
 } saveInvestmentRefreshResult(results, errors); if (typeof renderKeepingScroll === 'function')
-    renderKeepingScroll(); const failed = Object.keys(errors), names = { isa: 'ISA', pension: '개인연금', irp: 'IRP' }; toast(failed.length ? `${failed.map(key => names[key] || key).join(' · ')} 재시도 실패 · 기존 자료 유지` : `${targets.map(key => names[key] || key).join(' · ')} 갱신 완료`); return { ok: failed.length === 0, results, errors }; })().finally(finishInvestmentRefresh); return investmentRefreshPromise; }
+    renderKeepingScroll(); const failed = Object.keys(errors), names = { isa: 'ISA 시세', pension: '연금저축 잔고·내역', irp: 'IRP 잔고·내역' }; toast(failed.length ? `${failed.map(key => names[key] || key).join(' · ')} 재시도 실패 · 기존 자료 유지` : `${targets.map(key => names[key] || key).join(' · ')} 갱신 완료`); return { ok: failed.length === 0, results, errors }; })().finally(finishInvestmentRefresh); return investmentRefreshPromise; }
 async function syncKisHistory(kind) {
     if (!kind)
         return;

@@ -133,3 +133,13 @@ body[data-root="integrated"] .stack{gap:16px!important}.integrated-quick-presets
 @media(max-width:370px){.home-investment-refresh{flex-wrap:wrap}.home-investment-refresh>button{margin-left:auto}.pension-earnings-grid .pension-earning-box strong{font-size:15px}.analysis-seek{gap:8px}}
 
 .home-change-compare{padding:14px 16px}.home-compare-delta{display:block;margin:10px 0;font-size:22px;font-weight:600;letter-spacing:-.025em;font-variant-numeric:tabular-nums}.home-compare-delta.positive{color:var(--positive)}.home-compare-delta.negative{color:var(--negative)}.home-compare-delta.neutral{color:var(--muted);font-size:18px}.home-compare-values{display:grid;grid-template-columns:minmax(0,1fr) 16px minmax(0,1fr);align-items:center;gap:10px;color:var(--muted);font-size:12px}.home-compare-values>span:last-child{text-align:right}.home-compare-values b{display:block;margin-top:4px;font-size:14px;font-weight:500;color:var(--text);overflow-wrap:anywhere}.balance-comparison .sheetrow{align-items:flex-start}.balance-comparison .sheetrow strong{max-width:55%}
+
+/* Clear input context and comfortable touch targets. */
+body[data-root="integrated"] .integrated-monthbar{grid-template-columns:48px minmax(0,1fr) 48px}
+body[data-root="integrated"] .integrated-monthbar button{width:48px;height:48px;min-height:48px}
+.sheet-close{flex:none;min-width:48px;min-height:48px;border:0;border-radius:12px;background:var(--surface2);color:var(--text);font-size:14px;cursor:pointer;touch-action:manipulation}
+.sheethead>div{min-width:0}.sheethead h2{overflow-wrap:anywhere}
+.entry-date-context{padding:10px 12px;border-radius:12px;background:var(--soft);color:var(--text);font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+.preset-copy .preset-context{font-size:12px;line-height:1.4;overflow-wrap:anywhere;white-space:normal}
+.preset-copy{min-width:0}.refresh-scope-note{line-height:1.5;overflow-wrap:anywhere}
+html[data-theme="dark"] .entry-type-buttons button.active,html[data-theme="dark"] .entry-category-chips button.active{color:color-mix(in srgb,var(--accent) 60%,white)}
