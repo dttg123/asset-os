@@ -157,11 +157,11 @@ integratedSummaryPage = function () {
         if (title)
             title.textContent = `${integratedMonthLabel(month)} 남은 납부액`;
         if (small)
-            small.textContent = pending.length ? `미완료 ${pending.length}건` : '이번 달 미완료 일정 없음';
+            small.textContent = pending.length ? `미완료 ${pending.length}건` : '선택한 달의 미완료 일정 없음';
         if (amount)
             amount.textContent = won(total);
         if (body) {
-            body.innerHTML = pending.length ? v069ScheduleGroups(pending, 'summary') : '<div class="integrated-empty">이번 달 금융 일정은 모두 처리했습니다.</div>';
+            body.innerHTML = pending.length ? v069ScheduleGroups(pending, 'summary') : '<div class="integrated-empty">선택한 달의 금융 일정은 모두 처리했습니다.</div>';
             body.insertAdjacentHTML('beforebegin', `<div class="fixed-cost-preview">${pending.slice(0, 3).map(o => `<button class="schedule-row" data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"><span class="schedule-copy"><strong>${escapeHtml(o.schedule.name)}</strong><small>${escapeHtml(o.date)}</small></span><strong class="schedule-amount">${won(scheduleOccurrenceDisplayAmount(o))}</strong></button>`).join('')}<button class="diagnostic-action" data-integrated-tab-go="schedule">일정 전체 보기 ›</button></div>`);
         }
         schedule.insertAdjacentHTML('afterend', `<button class="card integrated-card-link" data-card-hub><div><strong>카드·할부</strong><small>월 납부액과 남은 원금 확인</small></div><span>›</span></button>` + integratedConsumptionPreview(month));
@@ -199,7 +199,7 @@ integratedSchedulePage = function () {
     template.innerHTML = v069SchedulePage();
     const title = template.content.querySelector('.schedule-head h2'), small = template.content.querySelector('.schedule-head small'), pill = template.content.querySelector('.schedule-head .count-pill'), list = template.content.querySelector('.schedule-card .schedule-list');
     if (title)
-        title.textContent = '이번 달 남은 납부액';
+        title.textContent = `${integratedMonthLabel(month)} 남은 납부액`;
     if (small)
         small.textContent = `${won(pending.reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0))} · 미완료 ${pending.length}건`;
     if (pill)

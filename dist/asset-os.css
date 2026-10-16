@@ -833,3 +833,13 @@ body[data-root="integrated"] .integrated-monthbar button{width:48px;height:48px;
 .preset-copy .preset-context{font-size:12px;line-height:1.4;overflow-wrap:anywhere;white-space:normal}
 .preset-copy{min-width:0}.refresh-scope-note{line-height:1.5;overflow-wrap:anywhere}
 html[data-theme="dark"] .entry-type-buttons button.active,html[data-theme="dark"] .entry-category-chips button.active{color:color-mix(in srgb,var(--accent) 60%,white)}
+
+.insurance-payment-state{font-weight:600;color:var(--text)}
+.finance-product-card>div{min-width:0}.finance-product-card small{overflow-wrap:anywhere;line-height:1.55}
+.integrated-consumption-head h2,.schedule-head h2{white-space:normal;overflow-wrap:anywhere}
+
+.insurance-policy-card strong{font-size:14px;line-height:1.5;overflow-wrap:anywhere}
+.insurance-policy-card small{font-size:12px;line-height:1.6}
+.insurance-policy-card .finance-status-pill{font-size:11px}
+.policy-toolbar [data-insurance-new]{min-height:44px;padding:10px 12px;border:0;border-radius:12px;background:var(--soft);color:var(--accent2);font-size:14px;cursor:pointer}
+html[data-theme="dark"] .insurance-policy-card .finance-status-pill.active,html[data-theme="dark"] .policy-toolbar [data-insurance-new]{color:color-mix(in srgb,var(--accent) 60%,white)}
