@@ -44,3 +44,39 @@ test('@core refresh labels distinguish ISA prices from pension balances',async({
  await expect(page.locator('.refresh-account-times')).toContainText('ISA 시세');
  await expect(page.locator('.refresh-account-times')).toContainText('연금저축 잔고·내역');
 });
+
+test('@core visual polish preserves navigation and money with motion enabled or reduced',async({page},info)=>{
+ const errors=[];page.on('pageerror',e=>errors.push(String(e)));
+ await page.goto('/index.html?qa=1#/home');
+ await page.getByRole('button',{name:'35년 생성',exact:true}).click();
+ await page.getByRole('dialog',{name:'QA 35년 실사용 데이터 생성'}).getByRole('button',{name:'생성',exact:true}).click();
+ await expect(page.getByText(/2026-2060 · 7,740건/)).toBeVisible({timeout:30_000});
+ const before=await page.evaluate(()=>({ledger:JSON.stringify(state.integrated.ledger),net:integratedFinancialModel().netAssets}));
+ for(const width of [360,412])for(const theme of ['light','dark']){
+  await page.setViewportSize({width,height:915});
+  await page.evaluate(theme=>{state.settings.theme=theme;render()},theme);
+  for(const root of ['홈','ISA','개인연금','통합']){
+   await page.getByRole('navigation',{name:'주요 메뉴'}).getByRole('button',{name:root,exact:true}).click();
+   await expect(page.locator('header h1')).toHaveText(root);
+   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1)).toBe(true);
+   const amounts=await page.locator('#main .heroamount,#main .isa-value,#main .pension-asset-value,#main .integrated-overview-value').evaluateAll(nodes=>nodes.map(n=>({width:n.clientWidth,scroll:n.scrollWidth,text:n.textContent})));
+   for(const amount of amounts){expect(amount.text).not.toMatch(/NaN|Infinity/);expect(amount.scroll).toBeLessThanOrEqual(amount.width+1)}
+   if(info.project.name==='galaxy-s25-ultra')await page.screenshot({path:`/tmp/asset-polish-${width}-${theme}-${root}.png`,animations:'disabled'});
+  }
+ }
+ await page.emulateMedia({reducedMotion:'reduce'});
+ await page.getByRole('navigation',{name:'주요 메뉴'}).getByRole('button',{name:'홈',exact:true}).click();
+ await expect(page.locator('#main>.stack')).toHaveCSS('animation-name','none');
+ await expect(page.locator('.hero')).not.toHaveCSS('background-image','none');
+ await page.locator('.hero').hover();await page.mouse.down();
+ await expect(page.locator('.hero')).toHaveCSS('transform','none');await page.mouse.up();
+ await expect(page.locator('#detailSheet')).toHaveClass(/open/);
+ expect(await page.locator('#detailSheet').evaluate(n=>parseFloat(getComputedStyle(n).transitionDuration))).toBeLessThan(.002);
+ await page.goBack();await expect(page.locator('#detailSheet')).not.toHaveClass(/open/);
+ await page.emulateMedia({reducedMotion:'no-preference'});
+ await page.getByRole('navigation',{name:'주요 메뉴'}).getByRole('button',{name:'ISA',exact:true}).click();
+ await expect(page.locator('header h1')).toHaveText('ISA');
+ await expect(page.locator('#main>.stack,#main>.module-page-shell').first()).toHaveCSS('animation-name','pageReveal');
+ expect(await page.evaluate(()=>({ledger:JSON.stringify(state.integrated.ledger),net:integratedFinancialModel().netAssets}))).toEqual(before);
+ expect(errors).toEqual([]);
+});
