@@ -905,7 +905,7 @@ function scheduleKindLabel(kind) { return { income: '수입', investment: '저�
 function scheduleActionLabel(kind) { return kind === 'income' ? '수입 확인' : (['investment', 'saving'].includes(kind) ? '납입' : (['loan', 'insurance', 'expense'].includes(kind) ? '납부' : '완료')); }
 function scheduleOccurrenceDisplayAmount(o) { const actual = Number(o?.tx?.meta?.actualAmount ?? o?.tx?.amount); return o?.status === 'done' && Number.isFinite(actual) && actual >= 0 ? actual : schedulePlannedAmount(o.schedule, o.date); }
 function scheduleOccurrenceUiLabel(o) { return o.status === 'done' && Math.abs(scheduleOccurrenceDisplayAmount(o) - schedulePlannedAmount(o.schedule, o.date)) > .5 ? '금액 다름' : scheduleStatusLabel(o.status); }
-function remainingScheduleCard(month = integratedSelectedMonth()) { const list = scheduleOccurrences(month).filter(o => o.status !== 'done'), total = list.reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0); return `<section class="card integrated-fixed-cost-card ${integratedFixedCostsExpanded ? 'open' : ''}" data-fixed-cost-card><button class="fixed-cost-head" data-fixed-cost-toggle aria-expanded="${escapeHtml(integratedFixedCostsExpanded ? 'true' : 'false')}"><span><strong>${escapeHtml(integratedMonthLabel(month))} 남은 일정</strong><small>${list.length ? `${list.length}건 · 납입·대출·보험·고정비 합계` : '이번 달 미완료 일정 없음'}</small></span><span class="fixed-cost-head-right"><b>${won(total)}</b><i>⌄</i></span></button><div class="fixed-cost-body" data-fixed-cost-body ${integratedFixedCostsExpanded ? '' : 'hidden'}>${list.length ? `<div class="schedule-list compact">${list.map(o => `<button class="schedule-row" data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"><span class="schedule-copy"><strong>${escapeHtml(o.schedule.name)}</strong><small>${escapeHtml(o.date)} · ${escapeHtml(scheduleKindLabel(o.schedule.kind))}</small></span><strong class="schedule-amount">${won(scheduleOccurrenceDisplayAmount(o))}</strong><span class="schedule-status ${o.status}">${scheduleStatusLabel(o.status)}</span></button>`).join('')}</div>` : '<div class="integrated-empty">이번 달 금융 일정은 모두 처리했습니다.</div>'}</div></section>`; }
+function remainingScheduleCard(month = integratedSelectedMonth()) { const list = scheduleOccurrences(month).filter(o => o.status !== 'done'), total = list.reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0); return `<section class="card integrated-fixed-cost-card ${integratedFixedCostsExpanded ? 'open' : ''}" data-fixed-cost-card><button class="fixed-cost-head" data-fixed-cost-toggle aria-expanded="${escapeHtml(integratedFixedCostsExpanded ? 'true' : 'false')}"><span><strong>${escapeHtml(integratedMonthLabel(month))} 남은 일정</strong><small>${list.length ? `${list.length}건 · 납입·대출·보험·고정비 합계` : '선택한 달의 미완료 일정 없음'}</small></span><span class="fixed-cost-head-right"><b>${won(total)}</b><i>⌄</i></span></button><div class="fixed-cost-body" data-fixed-cost-body ${integratedFixedCostsExpanded ? '' : 'hidden'}>${list.length ? `<div class="schedule-list compact">${list.map(o => `<button class="schedule-row" data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"><span class="schedule-copy"><strong>${escapeHtml(o.schedule.name)}</strong><small>${escapeHtml(o.date)} · ${escapeHtml(scheduleKindLabel(o.schedule.kind))}</small></span><strong class="schedule-amount">${won(scheduleOccurrenceDisplayAmount(o))}</strong><span class="schedule-status ${o.status}">${scheduleStatusLabel(o.status)}</span></button>`).join('')}</div>` : '<div class="integrated-empty">선택한 달의 금융 일정은 모두 처리했습니다.</div>'}</div></section>`; }
 function integratedSchedulePage() { const month = integratedScheduleMonth(), occ = scheduleOccurrences(month), { y, m, days } = scheduleMonthDays(month), first = new Date(y, m - 1, 1).getDay(), today = localYmd(), byDay = new Map(); for (const o of occ) {
     const d = Number(o.date.slice(-2));
     if (!byDay.has(d))
@@ -1008,7 +1008,7 @@ function openCardPlanDetail(id) {
 }
 function integratedConsumptionPreview(month) {
     const x = integratedSpendingAnalysis(month), max = Math.max(1, ...x.trend.map(row => row.amount));
-    return `<section class="card integrated-consumption-preview"><div class="integrated-consumption-head"><h2>이번 달 소비</h2><button data-integrated-tab-go="spending">자세히 ›</button></div><div class="integrated-consumption-value">${won(x.total)}</div><div class="spending-trend">${x.trend.map(row => `<button data-spending-month="${escapeHtml(row.month)}" data-spending-detail="month"><span class="spending-bar"><i style="height:${row.amount ? Math.max(8, row.amount / max * 100) : 2}%"></i></span><strong>${escapeHtml(row.label)}</strong><small>${row.amount ? displayWon(row.amount) : '0원'}</small></button>`).join('')}</div><small>카드 원금 납부는 소비에 다시 더하지 않아요.</small></section>`;
+    return `<section class="card integrated-consumption-preview"><div class="integrated-consumption-head"><h2>${escapeHtml(integratedMonthLabel(month))} 소비</h2><button data-integrated-tab-go="spending">자세히 ›</button></div><div class="integrated-consumption-value">${won(x.total)}</div><div class="spending-trend">${x.trend.map(row => `<button data-spending-month="${escapeHtml(row.month)}" data-spending-detail="month"><span class="spending-bar"><i style="height:${row.amount ? Math.max(8, row.amount / max * 100) : 2}%"></i></span><strong>${escapeHtml(row.label)}</strong><small>${row.amount ? displayWon(row.amount) : '0원'}</small></button>`).join('')}</div><small>카드 원금 납부는 소비에 다시 더하지 않아요.</small></section>`;
 }
 function openScheduleAmountForm(id, date, actual = false) {
     const s = financeSchedules().find(x => x.id === id), o = scheduleOccurrences(date.slice(0, 7)).find(x => x.schedule.id === id && x.date === date);
@@ -3333,11 +3333,11 @@ integratedSummaryPage = function () {
         if (title)
             title.textContent = `${integratedMonthLabel(month)} 남은 납부액`;
         if (small)
-            small.textContent = pending.length ? `미완료 ${pending.length}건` : '이번 달 미완료 일정 없음';
+            small.textContent = pending.length ? `미완료 ${pending.length}건` : '선택한 달의 미완료 일정 없음';
         if (amount)
             amount.textContent = won(total);
         if (body) {
-            body.innerHTML = pending.length ? v069ScheduleGroups(pending, 'summary') : '<div class="integrated-empty">이번 달 금융 일정은 모두 처리했습니다.</div>';
+            body.innerHTML = pending.length ? v069ScheduleGroups(pending, 'summary') : '<div class="integrated-empty">선택한 달의 금융 일정은 모두 처리했습니다.</div>';
             body.insertAdjacentHTML('beforebegin', `<div class="fixed-cost-preview">${pending.slice(0, 3).map(o => `<button class="schedule-row" data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"><span class="schedule-copy"><strong>${escapeHtml(o.schedule.name)}</strong><small>${escapeHtml(o.date)}</small></span><strong class="schedule-amount">${won(scheduleOccurrenceDisplayAmount(o))}</strong></button>`).join('')}<button class="diagnostic-action" data-integrated-tab-go="schedule">일정 전체 보기 ›</button></div>`);
         }
         schedule.insertAdjacentHTML('afterend', `<button class="card integrated-card-link" data-card-hub><div><strong>카드·할부</strong><small>월 납부액과 남은 원금 확인</small></div><span>›</span></button>` + integratedConsumptionPreview(month));
@@ -3375,7 +3375,7 @@ integratedSchedulePage = function () {
     template.innerHTML = v069SchedulePage();
     const title = template.content.querySelector('.schedule-head h2'), small = template.content.querySelector('.schedule-head small'), pill = template.content.querySelector('.schedule-head .count-pill'), list = template.content.querySelector('.schedule-card .schedule-list');
     if (title)
-        title.textContent = '이번 달 남은 납부액';
+        title.textContent = `${integratedMonthLabel(month)} 남은 납부액`;
     if (small)
         small.textContent = `${won(pending.reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0))} · 미완료 ${pending.length}건`;
     if (pill)
