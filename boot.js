@@ -34,6 +34,7 @@ $$('.nav').forEach(b => b.onclick = () => nav(b.dataset.root));
 window.addEventListener('hashchange', () => { resetTransientPanels(); window.scrollTo(0, 0); render(); });
 $('#profile').onclick = () => { refreshCloudProfileUI(); openSheet('#profileSheet'); };
 $('#scrim').onclick = () => requestCloseSheets('scrim');
+$('#closeFormSheet').onclick = () => requestCloseSheets('close-button');
 $('#dialogScrim').onclick = () => hideDialog(true);
 $('#confirmCancel').onclick = () => hideDialog(true);
 $('#confirmOk').onclick = () => { const cb = dialogConfirmAction; hideDialog(false); if (cb)

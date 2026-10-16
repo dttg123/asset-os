@@ -853,11 +853,11 @@ function initQaMode() { if (!QA_MODE)
 'use strict';
 if ('serviceWorker' in navigator)
     window.addEventListener('load', async () => { const hadController = !!navigator.serviceWorker.controller; try {
-        const reg = await navigator.serviceWorker.register('./service-worker.js?v=0.6.19&build=20261015-2', { scope: './', updateViaCache: 'none' });
+        const reg = await navigator.serviceWorker.register('./service-worker.js?v=0.6.20&build=20261016-1', { scope: './', updateViaCache: 'none' });
         await reg.update();
         let refreshing = false;
         navigator.serviceWorker.addEventListener('controllerchange', () => { if (!hadController || refreshing)
-            return; refreshing = true; const key = 'asset-os-sw-reload-0.6.19-build20261015-2'; if (sessionStorage.getItem(key))
+            return; refreshing = true; const key = 'asset-os-sw-reload-0.6.20-build20261016-1'; if (sessionStorage.getItem(key))
             return; sessionStorage.setItem(key, '1'); location.reload(); });
     }
     catch { } });
@@ -899,6 +899,7 @@ $$('.nav').forEach(b => b.onclick = () => nav(b.dataset.root));
 window.addEventListener('hashchange', () => { resetTransientPanels(); window.scrollTo(0, 0); render(); });
 $('#profile').onclick = () => { refreshCloudProfileUI(); openSheet('#profileSheet'); };
 $('#scrim').onclick = () => requestCloseSheets('scrim');
+$('#closeFormSheet').onclick = () => requestCloseSheets('close-button');
 $('#dialogScrim').onclick = () => hideDialog(true);
 $('#confirmCancel').onclick = () => hideDialog(true);
 $('#confirmOk').onclick = () => { const cb = dialogConfirmAction; hideDialog(false); if (cb)

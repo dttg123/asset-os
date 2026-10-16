@@ -107,9 +107,14 @@ function integratedSummaryEntryPresets() {
     }
     return entries;
 }
+function integratedEntryContext(item) {
+    const kind = { externalIncome: '수입', lifeExpense: '지출', savingInvestment: '저축·투자', loanPayment: '대출 납부' }[item.uiType] || '기록';
+    const target = item.liabilityId ? integratedStore().liabilities.find(a => a.id === item.liabilityId)?.name : item.toAccountId ? integratedStore().accounts.find(a => a.id === item.toAccountId)?.name : '';
+    return [kind, target, item.note].filter(Boolean).join(' · ');
+}
 function integratedSummaryEntryMarkup() {
     const paths = { externalIncome: 'M4 8h16v12H4z M8 8V4h8v4 M9 14h6 M12 11v6', lifeExpense: 'M4 5h2l2 10h10l2-7H7 M9 19h.01 M17 19h.01', savingInvestment: 'M3 20h18 M5 20V9h4v11 M10 20V4h4v16 M15 20v-8h4v8', loanPayment: 'M4 8h16v12H4z M7 8V5h10v3 M8 14h8' };
-    return `<section class="integrated-quick-presets"><h2>자주 쓰는 기록</h2><div class="integrated-preset-list">${integratedSummaryEntryPresets().map((x, i) => `<button data-summary-entry="${escapeHtml(i)}" class="preset-tile preset-tone-${escapeHtml(String(i))}"><span class="preset-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${escapeHtml(paths[x.uiType] || paths.lifeExpense)}"/></svg></span><span class="preset-copy"><strong>${escapeHtml(x.category || integratedDefaultCategory(x.uiType))}</strong><small>${Number(x.amount) > 0 ? won(x.amount) : '금액 입력'}</small></span><span class="preset-chevron" aria-hidden="true">›</span></button>`).join('')}</div></section>`;
+    return `<section class="integrated-quick-presets"><h2>자주 쓰는 기록</h2><div class="integrated-preset-list">${integratedSummaryEntryPresets().map((x, i) => `<button data-summary-entry="${escapeHtml(i)}" class="preset-tile preset-tone-${escapeHtml(String(i))}"><span class="preset-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${escapeHtml(paths[x.uiType] || paths.lifeExpense)}"/></svg></span><span class="preset-copy"><strong>${escapeHtml(x.category || integratedDefaultCategory(x.uiType))}</strong><small>${Number(x.amount) > 0 ? won(x.amount) : '금액 입력'}</small><small class="preset-context">${escapeHtml(integratedEntryContext(x))}</small></span><span class="preset-chevron" aria-hidden="true">›</span></button>`).join('')}</div></section>`;
 }
 function bindIntegratedSummaryEntries() {
     document.querySelectorAll('[data-summary-entry]').forEach(b => b.onclick = () => { const entry = integratedSummaryEntryPresets()[Number(b.dataset.summaryEntry)]; if (entry)
@@ -164,7 +169,8 @@ function openIntegratedTransactionForm(id = '', preset = {}) {
     form.elements.uiType?.addEventListener('change', () => { if (form.elements.category)
         form.elements.category.dataset.auto = '1'; syncIntegratedFormFields(); formClearError(form); sheetDirty = true; });
     form.elements.toAccountId?.addEventListener('change', () => { syncIntegratedFormFields(); formClearError(form); sheetDirty = true; });
-    form.elements.date?.addEventListener('change', () => { syncIntegratedFormFields(); sheetDirty = true; });
+    form.elements.date?.addEventListener('change', () => { syncIntegratedFormFields(); const hint = form.querySelector('[data-entry-date-context]'), date = form.elements.date?.value || ''; if (hint)
+        hint.textContent = date === localYmd() ? `오늘 ${date} 기록` : date ? `${date} 날짜로 기록합니다. 저장 전 날짜를 확인해 주세요.` : '기록할 날짜를 선택해 주세요.'; sheetDirty = true; });
     form.querySelectorAll('[data-entry-category]').forEach(button => button.onclick = () => { if (!form.elements.category)
         return; form.elements.category.value = button.dataset.entryCategory || ''; form.elements.category.dataset.auto = '0'; form.querySelectorAll('[data-entry-category]').forEach(b => b.classList.toggle('active', b === button)); sheetDirty = true; formClearError(form); });
     form.addEventListener('input', (event) => { sheetDirty = true; const target = event.target; if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement))
