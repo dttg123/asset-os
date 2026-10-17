@@ -179,7 +179,15 @@ function cardPlanSummary(s, month) {
     const plan = s.cardPlan, rows = integratedStore().ledger;
     const paid = rows.filter(t => t.liabilityId === s.liabilityId && ['debtPrincipal', 'externalDebtPrincipal'].includes(t.type || '')).reduce((sum, t) => sum + Number(t.amount || 0), 0);
     const date = scheduleDateForMonth({ ...s, active: true }, month), actual = scheduleCompletionTx(s.id, date), terms = cardInstallmentTerms(s, date);
-    return { purchaseAmount: plan.purchaseAmount, remainingPrincipal: Math.max(0, plan.purchaseAmount - paid), plannedAmount: date ? schedulePlannedAmount(s, date) : 0, estimatedInterest: terms?.interest || 0, actualAmount: actual ? Number(actual.meta?.actualAmount ?? actual.amount) || 0 : null };
+    let paidInstallments = 0;
+    const totalInstallments = Number.isInteger(plan.months) && plan.months >= 1 && plan.months <= 60 ? plan.months : 0, first = String(plan.firstPaymentDate || '');
+    for (let index = 0; validYmdDate(first) && index < totalInstallments; index++) {
+        const cursor = new Date(Date.UTC(Number(first.slice(0, 4)), Number(first.slice(5, 7)) - 1 + index, 1)), key = cursor.toISOString().slice(0, 7), due = scheduleDateForMonth({ ...s, active: true }, key);
+        if (due && scheduleCompletionTx(s.id, due, rows))
+            paidInstallments++;
+    }
+    const remainingPrincipal = Math.max(0, plan.purchaseAmount - paid);
+    return { purchaseAmount: plan.purchaseAmount, remainingPrincipal, plannedAmount: date ? schedulePlannedAmount(s, date) : 0, estimatedInterest: terms?.interest || 0, actualAmount: actual ? Number(actual.meta?.actualAmount ?? actual.amount) || 0 : null, paidInstallments, totalInstallments, completed: totalInstallments > 0 && paidInstallments === totalInstallments && remainingPrincipal === 0 };
 }
 function createCardInstallment(input) {
     const amount = Number(input.purchaseAmount), months = Number(input.months), rate = Number(input.annualRate) || 0, purchaseDate = String(input.purchaseDate || ''), first = String(input.firstPaymentDate || ''), name = String(input.name || '').trim(), mode = String(input.interestMode);

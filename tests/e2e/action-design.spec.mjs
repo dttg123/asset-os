@@ -18,8 +18,8 @@ test('@core action design keeps historical dates explicit and close preserves un
   const box=await page.getByRole('button',{name:'이전 달',exact:true}).boundingBox();expect(box.width).toBeGreaterThanOrEqual(44);expect(box.height).toBeGreaterThanOrEqual(44);
   await page.screenshot({path:`/tmp/asset-action-summary-${info.project.name}-${width}.png`,animations:'disabled'});
   await page.locator('[data-summary-entry]').first().click();
-  await expect(page.locator('#entryDate')).toHaveValue(/2026-02-/);
-  await expect(page.locator('#entryDateContext')).toContainText('저장 전 날짜를 확인');
+  await expect(page.locator('#entryDate')).toHaveValue(await page.evaluate(()=>localYmd()));
+  await expect(page.locator('#entryDateContext')).toContainText('오늘');
   await page.locator('#entryAmount').fill('12345');
   await page.getByRole('button',{name:'입력창 닫기',exact:true}).click();
   const dialog=page.getByRole('dialog',{name:'작성 내용을 닫을까요?'});await expect(dialog).toBeVisible();

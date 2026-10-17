@@ -35,7 +35,7 @@ function integratedCandidateIssues(candidateStore) {
         state.integrated = original;
     }
 }
-function integratedEntryDateForMonth(month = integratedSelectedMonth()) {
+function integratedEntryDateForMonth(month = localYmd().slice(0, 7)) {
     const m = String(month || ''), today = localYmd();
     if (!/^\d{4}-\d{2}$/.test(m))
         return today;

@@ -7,11 +7,11 @@ const vm=require('node:vm');
 const root=path.join(__dirname,'..');
 const read=name=>fs.readFileSync(path.join(root,name),'utf8');
 
-test('selected integrated month controls the new transaction date',()=>{
+test('new transactions default to today independently of the viewed month',()=>{
  const source=read('integrated-forms.js');
  const context={integratedSelectedMonth:()=> '2060-11',localYmd:()=> '2060-12-31',Date};
  vm.runInNewContext(source,context);
- assert.equal(context.integratedEntryDateForMonth(),'2060-11-30');
+ assert.equal(context.integratedEntryDateForMonth(),'2060-12-31');
  assert.equal(context.integratedEntryDateForMonth('2060-02'),'2060-02-29');
 });
 

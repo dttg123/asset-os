@@ -47,6 +47,7 @@ declare function integratedSpendingAnalysis(month:string):{categories:Array<Rele
 declare function integratedSelectedMonth():string;
 declare function integratedScheduleMonth():string;
 declare function integratedMonthLabel(month:string):string;
+declare function openCardPlansHub():void;
 declare function scheduleToolsMarkup(month:string):string;
 declare function bindScheduleTools():void;
 declare function nav(root:string,tab?:string):void;
@@ -135,7 +136,7 @@ integratedSummaryPage=function(){
   const title=schedule.querySelector('.fixed-cost-head strong'),small=schedule.querySelector('.fixed-cost-head small'),amount=schedule.querySelector('.fixed-cost-head-right b'),body=schedule.querySelector('[data-fixed-cost-body]');
   if(title)title.textContent=`${integratedMonthLabel(month)} 남은 납부액`;if(small)small.textContent=pending.length?`미완료 ${pending.length}건`:'선택한 달의 미완료 일정 없음';if(amount)amount.textContent=won(total);
   if(body){body.innerHTML=pending.length?v069ScheduleGroups(pending,'summary'):'<div class="integrated-empty">선택한 달의 금융 일정은 모두 처리했습니다.</div>';body.insertAdjacentHTML('beforebegin',`<div class="fixed-cost-preview">${pending.slice(0,3).map(o=>`<button class="schedule-row" data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"><span class="schedule-copy"><strong>${escapeHtml(o.schedule.name)}</strong><small>${escapeHtml(o.date)}</small></span><strong class="schedule-amount">${won(scheduleOccurrenceDisplayAmount(o))}</strong></button>`).join('')}<button class="diagnostic-action" data-integrated-tab-go="schedule">일정 전체 보기 ›</button></div>`)}
-  schedule.insertAdjacentHTML('afterend',`<button class="card integrated-card-link" data-card-hub><div><strong>카드·할부</strong><small>월 납부액과 남은 원금 확인</small></div><span>›</span></button>`+integratedConsumptionPreview(month));
+  schedule.insertAdjacentHTML('afterend',integratedConsumptionPreview(month));
  }
  const overview=template.content.querySelector('.integrated-overview-hero'),guard=template.content.querySelector('[data-integrated-assets-guard]'),source=[...template.content.children].find(e=>e.classList.contains('source-note')),cashflow=template.content.querySelector('.integrated-month-mini');
  if(overview&&cashflow){cashflow.before(overview);if(guard)overview.after(guard);if(source)(guard||overview).after(source)}
@@ -151,9 +152,11 @@ integratedSchedulePage=function(){
  if(title)title.textContent=`${integratedMonthLabel(month)} 남은 납부액`;
  if(small)small.textContent=`${won(pending.reduce((sum,o)=>sum+scheduleOccurrenceDisplayAmount(o),0))} · 미완료 ${pending.length}건`;
  if(pill)pill.textContent=`완료 ${done}건`;
- if(list)list.innerHTML=occ.map(o=>`<button class="schedule-row" data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"><span class="schedule-copy"><strong>${escapeHtml(o.schedule.name)}</strong><small>${escapeHtml(o.date)} · 예정 ${won(schedulePlannedAmount(o.schedule,o.date))}${o.status==='done'?` · 실제 ${won(scheduleOccurrenceDisplayAmount(o))}`:''}</small></span><strong class="schedule-amount">${won(scheduleOccurrenceDisplayAmount(o))}</strong><span class="schedule-status ${o.status}">${scheduleOccurrenceUiLabel(o)}</span></button>`).join('')||'<div class="integrated-empty">이 달의 금융 일정이 없습니다.</div>';
+ const row=(o:ReleaseOccurrence)=>`<button class="schedule-row" data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"><span class="schedule-copy"><strong>${escapeHtml(o.schedule.name)}</strong><small>${escapeHtml(o.date)} · 예정 ${won(schedulePlannedAmount(o.schedule,o.date))}${o.status==='done'?` · 실제 ${won(scheduleOccurrenceDisplayAmount(o))}`:''}</small></span><strong class="schedule-amount">${won(scheduleOccurrenceDisplayAmount(o))}</strong><span class="schedule-status ${o.status}">${scheduleOccurrenceUiLabel(o)}</span></button>`;
+ const finished=occ.filter(o=>o.status==='done');
+ if(list)list.innerHTML=`<div class="schedule-pending-list">${pending.slice(0,5).map(row).join('')||'<div class="integrated-empty">선택한 달의 미완료 일정이 없어요.</div>'}</div>${pending.length>5?`<details class="schedule-fold schedule-pending-more"><summary>미완료 ${pending.length-5}건 더 보기</summary>${pending.slice(5).map(row).join('')}</details>`:''}${finished.length?`<details class="schedule-fold schedule-completed"><summary>완료 ${finished.length}건 보기</summary>${finished.map(row).join('')}</details>`:''}`;
  const week=template.content.querySelector('.schedule-week'),grid=template.content.querySelector('.schedule-grid');if(week&&grid){const details=document.createElement('details'),summary=document.createElement('summary');details.className='schedule-calendar-toggle';summary.textContent='달력 보기';details.append(summary);week.before(details);details.append(week,grid)}
- return template.innerHTML+scheduleToolsMarkup(month);
+ return scheduleToolsMarkup(month)+template.innerHTML;
 };
 
 const v069SpendingPage=integratedSpendingPage;
@@ -180,7 +183,7 @@ openFinancialProductDetail=function(id){v069FinanceDetail(id);for(const span of 
 
 
 const v069Bind=bind;
-bind=function(){v069Bind();bindScheduleTools();bindIntegratedSummaryEntries();$('[data-card-hub]')?.addEventListener('click',()=>{nav('integrated','schedule');requestAnimationFrame(()=>document.getElementById('integratedCardPlans')?.scrollIntoView({block:'start'}))});$$('[data-integrated-asset-group]').forEach(button=>button.onclick=()=>{v069AssetGroup=v069AssetGroup===button.dataset.integratedAssetGroup?'':button.dataset.integratedAssetGroup||'';renderKeepingScroll()});$$('[data-schedule-category]').forEach(button=>button.onclick=()=>{const scope=button.dataset.scheduleScope,key=button.dataset.scheduleCategory;if(!scope||!key)return;v069ScheduleGroup[scope]=v069ScheduleGroup[scope]===key?'':key;renderKeepingScroll()});const more=$('[data-tx-more]');if(more)more.onclick=()=>{transactionDisplayLimit+=20;renderKeepingScroll()}};
+bind=function(){v069Bind();bindScheduleTools();bindIntegratedSummaryEntries();$$('[data-card-hub]').forEach(button=>button.onclick=()=>openCardPlansHub());$$('[data-integrated-asset-group]').forEach(button=>button.onclick=()=>{v069AssetGroup=v069AssetGroup===button.dataset.integratedAssetGroup?'':button.dataset.integratedAssetGroup||'';renderKeepingScroll()});$$('[data-schedule-category]').forEach(button=>button.onclick=()=>{const scope=button.dataset.scheduleScope,key=button.dataset.scheduleCategory;if(!scope||!key)return;v069ScheduleGroup[scope]=v069ScheduleGroup[scope]===key?'':key;renderKeepingScroll()});const more=$('[data-tx-more]');if(more)more.onclick=()=>{transactionDisplayLimit+=20;renderKeepingScroll()}};
 const appearanceMenu=document.querySelector('[data-profile-action="appearance"] small');if(appearanceMenu)appearanceMenu.textContent='포인트색·다크모드·터치 진동';
 
 const v0615BackupHub=openBackupHub;

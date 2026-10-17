@@ -870,3 +870,15 @@ html[data-theme="dark"]{--polish-accent:color-mix(in srgb,var(--accent) 65%,whit
 @media(prefers-reduced-motion:reduce){
  :where(.hero,.home-trend,.preset-tile,.integrated-record-primary,.integrated-form-save,.native-isa-entry>.primary,.pension-contribution-batch-open):not(:disabled):active{transform:none}
 }
+
+/* Bounded schedule lists and direct card access, shared across integrated tabs. */
+.integrated-view-tools{display:flex;justify-content:space-between;gap:12px;margin-top:-8px}
+.integrated-view-tools button{min-height:44px;padding:8px 12px;border:0;border-radius:12px;background:var(--soft);color:var(--polish-accent);font-size:14px}
+.integrated-view-tools button:disabled{background:transparent;color:var(--muted)}
+.schedule-fold{border-top:1px solid var(--line);margin-top:8px}
+.schedule-fold>summary{min-height:48px;display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--polish-accent);font-size:14px;list-style:none}
+.schedule-fold>summary:after{content:'⌄';margin-left:auto}.schedule-fold[open]>summary:after{content:'⌃'}
+.schedule-fold>summary::-webkit-details-marker{display:none}
+#integratedCardPlans{scroll-margin-top:90px}.card-plan-open{min-height:44px;gap:12px}.card-plan-open>strong{overflow-wrap:anywhere}
+
+#integratedCardPlans>.integrated-empty{min-height:0;padding:12px 0;text-align:left;font-size:13px}

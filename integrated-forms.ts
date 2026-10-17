@@ -80,7 +80,7 @@ function integratedCandidateIssues(candidateStore:IntegratedStore):string[]{
  finally{state.integrated=original}
 }
 
-function integratedEntryDateForMonth(month:unknown=integratedSelectedMonth()):string{
+function integratedEntryDateForMonth(month:unknown=localYmd().slice(0,7)):string{
  const m=String(month||''),today=localYmd();
  if(!/^\d{4}-\d{2}$/.test(m))return today;
  const [year,monthNumber]=m.split('-').map(Number),lastDay=new Date(Date.UTC(year,monthNumber,0)).getUTCDate(),day=Math.min(Number(today.slice(8,10))||1,lastDay);

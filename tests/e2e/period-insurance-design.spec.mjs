@@ -26,3 +26,60 @@ test('@core selected months and insurance payment status stay explicit without c
  await card.click();await expect(page.locator('#sheetBody')).toContainText('2025-12-31');await page.goBack();
  expect(await page.evaluate(()=>({ledger:JSON.stringify(state.integrated.ledger),insurance:JSON.stringify(state.insurance),net:integratedFinancialModel().netAssets}))).toEqual(before);
 });
+
+test('@core today defaults ignore stale months and thirty schedules stay compact with direct card access',async({page},info)=>{
+ await page.clock.setFixedTime(new Date('2026-10-17T03:00:00Z'));
+ await page.goto('/index.html?qa=1#/home');
+ await page.evaluate(()=>{
+  localYmd=(d)=>{const value=d||new Date();return value.getFullYear()+'-'+String(value.getMonth()+1).padStart(2,'0')+'-'+String(value.getDate()).padStart(2,'0')};
+  const next=window.__assetOS.getState();next.settings.integratedMonth='2026-09';next.settings.integratedMonthViewedOn='2026-10-16';
+  next.integrated.ledger=[{id:'cash',date:'2026-01-01',type:'openingAsset',amount:10000000,toAccountId:'cash-main'}];
+  next.financeSchedules={items:Array.from({length:30},(_,i)=>({id:'many-'+i,name:'테스트 납부 일정 '+(i+1),kind:'expense',amount:1000,day:25,startDate:'2026-01-01',active:true}))};
+  for(let i=0;i<10;i++)next.integrated.ledger.push({id:'paid-'+i,date:'2026-09-25',type:'expense',amount:1000,fromAccountId:'cash-main',category:'테스트 납부 일정 '+(i+1),meta:{scheduleId:'many-'+i,scheduleDate:'2026-09-25'}});
+  window.__assetOS.replaceState(next);nav('integrated','summary');
+ });
+ await expect(page.locator('[data-integrated-month-select]')).toHaveValue('2026-10');
+ await page.locator('[data-integrated-month-select]').fill('2026-09');await page.locator('[data-integrated-month-select]').dispatchEvent('change');
+ await page.locator('[data-summary-entry]').first().click();await expect(page.locator('#entryDate')).toHaveValue('2026-10-17');
+ await page.getByRole('button',{name:'입력창 닫기',exact:true}).click();
+ await page.getByRole('main').getByRole('button',{name:'일정',exact:true}).click();
+ await expect(page.locator('.schedule-pending-list .schedule-row')).toHaveCount(5);
+ await expect(page.locator('.schedule-card .schedule-list .schedule-row:visible')).toHaveCount(5);
+ await expect(page.locator('.schedule-pending-more summary')).toHaveText('미완료 15건 더 보기');
+ await expect(page.locator('.schedule-completed summary')).toHaveText('완료 10건 보기');
+ const ledger=await page.evaluate(()=>JSON.stringify(state.integrated.ledger));
+ for(const width of [360,412])for(const theme of ['light','dark']){
+  await page.setViewportSize({width,height:915});await page.evaluate(theme=>{setting().theme=theme;applyTheme()},theme);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1)).toBe(true);
+  await page.screenshot({path:`/tmp/asset-schedule-${info.project.name}-${width}-${theme}.png`,animations:'disabled'});
+ }
+ await page.locator('.schedule-pending-more summary').click();await expect(page.locator('.schedule-card .schedule-list .schedule-row:visible')).toHaveCount(20);
+ await page.locator('.schedule-completed summary').click();await expect(page.locator('.schedule-card .schedule-list .schedule-row:visible')).toHaveCount(30);
+ await page.locator('[data-card-hub]').click();await expect(page.locator('#detailSheet.open #integratedCardPlans')).toBeVisible();await expect(page.locator('#detailSheet.open [data-card-plan-new]')).toBeVisible();
+ await page.goBack();await expect(page.locator('#detailSheet')).not.toHaveClass(/open/);
+ await page.getByRole('button',{name:'이번 달로',exact:true}).click();await expect(page.locator('[data-integrated-month-select]')).toHaveValue('2026-10');
+ expect(await page.evaluate(()=>JSON.stringify(state.integrated.ledger))).toBe(ledger);
+ await page.clock.setFixedTime(new Date('2026-11-01T03:00:00Z'));await page.reload();
+ await page.evaluate(()=>{localYmd=(d)=>{const v=d||new Date();return v.getFullYear()+'-'+String(v.getMonth()+1).padStart(2,'0')+'-'+String(v.getDate()).padStart(2,'0')};render()});
+ await expect(page.locator('[data-integrated-month-select]')).toHaveValue('2026-11');
+});
+
+test('@core final card installment remains saved and completed history survives reload',async({page})=>{
+ await page.clock.setFixedTime(new Date('2026-10-17T03:00:00Z'));await page.goto('/index.html?qa=1#/home');
+ const id=await page.evaluate(()=>{
+  const next=window.__assetOS.getState();next.financialProducts={items:[],events:[]};next.financeSchedules={items:[]};next.integrated.liabilities=[];
+  next.integrated.ledger=[{id:'cash',date:'2026-01-01',type:'openingAsset',amount:10000000,toAccountId:'cash-main'}];window.__assetOS.replaceState(next);
+  const id=createCardInstallment({name:'완료 검증 TV',purchaseAmount:10001,months:2,purchaseDate:'2026-08-01',firstPaymentDate:'2026-08-31',interestMode:'free'});
+  const finish=renderScheduleCompletion;renderScheduleCompletion=()=>{};completeScheduleOccurrence(id,'2026-08-31',0,'','',5000,0);renderScheduleCompletion=finish;closeSheets({all:true});setting().integratedMonth='2026-09';persist(false);nav('integrated','schedule');return id;
+ });
+ await page.locator(`.schedule-list [data-fixed-cost-item="${id}"]`).click();
+ await page.locator('[data-schedule-loan-principal]').fill('5001');await page.locator('[data-schedule-loan-interest]').fill('0');await page.locator('[data-schedule-complete]').click();
+ await expect(page.locator('[data-schedule-actual-edit]')).toBeVisible();
+ await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);await page.reload();
+ await expect(page.locator('.card-completed summary')).toHaveText('납부 완료 1건 · 기록 보기');
+ await page.locator('.card-completed summary').click();await page.locator(`[data-card-plan-open="${id}"]`).click();
+ await expect(page.locator('.card-payment-complete')).toContainText('모든 회차 납부 완료');
+ expect(await page.evaluate(()=>integratedReplay().totalDebt)).toBe(0);
+ expect(await page.evaluate(()=>scheduleOccurrences('2026-10').filter(o=>o.schedule.cardPlan).length)).toBe(0);
+ expect(await page.evaluate(()=>state.integrated.ledger.filter(t=>t.meta?.cardPurchase).length)).toBe(1);
+});
