@@ -1,0 +1,77 @@
+'use strict';
+const CLOUD_CHUNK_CHARS = 256 * 1024, CLOUD_MAX_RAW_BYTES = 64 * 1024 * 1024, CLOUD_MAX_CHUNKS = 384;
+function cloudWireObject(value) { return !!value && typeof value === 'object' && !Array.isArray(value); }
+async function cloudBoundedBytes(stream, limit) { const reader = stream.getReader(), chunks = []; let size = 0; try {
+    while (true) {
+        const next = await reader.read();
+        if (next.done)
+            break;
+        size += next.value.byteLength;
+        if (size > limit) {
+            await reader.cancel();
+            throw new Error('클라우드 자료가 처리 한도를 넘었습니다. 기존 원장은 보존했습니다.');
+        }
+        chunks.push(next.value);
+    }
+}
+finally {
+    reader.releaseLock();
+} const bytes = new Uint8Array(size); let offset = 0; for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+} return bytes; }
+async function cloudEncodeEnvelope(client, payload, requestId) {
+    const raw = JSON.stringify(payload), rawBytes = new TextEncoder().encode(raw).length;
+    if (rawBytes > CLOUD_MAX_RAW_BYTES)
+        throw new Error('클라우드 원장 처리 한도 초과');
+    const bytes = await cloudBoundedBytes(new Blob([raw]).stream().pipeThrough(new CompressionStream('gzip')), CLOUD_MAX_RAW_BYTES);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 16384)
+        binary += String.fromCharCode(...bytes.subarray(i, i + 16384));
+    const encoded = btoa(binary), count = Math.ceil(encoded.length / CLOUD_CHUNK_CHARS);
+    if (count < 1 || count > CLOUD_MAX_CHUNKS)
+        throw new Error('클라우드 분할 저장 한도 초과');
+    for (let index = 0; index < count; index++) {
+        const result = await client.rpc('stage_asset_os_state_chunk', { p_request_id: requestId, p_index: index, p_contents: encoded.slice(index * CLOUD_CHUNK_CHARS, (index + 1) * CLOUD_CHUNK_CHARS) });
+        if (result.error)
+            throw new Error(String(result.error.message || '클라우드 분할 저장 실패'));
+    }
+    return { schemaVersion: payload.schemaVersion, appVersion: payload.appVersion, environment: payload.environment, savedAt: payload.savedAt, encoding: 'gzip-chunks-v1', requestId, chunkCount: count, rawBytes, checksum: await localDbChecksum(raw), data: {} };
+}
+async function cloudDecodeEnvelope(client, payload) {
+    if (!cloudWireObject(payload) || payload.encoding !== 'gzip-chunks-v1')
+        return payload;
+    const count = Number(payload.chunkCount), rawBytes = Number(payload.rawBytes), requestId = String(payload.requestId || '');
+    if (!Number.isInteger(count) || count < 1 || count > CLOUD_MAX_CHUNKS || !Number.isInteger(rawBytes) || rawBytes < 1 || rawBytes > CLOUD_MAX_RAW_BYTES || !/^[a-f0-9-]{36}$/i.test(requestId) || !/^[a-f0-9]{64}$/.test(String(payload.checksum || '')))
+        throw new Error('클라우드 저장 정보 검증 실패');
+    let encoded = '';
+    for (let after = -1; after < count - 1;) {
+        const response = await client.rpc('read_asset_os_state_chunks', { p_request_id: requestId, p_after_index: after, p_limit: 8 });
+        if (response.error || !Array.isArray(response.data) || !response.data.length)
+            throw new Error('클라우드 기록 일부를 읽지 못했습니다. 기존 원장을 보존했습니다.');
+        for (const item of response.data) {
+            if (!cloudWireObject(item) || Number(item.chunk_index) !== after + 1 || typeof item.contents !== 'string' || item.contents.length > CLOUD_CHUNK_CHARS || after + 1 >= count)
+                throw new Error('클라우드 기록 순서 또는 크기 검증 실패');
+            after++;
+            encoded += item.contents;
+        }
+    }
+    let binary;
+    try {
+        binary = atob(encoded);
+    }
+    catch {
+        throw new Error('클라우드 저장 인코딩 오류');
+    }
+    ;
+    const packed = Uint8Array.from(binary, c => c.charCodeAt(0)), bytes = await cloudBoundedBytes(new Blob([packed]).stream().pipeThrough(new DecompressionStream('gzip')), rawBytes);
+    if (bytes.length !== rawBytes)
+        throw new Error('클라우드 원장 크기 검증 실패');
+    const raw = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    if (await localDbChecksum(raw) !== payload.checksum)
+        throw new Error('클라우드 원장 검증값 불일치');
+    const decoded = JSON.parse(raw);
+    if (!cloudWireObject(decoded) || decoded.schemaVersion !== payload.schemaVersion)
+        throw new Error('클라우드 데이터 버전 검증 실패');
+    return decoded;
+}

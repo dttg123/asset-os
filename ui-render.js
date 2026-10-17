@@ -83,23 +83,23 @@ function updateDiagnostics() { const h = state.accounts.reduce((sum, a) => sum +
     $('#errorCount').className = `diagnostic-value ${runtimeErrors + integrity ? 'wait' : 'ok'}`;
 } if ($('#storageUsageStatus')) {
     const mb = Math.round((Number(usage?.bytes) || 0) / 10000) / 100, pctUsed = Math.round((Number(usage?.bytes) || 0) / (Number(usage?.limit) || MAX_STATE_BYTES) * 100);
-    $('#storageUsageStatus').textContent = usage ? `${mb}MB · ${pctUsed}%` : '저장 후 계산';
+    $('#storageUsageStatus').textContent = usage ? `${mb}MB · 기기 DB` : '저장 후 계산';
     $('#storageUsageStatus').className = `diagnostic-value ${['warning', 'critical'].includes(usage?.level || '') ? 'wait' : 'ok'}`;
 } if ($('#backupStatus'))
     $('#backupStatus').textContent = '준비됨'; }
-function selectAccount(id) { setting().selectedAccountId = id; persist(); render(); haptic('light'); }
+async function selectAccount(id) { setting().selectedAccountId = id; (await persist()); render(); haptic('light'); }
 function bind() {
     $('[data-home-growth]')?.addEventListener('click', () => openFinancialGrowthAnalysis('3m'));
     $$('[data-route]').forEach(b => b.onclick = e => { e.stopPropagation(); if (b.dataset.tab === 'transactions')
         transactionDisplayLimit = 50; nav(b.dataset.route, b.dataset.tab || 'summary'); });
     $$('[data-integrated-tab]').forEach(b => b.onclick = () => nav('integrated', b.dataset.integratedTab));
     $$('[data-integrated-tab-go]').forEach(b => b.onclick = () => nav('integrated', b.dataset.integratedTabGo));
-    $('[data-integrated-month-select]')?.addEventListener('change', e => { const target = e.target; if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement))
+    $('[data-integrated-month-select]')?.addEventListener('change', async (e) => { const target = e.target; if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement))
         return; const month = target.value; if (!/^\d{4}-\d{2}$/.test(month))
-        return; setting().integratedMonth = month; persist(false); render(); });
-    $('[data-integrated-current-month]')?.addEventListener('click', () => { setting().integratedMonth = localYmd().slice(0, 7); persist(false); render(); });
-    $$('[data-integrated-month-shift]').forEach(b => b.onclick = () => integratedShiftMonth(Number(b.dataset.integratedMonthShift) || 0));
-    $$('[data-integrated-filter]').forEach(b => b.onclick = () => { setting().integratedLedgerFilter = b.dataset.integratedFilter || ''; persist(false); render(); });
+        return; setting().integratedMonth = month; (await persist(false)); render(); });
+    $('[data-integrated-current-month]')?.addEventListener('click', async () => { setting().integratedMonth = localYmd().slice(0, 7); (await persist(false)); render(); });
+    $$('[data-integrated-month-shift]').forEach(b => b.onclick = async () => (await integratedShiftMonth(Number(b.dataset.integratedMonthShift) || 0)));
+    $$('[data-integrated-filter]').forEach(b => b.onclick = async () => { setting().integratedLedgerFilter = b.dataset.integratedFilter || ''; (await persist(false)); render(); });
     $$('[data-integrated-new]').forEach(b => b.onclick = () => openIntegratedTransactionForm());
     $$('[data-integrated-tx]').forEach(b => b.onclick = () => openIntegratedTransactionDetail(b.dataset.integratedTx));
     $$('[data-integrated-month-detail]').forEach(b => b.onclick = () => openIntegratedMonthDetail(b.dataset.integratedMonthDetail));
@@ -110,21 +110,21 @@ function bind() {
     $('[data-cash-reconcile]')?.addEventListener('click', openCashReconcileForm);
     $('[data-spending-budget]')?.addEventListener('click', openMonthlyLivingBudgetForm);
     $$('[data-integrated-asset]').forEach(b => b.onclick = () => openIntegratedAsset(b.dataset.integratedAsset));
-    $$('[data-fixed-cost-item]').forEach(b => b.onclick = () => openScheduleDay(b.dataset.fixedCostDate, b.dataset.fixedCostItem));
-    $$('[data-schedule-day]').forEach(b => b.onclick = () => openScheduleDay(b.dataset.scheduleDay));
+    $$('[data-fixed-cost-item]').forEach(b => b.onclick = async () => (await openScheduleDay(b.dataset.fixedCostDate, b.dataset.fixedCostItem)));
+    $$('[data-schedule-day]').forEach(b => b.onclick = async () => (await openScheduleDay(b.dataset.scheduleDay)));
     $('[data-empty-new-isa]')?.addEventListener('click', () => openNewIsaAccount(policyGroup('isa').activePolicyId));
     $$('[data-detail]').forEach(b => b.onclick = e => { e.stopPropagation(); openDetail(b.dataset.detail); });
-    $$('[data-account]').forEach(b => b.onclick = () => selectAccount(b.dataset.account || ''));
+    $$('[data-account]').forEach(b => b.onclick = async () => (await selectAccount(b.dataset.account || '')));
     $$('[data-archive-open]').forEach(b => b.onclick = () => openArchivedAccountDetail(b.dataset.archiveOpen));
     $$('[data-isa-tab]').forEach(b => b.onclick = () => { if (b.dataset.isaTab === 'transactions')
         transactionDisplayLimit = 50; nav('isa', b.dataset.isaTab); });
     $$('[data-holding]').forEach(b => b.onclick = () => openHolding(b.dataset.holding));
     $$('[data-tx]').forEach(b => b.onclick = () => openTransactionDetail(b.dataset.tx));
-    $$('[data-tx-filter]').forEach(b => b.onclick = () => { setting().txFilter = b.dataset.txFilter || ''; transactionDisplayLimit = 50; persist(); render(); });
+    $$('[data-tx-filter]').forEach(b => b.onclick = async () => { setting().txFilter = b.dataset.txFilter || ''; transactionDisplayLimit = 50; (await persist()); render(); });
     $('[data-tx-more]')?.addEventListener('click', () => { transactionDisplayLimit += 50; render(); });
     $$('[data-register]').forEach(b => b.onclick = openRegisterChoice);
     $$('[data-new-tx]').forEach(b => b.onclick = openTransactionChoice);
-    $$('[data-inline-group],[data-inline-donut]').forEach(b => b.onclick = () => { const group = b.dataset.inlineGroup || b.dataset.inlineDonut || '', next = setting().compositionFocus === group ? '' : group; setting().compositionGroup = next; setting().compositionFocus = next; persist(); renderKeepingScroll(); });
+    $$('[data-inline-group],[data-inline-donut]').forEach(b => b.onclick = async () => { const group = b.dataset.inlineGroup || b.dataset.inlineDonut || '', next = setting().compositionFocus === group ? '' : group; setting().compositionGroup = next; setting().compositionFocus = next; (await persist()); renderKeepingScroll(); });
     $('[data-isa-holdings-toggle]')?.addEventListener('click', e => { const panel = $('[data-isa-holdings-extra]'), guard = $('[data-isa-holdings-guard]'); isaHoldingsExpanded = !isaHoldingsExpanded; stableInlineToggle(e.currentTarget, panel, guard, isaHoldingsExpanded); e.currentTarget.textContent = isaHoldingsExpanded ? '숨기기 ∧' : '펼치기 ∨'; e.currentTarget.setAttribute('aria-expanded', isaHoldingsExpanded ? 'true' : 'false'); });
     $('[data-pension-holdings-toggle]')?.addEventListener('click', e => { const panel = $('[data-pension-holdings-extra]'), guard = $('[data-pension-holdings-guard]'); pensionHoldingsExpanded = !pensionHoldingsExpanded; stableInlineToggle(e.currentTarget, panel, guard, pensionHoldingsExpanded); e.currentTarget.textContent = pensionHoldingsExpanded ? '숨기기 ∧' : '펼치기 ∨'; e.currentTarget.setAttribute('aria-expanded', pensionHoldingsExpanded ? 'true' : 'false'); });
     $$('[data-dividend-analysis]').forEach(b => b.onclick = () => { dividendDisplayLimit = 50; openDividendAnalysis(b.dataset.period || ''); });
@@ -147,7 +147,7 @@ function bind() {
     $$('[data-pension-tx]').forEach(b => b.onclick = () => openPensionTransactionDetail(b.dataset.pensionTx));
     $('[data-pension-tx-more]')?.addEventListener('click', () => { pensionTransactionDisplayLimit += 20; renderKeepingScroll(); });
     $('[data-pension-future-settings]')?.addEventListener('click', openPensionSettings);
-    $('[data-pension-goal-toggle]')?.addEventListener('click', () => { setting().pensionGoalExpanded = !setting().pensionGoalExpanded; persist(); render(); });
+    $('[data-pension-goal-toggle]')?.addEventListener('click', async () => { setting().pensionGoalExpanded = !setting().pensionGoalExpanded; (await persist()); render(); });
     $('[data-pension-months-toggle]')?.addEventListener('click', e => { const card = e.currentTarget.closest('[data-pension-monthly-card]'), guard = card?.nextElementSibling?.matches('[data-monthly-scroll-guard]') ? card.nextElementSibling : null; if (!card)
         return; const beforeY = window.scrollY, beforeH = card.getBoundingClientRect().height, expanding = !pensionMonthsExpanded; if (expanding)
         clearScrollGuard(guard); pensionMonthsExpanded = expanding; card.classList.toggle('expanded', expanding); e.currentTarget.textContent = expanding ? '접기' : '12개월 펼치기'; e.currentTarget.setAttribute('aria-expanded', expanding ? 'true' : 'false'); requestAnimationFrame(() => { const afterH = card.getBoundingClientRect().height; if (!expanding)
@@ -156,8 +156,8 @@ function bind() {
         return; integratedAssetsExpanded = !integratedAssetsExpanded; stableInlineToggle(e.currentTarget, body, guard, integratedAssetsExpanded); card.classList.toggle('open', integratedAssetsExpanded); e.currentTarget.setAttribute('aria-expanded', integratedAssetsExpanded ? 'true' : 'false'); });
     $('[data-fixed-cost-toggle]')?.addEventListener('click', e => { const card = e.currentTarget.closest('[data-fixed-cost-card]'), body = card?.querySelector('[data-fixed-cost-body]'); if (!card || !body)
         return; integratedFixedCostsExpanded = !integratedFixedCostsExpanded; body.hidden = !integratedFixedCostsExpanded; card.classList.toggle('open', integratedFixedCostsExpanded); e.currentTarget.setAttribute('aria-expanded', integratedFixedCostsExpanded ? 'true' : 'false'); });
-    $$('[data-pension-scope]').forEach(b => b.onclick = () => { setting().pensionAssetScope = b.dataset.pensionScope || ''; setting().pensionAssetFocus = ''; pensionExpandedAssetGroup = ''; pensionHoldingsExpanded = false; pensionAnalysisScope = b.dataset.pensionScope || ''; pensionAnalysisSelectedKey = ''; persist(); renderKeepingScroll(); });
-    $$('[data-pension-group],[data-pension-donut]').forEach(b => b.onclick = () => { const key = b.dataset.pensionGroup || b.dataset.pensionDonut || '', next = setting().pensionAssetFocus === key ? '' : key; setting().pensionAssetFocus = next; pensionExpandedAssetGroup = next; persist(); renderKeepingScroll(); });
+    $$('[data-pension-scope]').forEach(b => b.onclick = async () => { setting().pensionAssetScope = b.dataset.pensionScope || ''; setting().pensionAssetFocus = ''; pensionExpandedAssetGroup = ''; pensionHoldingsExpanded = false; pensionAnalysisScope = b.dataset.pensionScope || ''; pensionAnalysisSelectedKey = ''; (await persist()); renderKeepingScroll(); });
+    $$('[data-pension-group],[data-pension-donut]').forEach(b => b.onclick = async () => { const key = b.dataset.pensionGroup || b.dataset.pensionDonut || '', next = setting().pensionAssetFocus === key ? '' : key; setting().pensionAssetFocus = next; pensionExpandedAssetGroup = next; (await persist()); renderKeepingScroll(); });
     $('[data-pension-group-toggle]')?.addEventListener('click', e => { const key = e.currentTarget.dataset.pensionGroupToggle || ''; pensionExpandedAssetGroup = pensionExpandedAssetGroup === key ? '' : key; renderKeepingScroll(); });
     $$('[data-pension-holding]').forEach(b => b.onclick = () => openPensionHoldingDetail(b.dataset.pensionHolding));
     $('[data-isa-asset-analysis]')?.addEventListener('click', openIsaAssetAnalysis);
@@ -165,5 +165,5 @@ function bind() {
     $('[data-pension-income-analysis]')?.addEventListener('click', openPensionIncomeAnalysis);
     if (route().root === 'pension' && route().tab === 'future')
         bindPensionFutureSheet();
-    $$('[data-current-month="true"]').forEach(b => b.onclick = e => { e.stopPropagation(); setting().integratedMonth = localYmd().slice(0, 7); persist(false); nav(b.dataset.route, b.dataset.tab || 'summary'); });
+    $$('[data-current-month="true"]').forEach(b => b.onclick = async (e) => { e.stopPropagation(); setting().integratedMonth = localYmd().slice(0, 7); (await persist(false)); nav(b.dataset.route, b.dataset.tab || 'summary'); });
 }

@@ -5,7 +5,7 @@ const BROKER_KIS_PUBLIC_CONFIG = Object.freeze({ projectUrl: 'https://wjrzukoofs
 const QA_MODE = typeof location !== 'undefined' && /(?:^|[?&])qa=1(?:&|$)/.test(String(location.search || ''));
 const QA_STORAGE_KEY = 'asset-os-qa-v0.5', LIVE_STORAGE_KEY = 'asset-os-v1.9.45-live';
 const DEFAULT_FINANCE_DAY = 25;
-const APP_VERSION = 'v0.6.23', APP_ENV = QA_MODE ? 'qa' : 'live', SCHEMA_VERSION = 21, KEY = QA_MODE ? QA_STORAGE_KEY : LIVE_STORAGE_KEY, LEGACY_KEYS = ['asset-os-v1.9.22-central-schedule', 'asset-os-v1.9.20-real-finance', 'asset-os-v1.9.19-finance-linked', 'asset-os-v1.9.18-integrated-ui-refine', 'asset-os-v1.9.17-integrated-complete-stage1', 'asset-os-v1.9.16-integrated-ledger-stage2', 'asset-os-v1.9.9-pension-step2-analysis', 'asset-os-v1.9.7-pension-step2-precision', 'asset-os-v1.9.6-pension-step2-refine', 'asset-os-v1.9.5-pension-step2', 'asset-os-v1.9.4-pension-step1', 'asset-os-v1.9.3-pension-step1', 'asset-os-v1.9.2-isa-review', 'asset-os-v1.9.1-isa-review', 'asset-os-v1.9-isa-review', 'asset-os-v1.8-isa-review', 'asset-os-v1.7-isa-review', 'asset-os-v1.6.1-isa-review', 'asset-os-v1.6-isa-review', 'asset-os-v1.5-isa-review', 'asset-os-v1.4-isa-review', 'asset-os-v1.3-isa-review'];
+const APP_VERSION = 'v0.7.0', APP_ENV = QA_MODE ? 'qa' : 'live', SCHEMA_VERSION = 22, KEY = QA_MODE ? QA_STORAGE_KEY : LIVE_STORAGE_KEY, LEGACY_KEYS = ['asset-os-v1.9.22-central-schedule', 'asset-os-v1.9.20-real-finance', 'asset-os-v1.9.19-finance-linked', 'asset-os-v1.9.18-integrated-ui-refine', 'asset-os-v1.9.17-integrated-complete-stage1', 'asset-os-v1.9.16-integrated-ledger-stage2', 'asset-os-v1.9.9-pension-step2-analysis', 'asset-os-v1.9.7-pension-step2-precision', 'asset-os-v1.9.6-pension-step2-refine', 'asset-os-v1.9.5-pension-step2', 'asset-os-v1.9.4-pension-step1', 'asset-os-v1.9.3-pension-step1', 'asset-os-v1.9.2-isa-review', 'asset-os-v1.9.1-isa-review', 'asset-os-v1.9-isa-review', 'asset-os-v1.8-isa-review', 'asset-os-v1.7-isa-review', 'asset-os-v1.6.1-isa-review', 'asset-os-v1.6-isa-review', 'asset-os-v1.5-isa-review', 'asset-os-v1.4-isa-review', 'asset-os-v1.3-isa-review'];
 const nf = new Intl.NumberFormat('ko-KR');
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const INVESTMENT_ROLES = ['성장', '배당', '현금흐름', '안정', '현금'];
@@ -1301,7 +1301,7 @@ function isaAccountsForDate(date = '') { const d = String(date || localYmd()), t
     return false; return true; }); }
 function resolveScheduleIsaAccount(sc, explicit = '', date = '') { const candidates = isaAccountsForDate(date || ''), requested = String(explicit || sc?.targetIsaAccountId || ''); if (requested && candidates.some(a => a.id === requested))
     return requested; return candidates.length === 1 ? candidates[0].id : ''; }
-function completeScheduleOccurrence(scheduleId, date, amountOverride = 0, targetPensionAccountId = '', targetIsaAccountId = '', loanPrincipalOverride = 0, loanInterestOverride = 0) {
+async function completeScheduleOccurrence(scheduleId, date, amountOverride = 0, targetPensionAccountId = '', targetIsaAccountId = '', loanPrincipalOverride = 0, loanInterestOverride = 0) {
     const request = validateScheduleCompletionRequest(scheduleId, date);
     if (!request.ok) {
         toast(request.error);
@@ -1317,7 +1317,7 @@ function completeScheduleOccurrence(scheduleId, date, amountOverride = 0, target
         toast(validationError);
         return false;
     }
-    if (!commitScheduleCompletion(request.schedule, date, draft))
+    if (!(await commitScheduleCompletion(request.schedule, date, draft)))
         return false;
     renderScheduleCompletion(date, draft.successMessage);
     return true;
@@ -1383,7 +1383,7 @@ function schedulePlannedAmount(s, date) {
     const latest = [...history].filter(x => x && validYmdDate(x.effectiveFrom) && Number.isFinite(x.amount) && x.amount > 0 && x.effectiveFrom <= date).sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom)).at(-1);
     return latest ? latest.amount : cardInstallmentTerms(s, date)?.total || Number(s.amount) || 0;
 }
-function updateSchedulePlannedAmount(id, date, amount, scope) {
+async function updateSchedulePlannedAmount(id, date, amount, scope) {
     const s = financeSchedules().find(x => x.id === id);
     if (!s || !validYmdDate(date) || !['once', 'future'].includes(scope) || !financialNumberInRange(amount) || !Number.isInteger(amount) || amount <= 0) {
         toast('일정과 금액을 확인해 주세요.');
@@ -1397,7 +1397,7 @@ function updateSchedulePlannedAmount(id, date, amount, scope) {
             delete s.amountOverrides[date];
         s.amountHistory = [...(Array.isArray(s.amountHistory) ? s.amountHistory : []).filter(x => x.effectiveFrom !== date), { effectiveFrom: date, amount }];
     }
-    if (!persist(false)) {
+    if (!(await persist(false))) {
         Object.assign(s, before);
         for (const key of ['amountOverrides', 'amountHistory'])
             if (!(key in before))
@@ -1420,7 +1420,7 @@ function cardPlanSummary(s, month) {
     const remainingPrincipal = Math.max(0, plan.purchaseAmount - paid);
     return { purchaseAmount: plan.purchaseAmount, remainingPrincipal, plannedAmount: date ? schedulePlannedAmount(s, date) : 0, estimatedInterest: terms?.interest || 0, actualAmount: actual ? Number(actual.meta?.actualAmount ?? actual.amount) || 0 : null, paidInstallments, totalInstallments, completed: totalInstallments > 0 && paidInstallments === totalInstallments && remainingPrincipal === 0 };
 }
-function createCardInstallment(input) {
+async function createCardInstallment(input) {
     const amount = Number(input.purchaseAmount), months = Number(input.months), rate = Number(input.annualRate) || 0, purchaseDate = String(input.purchaseDate || ''), first = String(input.firstPaymentDate || ''), name = String(input.name || '').trim(), mode = String(input.interestMode);
     if (!name || name.length > 80 || !validYmdDate(purchaseDate) || !validYmdDate(first) || first < purchaseDate || !Number.isInteger(amount) || amount <= 0 || !financialNumberInRange(amount) || !Number.isInteger(months) || months < 1 || months > 60 || amount < months || !['free', 'paid'].includes(mode) || !Number.isFinite(rate) || rate < 0 || rate > 100) {
         toast('구매금액·기간·첫 납부일을 확인해 주세요.');
@@ -1437,7 +1437,7 @@ function createCardInstallment(input) {
         state.financeSchedules = { items: [] };
     state.financeSchedules.items.push(s);
     const issues = integratedCandidateIssues(store);
-    if (issues.length || !persist(false)) {
+    if (issues.length || !(await persist(false))) {
         state.integrated = before;
         state.financeSchedules = schedulesBefore;
         if (issues.length)
@@ -1446,7 +1446,7 @@ function createCardInstallment(input) {
     }
     return id;
 }
-function removeUnpaidCardInstallment(id) {
+async function removeUnpaidCardInstallment(id) {
     const s = financeSchedules().find(x => x.id === id);
     if (!s?.cardPlan)
         return false;
@@ -1460,7 +1460,7 @@ function removeUnpaidCardInstallment(id) {
     store.liabilities = store.liabilities.filter(x => x.id !== s.liabilityId);
     if (state.financeSchedules)
         state.financeSchedules.items = financeSchedules().filter(x => x.id !== id);
-    if (!persist(false)) {
+    if (!(await persist(false))) {
         state.integrated = before;
         state.financeSchedules = schedules;
         return false;
@@ -1558,23 +1558,23 @@ function validateScheduleCompletionDraft(draft) {
     const issues = integratedCandidateIssues(candidateStore);
     return issues.length ? issues[0].replace('자산 잔액 음수:', '잔액이 부족합니다:').replace('부채 잔액 음수:', '대출잔액보다 많이 상환할 수 없습니다:') : '';
 }
-function commitScheduleCompletion(schedule, date, draft) {
+async function commitScheduleCompletion(schedule, date, draft) {
     if (draft.targetPensionAccountId)
         schedule.targetPensionAccountId = draft.targetPensionAccountId;
     if (draft.targetIsaAccountId)
         schedule.targetIsaAccountId = draft.targetIsaAccountId;
     integratedStore().ledger.push(...draft.rows);
     setting().integratedMonth = integratedMonthKey(date);
-    return persist(false);
+    return (await persist(false));
 }
 function renderScheduleCompletion(date, message) {
     closeSheets();
     render();
-    setTimeout(() => openScheduleDay(date), 60);
+    setTimeout(async () => (await openScheduleDay(date)), 60);
     toast(message);
     haptic('light');
 }
-function updateScheduleActualPayment(scheduleId, date, amount, principal = 0, interest = 0) {
+async function updateScheduleActualPayment(scheduleId, date, amount, principal = 0, interest = 0) {
     const schedule = financeSchedules().find(s => s.id === scheduleId);
     if (!schedule)
         return false;
@@ -1612,7 +1612,7 @@ function updateScheduleActualPayment(scheduleId, date, amount, principal = 0, in
         return false;
     }
     store.ledger.push(...draft.rows);
-    if (!persist(false)) {
+    if (!(await persist(false))) {
         store.ledger = original;
         Object.assign(schedule, previous);
         return false;
@@ -1892,7 +1892,8 @@ const STATE_MIGRATIONS = [
             settings.integratedLedgerFilter = 'all'; }) },
     { from: 20, to: 21, name: 'initialize storage diagnostics', migrate: data => migrationMutate(data, next => { const system = migrationRecord(next.system); next.system = system; if (typeof system.loadWarning !== 'string')
             system.loadWarning = ''; if (typeof system.saveError !== 'string')
-            system.saveError = ''; }) }
+            system.saveError = ''; }) },
+    { from: 21, to: 22, name: 'activate verified database storage without changing ledger records', migrate: data => data }
 ];
 const STATE_MIGRATION_BY_VERSION = new Map(STATE_MIGRATIONS.map(step => [step.from, step]));
 function stateMigrationPlan(fromVersion, toVersion = SCHEMA_VERSION) {
@@ -1968,11 +1969,184 @@ function compactStateSnapshots(input, referenceDate = localYmd()) {
     }
     return report;
 }
-const MAX_STATE_BYTES = 4000000;
+const MAX_STATE_BYTES = 48 * 1024 * 1024;
 const STORAGE_NOTICE_BYTES = Math.round(MAX_STATE_BYTES * .7), STORAGE_WARNING_BYTES = Math.round(MAX_STATE_BYTES * .85), STORAGE_CRITICAL_BYTES = Math.round(MAX_STATE_BYTES * .95);
 function storageUsageLevel(bytes) { return bytes >= STORAGE_CRITICAL_BYTES ? 'critical' : bytes >= STORAGE_WARNING_BYTES ? 'warning' : bytes >= STORAGE_NOTICE_BYTES ? 'notice' : 'ok'; }
-function stateEnvelopeJson(data = state) { const payload = QA_MODE && typeof qaStorageState === 'function' ? qaStorageState(data) : data; return JSON.stringify({ schemaVersion: SCHEMA_VERSION, appVersion: APP_VERSION, environment: APP_ENV, savedAt: new Date().toISOString(), data: payload }); }
+function stateEnvelopeJson(data = state) { const payload = data; return JSON.stringify({ schemaVersion: SCHEMA_VERSION, appVersion: APP_VERSION, environment: APP_ENV, savedAt: new Date().toISOString(), data: payload }); }
 function stateEnvelopeBytes(raw) { return typeof TextEncoder === 'function' ? new TextEncoder().encode(raw).length : raw.length * 2; }
+;
+/* asset-os source: src/storage/local-database.js */
+'use strict';
+const LOCAL_DATABASE_FORMAT = 1;
+let localDatabase = null, localDatabaseRevision = 0, localDatabaseEnvelope = null;
+let localDatabaseRows = new Map(), localDatabaseReady = false;
+let localDatabaseSync = null;
+const LOCAL_DATABASE_NAME = `asset-os-ledger-${APP_ENV}`;
+function localDbRequest(request) { return new Promise((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error || new Error('기기 저장 요청 실패')); }); }
+function localDbDone(tx) { return new Promise((resolve, reject) => { tx.oncomplete = () => resolve(); tx.onabort = () => reject(tx.error || new Error('기기 저장이 취소됐습니다.')); tx.onerror = () => { }; }); }
+function localDbTransaction(stores, mode) { if (!localDatabase)
+    throw new Error('기기 저장소가 준비되지 않았습니다.'); return localDatabase.transaction(stores, mode, mode === 'readwrite' ? { durability: 'strict' } : undefined); }
+async function localDbOpen() {
+    if (localDatabase)
+        return localDatabase;
+    if (typeof indexedDB === 'undefined')
+        throw new Error('이 브라우저에서 기기 데이터베이스를 사용할 수 없습니다. 브라우저 저장 권한을 확인해 주세요.');
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(LOCAL_DATABASE_NAME, LOCAL_DATABASE_FORMAT);
+        let expired = false;
+        const timer = setTimeout(() => { expired = true; reject(new Error('저장소 열기가 지연되고 있습니다. 같은 앱의 다른 탭을 닫고 다시 열어 주세요.')); }, 10000);
+        request.onupgradeneeded = () => { const db = request.result; db.createObjectStore('meta'); const rows = db.createObjectStore('records', { keyPath: 'key' }); rows.createIndex('collection', 'collection'); rows.createIndex('period', ['collection', 'date', 'ordinal']); db.createObjectStore('recovery', { keyPath: 'key' }); };
+        request.onerror = () => { clearTimeout(timer); reject(request.error || new Error('기기 저장소를 열지 못했습니다.')); };
+        request.onsuccess = () => { clearTimeout(timer); if (expired) {
+            request.result.close();
+            return;
+        } localDatabase = request.result; localDatabase.onversionchange = () => { localDatabase?.close(); localDatabase = null; localDatabaseReady = false; }; resolve(localDatabase); };
+    });
+}
+async function localDbChecksum(raw) { if (!globalThis.crypto?.subtle)
+    throw new Error('안전한 저장 검증을 위해 HTTPS 연결이 필요합니다.'); const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw)); return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join(''); }
+function localDbRecord(value) { return !!value && typeof value === 'object' && !Array.isArray(value); }
+function localDbPack(envelope) {
+    const header = JSON.parse(JSON.stringify(envelope)), arrays = [], rows = [];
+    const walk = (value, path) => {
+        if (!localDbRecord(value))
+            return;
+        for (const [key, item] of Object.entries(value)) {
+            const next = [...path, key];
+            if (Array.isArray(item)) {
+                if (next.join('/') === 'data/accounts') {
+                    item.forEach((account, index) => walk(account, [...next, String(index)]));
+                    continue;
+                }
+                const collection = JSON.stringify(next), ids = new Set();
+                arrays.push({ path: next, count: item.length });
+                item.forEach((row, ordinal) => { const proposed = localDbRecord(row) && typeof row.id === 'string' ? `id:${row.id}` : `position:${ordinal}`, identity = ids.has(proposed) ? `duplicate:${ordinal}` : proposed; ids.add(identity); rows.push({ key: JSON.stringify([collection, identity]), collection, ordinal, date: localDbRecord(row) ? String(row.date || row.tradeDate || row.asOf || '').slice(0, 10) : '', value: row }); });
+                value[key] = [];
+            }
+            else
+                walk(item, next);
+        }
+    };
+    walk(header, []);
+    return { envelope: header, arrays, rows };
+}
+function localDbUnpack(head, rows) {
+    const envelope = JSON.parse(JSON.stringify(head.envelope)), groups = new Map();
+    for (const row of rows) {
+        const list = groups.get(row.collection) || [];
+        list.push(row);
+        groups.set(row.collection, list);
+    }
+    for (const spec of head.arrays) {
+        const list = (groups.get(JSON.stringify(spec.path)) || []).sort((a, b) => a.ordinal - b.ordinal);
+        if (list.length !== spec.count || list.some((row, index) => row.ordinal !== index))
+            throw new Error('저장된 기록의 개수 또는 순서가 일치하지 않습니다. 원본을 보존하고 복구를 중단했습니다.');
+        let target = envelope;
+        for (const key of spec.path.slice(0, -1))
+            target = target[key];
+        if (!localDbRecord(target) && !Array.isArray(target))
+            throw new Error('저장 데이터 경로 검증 실패');
+        target[spec.path[spec.path.length - 1]] = list.map(row => row.value);
+        groups.delete(JSON.stringify(spec.path));
+    }
+    if (groups.size)
+        throw new Error('연결되지 않은 저장 기록을 발견했습니다.');
+    return envelope;
+}
+async function localDbRead() {
+    await localDbOpen();
+    const tx = localDbTransaction(['meta', 'records', 'recovery'], 'readonly'), done = localDbDone(tx);
+    const [head, rows, sync, legacy] = await Promise.all([localDbRequest(tx.objectStore('meta').get('head')), localDbRequest(tx.objectStore('records').getAll()), localDbRequest(tx.objectStore('meta').get('sync')), localDbRequest(tx.objectStore('recovery').get('before-migration'))]);
+    await done;
+    if (legacy?.legacyKey) {
+        const old = localStorage.getItem(legacy.legacyKey);
+        if (old && old !== legacy.raw)
+            throw new Error('이전 버전에서 원장을 수정한 기록이 있습니다. 두 원본을 보존하고 자동 덮어쓰기를 중단했습니다. 이전 탭을 닫고 자료를 확인해 주세요.');
+    }
+    localDatabaseSync = sync || null;
+    if (!head) {
+        if (rows.length)
+            throw new Error('저장소에 원장 정보가 없는 기록이 있습니다. 자동 초기화를 중단했습니다.');
+        localDatabaseRevision = 0;
+        localDatabaseRows.clear();
+        localDatabaseEnvelope = null;
+        localDatabaseReady = true;
+        return null;
+    }
+    if (head.format !== LOCAL_DATABASE_FORMAT)
+        throw new Error('새 버전 앱에서 저장한 자료입니다. 앱을 업데이트해 주세요.');
+    const envelope = localDbUnpack(head, rows);
+    if (await localDbChecksum(JSON.stringify(envelope)) !== head.checksum)
+        throw new Error('저장 데이터 검증값이 일치하지 않습니다. 자동 덮어쓰기를 중단했습니다.');
+    localDatabaseRevision = head.revision;
+    localDatabaseRows = new Map(rows.map(row => [row.key, JSON.stringify(row)]));
+    localDatabaseEnvelope = envelope;
+    localDatabaseReady = true;
+    return envelope;
+}
+async function localDbCommit(envelope, { recovery, legacyKey = KEY, expectedRevision = localDatabaseRevision } = {}) {
+    if (!localDatabaseReady)
+        throw new Error('기기 저장소를 다시 열어 확인해 주세요.');
+    const raw = JSON.stringify(envelope), packed = localDbPack(envelope), checksum = await localDbChecksum(raw), currentRows = new Map(packed.rows.map(row => [row.key, JSON.stringify(row)])), changed = packed.rows.filter(row => currentRows.get(row.key) !== localDatabaseRows.get(row.key)), removed = [...localDatabaseRows.keys()].filter(key => !currentRows.has(key));
+    const head = { format: 1, revision: expectedRevision + 1, envelope: packed.envelope, arrays: packed.arrays, checksum, bytes: new TextEncoder().encode(raw).length, updatedAt: new Date().toISOString() }, tx = localDbTransaction(['meta', 'records', 'recovery'], 'readwrite'), done = localDbDone(tx), meta = tx.objectStore('meta');
+    let conflict = false, writeError = null;
+    const request = meta.get('head');
+    request.onsuccess = () => { try {
+        const prior = request.result;
+        if ((prior?.revision || 0) !== expectedRevision) {
+            conflict = true;
+            tx.abort();
+            return;
+        }
+        for (const row of changed)
+            tx.objectStore('records').put(row);
+        for (const key of removed)
+            tx.objectStore('records').delete(key);
+        if (recovery)
+            tx.objectStore('recovery').put({ key: 'before-migration', raw: recovery, legacyKey, createdAt: head.updatedAt });
+        meta.put(head, 'head');
+    }
+    catch (error) {
+        writeError = error;
+        tx.abort();
+    } };
+    try {
+        await done;
+    }
+    catch (error) {
+        if (writeError)
+            throw writeError;
+        if (conflict)
+            throw new Error('다른 화면에서 원장이 변경됐습니다. 작성 중인 내용은 유지됩니다. 최신 원장을 확인한 뒤 다시 저장해 주세요.');
+        throw error;
+    }
+    localDatabaseRevision = head.revision;
+    localDatabaseRows = currentRows;
+    localDatabaseEnvelope = JSON.parse(raw);
+    try {
+        localStorage.setItem(`${KEY}-database-change`, JSON.stringify({ revision: head.revision, at: head.updatedAt }));
+    }
+    catch { }
+}
+async function localDbRecovery(key, raw) { await localDbOpen(); const tx = localDbTransaction(['recovery'], 'readwrite'), done = localDbDone(tx); const store = tx.objectStore('recovery'), createdAt = new Date().toISOString(), scan = store.getAll(); scan.onsuccess = () => { const prior = scan.result.filter(row => row.key !== 'before-migration' && row.key !== key); prior.push({ key, createdAt }); prior.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.key.localeCompare(a.key)); for (const old of prior.slice(3))
+    store.delete(old.key); store.put({ key, raw, createdAt }); }; await done; const read = localDbTransaction(['recovery'], 'readonly'), readDone = localDbDone(read), result = await localDbRequest(read.objectStore('recovery').get(key)); await readDone; if (result?.raw !== raw)
+    throw new Error('복구용 사본 검증 실패'); return true; }
+async function localDbSaveSync(value) { const tx = localDbTransaction(['meta'], 'readwrite'), done = localDbDone(tx); tx.objectStore('meta').put(value, 'sync'); await done; localDatabaseSync = JSON.parse(JSON.stringify(value)); }
+async function localDbUsage() { const estimate = await navigator.storage?.estimate?.(); return { usage: Number(estimate?.usage) || 0, quota: Number(estimate?.quota) || 0, persistent: !!(await navigator.storage?.persisted?.()) }; }
+async function localDbProbe() { try {
+    const key = 'storage-probe', value = crypto.randomUUID(), tx = localDbTransaction(['meta'], 'readwrite'), done = localDbDone(tx);
+    tx.objectStore('meta').put(value, key);
+    await done;
+    const read = localDbTransaction(['meta'], 'readwrite'), readDone = localDbDone(read), request = read.objectStore('meta').get(key);
+    let matched = false;
+    request.onsuccess = () => { matched = request.result === value; read.objectStore('meta').delete(key); };
+    await readDone;
+    return matched;
+}
+catch {
+    return false;
+} }
+const assetLocalDatabase = { read: localDbRead, commit: localDbCommit, recovery: localDbRecovery, saveSync: localDbSaveSync, usage: localDbUsage, probe: localDbProbe, get envelope() { return localDatabaseEnvelope; }, get revision() { return localDatabaseRevision; }, get sync() { return localDatabaseSync; } };
 ;
 /* asset-os source: store-state.js */
 'use strict';
@@ -2163,9 +2337,10 @@ function pruneRecoveryKeys(limit = 2) { try {
     keys.sort().reverse().slice(limit).forEach(k => localStorage.removeItem(k));
 }
 catch { } }
-function storeRecoveryCopy(key, raw) { localStorage.setItem(key, raw); if (localStorage.getItem(key) !== raw)
+async function storeRecoveryCopy(key, raw) { if (typeof assetLocalDatabase !== 'undefined')
+    return assetLocalDatabase.recovery(key, raw); localStorage.setItem(key, raw); if (localStorage.getItem(key) !== raw)
     throw new Error('복구용 사본 검증 실패'); pruneRecoveryKeys(); return true; }
-function loadState() {
+async function loadLegacyState() {
     let currentBroken = false, recoveryStored = false;
     for (const key of (QA_MODE ? [KEY] : [KEY, ...LEGACY_KEYS])) {
         const raw = localStorage.getItem(key);
@@ -2176,7 +2351,7 @@ function loadState() {
             if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
                 throw new Error('지원하지 않는 저장 형식');
             const envelope = parsed;
-            if (!envelope.data || ![4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21].includes(Number(envelope.schemaVersion)))
+            if (!envelope.data || ![4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22].includes(Number(envelope.schemaVersion)))
                 throw new Error('지원하지 않는 저장 형식');
             const migrated = migrateStateData(envelope.data, Number(envelope.schemaVersion)), loaded = normalizeState(migrated.data);
             if (key !== KEY || migrated.applied.length) {
@@ -2191,7 +2366,7 @@ function loadState() {
         catch (e) {
             loadIssue = `저장 데이터 손상 또는 형식 오류: ${e instanceof Error ? e.message : String(e)}`;
             try {
-                recoveryStored = storeRecoveryCopy(`${KEY}-recovery-${Date.now()}`, raw);
+                recoveryStored = (await storeRecoveryCopy(`${KEY}-recovery-${Date.now()}`, raw));
             }
             catch { }
             ;
@@ -2211,6 +2386,82 @@ function loadState() {
             catch { }
     }
     return fresh;
+}
+let storageSavePending = false, storageCommandPending = false;
+let storageBusyControls = [], storageBusyUi = false;
+function updateStorageBusyUi() {
+    if (typeof document === 'undefined' || !document.documentElement)
+        return;
+    const busy = storageSavePending || storageCommandPending;
+    if (busy)
+        document.documentElement.dataset.storageSaving = 'true';
+    else
+        delete document.documentElement.dataset.storageSaving;
+    if (busy && !storageBusyUi) {
+        storageBusyControls = Array.from(document.querySelectorAll('button,input,select,textarea')).map(element => ({ element, disabled: element.disabled }));
+        storageBusyControls.forEach(({ element }) => element.disabled = true);
+    }
+    if (!busy && storageBusyUi) {
+        storageBusyControls.forEach(({ element, disabled }) => { if (element.isConnected)
+            element.disabled = disabled; });
+        storageBusyControls = [];
+    }
+    storageBusyUi = busy;
+    if (typeof document.createElement !== 'function')
+        return;
+    let status = document.querySelector('#storageSaveStatus');
+    if (!status) {
+        status = document.createElement('div');
+        status.id = 'storageSaveStatus';
+        status.className = 'storage-save-status';
+        status.setAttribute('role', 'status');
+        status.textContent = '기기에 저장 중…';
+        document.body.appendChild(status);
+    }
+    status.hidden = !busy;
+}
+let storageCommandQueue = Promise.resolve();
+function runStoredCommand(command) { const result = storageCommandQueue.catch(() => { }).then(async () => { await waitForStorageSave(); storageCommandPending = true; updateStorageBusyUi(); try {
+    return await command();
+}
+finally {
+    storageCommandPending = false;
+    updateStorageBusyUi();
+} }); storageCommandQueue = result; return result; }
+let storageIdleWaiters = [];
+function waitForStorageSave() { return storageSavePending ? new Promise(resolve => storageIdleWaiters.push(resolve)) : Promise.resolve(); }
+async function loadState() {
+    if (typeof assetLocalDatabase === 'undefined')
+        return loadLegacyState();
+    const stored = await assetLocalDatabase.read();
+    if (stored) {
+        if (Number(stored.schemaVersion) > SCHEMA_VERSION)
+            throw new Error('새 버전 앱에서 저장한 데이터입니다. 앱을 업데이트해 주세요.');
+        const migrated = migrateStateData(stored.data, Number(stored.schemaVersion));
+        return normalizeState(migrated.data);
+    }
+    let original = '', legacyKey = KEY, loaded = null;
+    for (const key of (QA_MODE ? [KEY] : [KEY, ...LEGACY_KEYS])) {
+        const raw = localStorage.getItem(key);
+        if (!raw)
+            continue;
+        original = raw;
+        legacyKey = key;
+        try {
+            const envelope = JSON.parse(raw);
+            if (!envelope || typeof envelope !== 'object' || !envelope.data || !Number.isInteger(Number(envelope.schemaVersion)) || Number(envelope.schemaVersion) < 4 || Number(envelope.schemaVersion) > SCHEMA_VERSION)
+                throw new Error('지원하지 않는 원장 형식');
+            loaded = normalizeState(migrateStateData(envelope.data, Number(envelope.schemaVersion)).data);
+            break;
+        }
+        catch (error) {
+            throw new Error('기존 저장 데이터 확인 실패: ' + (error instanceof Error ? error.message : String(error)) + '. 원본을 보존하고 자동 초기화를 중단했습니다.');
+        }
+    }
+    loaded = loaded || normalizeState(seed);
+    await assetLocalDatabase.commit(JSON.parse(stateEnvelopeJson(loaded)), original ? { recovery: original, legacyKey } : {});
+    await assetLocalDatabase.read();
+    return loaded;
 }
 function syncHoldingLifecycle(a) { if (!isCurrentAccount(a))
     return a; const byId = new Map(replay(a).holdings.map((h) => [h.id, h.lifecycleStatus])); a.holdings.forEach((h) => { h.lifecycleStatus = byId.get(h.id) || h.lifecycleStatus || 'archived'; }); return a; }
@@ -2236,25 +2487,34 @@ function syncCurrentPensionSnapshot() { if (!state?.pension)
     list[idx] = prior;
 else
     list.push(prior); list.sort((a, b) => String(a.date).localeCompare(String(b.date))); }
-function persist(notify = true) {
+async function persist(notify = true) {
+    if (storageSavePending) {
+        if (notify)
+            toast('앞선 기록을 저장하고 있습니다. 잠시 후 다시 시도해 주세요.');
+        return false;
+    }
+    storageSavePending = true;
+    updateStorageBusyUi();
     const before = clone((lastPersistedState || state));
     try {
         state.accounts.forEach((a) => { syncHoldingLifecycle(a); rebuildLedgerIndexes(a); });
         syncCurrentPensionSnapshot();
         syncCurrentIsaSnapshot();
         const candidate = clone(state), retention = compactStateSnapshots(candidate, localYmd());
-        candidate.system = { loadWarning: '', saveError: '', ...(candidate.system || {}) };
-        candidate.system.saveError = '';
+        candidate.system = { ...(candidate.system || {}), loadWarning: '', saveError: '' };
         let raw = stateEnvelopeJson(candidate), bytes = stateEnvelopeBytes(raw);
-        candidate.system.storageUsage = { bytes, limit: MAX_STATE_BYTES, level: storageUsageLevel(bytes), snapshotRetention: { dailyMonths: SNAPSHOT_DAILY_KEEP_MONTHS, isaRemoved: retention.isaRemoved, kisRemoved: retention.kisRemoved } };
+        candidate.system.storageUsage = { bytes, limit: MAX_STATE_BYTES, backend: 'indexeddb', level: storageUsageLevel(bytes), snapshotRetention: { dailyMonths: SNAPSHOT_DAILY_KEEP_MONTHS, isaRemoved: retention.isaRemoved, kisRemoved: retention.kisRemoved } };
         raw = stateEnvelopeJson(candidate);
         bytes = stateEnvelopeBytes(raw);
         candidate.system.storageUsage.bytes = bytes;
         raw = stateEnvelopeJson(candidate);
         bytes = stateEnvelopeBytes(raw);
         if (bytes > MAX_STATE_BYTES)
-            throw new Error(`저장 데이터 ${bytes.toLocaleString('ko-KR')}바이트가 안전한도 ${MAX_STATE_BYTES.toLocaleString('ko-KR')}바이트를 초과했습니다. ZIP 백업 후 거래 기록과 첨부 자료를 확인해 주세요.`);
-        localStorage.setItem(KEY, raw);
+            throw new Error(`안전하게 처리할 수 있는 원장 크기 ${MAX_STATE_BYTES.toLocaleString('ko-KR')}바이트를 넘었습니다. 기록은 삭제하지 않았습니다. 백업 후 저장소를 확인해 주세요.`);
+        if (typeof assetLocalDatabase === 'undefined')
+            localStorage.setItem(KEY, raw);
+        else
+            await assetLocalDatabase.commit(JSON.parse(raw));
         state = candidate;
         lastPersistedState = clone(state);
         try {
@@ -2275,24 +2535,30 @@ function persist(notify = true) {
         return true;
     }
     catch (e) {
-        const message = `저장 실패: ${(e instanceof Error ? e.message : String(e)) || '로컬 저장소를 확인해 주세요.'}`;
+        const message = `저장 실패: ${(e instanceof Error ? e.message : String(e)) || '기기 저장소를 확인해 주세요.'}`;
         state = before;
-        state.system = { loadWarning: '', saveError: '', ...(state.system || {}) };
-        state.system.saveError = message;
+        state.system = { ...(state.system || {}), saveError: message };
         if (notify && document.querySelector('#toast'))
             toast(message);
         return false;
+    }
+    finally {
+        storageSavePending = false;
+        updateStorageBusyUi();
+        const waiters = storageIdleWaiters;
+        storageIdleWaiters = [];
+        waiters.forEach(resolve => resolve());
     }
 }
 ;
 /* asset-os source: backup.js */
 'use strict';
-const BACKUP_FORMAT = 'asset-os-backup-v1', SUPPORTED_SCHEMAS = new Set([4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]);
-const MAX_IMPORT_FILE_BYTES = 8 * 1024 * 1024;
+const BACKUP_FORMAT = 'asset-os-backup-v1', SUPPORTED_SCHEMAS = new Set([4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]);
+const MAX_IMPORT_FILE_BYTES = 64 * 1024 * 1024;
 function backupErrorName(error) { return error && typeof error === 'object' && 'name' in error ? String(error.name) : ''; }
 function backupErrorMessage(error) { return error instanceof Error ? error.message : String(error || ''); }
 function assertImportFileSize(file, label = '백업') { const size = Number(file?.size); if (Number.isFinite(size) && size > MAX_IMPORT_FILE_BYTES)
-    throw new Error(`${label} 파일은 8MB 이하만 열 수 있습니다.`); }
+    throw new Error(`${label} 파일은 64MB 이하만 열 수 있습니다.`); }
 let crcTable = null;
 function crc32(bytes) { if (!crcTable) {
     crcTable = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++)
@@ -2303,10 +2569,10 @@ function zipDosStamp(d = new Date()) { const year = Math.max(1980, d.getFullYear
 function backupPayload() { return { format: BACKUP_FORMAT, schemaVersion: SCHEMA_VERSION, appVersion: APP_VERSION, environment: APP_ENV, exportedAt: new Date().toISOString(), data: clone(state) }; }
 function createBackupZipBytes(payload = backupPayload()) { const enc = new TextEncoder(), json = enc.encode(JSON.stringify(payload)), name = enc.encode('asset-os-backup.json'), crc = crc32(json), stamp = zipDosStamp(), localSize = 30 + name.length + json.length, centralSize = 46 + name.length, total = localSize + centralSize + 22, out = new Uint8Array(total), v = new DataView(out.buffer); let o = 0; const u16 = (n) => { v.setUint16(o, n, true); o += 2; }, u32 = (n) => { v.setUint32(o, n >>> 0, true); o += 4; }, put = (b) => { out.set(b, o); o += b.length; }; u32(0x04034b50); u16(20); u16(0); u16(0); u16(stamp.time); u16(stamp.date); u32(crc); u32(json.length); u32(json.length); u16(name.length); u16(0); put(name); put(json); const centralOffset = o; u32(0x02014b50); u16(20); u16(20); u16(0); u16(0); u16(stamp.time); u16(stamp.date); u32(crc); u32(json.length); u32(json.length); u16(name.length); u16(0); u16(0); u16(0); u16(0); u32(0); u32(0); put(name); const centralLength = o - centralOffset; u32(0x06054b50); u16(0); u16(0); u16(1); u16(1); u32(centralLength); u32(centralOffset); u16(0); return out; }
 function parseBackupZipBytes(bytes) { const src = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes); if (src.length > MAX_IMPORT_FILE_BYTES)
-    throw new Error('백업 파일은 8MB 이하만 열 수 있습니다.'); const v = new DataView(src.buffer, src.byteOffset, src.byteLength); if (src.length < 30 || v.getUint32(0, true) !== 0x04034b50)
+    throw new Error('백업 파일은 64MB 이하만 열 수 있습니다.'); const v = new DataView(src.buffer, src.byteOffset, src.byteLength); if (src.length < 30 || v.getUint32(0, true) !== 0x04034b50)
     throw new Error('Asset OS ZIP 형식이 아닙니다.'); const method = v.getUint16(8, true), expected = v.getUint32(14, true), size = v.getUint32(18, true), nameLen = v.getUint16(26, true), extraLen = v.getUint16(28, true), start = 30 + nameLen + extraLen; if (method !== 0)
     throw new Error('지원하지 않는 압축 방식입니다. Asset OS에서 만든 ZIP을 선택해 주세요.'); if (size > MAX_IMPORT_FILE_BYTES)
-    throw new Error('백업 내부 데이터는 8MB 이하만 열 수 있습니다.'); if (start + size > src.length)
+    throw new Error('백업 내부 데이터는 64MB 이하만 열 수 있습니다.'); if (start + size > src.length)
     throw new Error('ZIP 데이터가 잘렸습니다.'); const data = src.slice(start, start + size); if (crc32(data) !== expected)
     throw new Error('ZIP CRC 검증에 실패했습니다.'); return backupInputPayload(JSON.parse(new TextDecoder().decode(data))); }
 function backupInputPayload(value) { if (!stateInputRecord(value))
@@ -2404,7 +2670,7 @@ async function shareDriveBackup() {
     return true;
 }
 async function parseBackupFile(file) { assertImportFileSize(file); const bytes = new Uint8Array(await file.arrayBuffer()), name = String(file.name || '').toLowerCase(); if (bytes.length > MAX_IMPORT_FILE_BYTES)
-    throw new Error('백업 파일은 8MB 이하만 열 수 있습니다.'); if (name.endsWith('.json') || name.endsWith('.txt'))
+    throw new Error('백업 파일은 64MB 이하만 열 수 있습니다.'); if (name.endsWith('.json') || name.endsWith('.txt'))
     return backupInputPayload(JSON.parse(new TextDecoder().decode(bytes))); return parseBackupZipBytes(bytes); }
 async function restoreBackupFile(file) { let payload, next; try {
     payload = await parseBackupFile(file);
@@ -2413,11 +2679,11 @@ async function restoreBackupFile(file) { let payload, next; try {
 catch (e) {
     showNotice('복원하지 않았습니다.', `백업 파일 검증 실패: ${backupErrorMessage(e)}`);
     return false;
-} showDialog({ title: '백업으로 복원할까요?', message: `백업 시각 ${formatDateTime(payload.exportedAt)}\n현재 데이터는 복구용 사본을 먼저 남긴 뒤 교체합니다.`, confirmText: '복원', cancelText: '취소' }, () => { try {
+} showDialog({ title: '백업으로 복원할까요?', message: `백업 시각 ${formatDateTime(payload.exportedAt)}\n현재 데이터는 복구용 사본을 먼저 남긴 뒤 교체합니다.`, confirmText: '복원', cancelText: '취소' }, async () => { try {
     const recovery = stateEnvelopeJson(state);
-    storeRecoveryCopy(`${KEY}-pre-restore-${Date.now()}`, recovery);
+    (await storeRecoveryCopy(`${KEY}-pre-restore-${Date.now()}`, recovery));
     state = next;
-    if (!persist(false))
+    if (!(await persist(false)))
         throw new Error(state.system.saveError || '저장 실패');
     applyTheme();
     closeSheets();
@@ -2437,13 +2703,13 @@ function openBackupHub() {
     openSheet('#detailSheet');
     $('[data-phone-folder]').onclick = async () => { if (await assetConnectPhoneBackup())
         openBackupHub(); };
-    $('[data-phone-now]').onclick = () => assetWritePhoneBackup();
+    $('[data-phone-now]').onclick = async () => (await assetWritePhoneBackup());
     $('[data-backup-zip]').onclick = saveZipBackup;
     $('[data-backup-drive]').onclick = shareDriveBackup;
     $('[data-backup-keep]').onclick = assetCreateKeepBackup;
     $('[data-backup-restore]').onclick = () => $('#backupInput').click();
 }
-function resetLiveData() { state = normalizeState(seed); if (!persist())
+async function resetLiveData() { state = normalizeState(seed); if (!(await persist()))
     return false; applyTheme(); render(); toast('초기 실사용 상태로 초기화했습니다.'); return true; }
 ;
 /* asset-os source: export-csv.js */
@@ -2600,11 +2866,11 @@ async function importInitialMergeFile(file) {
         return false;
     }
     const counts = { products: bundle.data?.financialProducts?.items?.length || 0, events: bundle.data?.financialProducts?.events?.length || 0, schedules: bundle.data?.financeSchedules?.items?.length || 0, ledger: bundle.data?.integrated?.ledger?.length || 0, insurance: bundle.data?.insurance?.policies?.length || 0, archive: bundle.data?.sourceArchives?.records?.length || 0, projection: !!bundle.data?.pensionProjection };
-    showDialog({ title: '확정 초기자료를 병합할까요?', message: `현재 원장은 유지하고 같은 ID만 갱신합니다.\n상품 ${counts.products} · 이벤트 ${counts.events} · 일정 ${counts.schedules} · 원장 ${counts.ledger} · 보험 ${counts.insurance} · 검산자료 ${counts.archive}${counts.projection ? ' · 미래연금 기준 포함' : ''}`, confirmText: '검증 후 병합', cancelText: '취소' }, () => {
+    showDialog({ title: '확정 초기자료를 병합할까요?', message: `현재 원장은 유지하고 같은 ID만 갱신합니다.\n상품 ${counts.products} · 이벤트 ${counts.events} · 일정 ${counts.schedules} · 원장 ${counts.ledger} · 보험 ${counts.insurance} · 검산자료 ${counts.archive}${counts.projection ? ' · 미래연금 기준 포함' : ''}`, confirmText: '검증 후 병합', cancelText: '취소' }, async () => {
         try {
-            storeRecoveryCopy(`${KEY}-pre-import-${Date.now()}`, stateEnvelopeJson(state));
+            (await storeRecoveryCopy(`${KEY}-pre-import-${Date.now()}`, stateEnvelopeJson(state)));
             state = next;
-            if (!persist(false))
+            if (!(await persist(false)))
                 throw new Error(state.system.saveError || '저장 실패');
             closeSheets();
             render();
@@ -2710,7 +2976,7 @@ async function assetWritePhoneBackup({ tag = '', version = APP_VERSION, silent =
     settings.phoneEnabled = true;
     settings.phonePermission = 'granted';
     settings.lastPhoneBackupAt = new Date().toISOString();
-    persist(false);
+    (await persist(false));
     if (!silent)
         toast(`휴대폰 백업 완료: ${name}`);
     return true;
@@ -2738,7 +3004,7 @@ async function assetConnectPhoneBackup() { if (typeof window.showDirectoryPicker
         await assetWritePhoneBackup({ tag: 'pre', version: settings.lastReleaseVersion || 'v0.4', silent: true });
         settings.lastReleaseVersion = APP_VERSION;
     }
-    persist(false);
+    (await persist(false));
     toast('휴대폰 백업 폴더를 연결했습니다.');
     return true;
 }
@@ -2749,7 +3015,7 @@ catch (error) {
 } }
 function queueAssetAutoBackup() { if (assetBackupWriting)
     return; clearTimeout(assetAutoBackupTimer); const settings = assetBackupSettings(); if (!settings.phoneEnabled)
-    return; assetAutoBackupTimer = setTimeout(() => assetWritePhoneBackup({ silent: true }), ASSET_AUTO_BACKUP_DELAY); }
+    return; assetAutoBackupTimer = setTimeout(async () => (await assetWritePhoneBackup({ silent: true })), ASSET_AUTO_BACKUP_DELAY); }
 async function assetCreateKeepBackup() { if (await assetWritePhoneBackup({ tag: 'keep' }))
     return true; const name = assetManagedBackupName({ tag: 'keep' }); downloadBytes(createBackupZipBytes(), name); toast(`영구보관 ZIP 저장: ${name}`); return true; }
 ;
@@ -2811,20 +3077,20 @@ function insuranceCardMarkup(p) {
 function openInsuranceHub() { const rows = insurancePolicies(), active = rows.filter(p => p.status === 'active'), ended = rows.filter(p => p.status === 'ended'), monthly = insuranceMonthlyPremium(); $('#sheetEyebrow').textContent = '보장성 보험'; $('#sheetTitle').textContent = '내 보험'; $('#sheetBody').innerHTML = `<div class="sheetrows"><div class="sheetrow total"><span>현재 월 보험료</span><strong>${won(monthly)}</strong></div></div><div class="policy-toolbar"><strong>유지 중 ${active.length}건</strong><button data-insurance-new>＋ 보험 추가</button></div><div class="finance-product-list">${active.map(insuranceCardMarkup).join('') || '<div class="integrated-empty">유지 중인 보험이 없습니다.</div>'}</div>${ended.length ? `<div class="finance-archive-title">종료된 보험 · ${ended.length}건</div><div class="finance-product-list">${ended.map(insuranceCardMarkup).join('')}</div>` : ''}`; openSheet('#detailSheet'); $('[data-insurance-new]')?.addEventListener('click', () => openInsuranceForm()); $$('[data-insurance-id]').forEach(b => b.onclick = () => openInsuranceDetail(b.dataset.insuranceId || '')); }
 function openInsuranceDetail(id) { const p = insurancePolicies().find(x => x.id === id); if (!p)
     return; $('#sheetEyebrow').textContent = '보험 · 계약'; $('#sheetTitle').textContent = p.name; const premium = insurancePremiumSummary(p), schedule = insuranceSchedule(p), rows = [['보험사', p.company], ['분류', p.category], ['계약일', p.contractDate], ['보장 만기', p.coverageEndDate], ['납입 종료', p.paymentEndDate], ['보험료', p.paymentStyle === 'lump' ? won(p.premium) : `월 ${won(p.premium)}`], ['납부 일정', p.paymentStyle === 'lump' ? '반복 일정 없음' : p.status === 'ended' ? '일정 종료' : schedule?.active ? (schedule.needsDate ? '납부일 확인 필요' : `매월 ${schedule.day}일`) : '연결 안 됨'], ['계약 총 보험료 · 예상', won(premium.total)], ['실제 납부 기록', won(premium.paid)], ...(premium.previousRecorded ? [['기존 등록 누계 · 별도', won(premium.previousRecorded)]] : []), ['다음 달 이후 · 예상', won(premium.remaining)]]; $('#sheetBody').innerHTML = `<div class="sheetrows">${rows.map(([k, v]) => `<div class="sheetrow"><span>${escapeHtml(k)}</span><strong>${escapeHtml(v || '-')}</strong></div>`).join('')}</div><div class="policy-toolbar"><strong>보장 항목 ${p.coverages.length}개</strong></div><div class="sheetrows">${p.coverages.map((c) => `<div class="sheetrow"><span>${escapeHtml(c.name)}${c.note ? `<small style="display:block">${escapeHtml(c.note)}</small>` : ''}</span><strong>${won(c.amount)}</strong></div>`).join('') || '<div class="integrated-empty">보장 항목이 없습니다.</div>'}</div>${p.note ? `<div class="source-note">${escapeHtml(p.note)}</div>` : ''}<button class="diagnostic-action" data-insurance-payment="${escapeHtml(p.id)}">납부 기록</button>${p.status === 'active' ? `<div class="finance-detail-actions"><button class="primary" data-insurance-edit="${escapeHtml(p.id)}">계약 수정</button><button class="danger" data-insurance-end="${escapeHtml(p.id)}">종료 처리</button></div>` : ''}`; openSheet('#detailSheet'); $('[data-insurance-payment]')?.addEventListener('click', () => openInsurancePaymentForm(id)); $('[data-insurance-edit]')?.addEventListener('click', () => openInsuranceForm(id)); $('[data-insurance-end]')?.addEventListener('click', () => endInsurancePolicy(id)); }
-function openInsuranceForm(id = '') { const p = insurancePolicies().find(x => x.id === id) || null, schedule = insuranceSchedule(p); $('#formEyebrow').textContent = '보험 · 계약 관리'; $('#formTitle').textContent = p ? '보험 계약 수정' : '보험 추가'; $('#formBody').innerHTML = `<form id="insuranceForm" class="form" data-insurance-id="${escapeHtml(p?.id || '')}"><div class="form-grid"><div class="field"><label>보험명</label><input name="name" value="${escapeHtml(p?.name || '')}" required></div><div class="field"><label>보험사</label><input name="company" value="${escapeHtml(p?.company || '')}"></div></div><div class="field"><label>분류</label><input name="category" value="${escapeHtml(p?.category || '')}" placeholder="예: 실손·건강·운전자"></div><div class="form-grid"><div class="field"><label>계약일</label><input name="contractDate" type="date" value="${escapeHtml(p?.contractDate || '')}"></div><div class="field"><label>보장 만기</label><input name="coverageEndDate" type="date" value="${escapeHtml(p?.coverageEndDate || '')}"></div></div><div class="form-grid"><div class="field"><label>납입 종료</label><input name="paymentEndDate" type="date" value="${escapeHtml(p?.paymentEndDate || '')}"></div><div class="field"><label>납입 방식</label><select name="paymentStyle"><option value="monthly" ${p?.paymentStyle !== 'lump' ? 'selected' : ''}>월납</option><option value="lump" ${p?.paymentStyle === 'lump' ? 'selected' : ''}>일시납</option></select></div></div><div class="form-grid"><div class="field"><label>보험료</label><input name="premium" type="number" min="0" step="1" inputmode="numeric" value="${escapeHtml(Number(p?.premium) || '')}" required></div><div class="field"><label>월 납부일</label><input name="paymentDay" type="number" min="1" max="31" value="${escapeHtml(Number(p?.paymentDay) || Number(schedule?.day) || '')}" placeholder="확인 후 입력"></div></div><label class="insurance-schedule-link"><input name="linkSchedule" type="checkbox" ${schedule || !p ? 'checked' : ''}><span>보험료를 통합 일정과 연결</span></label><div class="field"><label>보장 항목 <small>한 줄에 이름 | 금액 | 메모</small></label><textarea name="coverages" rows="6" placeholder="입원의료비 | 50000000 | 갱신형">${escapeHtml(insuranceCoverageText(p?.coverages || []))}</textarea></div><div class="field"><label>메모</label><input name="note" value="${escapeHtml(p?.note || '')}"></div><button class="integrated-form-save">${p ? '수정 저장' : '보험 저장'}</button></form>`; openSheet('#formSheet', { mode: 'input' }); $('#insuranceForm').onsubmit = (e) => { e.preventDefault(); saveInsurancePolicy(e.currentTarget); }; }
-function saveInsurancePolicy(form) { const d = new FormData(form), id = form.dataset.insuranceId || uid('insurance'), old = insurancePolicies().find(x => x.id === id), name = String(d.get('name') || '').trim(), premium = Math.max(0, Math.round(Number(d.get('premium')) || 0)), paymentDay = Math.min(31, Math.max(0, Math.round(Number(d.get('paymentDay')) || 0))); if (!name)
+function openInsuranceForm(id = '') { const p = insurancePolicies().find(x => x.id === id) || null, schedule = insuranceSchedule(p); $('#formEyebrow').textContent = '보험 · 계약 관리'; $('#formTitle').textContent = p ? '보험 계약 수정' : '보험 추가'; $('#formBody').innerHTML = `<form id="insuranceForm" class="form" data-insurance-id="${escapeHtml(p?.id || '')}"><div class="form-grid"><div class="field"><label>보험명</label><input name="name" value="${escapeHtml(p?.name || '')}" required></div><div class="field"><label>보험사</label><input name="company" value="${escapeHtml(p?.company || '')}"></div></div><div class="field"><label>분류</label><input name="category" value="${escapeHtml(p?.category || '')}" placeholder="예: 실손·건강·운전자"></div><div class="form-grid"><div class="field"><label>계약일</label><input name="contractDate" type="date" value="${escapeHtml(p?.contractDate || '')}"></div><div class="field"><label>보장 만기</label><input name="coverageEndDate" type="date" value="${escapeHtml(p?.coverageEndDate || '')}"></div></div><div class="form-grid"><div class="field"><label>납입 종료</label><input name="paymentEndDate" type="date" value="${escapeHtml(p?.paymentEndDate || '')}"></div><div class="field"><label>납입 방식</label><select name="paymentStyle"><option value="monthly" ${p?.paymentStyle !== 'lump' ? 'selected' : ''}>월납</option><option value="lump" ${p?.paymentStyle === 'lump' ? 'selected' : ''}>일시납</option></select></div></div><div class="form-grid"><div class="field"><label>보험료</label><input name="premium" type="number" min="0" step="1" inputmode="numeric" value="${escapeHtml(Number(p?.premium) || '')}" required></div><div class="field"><label>월 납부일</label><input name="paymentDay" type="number" min="1" max="31" value="${escapeHtml(Number(p?.paymentDay) || Number(schedule?.day) || '')}" placeholder="확인 후 입력"></div></div><label class="insurance-schedule-link"><input name="linkSchedule" type="checkbox" ${schedule || !p ? 'checked' : ''}><span>보험료를 통합 일정과 연결</span></label><div class="field"><label>보장 항목 <small>한 줄에 이름 | 금액 | 메모</small></label><textarea name="coverages" rows="6" placeholder="입원의료비 | 50000000 | 갱신형">${escapeHtml(insuranceCoverageText(p?.coverages || []))}</textarea></div><div class="field"><label>메모</label><input name="note" value="${escapeHtml(p?.note || '')}"></div><button class="integrated-form-save">${p ? '수정 저장' : '보험 저장'}</button></form>`; openSheet('#formSheet', { mode: 'input' }); $('#insuranceForm').onsubmit = async (e) => { e.preventDefault(); (await saveInsurancePolicy(e.currentTarget)); }; }
+async function saveInsurancePolicy(form) { const d = new FormData(form), id = form.dataset.insuranceId || uid('insurance'), old = insurancePolicies().find(x => x.id === id), name = String(d.get('name') || '').trim(), premium = Math.max(0, Math.round(Number(d.get('premium')) || 0)), paymentDay = Math.min(31, Math.max(0, Math.round(Number(d.get('paymentDay')) || 0))); if (!name)
     return toast('보험명을 입력해 주세요.'); if (!premium)
     return toast('보험료를 입력해 주세요.'); const p = { ...(old || {}), id, name, company: String(d.get('company') || '').trim(), category: String(d.get('category') || '').trim(), premium, paymentDay, paymentStyle: String(d.get('paymentStyle')) === 'lump' ? 'lump' : 'monthly', contractDate: String(d.get('contractDate') || ''), coverageEndDate: String(d.get('coverageEndDate') || ''), paymentEndDate: String(d.get('paymentEndDate') || ''), status: old?.status || 'active', coverages: parseInsuranceCoverages(d.get('coverages')), note: String(d.get('note') || '').trim() }; if (p.contractDate && p.paymentEndDate && p.paymentEndDate < p.contractDate)
     return toast('납입 종료일은 계약일보다 빠를 수 없습니다.'); if (old)
     Object.assign(old, p);
 else
-    insurancePolicies().push(p); syncInsuranceSchedule(p, d.get('linkSchedule') === 'on'); if (!persist())
+    insurancePolicies().push(p); syncInsuranceSchedule(p, d.get('linkSchedule') === 'on'); if (!(await persist()))
     return; sheetDirty = false; closeSheets(); render(); setTimeout(openInsuranceHub, 60); toast(old ? '보험 계약을 수정했습니다.' : '보험과 납부 일정을 저장했습니다.'); }
 function endInsurancePolicy(id) { const p = insurancePolicies().find(x => x.id === id); if (!p)
-    return; showDialog({ title: '보험 계약을 종료할까요?', message: '보험 기록과 과거 납부내역은 보존하고 앞으로의 연결 일정만 종료합니다.', confirmText: '종료', cancelText: '취소' }, () => { p.status = 'ended'; p.endedAt = localYmd(); const schedule = insuranceSchedule(p); if (schedule) {
+    return; showDialog({ title: '보험 계약을 종료할까요?', message: '보험 기록과 과거 납부내역은 보존하고 앞으로의 연결 일정만 종료합니다.', confirmText: '종료', cancelText: '취소' }, async () => { p.status = 'ended'; p.endedAt = localYmd(); const schedule = insuranceSchedule(p); if (schedule) {
     schedule.active = false;
     schedule.endDate = p.endedAt;
-} if (!persist())
+} if (!(await persist()))
     return; closeSheets(); render(); setTimeout(openInsuranceHub, 60); toast('보험 계약을 종료 보관했습니다.'); }); }
 function recordInsurancePayment(id, { date, amount, source = 'tracked', paymentId = '' }) {
     const p = insurancePolicies().find(x => x.id === id);
@@ -2858,8 +3124,8 @@ function openInsurancePaymentForm(id) {
     $('#formBody').innerHTML = `<form id="insurancePaymentForm" class="form"><div class="form-grid"><div class="field"><label>납부일</label><input name="date" type="date" value="${escapeHtml(ymd())}" required></div><div class="field"><label>실제 납부액</label><input name="amount" type="number" min="1" step="1" value="${escapeHtml(Number(p.premium) || '')}" required></div></div><div class="field"><label>지급 계좌</label><select name="source"><option value="tracked">현금·입출금</option><option value="outside">앱 밖 계좌</option></select></div><div class="source-note">일정에서 이미 완료한 납부는 다시 입력하지 않습니다.</div><button class="integrated-form-save">납부 저장</button></form>`;
     openSheet('#formSheet', { mode: 'input' });
     const paymentId = uid('insurance-payment');
-    $('#insurancePaymentForm').onsubmit = (e) => { e.preventDefault(); const d = new FormData(e.currentTarget), r = recordInsurancePayment(id, { date: String(d.get('date') || ''), amount: Number(d.get('amount')), source: String(d.get('source') || 'tracked'), paymentId }); if (!r.ok)
-        return toast(r.error); setting().integratedMonth = integratedMonthKey(r.transaction.date); setting().integratedLedgerFilter = 'all'; if (!persist())
+    $('#insurancePaymentForm').onsubmit = async (e) => { e.preventDefault(); const d = new FormData(e.currentTarget), r = recordInsurancePayment(id, { date: String(d.get('date') || ''), amount: Number(d.get('amount')), source: String(d.get('source') || 'tracked'), paymentId }); if (!r.ok)
+        return toast(r.error); setting().integratedMonth = integratedMonthKey(r.transaction.date); setting().integratedLedgerFilter = 'all'; if (!(await persist()))
         return; sheetDirty = false; closeSheets(); render(); setTimeout(() => openInsuranceDetail(id), 60); toast('실제 납부 기록을 저장했습니다.'); };
 }
 ;

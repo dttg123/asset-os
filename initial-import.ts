@@ -17,9 +17,9 @@ declare function systemIntegrityIssues():string[];
 declare function assertImportFileSize(file:{size?:unknown},label?:string):void;
 declare function showNotice(title:string,message:string):void;
 declare function showDialog(options:ImportRecord,confirm:()=>void):void;
-declare function storeRecoveryCopy(key:string,raw:string):boolean;
+declare function storeRecoveryCopy(key:string,raw:string):Promise<boolean>;
 declare function stateEnvelopeJson(value:ImportState):string;
-declare function persist(notify?:boolean):boolean;
+declare function persist(notify?:boolean):Promise<boolean>;
 declare function closeSheets(options?:ImportRecord):void;
 declare function render():void;
 declare function toast(message:string):void;
@@ -91,11 +91,11 @@ async function importInitialMergeFile(file:File):Promise<boolean>{
   next=buildInitialImportCandidate(bundle);
  }catch(error:unknown){showNotice('병합하지 않았습니다.',initialImportErrorMessage(error));return false}
  const counts={products:bundle.data?.financialProducts?.items?.length||0,events:bundle.data?.financialProducts?.events?.length||0,schedules:bundle.data?.financeSchedules?.items?.length||0,ledger:bundle.data?.integrated?.ledger?.length||0,insurance:bundle.data?.insurance?.policies?.length||0,archive:bundle.data?.sourceArchives?.records?.length||0,projection:!!bundle.data?.pensionProjection};
- showDialog({title:'확정 초기자료를 병합할까요?',message:`현재 원장은 유지하고 같은 ID만 갱신합니다.\n상품 ${counts.products} · 이벤트 ${counts.events} · 일정 ${counts.schedules} · 원장 ${counts.ledger} · 보험 ${counts.insurance} · 검산자료 ${counts.archive}${counts.projection?' · 미래연금 기준 포함':''}`,confirmText:'검증 후 병합',cancelText:'취소'},()=>{
+ showDialog({title:'확정 초기자료를 병합할까요?',message:`현재 원장은 유지하고 같은 ID만 갱신합니다.\n상품 ${counts.products} · 이벤트 ${counts.events} · 일정 ${counts.schedules} · 원장 ${counts.ledger} · 보험 ${counts.insurance} · 검산자료 ${counts.archive}${counts.projection?' · 미래연금 기준 포함':''}`,confirmText:'검증 후 병합',cancelText:'취소'},async ()=>{
   try{
-   storeRecoveryCopy(`${KEY}-pre-import-${Date.now()}`,stateEnvelopeJson(state));
+   (await storeRecoveryCopy(`${KEY}-pre-import-${Date.now()}`,stateEnvelopeJson(state)));
    state=next;
-   if(!persist(false))throw new Error(state.system.saveError||'저장 실패');
+   if(!(await persist(false)))throw new Error(state.system.saveError||'저장 실패');
    closeSheets();render();toast('확정 초기자료를 병합했습니다.');
   }catch(error:unknown){showNotice('병합 실패',initialImportErrorMessage(error))}
  });

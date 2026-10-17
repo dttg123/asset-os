@@ -1,4 +1,5 @@
 'use strict';
+(async()=>{
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
@@ -27,7 +28,7 @@ const context=vm.createContext({
 });
 vm.runInContext(fs.readFileSync(path.join(__dirname,'..','ui-settings.js'),'utf8'),context,{filename:'ui-settings.js'});
 
-vm.runInContext('openKisSettings()',context);
+(await vm.runInContext("(async()=>{return (await openKisSettings())})()",context));
 assert.match(elements['#sheetBody'].innerHTML,/인증 링크 받기/);
 assert.doesNotMatch(elements['#sheetBody'].innerHTML,/이메일 인증번호/);
 assert.match(elements['#sheetBody'].innerHTML,/Google 세션을 확인하지 못한 경우에만 이메일 인증을 사용합니다/);
@@ -35,7 +36,7 @@ assert.doesNotMatch(elements['#sheetBody'].innerHTML,/data-kis-sync/);
 assert.doesNotMatch(elements['#sheetBody'].innerHTML,/appkey|appsecret|계좌번호 입력/i);
 
 signed.value=true;
-vm.runInContext('openKisSettings()',context);
+(await vm.runInContext("(async()=>{return (await openKisSettings())})()",context));
 const html=elements['#sheetBody'].innerHTML;
 assert.match(html,/한국투자 연금저축/);
 assert.match(html,/한국투자 IRP/);
@@ -52,3 +53,5 @@ assert.match(vm.runInContext("kisErrorText('KIS_UPSTREAM_FAILED|balance|TEST001'
 assert.match(vm.runInContext("kisErrorText('KIS_UPSTREAM_FAILED|balance|TEST001')",context),/TEST001/);
 
 console.log('kis settings ui tests: PASS');
+
+})().catch(error=>{console.error(error);process.exitCode=1});

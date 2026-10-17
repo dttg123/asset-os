@@ -24,10 +24,10 @@ declare function clone<T>(value:T):T;
 declare function integratedValidateCandidate(row:LedgerRow,editingId:string):string;
 declare function integratedCandidateIssues(store:{accounts:Array<{id:string;kind?:string}>;ledger:LedgerRow[]}):string[];
 declare function setting():{integratedMonth:string;[key:string]:unknown};
-declare function persist(notify?:boolean):boolean;
+declare function persist(notify?:boolean):Promise<boolean>;
 declare function closeSheets():void;
 declare function render():void;
-declare function openScheduleDay(date:string):void;
+declare function openScheduleDay(date:string):Promise<void>;
 declare function toast(message:string):void;
 declare function haptic(kind:string):void;
 
@@ -97,19 +97,19 @@ function validateScheduleCompletionDraft(draft:CompletionDraft):string{
  return issues.length?issues[0].replace('자산 잔액 음수:','잔액이 부족합니다:').replace('부채 잔액 음수:','대출잔액보다 많이 상환할 수 없습니다:'):''
 }
 
-function commitScheduleCompletion(schedule:Schedule,date:string,draft:CompletionDraft):boolean{
+async function commitScheduleCompletion(schedule:Schedule,date:string,draft:CompletionDraft):Promise<boolean>{
  if(draft.targetPensionAccountId)schedule.targetPensionAccountId=draft.targetPensionAccountId;
  if(draft.targetIsaAccountId)schedule.targetIsaAccountId=draft.targetIsaAccountId;
  integratedStore().ledger.push(...draft.rows);
  setting().integratedMonth=integratedMonthKey(date);
- return persist(false)
+ return (await persist(false))
 }
 
 function renderScheduleCompletion(date:string,message:string):void{
- closeSheets();render();setTimeout(()=>openScheduleDay(date),60);toast(message);haptic('light')
+ closeSheets();render();setTimeout(async ()=>(await openScheduleDay(date)),60);toast(message);haptic('light')
 }
 
-function updateScheduleActualPayment(scheduleId:string,date:string,amount:number,principal=0,interest=0):boolean{
+async function updateScheduleActualPayment(scheduleId:string,date:string,amount:number,principal=0,interest=0):Promise<boolean>{
  const schedule=financeSchedules().find(s=>s.id===scheduleId);if(!schedule)return false;
  const store=integratedStore(),original=clone(store.ledger),previous=clone(schedule);
  const completed=store.ledger.filter(t=>t.meta?.scheduleId===scheduleId&&t.meta?.scheduleDate===date);
@@ -123,6 +123,6 @@ function updateScheduleActualPayment(scheduleId:string,date:string,amount:number
  const validation=validateScheduleCompletionDraft(draft);
  if(validation||issues.length){store.ledger=original;toast(validation||issues[0]);return false}
  store.ledger.push(...draft.rows);
- if(!persist(false)){store.ledger=original;Object.assign(schedule,previous);return false}
+ if(!(await persist(false))){store.ledger=original;Object.assign(schedule,previous);return false}
  return true;
 }

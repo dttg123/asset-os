@@ -135,3 +135,81 @@ GitHub Actions와 실행 결과를 검증 증빙으로 사용하며, 실패·미
 - Validation: core Node 188/188 PASS; existing and new desktop/Galaxy browser flows 56/56 PASS; final focused date/30-schedule/completion checks 4/4 PASS; FAST gates/23 tests PASS. Card tests cover 24 end-of-month installments with rounding, interest/actual corrections, persisted final payment, partial final principal, duplicate completion rejection, quota failure rollback and one-time retry. Existing storage code handled quota failure correctly; no persistence bypass was introduced.
 - Visual inspection: 360/412px light/dark schedule screens with 30 fixtures; no horizontal overflow. Initial new browser fixture assumed wall-clock dates despite QA mode's fixed 2060 date and let a setup-only completion reopen a sheet asynchronously. Corrected fixture date simulation and setup callback, then ran the complete suite without waiving failures. Final code guard bounds imported installment terms before date iteration.
 - All QA used isolated fixtures. No live user ledger or brokerage operations. Existing Namu ISA actual-balance reconciliation and the previously unreproduced long-session settings delay are not certified resolved by this release. No new repository files or dependencies.
+
+## Long-term storage study and proposed acceptance criteria — 2026-10-18
+
+Status: research and isolated browser prototype only. Production remains v0.6.23/schema 21. No application storage migration, live ledger write, cloud schema change, or deployment was performed for this study.
+
+### Evidence and comparisons
+
+- Reviewed MDN IndexedDB transactions, strict durability, blocked/versionchange events, origin quotas/eviction, and web.dev persistent storage. Completion of a request is not completion of its encompassing transaction. Persistent storage reduces automatic eviction but does not survive explicit site-data deletion. All paths under the same origin share quota; database naming provides logical separation, not security isolation.
+- Read actual public source, not only product descriptions: idb `src/database-extras.ts` waits for both write request and `tx.done`; `src/wrap-idb-value.ts` rejects the completion promise on error/abort. Dexie `src/classes/transaction/transaction.ts` resolves on transaction completion and rejects on abort/error. Dexie's best-practice documentation warns against swallowing transaction failures and unrelated asynchronous work inside a transaction.
+- Actual Budget official architecture uses local SQLite and a browser worker, and its official sync documentation separates local work from remote synchronization. Read `packages/loot-core/src/server/budgetfiles/backups.ts`: a temporary database copy is cleaned of synchronization messages before ZIP creation, backup rotation is bounded, and a pre-restore latest database is retained. Read `src/server/sync/index.ts`: changes are applied in a transaction before in-memory synchronization clocks are updated. Its IndexedDB helper's individual `set()` resolves a request; this helper alone is not a model for transaction-level durability. These are separate layers with different contracts.
+- RxDB documents the distinction between local database conflicts and replication conflicts. This supports explicit revision checks; it does not justify silently merging financial amounts or assuming a CRDT library alone establishes financial consistency.
+- Supabase changelog fetched and relevant October 12 TLS deprecation read. No Supabase SDK, transport, or schema implementation was changed in this study.
+
+Primary references:
+- https://developer.mozilla.org/en-US/docs/Web/API/IDBDatabase/transaction
+- https://developer.mozilla.org/en-US/docs/Web/API/IDBOpenDBRequest/blocked_event
+- https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria
+- https://web.dev/articles/persistent-storage
+- https://github.com/jakearchibald/idb/blob/main/src/database-extras.ts
+- https://github.com/jakearchibald/idb/blob/main/src/wrap-idb-value.ts
+- https://github.com/dexie/Dexie.js/blob/master/src/classes/transaction/transaction.ts
+- https://dexie.org/docs/Tutorial/Best-Practices
+- https://rxdb.info/transactions-conflicts-revisions.html
+- https://actualbudget.org/docs/contributing/project-details/architecture/
+- https://actualbudget.org/docs/getting-started/sync/
+- https://actualbudget.org/docs/backup-restore/backup/
+- https://github.com/actualbudget/actual/blob/master/packages/loot-core/src/server/budgetfiles/backups.ts
+- https://github.com/actualbudget/actual/blob/master/packages/loot-core/src/server/sync/index.ts
+
+### Current implementation constraints
+
+- `persist()` returns a synchronous boolean; 24 TypeScript files contain 115 references including declarations. Every real call site needs semantic review for an asynchronous completion contract. Returning a Promise without changing `if (!persist())` is unsafe because a Promise is truthy. Serialize mutations as well as commits; avoid restoring an old snapshot over a newer successful save after an async error.
+- Whole-state localStorage writes enforce 4,000,000 bytes. Recovery copies compete for this storage. Startup, remote application, diagnostics, QA reset, import, restore, and cross-tab events bypass or assume this backend in different places; centralize their access.
+- ZIP/JSON/TXT import is capped at 8 MiB. ZIP output currently contains uncompressed JSON. Changing the primary database alone would leave eventual backups unrestorable. Choose documented, bounded export/import sizes and validate produced backups against the same bounds; test actual large backup round trips and malformed/untrusted inputs.
+- QA serialization uses `qaStorageState()` to remove fields, while production preserves them. The existing 35-year snapshot stress reports 2,634,802 bytes in QA form but approximately 3,935,791 bytes with a minimal production-shaped envelope after retention (metadata may add bytes). This is synthetic fixture size, not actual user usage. Future storage acceptance must use the same path and fields as production.
+- `cloudLocalEnvelope()` and `cloudApplyRemoteEnvelope()` directly access localStorage. Server RPC has revision compare-and-set and a last-request identifier, but startup selection uses client timestamps and resets the expected revision to the fetched remote revision before pushing. An isolated policy example with different local/remote records and later local time returns `push`. This demonstrates a design gap for divergent offline edits, not evidence that current user data was lost. Persist the last common revision and unacknowledged write identity across reloads; do not infer causality from device time.
+- Indexed month queries alone cannot replace full historical financial replay: opening positions, balances, past corrections, cross-module links and carryovers affect later totals. Preserve an authoritative ledger and invalidate/rebuild derived summaries for affected periods.
+
+### Proposed implementation boundary (one reviewed release)
+
+1. Introduce one local repository API for load, atomic financial mutations, recovery copies, backup snapshots and synchronization metadata. IndexedDB records use stable identity plus environment/user/module/account/date indices. Preserve source fields and ordering; do not silently drop unknown data, revisions, or orphaned links to fit the schema. Rebuild derived ledger indexes rather than persisting redundant copies where exact behavior is preserved.
+2. Commit related financial records, local revision and durable pending-sync metadata together. Wait for transaction completion before save-success UI or clearing an input. Use strict durability where supported; test supported/failure behavior explicitly. Keep network requests outside local transactions. Distinguish local save completion from remote acknowledgment.
+3. Migrate by copy/verify/activate, keeping the old source unchanged until verification and activation. Make restart idempotent; all collection records and references, not only totals, must compare. Never silently fall back to an empty/old database on open or validation failure. Plan old-client/rollback compatibility before activation.
+4. Reject stale local writers atomically; handle cross-tab reloads and preserve dirty drafts. Persist cloud base revisions and retries; detect divergent device edits without timestamp-only winner selection. Cloud payload growth and per-change transfer need a measured design too; IndexedDB does not fix server-side whole-envelope synchronization. Choose a bounded record/batch protocol with atomic publication rather than raising an arbitrary local limit alone.
+5. Preserve immutable financial history, bound replaceable automatic snapshots/caches and recovery-copy rotation, and query/paginate visible history by indexed periods. Correct all affected historical summaries after edits. Keep QA and operating ledgers separate, including cloud suppression and account changes.
+6. Keep portable backups versioned and validated, with corruption checks, large-data round trips, restoration atomicity, pre-restore recovery, and synchronization handling that cannot immediately replace the restored ledger. Report origin-wide estimated usage and optional persistent-storage status honestly; neither is unlimited capacity or an external backup.
+
+### Isolated browser prototype evidence
+
+Chromium 153 on a new localhost origin; generated records only. This is a storage-pattern experiment, not Asset OS integration QA or a guarantee for the user's handset. The temporary probe ran against the real browser IndexedDB API, then deleted its test database. No new repository files/dependencies.
+
+- 12,000 generated rows; serialized JSON 15,121,785 bytes; integer amount total 72,006,000. A strict readwrite transaction stored records, head revision and pending outbox together.
+- A write request succeeded, then an explicit abort rolled back record amount, head revision and outbox together. Prior amount 1/revision 1 remained.
+- Two writers with expected revision 1 ran concurrently; exactly one committed, one aborted.
+- Database close/reopen retained all original 12,000 records and exact sum 72,006,000; committed head revision 2.
+- Indexed October 2026 lookup returned only the expected 30 rows.
+- Plain record JSON export/import preserved original row count and sum. This is NOT the application's ZIP/restore test.
+- Version 2 open triggered versionchange on the old connection, which closed and permitted upgrade.
+
+All seven prototype assertions passed. Not tested/certified here: real storage exhaustion, OS power loss, account-isolation integration, real app migration/reload, ZIP limit redesign, production cloud writes, complete money/UI regressions, handset capacity/performance. These remain explicit implementation acceptance work.
+
+## Durable storage implementation — v0.7.0 / schema 22 (2026-10-18)
+
+The preceding study section describes the pre-change baseline. This section supersedes its implementation status.
+
+- Primary device storage now uses IndexedDB records, a revisioned head and SHA-256 verification. Financial state becomes saved only after the strict readwrite transaction completes. Request-success followed by transaction-abort is a failed save; memory rolls back. Stale tabs fail revision checks and keep dirty input.
+- Legacy schema 4–21 data is copied, normalized, verified and activated without changing the old source. The migration source also remains in a separate recovery store. Failed/corrupt reads stop initialization rather than silently opening empty financial data. An old client changing the legacy source after migration blocks automatic use of either version.
+- Arrays are split into records, changed records are written incrementally, and all authoritative history is retained. Startup still loads the complete ledger for exact financial replay. The period index does not imply lazy financial replay. Integrated visible rows now expand in batches of 50 even without a search.
+- Local save and cloud acknowledgment remain distinct. Cloud base revisions and retry IDs persist across reloads; divergent edits require explicit resolution. Cloud uploads use bounded gzip/base64 chunks, SHA-256 validation and atomic manifest publication. Current and previous published chunk generations remain; unfinished generations are bounded to two through the application RPC. Remote owner checks/RLS apply to every chunk.
+- ZIP/JSON/TXT imports are bounded to 64 MiB. App processing is deliberately bounded to 48 MiB of serialized state; this is not a browser quota or an unlimited-storage claim. QA and production now serialize the same fields. Recoverable copies rotate to three plus the original migration source. No runtime dependencies were added.
+- Five cloud migrations were applied using the Supabase connection. One long migration request repeatedly returned `Invalid or expired requestState`; inspecting actual schema before each attempt prevented duplicate assumptions. Splitting the remaining changes into small migrations completed successfully. The earlier CLI telemetry attempt was rejected by automatic approval review; the CLI was not retried or bypassed. Repository filenames use the server-recorded migration versions. Optional production-only policies/event-trigger functions are guarded for clean-project replay.
+- Real cloud verification used synthetic identities inside BEGIN/ROLLBACK: immutable staging, incomplete upload rejection, idempotent publication, stale revision conflict, old-client write blocking, own/cross-owner access, and bounded successful/unfinished history all passed. Operating financial payload remained one schema-21 ledger, 242,285 bytes; test chunks remaining: zero.
+- Supabase performance advisors: no findings. Security advisors retain the deliberate owner-checked save RPC SECURITY DEFINER warning, backend-only KIS token cache with no browser policies, and the pre-existing disabled leaked-password protection setting. The unrelated exposed schema-event function privilege was removed. References: https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable and https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection .
+- Browser regression: 64/64 passed across desktop and Galaxy viewport, then 2/2 targeted busy-month pagination checks passed. Real IndexedDB tests include legacy preservation, 12,001-row ledger above 8 MiB, ZIP/codec field equality, corruption rejection, commit abort and stale tabs. Large ZIP restoration through the actual confirmation flow is checked separately before release.
+- Financial checks include 30 years entered one user action at a time and 35-year QA isolation/retention, with explicit selected-month setup adapted to the existing daily reset behavior. The production-sized envelope is checked against its real processing limit, rather than the removed QA-only 2 MB serialization assumption.
+- Limits: no physical power-loss, real device quota exhaustion, 100,000-row performance, or recovery UI for a corrupted primary database is claimed. Strict transactions, preserved migration/recovery sources and cloud/portable backups reduce risk; browser site-data deletion still requires an external copy. Cloud synchronization compresses a complete snapshot per publication, rather than implementing per-record remote deltas. IndexedDB storage estimates are available internally; persistent-storage grants and origin-wide quota display are not part of this release.
+
+Additional final checks: actual >8 MiB ZIP confirmation/restore and checksum after reload passed on desktop and Galaxy (2/2). Runtime, release metadata, syntax, strict types, secret scan and generated-output gates passed; dependency audit reported zero vulnerabilities. Full Node suite is rerun before production merge; CI independently replays migrations on a clean database and repeats core/full checks.

@@ -19,6 +19,7 @@
       "integrated-finance-engine.js",
       "src/storage/state-migrations.js",
       "src/storage/snapshot-retention.js",
+      "src/storage/local-database.js",
       "store-state.js",
       "backup.js",
       "export-csv.js",
@@ -64,6 +65,7 @@
     "asset-runtime.js": [
       "src/storage/cloud-save-contract.js",
       "src/domain/cloud-state-policy.js",
+      "src/storage/cloud-codec.js",
       "supabase-sync.js",
       "qa-mode.js",
       "pwa.js",

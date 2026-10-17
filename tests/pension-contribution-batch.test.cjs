@@ -1,4 +1,5 @@
 'use strict';
+(async()=>{
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
@@ -16,18 +17,20 @@ vm.runInContext(fs.readFileSync(path.join(__dirname,'..','pension-contributions.
 const run=(code,args=[])=>vm.runInContext(code,Object.assign(context,{__args:args}));
 const months=[1,2,3,4,5,6,7,8],input={year:'2026',throughMonth:8,day:25,pensionAmount:500000,irpAmount:250000,pensionAccountId:'ps-1',irpAccountId:'irp-1',months:{pension:months.filter(m=>m!==7),irp:months}};
 
-assert.equal(run('pensionContributionBatchLatestMonth("2026",25)'),8);
-assert.equal(run('pensionContributionBatchLatestMonth("2020",25)'),12);
-let result=run('applyPensionContributionBatch(__args[0])',[input]);
+assert.equal((await run('pensionContributionBatchLatestMonth("2026",25)')),8);
+assert.equal((await run('pensionContributionBatchLatestMonth("2020",25)')),12);
+let result=(await run('applyPensionContributionBatch(__args[0])',[input]));
 assert.equal(result.ok,true);assert.equal(result.summary.pension,3500000);assert.equal(result.summary.irp,2000000);assert.equal(result.summary.total,5500000);assert.equal(result.summary.count,15);
 assert.equal(state.integrated.ledger.length,15);assert.equal(state.pension.accounts[0].openedAt,'2026-01-25');assert.equal(state.pension.accounts[1].openedAt,'2026-01-25');
 const july=centralPensionContributionRows('2026').filter(r=>r.date.startsWith('2026-07'));
 assert.equal(july.filter(r=>r.kind==='pension').length,0);assert.equal(july.filter(r=>r.kind==='irp').reduce((s,r)=>s+r.amount,0),250000);
 assert.equal(state.financeSchedules.items.find(s=>s.targetKind==='pension').amount,500000);assert.equal(state.financeSchedules.items.find(s=>s.targetKind==='irp').amount,250000);
 
-result=run('applyPensionContributionBatch(__args[0])',[input]);assert.equal(result.ok,true);assert.equal(state.integrated.ledger.length,15,'재실행 중복 금지');
-const future=run('pensionContributionBatchCandidate(__args[0])',[{...input,throughMonth:9,months:{pension:months,irp:months}}]);assert.equal(future.ok,false);assert.match(future.error,/8월/);
+result=(await run('applyPensionContributionBatch(__args[0])',[input]));assert.equal(result.ok,true);assert.equal(state.integrated.ledger.length,15,'재실행 중복 금지');
+const future=(await run('pensionContributionBatchCandidate(__args[0])',[{...input,throughMonth:9,months:{pension:months,irp:months}}]));assert.equal(future.ok,false);assert.match(future.error,/8월/);
 
 state.integrated.ledger.push({id:'manual',date:'2026-02-10',type:'externalAssetIn',amount:600000,toAccountId:'pension-link',meta:{targetPensionAccountId:'ps-1'}});
-const before=JSON.stringify(state.integrated.ledger),conflict=run('applyPensionContributionBatch(__args[0])',[input]);assert.equal(conflict.ok,false);assert.equal(JSON.stringify(state.integrated.ledger),before,'충돌 시 원본 보존');
+const before=JSON.stringify(state.integrated.ledger),conflict=(await run('applyPensionContributionBatch(__args[0])',[input]));assert.equal(conflict.ok,false);assert.equal(JSON.stringify(state.integrated.ledger),before,'충돌 시 원본 보존');
 console.log('pension contribution batch tests: PASS');
+
+})().catch(error=>{console.error(error);process.exitCode=1});

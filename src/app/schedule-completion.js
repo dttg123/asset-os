@@ -87,23 +87,23 @@ function validateScheduleCompletionDraft(draft) {
     const issues = integratedCandidateIssues(candidateStore);
     return issues.length ? issues[0].replace('자산 잔액 음수:', '잔액이 부족합니다:').replace('부채 잔액 음수:', '대출잔액보다 많이 상환할 수 없습니다:') : '';
 }
-function commitScheduleCompletion(schedule, date, draft) {
+async function commitScheduleCompletion(schedule, date, draft) {
     if (draft.targetPensionAccountId)
         schedule.targetPensionAccountId = draft.targetPensionAccountId;
     if (draft.targetIsaAccountId)
         schedule.targetIsaAccountId = draft.targetIsaAccountId;
     integratedStore().ledger.push(...draft.rows);
     setting().integratedMonth = integratedMonthKey(date);
-    return persist(false);
+    return (await persist(false));
 }
 function renderScheduleCompletion(date, message) {
     closeSheets();
     render();
-    setTimeout(() => openScheduleDay(date), 60);
+    setTimeout(async () => (await openScheduleDay(date)), 60);
     toast(message);
     haptic('light');
 }
-function updateScheduleActualPayment(scheduleId, date, amount, principal = 0, interest = 0) {
+async function updateScheduleActualPayment(scheduleId, date, amount, principal = 0, interest = 0) {
     const schedule = financeSchedules().find(s => s.id === scheduleId);
     if (!schedule)
         return false;
@@ -141,7 +141,7 @@ function updateScheduleActualPayment(scheduleId, date, amount, principal = 0, in
         return false;
     }
     store.ledger.push(...draft.rows);
-    if (!persist(false)) {
+    if (!(await persist(false))) {
         store.ledger = original;
         Object.assign(schedule, previous);
         return false;

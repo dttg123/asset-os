@@ -1,0 +1,7 @@
+-- Preserve owner predicates while evaluating auth once per statement.
+do $$ begin if exists(select 1 from pg_catalog.pg_policies where schemaname='public' and tablename='asset_os_state' and policyname='asset_os_select_own') then execute 'alter policy asset_os_select_own on public.asset_os_state to authenticated using ((select auth.uid())=user_id)';end if;end $$;
+do $$ begin if exists(select 1 from pg_catalog.pg_policies where schemaname='public' and tablename='asset_os_state' and policyname='asset_os_insert_own') then execute 'alter policy asset_os_insert_own on public.asset_os_state to authenticated with check ((select auth.uid())=user_id)';end if;end $$;
+do $$ begin if exists(select 1 from pg_catalog.pg_policies where schemaname='public' and tablename='asset_os_state' and policyname='asset_os_update_own') then execute 'alter policy asset_os_update_own on public.asset_os_state to authenticated using ((select auth.uid())=user_id) with check ((select auth.uid())=user_id)';end if;end $$;
+do $$ begin if exists(select 1 from pg_catalog.pg_policies where schemaname='public' and tablename='asset_os_state' and policyname='asset_os_delete_own') then execute 'alter policy asset_os_delete_own on public.asset_os_state to authenticated using ((select auth.uid())=user_id)';end if;end $$;
+-- This schema event trigger is not an application RPC.
+do $$ begin if to_regprocedure('public.rls_auto_enable()') is not null then execute 'revoke execute on function public.rls_auto_enable() from public,anon,authenticated'; end if; end $$;

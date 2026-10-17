@@ -44,9 +44,9 @@ test('same-revision clients cannot silently overwrite each other',async()=>{
  const phone=client(database,'owner'),pc=client(database,'owner');
  phone.__envelope={savedAt:'2026-09-28T01:00:00Z',data:{accounts:[{id:'phone'}]}};
  pc.__envelope={savedAt:'2026-09-28T01:00:01Z',data:{accounts:[{id:'pc'}]}};
- assert.equal(await vm.runInContext('cloudPushState(__envelope)',phone),true);
+ assert.equal(await vm.runInContext("(async()=>{return (await cloudPushState(__envelope))})()",phone),true);
  assert.equal(database.revision,2);
- assert.equal(await vm.runInContext('cloudPushState(__envelope)',pc),false);
+ assert.equal(await vm.runInContext("(async()=>{return (await cloudPushState(__envelope))})()",pc),false);
  assert.equal(vm.runInContext('cloudSyncStatus',pc),'동기화 충돌 확인 필요');
  assert.equal(database.payload.data.accounts[0].id,'phone');
 });
@@ -54,9 +54,9 @@ test('same-revision clients cannot silently overwrite each other',async()=>{
 test('a lost response retries the same request without a second revision',async()=>{
  const database={revision:1,lastRequestId:'',payload:null,failAfterCommit:true};
  const phone=client(database,'owner');phone.__envelope={savedAt:'2026-09-28T01:00:00Z',data:{accounts:[{id:'phone'}]}};
- assert.equal(await vm.runInContext('cloudPushState(__envelope)',phone),false);
+ assert.equal(await vm.runInContext("(async()=>{return (await cloudPushState(__envelope))})()",phone),false);
  assert.equal(database.revision,2,'first request committed before the response was lost');
- assert.equal(await vm.runInContext('cloudPushState(__envelope)',phone),true);
+ assert.equal(await vm.runInContext("(async()=>{return (await cloudPushState(__envelope))})()",phone),true);
  assert.equal(database.revision,2,'idempotent retry must not increment twice');
 });
 
@@ -64,7 +64,7 @@ test('conflict pull cancels a stale busy save before applying the remote state',
  const database={revision:2,lastRequestId:'other-session',payload:{savedAt:'2026-09-28T00:00:00Z',data:{accounts:[]}},failAfterCommit:false};
  const stale=client(database,'owner');
  vm.runInContext(`cloudSyncBusy=true;cloudPushPending=true;cloudSyncTimer=99;cloudPendingWrite={requestId:'stale'};__pullForce='';__unlocked=0;clearTimeout=id=>{__cleared=id};cloudReconcileState=async force=>{__pullForce=force;return true};assetAuthGateUnlock=()=>{__unlocked+=1}`,stale);
- assert.equal(await vm.runInContext('cloudResolveConflictPull()',stale),true);
+ assert.equal(await vm.runInContext("(async()=>{return (await cloudResolveConflictPull())})()",stale),true);
  assert.equal(vm.runInContext('cloudSyncBusy',stale),false);
  assert.equal(vm.runInContext('cloudPushPending',stale),false);
  assert.equal(vm.runInContext('cloudSyncTimer',stale),0);
@@ -86,7 +86,7 @@ test('a signed-in device opens local data before a slow cloud check finishes',as
  const database={revision:2,lastRequestId:'',payload:null,failAfterCommit:false};
  const fast=client(database,'owner');
  vm.runInContext(`__unlocks=0;__resolved=false;initSupabaseCloud=async()=>true;cloudLocalEnvelope=()=>({stored:true,envelope:{savedAt:'2026-09-28T00:00:00Z',data:{accounts:[]}}});assetAuthGateUnlock=()=>{__unlocks+=1};cloudReconcileState=()=>new Promise(resolve=>{__finishCloud=()=>{__resolved=true;resolve(true)}})`,fast);
- const startup=vm.runInContext('startAssetAuthenticatedApp()',fast);
+ const startup=vm.runInContext("(async()=>{return (await startAssetAuthenticatedApp())})()",fast);
  await new Promise(resolve=>setImmediate(resolve));
  assert.equal(fast.__unlocks,1,'local UI must unlock without waiting for the network');
  assert.equal(fast.__resolved,false,'cloud verification should still be running');
@@ -98,7 +98,7 @@ test('a background cloud failure keeps valid local data open',async()=>{
  const database={revision:2,lastRequestId:'',payload:null,failAfterCommit:false};
  const offline=client(database,'owner');
  vm.runInContext(`__unlocks=0;__gateModes=[];initSupabaseCloud=async()=>true;cloudLocalEnvelope=()=>({stored:true,envelope:{savedAt:'2026-09-28T00:00:00Z',data:{accounts:[]}}});assetAuthGateUnlock=()=>{__unlocks+=1};assetAuthGateState=mode=>{__gateModes.push(mode)};cloudReconcileState=async()=>{cloudSyncStatus='동기화 확인 실패';return false}`,offline);
- assert.equal(await vm.runInContext('startAssetAuthenticatedApp()',offline),false);
+ assert.equal(await vm.runInContext("(async()=>{return (await startAssetAuthenticatedApp())})()",offline),false);
  assert.equal(offline.__unlocks,1);
  assert.equal(JSON.stringify(offline.__gateModes),JSON.stringify(['loading']),'a transient network failure must not relock a valid local ledger');
  assert.equal(vm.runInContext('cloudSyncStatus',offline),'오프라인 · 재확인 필요');
@@ -120,4 +120,29 @@ test('migration enforces authenticated atomic writes',()=>{
  assert.match(pgTap,/has_table_privilege\('authenticated','public\.asset_os_state','SELECT'\)/);
  assert.match(pgTap,/not has_table_privilege\('authenticated','public\.asset_os_state','UPDATE'\)/);
  assert.match(pgTap,/not has_function_privilege\('anon','public\.save_asset_os_state/);
+});
+
+
+test('persisted common revision detects divergent offline edits despite a newer phone timestamp',async()=>{
+ const database={revision:2,lastRequestId:'remote',payload:{schemaVersion:21,savedAt:'2026-10-17T00:00:00Z',data:{accounts:[{id:'remote-edit'}]}},failAfterCommit:false};
+ const phone=client(database,'owner');
+ phone.__local={schemaVersion:21,savedAt:'2026-10-18T00:00:00Z',data:{accounts:[{id:'phone-edit'}]}};
+ vm.runInContext(`assetLocalDatabase={sync:{userId:'owner',baseRevision:1,baseFingerprint:cloudEnvelopeFingerprint({data:{accounts:[{id:'common'}]}})},saveSync:async value=>{assetLocalDatabase.sync=value}};cloudLocalEnvelope=()=>({stored:true,envelope:__local});cloudFetchStateRow=async()=>({row:{revision:2,payload:__remote},error:null})`,Object.assign(phone,{__remote:database.payload}));
+ assert.equal(await vm.runInContext('cloudReconcileState()',phone),false);
+ assert.equal(vm.runInContext('cloudSyncStatus',phone),'동기화 충돌 확인 필요');assert.equal(database.revision,2);assert.equal(database.payload.data.accounts[0].id,'remote-edit');
+});
+
+test('a committed upload with lost acknowledgment is recognized after reload without publishing twice',async()=>{
+ const database={revision:1,lastRequestId:'',payload:null,failAfterCommit:true},phone=client(database,'owner');let saved=null;
+ phone.assetLocalDatabase={sync:null,saveSync:async value=>{saved=structuredClone(value)}};
+ phone.__envelope={schemaVersion:21,savedAt:'2026-10-17T00:00:00Z',data:{accounts:[{id:'kept'}]}};
+ assert.equal(await vm.runInContext('cloudPushState(__envelope)',phone),false);assert.equal(database.revision,2);assert.ok(saved.pending.requestId);
+ const reloaded=client(database,'owner');reloaded.assetLocalDatabase={sync:saved,saveSync:async value=>{saved=structuredClone(value)}};reloaded.__envelope=phone.__envelope;reloaded.__remote=database.payload;
+ vm.runInContext(`cloudLocalEnvelope=()=>({stored:true,envelope:__envelope});cloudFetchStateRow=async()=>({row:{revision:2,payload:__remote},error:null})`,reloaded);
+ assert.equal(await vm.runInContext('cloudReconcileState()',reloaded),true);assert.equal(database.revision,2);assert.equal(saved.baseRevision,2);assert.equal(saved.pending,null);
+});
+
+test('a different signed-in owner cannot upload the existing local ledger',async()=>{
+ const database={revision:1,lastRequestId:'',payload:null,failAfterCommit:false},phone=client(database,'other');phone.assetLocalDatabase={sync:{userId:'original-owner',baseRevision:1,baseFingerprint:'original'}};phone.__envelope={data:{accounts:[{id:'private'}]}};
+ assert.equal(await vm.runInContext('cloudPushState(__envelope)',phone),false);assert.equal(database.payload,null);assert.equal(database.revision,1);
 });

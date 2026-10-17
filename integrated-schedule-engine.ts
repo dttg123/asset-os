@@ -18,7 +18,7 @@ declare function validateScheduleCompletionRequest(scheduleId:string,date:string
 declare function calculateLoanScheduleCompletion(schedule:ScheduleRecord,date:string,principal:number,interest:number):ScheduleDraft;
 declare function calculateStandardScheduleCompletion(schedule:ScheduleRecord,date:string,amount:number,pensionAccountId:string,isaAccountId:string):ScheduleDraft;
 declare function validateScheduleCompletionDraft(draft:ScheduleDraft):string;
-declare function commitScheduleCompletion(schedule:ScheduleRecord,date:string,draft:ScheduleDraft):boolean;
+declare function commitScheduleCompletion(schedule:ScheduleRecord,date:string,draft:ScheduleDraft):Promise<boolean>;
 declare function renderScheduleCompletion(date:string,message?:string):void;
 declare function toast(message:string):void;
 declare function isCurrentAccount(account:ScheduleRecord):boolean;
@@ -43,14 +43,14 @@ function schedulePensionKind(sc:ScheduleRecord){const linkedKind=integratedStore
 function resolveSchedulePensionAccount(sc:ScheduleRecord,explicit='',date=''){const kind=schedulePensionKind(sc);if(!kind)return'';const candidates=pensionAccountsForKind(kind,date||'');const requested=String(explicit||sc?.targetPensionAccountId||'');if(requested&&candidates.some(a=>a.id===requested))return requested;return candidates.length===1?candidates[0].id:''}
 function isaAccountsForDate(date=''){const d=String(date||localYmd()),today=localYmd();return (state.accounts as ScheduleRecord[]).filter(a=>{const open=String(a.openedAt||a.baselineDate||''),ends=[String(a.closedAt||''),String(a.maturityAt||'')].filter(Boolean).sort(),end=ends[0]||'';if(open&&d<open)return false;if(end&&d>end)return false;if(d>=today&&a.status!=='active')return false;return true})}
 function resolveScheduleIsaAccount(sc:ScheduleRecord,explicit='',date=''){const candidates=isaAccountsForDate(date||''),requested=String(explicit||sc?.targetIsaAccountId||'');if(requested&&candidates.some(a=>a.id===requested))return requested;return candidates.length===1?candidates[0].id:''}
-function completeScheduleOccurrence(scheduleId:string,date:string,amountOverride=0,targetPensionAccountId='',targetIsaAccountId='',loanPrincipalOverride=0,loanInterestOverride=0){
+async function completeScheduleOccurrence(scheduleId:string,date:string,amountOverride=0,targetPensionAccountId='',targetIsaAccountId='',loanPrincipalOverride=0,loanInterestOverride=0){
  const request=validateScheduleCompletionRequest(scheduleId,date);
  if(!request.ok){toast(request.error);return false}
  const draft=request.schedule.kind==='loan'?calculateLoanScheduleCompletion(request.schedule,date,loanPrincipalOverride,loanInterestOverride):calculateStandardScheduleCompletion(request.schedule,date,amountOverride,targetPensionAccountId,targetIsaAccountId);
  if(!draft.ok){toast(draft.error);return false}
  const validationError=validateScheduleCompletionDraft(draft);
  if(validationError){toast(validationError);return false}
- if(!commitScheduleCompletion(request.schedule,date,draft))return false;
+ if(!(await commitScheduleCompletion(request.schedule,date,draft)))return false;
  renderScheduleCompletion(date,draft.successMessage);
  return true
 }
@@ -68,7 +68,7 @@ declare function validYmdDate(value:string):boolean;
 declare function clone<T>(value:T):T;
 declare function uid(prefix:string):string;
 declare function integratedCandidateIssues(store:Record<string,unknown>):string[];
-declare function persist(notify?:boolean):boolean;
+declare function persist(notify?:boolean):Promise<boolean>;
 function cardInstallmentTerms(s:ScheduleRecord,date:string){
  const plan=s.cardPlan as CardPlan|undefined;if(!plan)return null;
  if(!validYmdDate(String(plan.firstPaymentDate))||!Number.isInteger(plan.months)||plan.months<1||plan.months>60||!Number.isFinite(plan.purchaseAmount)||plan.purchaseAmount<=0||!Number.isFinite(plan.annualRate)||plan.annualRate<0)return null;
@@ -85,13 +85,13 @@ function schedulePlannedAmount(s:ScheduleRecord,date:string):number{
  const latest=[...history].filter(x=>x&&validYmdDate(x.effectiveFrom)&&Number.isFinite(x.amount)&&x.amount>0&&x.effectiveFrom<=date).sort((a,b)=>a.effectiveFrom.localeCompare(b.effectiveFrom)).at(-1);
  return latest?latest.amount:cardInstallmentTerms(s,date)?.total||Number(s.amount)||0;
 }
-function updateSchedulePlannedAmount(id:string,date:string,amount:number,scope:string):boolean{
+async function updateSchedulePlannedAmount(id:string,date:string,amount:number,scope:string):Promise<boolean>{
  const s=financeSchedules().find(x=>x.id===id);
  if(!s||!validYmdDate(date)||!['once','future'].includes(scope)||!financialNumberInRange(amount)||!Number.isInteger(amount)||amount<=0){toast('일정과 금액을 확인해 주세요.');return false}
  const before=clone(s);
  if(scope==='once')s.amountOverrides={...(s.amountOverrides as Record<string,number>||{}),[date]:amount};
  else {if(s.amountOverrides)delete (s.amountOverrides as Record<string,number>)[date];s.amountHistory=[...(Array.isArray(s.amountHistory)?s.amountHistory as ScheduleAmountHistory[]:[]).filter(x=>x.effectiveFrom!==date),{effectiveFrom:date,amount}];}
- if(!persist(false)){Object.assign(s,before);for(const key of ['amountOverrides','amountHistory'])if(!(key in before))delete s[key];return false}
+ if(!(await persist(false))){Object.assign(s,before);for(const key of ['amountOverrides','amountHistory'])if(!(key in before))delete s[key];return false}
  return true;
 }
 function cardPlanSummary(s:ScheduleRecord,month:string){
@@ -103,7 +103,7 @@ function cardPlanSummary(s:ScheduleRecord,month:string){
  const remainingPrincipal=Math.max(0,plan.purchaseAmount-paid);
  return{purchaseAmount:plan.purchaseAmount,remainingPrincipal,plannedAmount:date?schedulePlannedAmount(s,date):0,estimatedInterest:terms?.interest||0,actualAmount:actual?Number(actual.meta?.actualAmount??actual.amount)||0:null,paidInstallments,totalInstallments,completed:totalInstallments>0&&paidInstallments===totalInstallments&&remainingPrincipal===0};
 }
-function createCardInstallment(input:Record<string,unknown>):string{
+async function createCardInstallment(input:Record<string,unknown>):Promise<string>{
  const amount=Number(input.purchaseAmount),months=Number(input.months),rate=Number(input.annualRate)||0,purchaseDate=String(input.purchaseDate||''),first=String(input.firstPaymentDate||''),name=String(input.name||'').trim(),mode=String(input.interestMode);
  if(!name||name.length>80||!validYmdDate(purchaseDate)||!validYmdDate(first)||first<purchaseDate||!Number.isInteger(amount)||amount<=0||!financialNumberInRange(amount)||!Number.isInteger(months)||months<1||months>60||amount<months||!['free','paid'].includes(mode)||!Number.isFinite(rate)||rate<0||rate>100){toast('구매금액·기간·첫 납부일을 확인해 주세요.');return''}
  const store=integratedStore(),before=clone(store),schedulesBefore=clone(state.financeSchedules),id=uid('card-plan'),liabilityId=uid('card-debt');
@@ -114,17 +114,17 @@ function createCardInstallment(input:Record<string,unknown>):string{
  const s:ScheduleRecord={id,name,kind:'loan',amount:0,amountMode:'estimate',day:Number(first.slice(8,10)),startDate:first,active:true,liabilityId,source:'user',cardPlan:plan};s.amount=cardInstallmentTerms(s,first)?.total||0;
  if(!state.financeSchedules)state.financeSchedules={items:[]};state.financeSchedules.items.push(s);
  const issues=integratedCandidateIssues(store);
- if(issues.length||!persist(false)){state.integrated=before;state.financeSchedules=schedulesBefore;if(issues.length)toast(issues[0]);return''}
+ if(issues.length||!(await persist(false))){state.integrated=before;state.financeSchedules=schedulesBefore;if(issues.length)toast(issues[0]);return''}
  return id;
 }
 
-function removeUnpaidCardInstallment(id:string):boolean{
+async function removeUnpaidCardInstallment(id:string):Promise<boolean>{
  const s=financeSchedules().find(x=>x.id===id);if(!s?.cardPlan)return false;
  const store=integratedStore(),rows=store.ledger as ScheduleRecord[];
  if(rows.some(t=>t.liabilityId===s.liabilityId&&t.type!=='openingLiability')){toast('납부 기록이 있어 구매를 취소할 수 없습니다.');return false}
  const before=clone(store),schedules=clone(state.financeSchedules);
  store.ledger=rows.filter(t=>t.meta?.cardPlanId!==id);store.liabilities=(store.liabilities as ScheduleRecord[]).filter(x=>x.id!==s.liabilityId);
  if(state.financeSchedules)state.financeSchedules.items=financeSchedules().filter(x=>x.id!==id);
- if(!persist(false)){state.integrated=before;state.financeSchedules=schedules;return false}
+ if(!(await persist(false))){state.integrated=before;state.financeSchedules=schedules;return false}
  return true;
 }

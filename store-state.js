@@ -186,9 +186,10 @@ function pruneRecoveryKeys(limit = 2) { try {
     keys.sort().reverse().slice(limit).forEach(k => localStorage.removeItem(k));
 }
 catch { } }
-function storeRecoveryCopy(key, raw) { localStorage.setItem(key, raw); if (localStorage.getItem(key) !== raw)
+async function storeRecoveryCopy(key, raw) { if (typeof assetLocalDatabase !== 'undefined')
+    return assetLocalDatabase.recovery(key, raw); localStorage.setItem(key, raw); if (localStorage.getItem(key) !== raw)
     throw new Error('복구용 사본 검증 실패'); pruneRecoveryKeys(); return true; }
-function loadState() {
+async function loadLegacyState() {
     let currentBroken = false, recoveryStored = false;
     for (const key of (QA_MODE ? [KEY] : [KEY, ...LEGACY_KEYS])) {
         const raw = localStorage.getItem(key);
@@ -199,7 +200,7 @@ function loadState() {
             if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
                 throw new Error('지원하지 않는 저장 형식');
             const envelope = parsed;
-            if (!envelope.data || ![4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21].includes(Number(envelope.schemaVersion)))
+            if (!envelope.data || ![4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22].includes(Number(envelope.schemaVersion)))
                 throw new Error('지원하지 않는 저장 형식');
             const migrated = migrateStateData(envelope.data, Number(envelope.schemaVersion)), loaded = normalizeState(migrated.data);
             if (key !== KEY || migrated.applied.length) {
@@ -214,7 +215,7 @@ function loadState() {
         catch (e) {
             loadIssue = `저장 데이터 손상 또는 형식 오류: ${e instanceof Error ? e.message : String(e)}`;
             try {
-                recoveryStored = storeRecoveryCopy(`${KEY}-recovery-${Date.now()}`, raw);
+                recoveryStored = (await storeRecoveryCopy(`${KEY}-recovery-${Date.now()}`, raw));
             }
             catch { }
             ;
@@ -234,6 +235,82 @@ function loadState() {
             catch { }
     }
     return fresh;
+}
+let storageSavePending = false, storageCommandPending = false;
+let storageBusyControls = [], storageBusyUi = false;
+function updateStorageBusyUi() {
+    if (typeof document === 'undefined' || !document.documentElement)
+        return;
+    const busy = storageSavePending || storageCommandPending;
+    if (busy)
+        document.documentElement.dataset.storageSaving = 'true';
+    else
+        delete document.documentElement.dataset.storageSaving;
+    if (busy && !storageBusyUi) {
+        storageBusyControls = Array.from(document.querySelectorAll('button,input,select,textarea')).map(element => ({ element, disabled: element.disabled }));
+        storageBusyControls.forEach(({ element }) => element.disabled = true);
+    }
+    if (!busy && storageBusyUi) {
+        storageBusyControls.forEach(({ element, disabled }) => { if (element.isConnected)
+            element.disabled = disabled; });
+        storageBusyControls = [];
+    }
+    storageBusyUi = busy;
+    if (typeof document.createElement !== 'function')
+        return;
+    let status = document.querySelector('#storageSaveStatus');
+    if (!status) {
+        status = document.createElement('div');
+        status.id = 'storageSaveStatus';
+        status.className = 'storage-save-status';
+        status.setAttribute('role', 'status');
+        status.textContent = '기기에 저장 중…';
+        document.body.appendChild(status);
+    }
+    status.hidden = !busy;
+}
+let storageCommandQueue = Promise.resolve();
+function runStoredCommand(command) { const result = storageCommandQueue.catch(() => { }).then(async () => { await waitForStorageSave(); storageCommandPending = true; updateStorageBusyUi(); try {
+    return await command();
+}
+finally {
+    storageCommandPending = false;
+    updateStorageBusyUi();
+} }); storageCommandQueue = result; return result; }
+let storageIdleWaiters = [];
+function waitForStorageSave() { return storageSavePending ? new Promise(resolve => storageIdleWaiters.push(resolve)) : Promise.resolve(); }
+async function loadState() {
+    if (typeof assetLocalDatabase === 'undefined')
+        return loadLegacyState();
+    const stored = await assetLocalDatabase.read();
+    if (stored) {
+        if (Number(stored.schemaVersion) > SCHEMA_VERSION)
+            throw new Error('새 버전 앱에서 저장한 데이터입니다. 앱을 업데이트해 주세요.');
+        const migrated = migrateStateData(stored.data, Number(stored.schemaVersion));
+        return normalizeState(migrated.data);
+    }
+    let original = '', legacyKey = KEY, loaded = null;
+    for (const key of (QA_MODE ? [KEY] : [KEY, ...LEGACY_KEYS])) {
+        const raw = localStorage.getItem(key);
+        if (!raw)
+            continue;
+        original = raw;
+        legacyKey = key;
+        try {
+            const envelope = JSON.parse(raw);
+            if (!envelope || typeof envelope !== 'object' || !envelope.data || !Number.isInteger(Number(envelope.schemaVersion)) || Number(envelope.schemaVersion) < 4 || Number(envelope.schemaVersion) > SCHEMA_VERSION)
+                throw new Error('지원하지 않는 원장 형식');
+            loaded = normalizeState(migrateStateData(envelope.data, Number(envelope.schemaVersion)).data);
+            break;
+        }
+        catch (error) {
+            throw new Error('기존 저장 데이터 확인 실패: ' + (error instanceof Error ? error.message : String(error)) + '. 원본을 보존하고 자동 초기화를 중단했습니다.');
+        }
+    }
+    loaded = loaded || normalizeState(seed);
+    await assetLocalDatabase.commit(JSON.parse(stateEnvelopeJson(loaded)), original ? { recovery: original, legacyKey } : {});
+    await assetLocalDatabase.read();
+    return loaded;
 }
 function syncHoldingLifecycle(a) { if (!isCurrentAccount(a))
     return a; const byId = new Map(replay(a).holdings.map((h) => [h.id, h.lifecycleStatus])); a.holdings.forEach((h) => { h.lifecycleStatus = byId.get(h.id) || h.lifecycleStatus || 'archived'; }); return a; }
@@ -259,25 +336,34 @@ function syncCurrentPensionSnapshot() { if (!state?.pension)
     list[idx] = prior;
 else
     list.push(prior); list.sort((a, b) => String(a.date).localeCompare(String(b.date))); }
-function persist(notify = true) {
+async function persist(notify = true) {
+    if (storageSavePending) {
+        if (notify)
+            toast('앞선 기록을 저장하고 있습니다. 잠시 후 다시 시도해 주세요.');
+        return false;
+    }
+    storageSavePending = true;
+    updateStorageBusyUi();
     const before = clone((lastPersistedState || state));
     try {
         state.accounts.forEach((a) => { syncHoldingLifecycle(a); rebuildLedgerIndexes(a); });
         syncCurrentPensionSnapshot();
         syncCurrentIsaSnapshot();
         const candidate = clone(state), retention = compactStateSnapshots(candidate, localYmd());
-        candidate.system = { loadWarning: '', saveError: '', ...(candidate.system || {}) };
-        candidate.system.saveError = '';
+        candidate.system = { ...(candidate.system || {}), loadWarning: '', saveError: '' };
         let raw = stateEnvelopeJson(candidate), bytes = stateEnvelopeBytes(raw);
-        candidate.system.storageUsage = { bytes, limit: MAX_STATE_BYTES, level: storageUsageLevel(bytes), snapshotRetention: { dailyMonths: SNAPSHOT_DAILY_KEEP_MONTHS, isaRemoved: retention.isaRemoved, kisRemoved: retention.kisRemoved } };
+        candidate.system.storageUsage = { bytes, limit: MAX_STATE_BYTES, backend: 'indexeddb', level: storageUsageLevel(bytes), snapshotRetention: { dailyMonths: SNAPSHOT_DAILY_KEEP_MONTHS, isaRemoved: retention.isaRemoved, kisRemoved: retention.kisRemoved } };
         raw = stateEnvelopeJson(candidate);
         bytes = stateEnvelopeBytes(raw);
         candidate.system.storageUsage.bytes = bytes;
         raw = stateEnvelopeJson(candidate);
         bytes = stateEnvelopeBytes(raw);
         if (bytes > MAX_STATE_BYTES)
-            throw new Error(`저장 데이터 ${bytes.toLocaleString('ko-KR')}바이트가 안전한도 ${MAX_STATE_BYTES.toLocaleString('ko-KR')}바이트를 초과했습니다. ZIP 백업 후 거래 기록과 첨부 자료를 확인해 주세요.`);
-        localStorage.setItem(KEY, raw);
+            throw new Error(`안전하게 처리할 수 있는 원장 크기 ${MAX_STATE_BYTES.toLocaleString('ko-KR')}바이트를 넘었습니다. 기록은 삭제하지 않았습니다. 백업 후 저장소를 확인해 주세요.`);
+        if (typeof assetLocalDatabase === 'undefined')
+            localStorage.setItem(KEY, raw);
+        else
+            await assetLocalDatabase.commit(JSON.parse(raw));
         state = candidate;
         lastPersistedState = clone(state);
         try {
@@ -298,12 +384,18 @@ function persist(notify = true) {
         return true;
     }
     catch (e) {
-        const message = `저장 실패: ${(e instanceof Error ? e.message : String(e)) || '로컬 저장소를 확인해 주세요.'}`;
+        const message = `저장 실패: ${(e instanceof Error ? e.message : String(e)) || '기기 저장소를 확인해 주세요.'}`;
         state = before;
-        state.system = { loadWarning: '', saveError: '', ...(state.system || {}) };
-        state.system.saveError = message;
+        state.system = { ...(state.system || {}), saveError: message };
         if (notify && document.querySelector('#toast'))
             toast(message);
         return false;
+    }
+    finally {
+        storageSavePending = false;
+        updateStorageBusyUi();
+        const waiters = storageIdleWaiters;
+        storageIdleWaiters = [];
+        waiters.forEach(resolve => resolve());
     }
 }

@@ -35,17 +35,17 @@ assert.doesNotMatch(renderSource,/maybeAutoRefresh/);
 assert.doesNotMatch(isaQuoteSource,/maybeAutoRefreshIsaQuotes|ISA_QUOTE_REFRESH_MS/);
 
 (async()=>{
- const result=await vm.runInContext('refreshBrokerKisManually(["pension"])',context);
+ const result=await vm.runInContext("(async()=>{return (await refreshBrokerKisManually([\"pension\"]))})()",context);
  assert.equal(result.ok,true);assert.equal(result.updated,1);assert.equal(calls.length,3);
  assert.deepEqual(calls.map(x=>x.action),['balance','orders','rights']);assert.equal(renders,1);
  calls.length=0;state.brokerKis.connections.pension.orderSyncThrough='2026-06-01';
- const catchup=await vm.runInContext('runKisCurrentSync("pension","ps-main")',context);
+ const catchup=await vm.runInContext("(async()=>{return (await runKisCurrentSync(\"pension\",\"ps-main\"))})()",context);
  assert.equal(catchup.ok,true);assert.deepEqual(calls.map(x=>x.action),['balance','orders','orders','orders','orders','rights']);
  const ranges=JSON.parse(JSON.stringify(calls.filter(x=>x.action==='orders').map(x=>x.range)));
  assert.deepEqual(ranges,[{from:'2026-05-30',to:'2026-06-29'},{from:'2026-06-30',to:'2026-07-30'},{from:'2026-07-31',to:'2026-08-30'},{from:'2026-08-31',to:'2026-09-04'}]);
  const concurrentKinds=[];let releasePension;const pensionGate=new Promise(resolve=>{releasePension=resolve});context.concurrentKinds=concurrentKinds;context.pensionGate=pensionGate;
  vm.runInContext('runKisCurrentSync=async function(kind){concurrentKinds.push(kind);if(kind==="pension")await pensionGate;return{ok:true}}',context);
- const pensionRun=vm.runInContext('refreshBrokerKisManually(["pension"])',context);await Promise.resolve();const irpRun=vm.runInContext('refreshBrokerKisManually(["irp"])',context);releasePension();
+ const pensionRun=(await vm.runInContext("(async()=>{return (await refreshBrokerKisManually([\"pension\"]))})()",context));await Promise.resolve();const irpRun=(await vm.runInContext("(async()=>{return (await refreshBrokerKisManually([\"irp\"]))})()",context));releasePension();
  const [pensionResult,irpResult]=await Promise.all([pensionRun,irpRun]);assert.equal(pensionResult.ok,true);assert.equal(irpResult.ok,true);assert.deepEqual(concurrentKinds,['pension','irp'],'겹친 요청도 각 계좌를 한 번씩 실제 갱신해야 한다');
  console.log('kis manual refresh tests: PASS');
 })().catch(error=>{console.error(error);process.exitCode=1});

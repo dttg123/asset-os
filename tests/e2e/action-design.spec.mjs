@@ -5,10 +5,10 @@ test.beforeEach(async({page})=>{
 });
 test('@core action design keeps historical dates explicit and close preserves unsaved edits',async({page},info)=>{
  await page.goto('/index.html?qa=1#/home');
- await page.evaluate(()=>{
+ await page.evaluate(async ()=>{
   const next=window.__assetOS.getState();next.settings.integratedMonth='2026-02';
   next.settings.integratedEntryFavorites=[{uiType:'externalIncome',category:'월급',amount:100000,toAccountId:'cash-main',note:'기본급'},{uiType:'externalIncome',category:'월급',amount:200000,toAccountId:'qa-other',note:'상여'}];
-  next.integrated.accounts.push({id:'qa-other',kind:'cash',name:'별도 계좌'});window.__assetOS.replaceState(next);nav('integrated','summary');
+  next.integrated.accounts.push({id:'qa-other',kind:'cash',name:'별도 계좌'});(await window.__assetOS.replaceState(next));nav('integrated','summary');
  });
  const before=await page.evaluate(()=>JSON.stringify(window.__assetOS.getState().integrated.ledger));
  await expect(page.locator('.preset-context').first()).toContainText('기본급');

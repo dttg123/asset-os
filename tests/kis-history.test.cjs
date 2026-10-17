@@ -37,13 +37,13 @@ vm.runInContext('openKisSettings=()=>{};toast=value=>recordToast(value)',context
  assert.equal(longRanges[0].from,'2010-01-01');assert.equal(longRanges.at(-1).to,'2026-09-03');
  for(let i=1;i<longRanges.length;i++)assert.equal(longRanges[i].from,vm.runInContext(`kisDateAddDays('${longRanges[i-1].to}',1)`,context),'장기 구간 사이에 누락·중복 날짜가 생기면 안 된다');
 
- await vm.runInContext('syncKisHistory("pension")',context);
+ await vm.runInContext("(async()=>{return (await syncKisHistory(\"pension\"))})()",context);
  let history=JSON.parse(JSON.stringify(context.state.brokerKis.history.pension));
  assert.equal(history.status,'paused');
  assert.equal(history.orderThrough,'2026-08-01','실패 직전까지 완료된 31일 구간을 저장해야 한다');
  assert.match(toastMessage,/다음 구간부터 다시 이어집니다/);
 
- await vm.runInContext('syncKisHistory("pension")',context);
+ await vm.runInContext("(async()=>{return (await syncKisHistory(\"pension\"))})()",context);
  history=JSON.parse(JSON.stringify(context.state.brokerKis.history.pension));
  assert.equal(history.status,'complete');
  assert.equal(history.orderThrough,'2026-09-03');

@@ -176,6 +176,6 @@ function openAiStrategy() {
     $$('[data-ai-amount]').forEach(button => button.onclick = () => { form.elements.namedItem('amount').value = button.dataset.aiAmount || ''; });
     form.onsubmit = async (event) => { event.preventDefault(); const data = new FormData(form), amount = Math.max(0, Math.round(Number(data.get('amount')) || 0)), fundingSource = String(data.get('fundingSource') || 'new_money'), includedScopes = aiStrategyScopes(data.getAll('includedScope')); if (!includedScopes.length)
         return toast('분석에 포함할 계좌를 하나 이상 선택해 주세요.'); if (amount <= 0 && aiStrategyPurpose !== 'rebalance')
-        return toast('판단할 금액을 입력해 주세요.'); setting().aiStrategy = { ...saved, purpose: aiStrategyPurpose, fundingSource, amount, includedScopes }; if (!persist(false))
+        return toast('판단할 금액을 입력해 주세요.'); setting().aiStrategy = { ...saved, purpose: aiStrategyPurpose, fundingSource, amount, includedScopes }; if (!(await persist(false)))
         return; await shareAiStrategyFile(aiStrategyPurpose, amount, fundingSource, includedScopes); };
 }

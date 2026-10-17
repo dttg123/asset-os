@@ -76,7 +76,7 @@ async function assetWritePhoneBackup({ tag = '', version = APP_VERSION, silent =
     settings.phoneEnabled = true;
     settings.phonePermission = 'granted';
     settings.lastPhoneBackupAt = new Date().toISOString();
-    persist(false);
+    (await persist(false));
     if (!silent)
         toast(`휴대폰 백업 완료: ${name}`);
     return true;
@@ -104,7 +104,7 @@ async function assetConnectPhoneBackup() { if (typeof window.showDirectoryPicker
         await assetWritePhoneBackup({ tag: 'pre', version: settings.lastReleaseVersion || 'v0.4', silent: true });
         settings.lastReleaseVersion = APP_VERSION;
     }
-    persist(false);
+    (await persist(false));
     toast('휴대폰 백업 폴더를 연결했습니다.');
     return true;
 }
@@ -115,6 +115,6 @@ catch (error) {
 } }
 function queueAssetAutoBackup() { if (assetBackupWriting)
     return; clearTimeout(assetAutoBackupTimer); const settings = assetBackupSettings(); if (!settings.phoneEnabled)
-    return; assetAutoBackupTimer = setTimeout(() => assetWritePhoneBackup({ silent: true }), ASSET_AUTO_BACKUP_DELAY); }
+    return; assetAutoBackupTimer = setTimeout(async () => (await assetWritePhoneBackup({ silent: true })), ASSET_AUTO_BACKUP_DELAY); }
 async function assetCreateKeepBackup() { if (await assetWritePhoneBackup({ tag: 'keep' }))
     return true; const name = assetManagedBackupName({ tag: 'keep' }); downloadBytes(createBackupZipBytes(), name); toast(`영구보관 ZIP 저장: ${name}`); return true; }
