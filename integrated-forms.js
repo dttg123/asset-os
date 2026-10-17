@@ -191,11 +191,11 @@ function openIntegratedTransactionForm(id = '', preset = {}) {
         else
             apply();
     }));
-    form.querySelectorAll?.('[data-entry-remove]').forEach(button => button.addEventListener('click', () => { const entries = integratedEntryFavorites(), before = clone(setting().integratedEntryFavorites); entries.splice(Number(button.dataset.entryRemove), 1); setting().integratedEntryFavorites = entries; if (!persist()) {
+    form.querySelectorAll?.('[data-entry-remove]').forEach(button => button.addEventListener('click', async () => { const entries = integratedEntryFavorites(), before = clone(setting().integratedEntryFavorites); entries.splice(Number(button.dataset.entryRemove), 1); setting().integratedEntryFavorites = entries; if (!(await persist())) {
         setting().integratedEntryFavorites = before;
         return;
     } button.closest('.entry-shortcut')?.remove(); toast('자주 쓰는 기록에서 뺐어요.'); }));
-    form.addEventListener('submit', (event) => { event.preventDefault(); saveIntegratedTransaction(event.currentTarget, !!event.submitter?.hasAttribute('data-entry-continue')); });
+    form.addEventListener('submit', async (event) => { event.preventDefault(); (await saveIntegratedTransaction(event.currentTarget, !!event.submitter?.hasAttribute('data-entry-continue'))); });
 }
 function integratedFormLiveError(form) {
     const data = new FormData(form), type = String(data.get('uiType') || ''), systemType = form.dataset.systemType || '';
@@ -325,7 +325,7 @@ function integratedValidateCandidate(candidate, editingId = '') {
     const issues = [...integratedCandidateIssues(test), ...integratedPolicyLimitIssues(test)];
     return issues.length ? issues[0].replace('자산 잔액 음수:', '잔액이 부족합니다:').replace('부채 잔액 음수:', '대출잔액보다 많이 상환할 수 없습니다:') : '';
 }
-function saveIntegratedTransaction(form, continueEntry = false) {
+async function saveIntegratedTransaction(form, continueEntry = false) {
     const rows = integratedCandidatesFromForm(form), editingId = form.dataset.editId || '';
     if (!rows.length) {
         const message = '기록할 금액을 입력해 주세요.', isLoan = String(new FormData(form).get('uiType') || '') === 'loanPayment';
@@ -369,7 +369,7 @@ function saveIntegratedTransaction(form, continueEntry = false) {
             setting().integratedEntryFavorites = [favorite, ...entries].slice(0, 8);
         }
     }
-    if (!persist())
+    if (!(await persist()))
         return;
     sheetDirty = false;
     closeSheets({ all: true });
@@ -386,9 +386,9 @@ function openCashReconcileForm() {
     $('#formBody').innerHTML = `<form id="cashReconcileForm" class="form"><div class="finance-form-note real">통장·현금의 실제 잔액을 입력하면 현재 기록과의 차이만 보정 원장으로 남깁니다. 기존 수입·지출 기록은 바꾸지 않습니다.</div><div class="form-grid"><div class="field"><label>확인일</label><input name="date" type="date" value="${escapeHtml(date)}" required></div><div class="field"><label>실제 잔액</label><input name="actualBalance" type="number" min="0" step="1" value="${escapeHtml(Math.round(current))}" required></div></div><div class="finance-settlement-box"><strong>기록상 잔액 ${won(current)}</strong>저장 전 확인일 기준으로 다시 계산합니다.</div><div class="field"><label>메모 <small>선택</small></label><input name="note" placeholder="예: 은행 앱 잔액 확인"></div><div class="form-error" role="alert" aria-live="polite" hidden></div><button class="integrated-form-save" type="submit">잔액 맞추기</button></form>`;
     openSheet('#formSheet', { mode: 'input' });
     const form = $('#cashReconcileForm');
-    form.addEventListener('submit', (event) => { event.preventDefault(); saveCashReconcile(event.currentTarget); });
+    form.addEventListener('submit', async (event) => { event.preventDefault(); (await saveCashReconcile(event.currentTarget)); });
 }
-function saveCashReconcile(form) {
+async function saveCashReconcile(form) {
     const data = new FormData(form), date = String(data.get('date') || ymd()), actual = Number(data.get('actualBalance')), note = String(data.get('note') || '').trim(), dateError = postedDateError(date);
     if (dateError) {
         formShowError(form, dateError, 'date');
@@ -416,7 +416,7 @@ function saveCashReconcile(form) {
     integratedLedgerSearch = '';
     integratedSearchDisplayLimit = 50;
     setting().integratedLedgerFilter = 'all';
-    if (!persist())
+    if (!(await persist()))
         return;
     sheetDirty = false;
     closeSheets({ all: true });
@@ -438,7 +438,7 @@ function deleteIntegratedTransaction(id) {
         toast('ISA 정산에 연결된 거래는 개별 삭제할 수 없습니다.');
         return;
     }
-    showDialog({ title: '이 거래를 삭제할까요?', message: `${tx.date} · ${tx.category || integratedTxLabel(tx)} 기록을 삭제합니다. 관련 합계가 즉시 다시 계산됩니다.`, confirmText: '삭제', cancelText: '취소', danger: true }, () => {
+    showDialog({ title: '이 거래를 삭제할까요?', message: `${tx.date} · ${tx.category || integratedTxLabel(tx)} 기록을 삭제합니다. 관련 합계가 즉시 다시 계산됩니다.`, confirmText: '삭제', cancelText: '취소', danger: true }, async () => {
         const before = clone(integratedStore());
         integratedStore().ledger = integratedStore().ledger.filter(t => t.id !== id);
         const issues = integratedCandidateIssues(integratedStore());
@@ -449,7 +449,7 @@ function deleteIntegratedTransaction(id) {
         }
         integratedStore().mode = 'live';
         integratedStore().label = '내 통합 거래기록';
-        if (!persist())
+        if (!(await persist()))
             return;
         sheetDirty = false;
         closeSheets();
@@ -502,7 +502,7 @@ function openIntegratedRefundForm(id) {
     $('#formTitle').textContent = '환불·부분취소 기록';
     $('#formBody').innerHTML = `<form id="refundForm" class="form"><div class="readonly-row"><span>환불 가능한 잔액</span><strong>${won(remaining)}</strong></div><div class="field"><label>환불일</label><input name="date" type="date" value="${escapeHtml(localYmd())}" required></div><div class="field"><label>실제 환불액</label><input name="amount" type="number" min="1" max="${escapeHtml(remaining)}" value="${escapeHtml(remaining)}" required></div><div class="source-note">원래 지출은 보존하며 환불한 달의 소비에서 차감합니다.</div><button class="form-btn primary">환불 저장</button></form>`;
     openSheet('#formSheet', { mode: 'input' });
-    $('#refundForm').onsubmit = (event) => {
+    $('#refundForm').onsubmit = async (event) => {
         event.preventDefault();
         const form = event.currentTarget, data = new FormData(form), before = clone(state), result = recordIntegratedRefund(id, String(data.get('date')), Number(data.get('amount')));
         if (!result.ok) {
@@ -512,7 +512,7 @@ function openIntegratedRefundForm(id) {
         setting().integratedMonth = integratedMonthKey(String(data.get('date')));
         setting().integratedLedgerFilter = 'all';
         integratedLedgerSearch = '';
-        if (!persist()) {
+        if (!(await persist())) {
             state = before;
             return;
         }

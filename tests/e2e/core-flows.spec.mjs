@@ -66,7 +66,7 @@ test('@core @release authentication gate exposes only safe conflict actions',asy
 test('@core finance interest and backup health work through their real sheets',async({page})=>{
  await preparePage(page);
  await page.goto(app);
- await page.evaluate(()=>{
+ await page.evaluate(async ()=>{
   const next=window.__assetOS.getState(),id='e2e-deposit',accountId=`finance-asset-${id}`;
   next.financialProducts=next.financialProducts||{items:[],events:[]};
   next.financialProducts.items=next.financialProducts.items.filter(product=>product.id!==id);
@@ -77,7 +77,7 @@ test('@core finance interest and backup health work through their real sheets',a
   next.integrated.ledger=next.integrated.ledger.filter(row=>row.productId!==id);
   next.integrated.ledger.push({id:'e2e-opening',date:'2060-01-01',type:'openingAsset',amount:1000000,toAccountId:accountId,productId:id});
   next.settings.backupV04={...(next.settings.backupV04||{}),phoneEnabled:true,lastPhoneBackupAt:new Date(Date.now()-10*86400000).toISOString()};
-  window.__assetOS.replaceState(next);
+  (await window.__assetOS.replaceState(next));
  });
  await page.evaluate(()=>openFinancialProductDetail('e2e-deposit'));
  await page.getByRole('button',{name:'이자 입금'}).click();
@@ -119,13 +119,13 @@ test('@core integrated input rejects unsafe amounts and saves a valid transactio
 test('@core ISA and pension interest save through typed form controls',async({page})=>{
  await preparePage(page);
  await page.goto(app);
- await page.evaluate(()=>{
+ await page.evaluate(async ()=>{
   const next=window.__assetOS.getState();
   next.accounts=[{id:'e2e-input-isa',name:'입력 테스트 ISA',status:'active',openedAt:'2026-01-01',baselineDate:'2026-01-01',baselineCash:0,holdings:[],transactions:[],reconciliations:[]}];
   next.settings.selectedAccountId='e2e-input-isa';
   next.pension.accounts=[{id:'e2e-input-pension',name:'입력 테스트 연금',kind:'pension',status:'active',openedAt:'2026-01-01'}];
   next.pension.holdings=[];next.pension.transactions=[];
-  window.__assetOS.replaceState(next);
+  (await window.__assetOS.replaceState(next));
   openTransactionForm('interest');
  });
  const isaForm=page.locator('#txForm');
@@ -149,11 +149,11 @@ test('@core ISA and pension interest save through typed form controls',async({pa
 test('@core AI form presets produce a scoped zero-funding rebalance download',async({page})=>{
  await preparePage(page);
  await page.goto(app);
- await page.evaluate(()=>{
+ await page.evaluate(async ()=>{
   const next=window.__assetOS.getState();
   next.accounts=[];
   next.settings.aiStrategy={purpose:'buy',fundingSource:'new_money',amount:0,includedScopes:['isa']};
-  window.__assetOS.replaceState(next);
+  (await window.__assetOS.replaceState(next));
   openAiStrategy();
  });
  const form=page.locator('#aiStrategyForm');
@@ -179,12 +179,12 @@ test('@core AI form presets produce a scoped zero-funding rebalance download',as
 test('@core secure mobile backup downloads a restorable ZIP when file pickers are unavailable',async({page})=>{
  await preparePage(page);
  await page.goto(app);
- await page.evaluate(()=>{
+ await page.evaluate(async ()=>{
   Object.defineProperty(window,'showSaveFilePicker',{configurable:true,value:undefined});
   Object.defineProperty(window,'showDirectoryPicker',{configurable:true,value:undefined});
   const next=window.__assetOS.getState();
   next.settings.haptics=false;
-  window.__assetOS.replaceState(next);
+  (await window.__assetOS.replaceState(next));
   openBackupHub();
  });
  expect(await page.evaluate(()=>window.isSecureContext)).toBe(true);
@@ -200,7 +200,7 @@ test('@core secure mobile backup downloads a restorable ZIP when file pickers ar
   const payload=parseBackupZipBytes(new Uint8Array(bytes));
   return{format:payload.format,schema:payload.schemaVersion,environment:payload.environment,haptics:payload.data.settings.haptics};
  },bytes);
- expect(restored).toEqual({format:'asset-os-backup-v1',schema:21,environment:'qa',haptics:false});
+ expect(restored).toEqual({format:'asset-os-backup-v1',schema:22,environment:'qa',haptics:false});
  expect(appErrors).toEqual([]);
 });
 
@@ -268,15 +268,15 @@ test('@core haptic settings control vibration and unsupported browsers remain us
 test('@core AI sharing uses pension cash after a balance discrepancy without blocking a funded request',async({page})=>{
  await preparePage(page);
  await page.goto(app);
- await page.evaluate(()=>{
+ await page.evaluate(async ()=>{
   const next=window.__assetOS.getState();
   next.accounts=[];
   next.pension.accounts=[{id:'e2e-ai-pension',name:'QA 연금',kind:'pension',status:'active',openedAt:'2026-01-01'}];
   next.pension.holdings=[];next.pension.transactions=[];
   next.brokerKis={};
   next.settings.aiStrategy={purpose:'buy',fundingSource:'account_cash',amount:100000,includedScopes:['pension']};
-  window.__assetOS.replaceState(next);
-  const result=window.__assetOS.brokerKis.importBalance({cash:1000000,cashDetail:{depositCash:1000000,settledCash:1000000,availableCash:1000000},securitiesValue:2000000,totalValue:2690284,holdings:[{productCode:'005930',productName:'QA 종목',quantity:100,avgPrice:20000,currentPrice:20000,marketValue:2000000}]},'pension','e2e-ai-pension',new Date().toISOString());
+  (await window.__assetOS.replaceState(next));
+  const result=(await window.__assetOS.brokerKis.importBalance({cash:1000000,cashDetail:{depositCash:1000000,settledCash:1000000,availableCash:1000000},securitiesValue:2000000,totalValue:2690284,holdings:[{productCode:'005930',productName:'QA 종목',quantity:100,avgPrice:20000,currentPrice:20000,marketValue:2000000}]},'pension','e2e-ai-pension',new Date().toISOString()));
   if(!result.ok)throw new Error(JSON.stringify(result));
   Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>true});
   Object.defineProperty(navigator,'share',{configurable:true,value:async({files})=>{window.__qaAiShare=JSON.parse(await files[0].text())}});
@@ -326,11 +326,11 @@ test('@core quick entry saves continuously, remembers fields, copies safely and 
 
 test('@core native integrated summary opens presets and card installments without silent writes',async({page})=>{
  await preparePage(page);await page.goto(app);
- await page.evaluate(()=>{
+ await page.evaluate(async ()=>{
   const next=window.__assetOS.getState();next.financialProducts={items:[],events:[]};next.financeSchedules={items:[]};next.integrated.liabilities=[];
   next.integrated.ledger=[{id:'native-cash',date:'2026-01-01',type:'openingAsset',toAccountId:'cash-main',amount:10000000}];
   next.settings.integratedMonth='2026-02';next.settings.integratedEntryFavorites=[{uiType:'lifeExpense',category:'식비',amount:25000}];
-  window.__assetOS.replaceState(next);createCardInstallment({name:'TV · 국민카드',purchaseAmount:3100000,months:24,purchaseDate:'2026-01-10',firstPaymentDate:'2026-02-25',interestMode:'free'});
+  (await window.__assetOS.replaceState(next));(await createCardInstallment({name:'TV · 국민카드',purchaseAmount:3100000,months:24,purchaseDate:'2026-01-10',firstPaymentDate:'2026-02-25',interestMode:'free'}));
   financeSchedules().push({id:'native-income',name:'예정 급여',kind:'income',amount:3000000,day:15,startDate:'2026-01-01',active:true});nav('integrated','summary');
  });
  await expect(page.locator('.nav.active')).toHaveText('통합');
@@ -363,7 +363,7 @@ test('@core native integrated summary opens presets and card installments withou
 
 test('@core @release schedule and card sheets connect purchase, payment correction and recurrence scope',async({page})=>{
  await preparePage(page);await page.goto(app);
- await page.evaluate(()=>{const next=window.__assetOS.getState();next.financialProducts={items:[],events:[]};next.financeSchedules={items:[]};next.integrated.liabilities=[];next.integrated.ledger=[{id:'card-cash',date:'2026-01-01',type:'openingAsset',toAccountId:'cash-main',amount:10000000}];next.settings.integratedMonth='2026-02';window.__assetOS.replaceState(next);nav('integrated','schedule')});
+ await page.evaluate(async ()=>{const next=window.__assetOS.getState();next.financialProducts={items:[],events:[]};next.financeSchedules={items:[]};next.integrated.liabilities=[];next.integrated.ledger=[{id:'card-cash',date:'2026-01-01',type:'openingAsset',toAccountId:'cash-main',amount:10000000}];next.settings.integratedMonth='2026-02';(await window.__assetOS.replaceState(next));nav('integrated','schedule')});
  await page.getByRole('button',{name:'＋ 구매 기록',exact:true}).click();
  const card=page.locator('#cardInstallmentForm');await card.locator('[name="name"]').fill('TV · 국민카드');await card.locator('[name="purchaseAmount"]').fill('1200000');await card.locator('[name="purchaseDate"]').fill('2026-01-10');await card.locator('[name="firstPaymentDate"]').fill('2026-02-25');await card.locator('[name="months"]').selectOption('12');await card.locator('[name="interestMode"]').selectOption('paid');await card.locator('[name="annualRate"]').fill('12');await card.getByRole('button',{name:'구매 기록 저장'}).click();
  await expect(page.locator('.card-plan-values')).toContainText('1,200,000원');await expect(page.locator('.card-plan-values')).toContainText('112,000원');
@@ -382,26 +382,26 @@ test('@core @release schedule and card sheets connect purchase, payment correcti
 
 test('@core @release money balances survive settlement, malformed refresh, save failure and explicit zero after reload',async({page})=>{
  await preparePage(page);await page.goto(app);
- await page.evaluate(()=>{
-  const next=window.__assetOS.getState();next.accounts=[];next.pension.accounts=[{id:'money-flow',kind:'pension',name:'QA 돈 흐름',status:'active',openedAt:'2026-01-01'}];next.pension.holdings=[];next.pension.transactions=[];next.pension.assetSnapshots=[];next.integrated.ledger=[];next.brokerKis={};next.moduleVerification={isa:true,pension:true,irp:true};next.settings.pensionAssetScope='pension';next.settings.backupV04={phoneEnabled:false};window.__assetOS.replaceState(next);
+ await page.evaluate(async ()=>{
+  const next=window.__assetOS.getState();next.accounts=[];next.pension.accounts=[{id:'money-flow',kind:'pension',name:'QA 돈 흐름',status:'active',openedAt:'2026-01-01'}];next.pension.holdings=[];next.pension.transactions=[];next.pension.assetSnapshots=[];next.integrated.ledger=[];next.brokerKis={};next.moduleVerification={isa:true,pension:true,irp:true};next.settings.pensionAssetScope='pension';next.settings.backupV04={phoneEnabled:false};(await window.__assetOS.replaceState(next));
   window.__moneyTime=new Date().toISOString();window.__moneyBalance={cash:100000,cashDetail:{depositCash:100000,settledCash:300000,nextDayCash:100000,availableCash:100000},securitiesValue:200000,totalValue:500000,holdings:[{productCode:'MONEY',productName:'QA ETF',quantity:20,avgPrice:9000,currentPrice:10000,marketValue:200000,profitLoss:20000}]};
-  const result=window.__assetOS.brokerKis.importBalance(window.__moneyBalance,'pension','money-flow',window.__moneyTime);if(!result.ok)throw Error('valid balance rejected');nav('pension','assets');
+  const result=(await window.__assetOS.brokerKis.importBalance(window.__moneyBalance,'pension','money-flow',window.__moneyTime));if(!result.ok)throw Error('valid balance rejected');nav('pension','assets');
  });
  await expect(page.locator('.pension-asset-value')).toHaveText('500,000원');
  expect(await page.evaluate(()=>({cash:pensionAssetMetrics('pension').cash,other:pensionAssetMetrics('pension').unallocated,home:integratedFinancialModel().pension,history:state.pension.assetSnapshots.at(-1).pension.value}))).toEqual({cash:300000,other:0,home:500000,history:500000});
- const rejected=await page.evaluate(()=>{
-  const before=JSON.stringify(state.brokerKis),storageBefore=localStorage.getItem(KEY),at=new Date(Date.parse(window.__moneyTime)+1000).toISOString();
-  const invalid=window.__assetOS.brokerKis.importBalance({},'pension','money-flow',at),wrongAccount=window.__assetOS.brokerKis.importBalance(window.__moneyBalance,'irp','money-flow',at);
-  return{invalid:invalid.error,wrongAccount:wrongAccount.error,unchanged:before===JSON.stringify(state.brokerKis)&&storageBefore===localStorage.getItem(KEY)};
+ const rejected=await page.evaluate(async ()=>{
+  const before=JSON.stringify(state.brokerKis),storageBefore=JSON.stringify(assetLocalDatabase.envelope),at=new Date(Date.parse(window.__moneyTime)+1000).toISOString();
+  const invalid=(await window.__assetOS.brokerKis.importBalance({},'pension','money-flow',at)),wrongAccount=(await window.__assetOS.brokerKis.importBalance(window.__moneyBalance,'irp','money-flow',at));
+  return{invalid:invalid.error,wrongAccount:wrongAccount.error,unchanged:before===JSON.stringify(state.brokerKis)&&storageBefore===JSON.stringify(assetLocalDatabase.envelope)};
  });
  expect(rejected).toEqual({invalid:'KIS_BALANCE_INVALID',wrongAccount:'KIS_ACCOUNT_LINK_MISMATCH',unchanged:true});
- const failed=await page.evaluate(()=>{
-  const before=JSON.stringify(state.brokerKis),storageBefore=localStorage.getItem(KEY),original=Storage.prototype.setItem;Storage.prototype.setItem=function(){throw new DOMException('QA quota','QuotaExceededError')};
-  try{const result=window.__assetOS.brokerKis.importBalance({...window.__moneyBalance,totalValue:800000,cashDetail:{settledCash:600000}},'pension','money-flow',new Date(Date.parse(window.__moneyTime)+2000).toISOString());return{error:result.error,unchanged:before===JSON.stringify(state.brokerKis),total:pensionAssetMetrics('pension').value,stored:storageBefore===localStorage.getItem(KEY)}}finally{Storage.prototype.setItem=original}
+ const failed=await page.evaluate(async ()=>{
+  const before=JSON.stringify(state.brokerKis),storageBefore=JSON.stringify(assetLocalDatabase.envelope),original=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(){throw new DOMException('QA quota','QuotaExceededError')};
+  try{const result=(await window.__assetOS.brokerKis.importBalance({...window.__moneyBalance,totalValue:800000,cashDetail:{settledCash:600000}},'pension','money-flow',new Date(Date.parse(window.__moneyTime)+2000).toISOString()));return{error:result.error,unchanged:before===JSON.stringify(state.brokerKis),total:pensionAssetMetrics('pension').value,stored:storageBefore===JSON.stringify(assetLocalDatabase.envelope)}}finally{IDBObjectStore.prototype.put=original}
  });
  expect(failed).toEqual({error:'PERSIST_FAILED',unchanged:true,total:500000,stored:true});
  await page.reload();await expect(page.locator('.pension-asset-value')).toHaveText('500,000원');
- await page.evaluate(()=>{const at=new Date(Date.parse(brokerKisLatestBalance(state.brokerKis,'pension','money-flow').fetchedAt)+3000).toISOString(),result=window.__assetOS.brokerKis.importBalance({cash:0,cashDetail:{depositCash:0,settledCash:0,availableCash:0},securitiesValue:0,totalValue:0,holdings:[]},'pension','money-flow',at);if(!result.ok)throw Error('explicit zero rejected');nav('pension','assets')});
+ await page.evaluate(async ()=>{const at=new Date(Date.parse(brokerKisLatestBalance(state.brokerKis,'pension','money-flow').fetchedAt)+3000).toISOString(),result=(await window.__assetOS.brokerKis.importBalance({cash:0,cashDetail:{depositCash:0,settledCash:0,availableCash:0},securitiesValue:0,totalValue:0,holdings:[]},'pension','money-flow',at));if(!result.ok)throw Error('explicit zero rejected');nav('pension','assets')});
  expect(await page.evaluate(()=>({value:pensionAssetMetrics('pension').value,home:integratedFinancialModel().pension,history:state.pension.assetSnapshots.at(-1).pension.value,exposure:pensionAccountExposure('money-flow').hasAssets}))).toEqual({value:0,home:0,history:0,exposure:false});
  await page.reload();expect(await page.evaluate(()=>pensionAssetMetrics('pension').value)).toBe(0);expect(await page.evaluate(()=>state.pension.assetSnapshots.at(-1).pension.value)).toBe(0);
  await expectNoHorizontalOverflow(page);expect(appErrors).toEqual([]);
@@ -409,24 +409,24 @@ test('@core @release money balances survive settlement, malformed refresh, save 
 
 test('@core unified app keeps alerts behind the header bell and preserves account detail actions',async({page})=>{
  await preparePage(page);await page.goto(app);
- await page.evaluate(()=>{
+ await page.evaluate(async ()=>{
   const next=window.__assetOS.getState();next.accounts=[];next.pension.accounts=[];next.pension.holdings=[];next.pension.transactions=[];next.pension.contributions=[];
   next.financialProducts={items:[],events:[]};next.financeSchedules={items:[]};next.integrated.ledger=[];next.integrated.liabilities=[];next.brokerKis={connections:{}};next.settings.backupV04={...(next.settings.backupV04||{}),phoneEnabled:false};
-  window.__assetOS.replaceState(next);nav('home');
+  (await window.__assetOS.replaceState(next));nav('home');
  });
  await expect(page.locator('#alertBell')).toBeVisible();await expect(page.locator('#alertBadge')).toBeHidden();await expect(page.locator('#main .alerts')).toHaveCount(0);
  await page.locator('#alertBell').click();await expect(page.locator('#sheetBody')).toContainText('지금 처리할 중요 알림이 없습니다.');await expect(page.locator('#sheetBody [data-investment-refresh-all]')).toBeVisible();
  await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
- await page.evaluate(()=>{const today=localYmd();financeSchedules().push({id:'bell-schedule',name:'알림 연결 확인',kind:'expense',amount:123456,day:Number(today.slice(-2)),startDate:today,active:true});persist(false);render()});
+ await page.evaluate(async ()=>{const today=localYmd();financeSchedules().push({id:'bell-schedule',name:'알림 연결 확인',kind:'expense',amount:123456,day:Number(today.slice(-2)),startDate:today,active:true});(await persist(false));render()});
  await expect(page.locator('#alertBadge')).toHaveText('1');await page.locator('#alertBell').click();await page.locator('#sheetBody [data-home-schedule]').click();await expect(page.locator('.schedule-detail-list')).toContainText('알림 연결 확인');
  expect(await page.evaluate(()=>integratedLedger().length)).toBe(0);
  await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
- await page.evaluate(()=>{financeSchedules().splice(0);setting().backupV04={...(setting().backupV04||{}),phoneEnabled:true,lastPhoneBackupAt:new Date(Date.now()-10*86400000).toISOString()};persist(false);render()});
+ await page.evaluate(async ()=>{financeSchedules().splice(0);setting().backupV04={...(setting().backupV04||{}),phoneEnabled:true,lastPhoneBackupAt:new Date(Date.now()-10*86400000).toISOString()};(await persist(false));render()});
  await expect(page.locator('#alertBadge')).toHaveText('1');await page.locator('#alertBell').click();await page.locator('#sheetBody [data-backup-alert]').click();await expect(page.locator('#sheetBody')).toContainText('백업');
  await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
  await page.evaluate(()=>{setting().backupV04.phoneEnabled=false;state.brokerKis.connections.pension.lastError='QA_SYNC_FAILED';render()});await expect(page.locator('#alertBadge')).toHaveText('1');await page.locator('#alertBell').click();await expect(page.locator('#sheetBody [data-investment-refresh-failed]')).toBeVisible();
  await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
- await page.evaluate(()=>{const next=window.__assetOS.getState();next.accounts=[{id:'bell-isa',name:'알림 QA ISA',status:'active',openedAt:'2026-01-01',maturityAt:'2029-01-01',baselineDate:'2026-01-01',baselineCash:3189892,holdings:[],transactions:[],reconciliations:[]}];next.settings.selectedAccountId='bell-isa';window.__assetOS.replaceState(next);nav('home')});
+ await page.evaluate(async ()=>{const next=window.__assetOS.getState();next.accounts=[{id:'bell-isa',name:'알림 QA ISA',status:'active',openedAt:'2026-01-01',maturityAt:'2029-01-01',baselineDate:'2026-01-01',baselineCash:3189892,holdings:[],transactions:[],reconciliations:[]}];next.settings.selectedAccountId='bell-isa';(await window.__assetOS.replaceState(next));nav('home')});
  await page.locator('.home-account-list [data-route="isa"]').click();await expect(page.locator('.isa-summary-facts')).toContainText('평가손익');await expect(page.locator('.isa-summary-facts')).toContainText('계좌 현금');await page.locator('.native-isa-entry [data-new-tx]').click();await expect(page.locator('#actionSheet')).toHaveAttribute('aria-hidden','false');await page.locator('#actionGrid [data-t="interest"]').click();await expect(page.locator('#formSheet')).toHaveAttribute('aria-hidden','false');await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);await page.locator('.isa-account-tools > summary').click();await page.locator('.isa-account-tools [data-register]').click();await expect(page.locator('#registerSheet')).toHaveAttribute('aria-hidden','false');await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);await page.locator('[data-isa-asset-analysis]').click();await expect(page.locator('#detailSheet')).toHaveClass(/open/);
  await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
  await page.evaluate(()=>nav('pension','contribution'));await expect(page.locator('.pension-goal .pension-credit-facts')).toContainText('예상 세액공제');await expect(page.locator('.stack > .pension-credit-facts')).toHaveCount(0);await page.locator('.pension-credit-estimate').click();await expect(page.locator('#pensionTaxProfileForm')).toBeVisible();await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);await page.locator('[data-pension-goal-toggle]').click();await expect(page.locator('.pension-goal-detail')).toBeVisible();await page.locator('[data-pension-contribution-batch]').click();await expect(page.locator('#formSheet')).toHaveAttribute('aria-hidden','false');await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
@@ -453,6 +453,7 @@ test('@core settings preserve preferences and haptic opt-out across reload',asyn
  await page.getByRole('button',{name:'퍼플',exact:true}).click();
  expect(await page.evaluate(()=>window.__qaVibrations)).toEqual([]);
  await page.getByRole('checkbox',{name:'다크모드',exact:true}).check();
+ await page.waitForFunction(()=>!storageSavePending&&!storageCommandPending);
  await page.reload();
  await page.getByRole('button',{name:'내 Asset OS 열기'}).click();
  await page.locator('[data-profile-action="appearance"]').click();
@@ -488,12 +489,12 @@ test('@core pension plan stays open when saving fails',async({page})=>{
 
 test('@core refresh result updates in the open alerts sheet and survives reload',async({page})=>{
  await preparePage(page);await page.goto(app);
- await page.evaluate(()=>{
+ await page.evaluate(async ()=>{
   state.accounts=[];state.brokerKis.connections.pension.lastCompleteSyncAt='2026-10-13T03:00:00Z';state.brokerKis.connections.irp.lastCompleteSyncAt='2026-09-04T01:17:00Z';
   kisConnectedAccount=()=>({id:'refresh-test'});
   window.__qaRefreshCalls=[];
   refreshBrokerKisManually=async kinds=>{const kind=kinds[0];window.__qaRefreshCalls.push(kind);if(kind==='irp'&&window.__qaRefreshCalls.length<=2)return{ok:false,error:'QA_FAILED'};state.brokerKis.connections[kind].lastCompleteSyncAt=new Date().toISOString();state.brokerKis.connections[kind].lastError='';return{ok:true}};
-  persist(false);render();openAlertsCenter();
+  (await persist(false));render();openAlertsCenter();
  });
  await expect(page.locator('[data-refresh-result]')).toContainText('2026. 10. 13.');
  await page.locator('[data-investment-refresh-all]').click();
@@ -538,9 +539,9 @@ test('@core asset charts select recorded dates at the edges and through native d
 
 test('@core imported balance totals stay authoritative and unexplained differences open a comparison',async({page})=>{
  await preparePage(page);await page.goto(app);
- await page.evaluate(()=>{
-  const next=window.__assetOS.getState();next.accounts=[];next.pension.accounts=[{id:'balance-ui',kind:'pension',name:'QA 연금저축',status:'active',openedAt:'2026-01-01'}];next.pension.holdings=[];next.pension.transactions=[];next.brokerKis={};next.settings.pensionAssetScope='pension';next.settings.backupV04={phoneEnabled:false};window.__assetOS.replaceState(next);
-  window.__qaBalanceAt=new Date().toISOString();window.__assetOS.brokerKis.importBalance({cash:100000,cashDetail:{depositCash:100000,settledCash:100000,nextDayCash:100000,availableCash:100000},securitiesValue:200000,totalValue:264602,holdings:[{productCode:'CHECK',productName:'QA ETF',quantity:20,avgPrice:9000,currentPrice:10000,marketValue:200000}]},'pension','balance-ui',window.__qaBalanceAt);
+ await page.evaluate(async ()=>{
+  const next=window.__assetOS.getState();next.accounts=[];next.pension.accounts=[{id:'balance-ui',kind:'pension',name:'QA 연금저축',status:'active',openedAt:'2026-01-01'}];next.pension.holdings=[];next.pension.transactions=[];next.brokerKis={};next.settings.pensionAssetScope='pension';next.settings.backupV04={phoneEnabled:false};(await window.__assetOS.replaceState(next));
+  window.__qaBalanceAt=new Date().toISOString();(await window.__assetOS.brokerKis.importBalance({cash:100000,cashDetail:{depositCash:100000,settledCash:100000,nextDayCash:100000,availableCash:100000},securitiesValue:200000,totalValue:264602,holdings:[{productCode:'CHECK',productName:'QA ETF',quantity:20,avgPrice:9000,currentPrice:10000,marketValue:200000}]},'pension','balance-ui',window.__qaBalanceAt));
   window.__qaRawBalance=JSON.stringify(state.brokerKis.balanceSnapshots);nav('pension','assets');
  });
  await expect(page.locator('.pension-asset-value')).toHaveText('264,602원');
@@ -550,7 +551,7 @@ test('@core imported balance totals stay authoritative and unexplained differenc
  await expect(page.locator('.balance-comparison .sheetrow').filter({hasText:'구성 합계와 조회 총액 차이'})).toContainText('-35,398원');
  expect(await page.evaluate(()=>JSON.stringify(state.brokerKis.balanceSnapshots)===window.__qaRawBalance)).toBe(true);
  await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
- await page.evaluate(()=>{window.__assetOS.brokerKis.importBalance({cash:100000,cashDetail:{depositCash:100000,settledCash:64602,nextDayCash:64602,availableCash:64602},securitiesValue:200000,totalValue:264602,holdings:[{productCode:'CHECK',productName:'QA ETF',quantity:20,avgPrice:9000,currentPrice:10000,marketValue:200000}]},'pension','balance-ui',new Date(Date.parse(window.__qaBalanceAt)+1000).toISOString());render();openAlertsCenter()});
+ await page.evaluate(async ()=>{(await window.__assetOS.brokerKis.importBalance({cash:100000,cashDetail:{depositCash:100000,settledCash:64602,nextDayCash:64602,availableCash:64602},securitiesValue:200000,totalValue:264602,holdings:[{productCode:'CHECK',productName:'QA ETF',quantity:20,avgPrice:9000,currentPrice:10000,marketValue:200000}]},'pension','balance-ui',new Date(Date.parse(window.__qaBalanceAt)+1000).toISOString()));render();openAlertsCenter()});
  await expect(page.locator('[data-pension-balance-check="balance-ui"]')).toHaveCount(0);
  expect(await page.evaluate(()=>pensionAccountView(pensionAccount('balance-ui')).cash)).toBe(64602);
  expect(await page.evaluate(()=>pensionAccountView(pensionAccount('balance-ui')).reportedCash)).toBe(100000);
@@ -559,13 +560,13 @@ test('@core imported balance totals stay authoritative and unexplained differenc
 
 test('@core money history uses a covered baseline and explains debt and adjustment sources',async({page})=>{
  await preparePage(page);await page.goto(app);
- await page.evaluate(()=>{
+ await page.evaluate(async ()=>{
   const next=window.__assetOS.getState(),today=localYmd(),y=Number(today.slice(0,4)),month=today.slice(0,7);
   next.accounts=[];next.pension.accounts=[{id:'history-p',kind:'pension',status:'active',name:'QA pension',openedAt:`${y-1}-01-01`}];next.pension.holdings=[];next.pension.transactions=[];next.pension.contributions=[];next.brokerKis=brokerKisEmptyStore();
   next.integrated.accounts=[{id:'cash-main',kind:'cash',name:'QA cash'},{id:'pension-link',kind:'pension',name:'QA pension'}];next.integrated.liabilities=[{id:'history-debt',kind:'loan',name:'QA loan'}];next.integrated.ledger=[{id:'history-open',type:'openingAsset',date:`${y-3}-01-01`,amount:1000000,toAccountId:'cash-main',meta:{}},{id:'history-debt-open',type:'openingLiability',date:`${y-3}-01-01`,amount:200000,liabilityId:'history-debt',meta:{}},{id:'history-support',type:'adjustment',date:today,amount:0,delta:273000,accountId:'cash-main',category:'정부기여금 누계 반영',meta:{analysisOnly:true}},{id:'history-interest',type:'adjustment',date:today,amount:0,delta:4230,accountId:'cash-main',category:'누적 이자 반영',meta:{analysisOnly:true}}];
   next.integrated.ledger.push({id:'history-pension-cash',type:'externalAssetIn',date:`${month}-01`,amount:100000,toAccountId:'pension-link',meta:{targetPensionAccountId:'history-p'}});
   next.pension.assetSnapshots=[{date:`${month}-01`,pension:{cost:100000,value:100000},irp:{cost:0,value:0},meta:{autoSnapshot:false}},{date:today,pension:{cost:100000,value:100000},irp:{cost:0,value:0},meta:{autoSnapshot:false}}];
-  next.financialProducts={items:[],events:[]};next.financeSchedules={items:[]};window.__assetOS.replaceState(next);
+  next.financialProducts={items:[],events:[]};next.financeSchedules={items:[]};(await window.__assetOS.replaceState(next));
   window.__moneyHistoryExpected={start:`${month}-01`,end:today};
  });
  await expect(page.locator('.hero .label')).toHaveText('순금융자산');await expect(page.locator('.heroamount')).toHaveAttribute('title','1,177,230원');

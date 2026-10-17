@@ -3,13 +3,13 @@ import {readFile} from 'node:fs/promises';
 test.beforeEach(async({page})=>{if(process.env.ASSET_OS_QA_SDK_PATH){const body=await readFile(process.env.ASSET_OS_QA_SDK_PATH);await page.route('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4',route=>route.fulfill({body,contentType:'text/javascript'}))}});
 test('@core selected months and insurance payment status stay explicit without changing money',async({page},info)=>{
  await page.goto('/index.html?qa=1#/home');
- await page.evaluate(()=>{
+ await page.evaluate(async ()=>{
   const next=window.__assetOS.getState();next.settings.integratedMonth='2026-02';
   next.insurance={policies:[
    {id:'paid',name:'납입을 마친 긴 이름의 테스트 보험 계약',company:'테스트',status:'active',paymentStyle:'monthly',premium:13124,contractDate:'2025-01-01',paymentEndDate:'2025-12-31',coverages:[]},
    {id:'paying',name:'현재 월납 보험',status:'active',paymentStyle:'monthly',premium:10000,contractDate:'2025-01-01',paymentEndDate:'2099-12-31',coverages:[]},
    {id:'lump',name:'일시납 보험',status:'active',paymentStyle:'lump',premium:50000,contractDate:'2025-01-01',paymentEndDate:'2025-01-01',coverages:[]}
-  ]};window.__assetOS.replaceState(next);nav('integrated','summary');
+  ]};(await window.__assetOS.replaceState(next));nav('integrated','summary');
  });
  const before=await page.evaluate(()=>({ledger:JSON.stringify(state.integrated.ledger),insurance:JSON.stringify(state.insurance),net:integratedFinancialModel().netAssets}));
  await expect(page.getByRole('heading',{name:'2026년 2월 소비',exact:true})).toBeVisible();
@@ -30,13 +30,13 @@ test('@core selected months and insurance payment status stay explicit without c
 test('@core today defaults ignore stale months and thirty schedules stay compact with direct card access',async({page},info)=>{
  await page.clock.setFixedTime(new Date('2026-10-17T03:00:00Z'));
  await page.goto('/index.html?qa=1#/home');
- await page.evaluate(()=>{
+ await page.evaluate(async ()=>{
   localYmd=(d)=>{const value=d||new Date();return value.getFullYear()+'-'+String(value.getMonth()+1).padStart(2,'0')+'-'+String(value.getDate()).padStart(2,'0')};
   const next=window.__assetOS.getState();next.settings.integratedMonth='2026-09';next.settings.integratedMonthViewedOn='2026-10-16';
   next.integrated.ledger=[{id:'cash',date:'2026-01-01',type:'openingAsset',amount:10000000,toAccountId:'cash-main'}];
   next.financeSchedules={items:Array.from({length:30},(_,i)=>({id:'many-'+i,name:'테스트 납부 일정 '+(i+1),kind:'expense',amount:1000,day:25,startDate:'2026-01-01',active:true}))};
   for(let i=0;i<10;i++)next.integrated.ledger.push({id:'paid-'+i,date:'2026-09-25',type:'expense',amount:1000,fromAccountId:'cash-main',category:'테스트 납부 일정 '+(i+1),meta:{scheduleId:'many-'+i,scheduleDate:'2026-09-25'}});
-  window.__assetOS.replaceState(next);nav('integrated','summary');
+  (await window.__assetOS.replaceState(next));nav('integrated','summary');
  });
  await expect(page.locator('[data-integrated-month-select]')).toHaveValue('2026-10');
  await page.locator('[data-integrated-month-select]').fill('2026-09');await page.locator('[data-integrated-month-select]').dispatchEvent('change');
@@ -66,11 +66,11 @@ test('@core today defaults ignore stale months and thirty schedules stay compact
 
 test('@core final card installment remains saved and completed history survives reload',async({page})=>{
  await page.clock.setFixedTime(new Date('2026-10-17T03:00:00Z'));await page.goto('/index.html?qa=1#/home');
- const id=await page.evaluate(()=>{
+ const id=await page.evaluate(async ()=>{
   const next=window.__assetOS.getState();next.financialProducts={items:[],events:[]};next.financeSchedules={items:[]};next.integrated.liabilities=[];
-  next.integrated.ledger=[{id:'cash',date:'2026-01-01',type:'openingAsset',amount:10000000,toAccountId:'cash-main'}];window.__assetOS.replaceState(next);
-  const id=createCardInstallment({name:'완료 검증 TV',purchaseAmount:10001,months:2,purchaseDate:'2026-08-01',firstPaymentDate:'2026-08-31',interestMode:'free'});
-  const finish=renderScheduleCompletion;renderScheduleCompletion=()=>{};completeScheduleOccurrence(id,'2026-08-31',0,'','',5000,0);renderScheduleCompletion=finish;closeSheets({all:true});setting().integratedMonth='2026-09';persist(false);nav('integrated','schedule');return id;
+  next.integrated.ledger=[{id:'cash',date:'2026-01-01',type:'openingAsset',amount:10000000,toAccountId:'cash-main'}];(await window.__assetOS.replaceState(next));
+  const id=(await createCardInstallment({name:'완료 검증 TV',purchaseAmount:10001,months:2,purchaseDate:'2026-08-01',firstPaymentDate:'2026-08-31',interestMode:'free'}));
+  const finish=renderScheduleCompletion;renderScheduleCompletion=()=>{};(await completeScheduleOccurrence(id,'2026-08-31',0,'','',5000,0));renderScheduleCompletion=finish;closeSheets({all:true});setting().integratedMonth='2026-09';(await persist(false));nav('integrated','schedule');return id;
  });
  await page.locator(`.schedule-list [data-fixed-cost-item="${id}"]`).click();
  await page.locator('[data-schedule-loan-principal]').fill('5001');await page.locator('[data-schedule-loan-interest]').fill('0');await page.locator('[data-schedule-complete]').click();

@@ -87,22 +87,65 @@ let lastPersistedState:StateData|null=null;
 let transactionDisplayLimit=50,dividendDisplayLimit=50,pensionTransactionDisplayLimit=20,pensionTransactionSearch='',integratedLedgerSearch='',integratedSearchDisplayLimit=50;
 let dividendAnalysisExpanded=false,pensionIncomeAnalysisExpanded=false,pensionAssetAnalysisExpanded=false,isaHoldingsExpanded=false,pensionHoldingsExpanded=false;
 function pruneRecoveryKeys(limit=2):void{try{const prefixes=[`${KEY}-pre-restore-`,`${KEY}-recovery-`,`${KEY}-pre-cloud-`,`${KEY}-pre-import-`],keys=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&prefixes.some((prefix:string)=>k.startsWith(prefix)))keys.push(k)}keys.sort().reverse().slice(limit).forEach(k=>localStorage.removeItem(k))}catch{}}
-function storeRecoveryCopy(key:string,raw:string):true{localStorage.setItem(key,raw);if(localStorage.getItem(key)!==raw)throw new Error('복구용 사본 검증 실패');pruneRecoveryKeys();return true}
-function loadState():StateData{
+async function storeRecoveryCopy(key:string,raw:string):Promise<true>{if(typeof assetLocalDatabase!=='undefined')return assetLocalDatabase.recovery(key,raw);localStorage.setItem(key,raw);if(localStorage.getItem(key)!==raw)throw new Error('복구용 사본 검증 실패');pruneRecoveryKeys();return true}
+
+async function loadLegacyState():Promise<StateData>{
  let currentBroken=false,recoveryStored=false;
  for(const key of (QA_MODE?[KEY]:[KEY,...LEGACY_KEYS])){
   const raw=localStorage.getItem(key);if(!raw)continue;
-  try{const parsed:unknown=JSON.parse(raw);if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))throw new Error('지원하지 않는 저장 형식');const envelope=parsed as Record<string,unknown>;if(!envelope.data||![4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21].includes(Number(envelope.schemaVersion)))throw new Error('지원하지 않는 저장 형식');const migrated=migrateStateData(envelope.data,Number(envelope.schemaVersion)),loaded=normalizeState(migrated.data);if(key!==KEY||migrated.applied.length){loaded.system.loadWarning='';try{localStorage.setItem(KEY,JSON.stringify({schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,savedAt:new Date().toISOString(),data:loaded}))}catch{}}return loaded}
-  catch(e:unknown){loadIssue=`저장 데이터 손상 또는 형식 오류: ${e instanceof Error?e.message:String(e)}`;try{recoveryStored=storeRecoveryCopy(`${KEY}-recovery-${Date.now()}`,raw)}catch{};if(key===KEY){currentBroken=true;break}}
+  try{const parsed:unknown=JSON.parse(raw);if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))throw new Error('지원하지 않는 저장 형식');const envelope=parsed as Record<string,unknown>;if(!envelope.data||![4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22].includes(Number(envelope.schemaVersion)))throw new Error('지원하지 않는 저장 형식');const migrated=migrateStateData(envelope.data,Number(envelope.schemaVersion)),loaded=normalizeState(migrated.data);if(key!==KEY||migrated.applied.length){loaded.system.loadWarning='';try{localStorage.setItem(KEY,JSON.stringify({schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,savedAt:new Date().toISOString(),data:loaded}))}catch{}}return loaded}
+  catch(e:unknown){loadIssue=`저장 데이터 손상 또는 형식 오류: ${e instanceof Error?e.message:String(e)}`;try{recoveryStored=(await storeRecoveryCopy(`${KEY}-recovery-${Date.now()}`,raw))}catch{};if(key===KEY){currentBroken=true;break}}
  }
  const fresh=normalizeState(seed);if(loadIssue){fresh.system.loadWarning=loadIssue+(recoveryStored?' 원본은 복구용으로 보관했고 초기 데이터로 열었습니다.':' 복구용 사본을 저장하지 못해 원본 저장값은 덮어쓰지 않았습니다.');if(recoveryStored&&!currentBroken)try{localStorage.setItem(KEY,JSON.stringify({schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,environment:APP_ENV,savedAt:new Date().toISOString(),data:fresh}))}catch{}}return fresh
+}
+declare const assetLocalDatabase:{read():Promise<Record<string,unknown>|null>;commit(envelope:Record<string,unknown>,options?:{recovery?:string;legacyKey?:string}):Promise<void>;recovery(key:string,raw:string):Promise<true>;envelope:Record<string,unknown>|null};
+let storageSavePending=false,storageCommandPending=false;
+let storageBusyControls:Array<{element:HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement|HTMLButtonElement;disabled:boolean}>=[],storageBusyUi=false;
+function updateStorageBusyUi():void{
+ if(typeof document==='undefined'||!document.documentElement)return;
+ const busy=storageSavePending||storageCommandPending;
+ if(busy)document.documentElement.dataset.storageSaving='true';else delete document.documentElement.dataset.storageSaving;
+ if(busy&&!storageBusyUi){storageBusyControls=Array.from(document.querySelectorAll<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement|HTMLButtonElement>('button,input,select,textarea')).map(element=>({element,disabled:element.disabled}));storageBusyControls.forEach(({element})=>element.disabled=true)}
+ if(!busy&&storageBusyUi){storageBusyControls.forEach(({element,disabled})=>{if(element.isConnected)element.disabled=disabled});storageBusyControls=[]}
+ storageBusyUi=busy;
+ if(typeof document.createElement!=='function')return;
+ let status=document.querySelector<HTMLElement>('#storageSaveStatus');if(!status){status=document.createElement('div');status.id='storageSaveStatus';status.className='storage-save-status';status.setAttribute('role','status');status.textContent='기기에 저장 중…';document.body.appendChild(status)}status.hidden=!busy;
+}
+let storageCommandQueue:Promise<unknown>=Promise.resolve();
+function runStoredCommand<T>(command:()=>Promise<T>):Promise<T>{const result=storageCommandQueue.catch(()=>{}).then(async()=>{await waitForStorageSave();storageCommandPending=true;updateStorageBusyUi();try{return await command()}finally{storageCommandPending=false;updateStorageBusyUi()}});storageCommandQueue=result;return result}
+
+let storageIdleWaiters:Array<()=>void>=[];
+function waitForStorageSave():Promise<void>{return storageSavePending?new Promise(resolve=>storageIdleWaiters.push(resolve)):Promise.resolve()}
+async function loadState():Promise<StateData>{
+ if(typeof assetLocalDatabase==='undefined')return loadLegacyState();
+ const stored=await assetLocalDatabase.read();
+ if(stored){if(Number(stored.schemaVersion)>SCHEMA_VERSION)throw new Error('새 버전 앱에서 저장한 데이터입니다. 앱을 업데이트해 주세요.');const migrated=migrateStateData(stored.data,Number(stored.schemaVersion));return normalizeState(migrated.data)}
+ let original='',legacyKey=KEY,loaded:StateData|null=null;
+ for(const key of (QA_MODE?[KEY]:[KEY,...LEGACY_KEYS])){const raw=localStorage.getItem(key);if(!raw)continue;original=raw;legacyKey=key;try{const envelope=JSON.parse(raw) as Record<string,unknown>;if(!envelope||typeof envelope!=='object'||!envelope.data||!Number.isInteger(Number(envelope.schemaVersion))||Number(envelope.schemaVersion)<4||Number(envelope.schemaVersion)>SCHEMA_VERSION)throw new Error('지원하지 않는 원장 형식');loaded=normalizeState(migrateStateData(envelope.data,Number(envelope.schemaVersion)).data);break}catch(error){throw new Error('기존 저장 데이터 확인 실패: '+(error instanceof Error?error.message:String(error))+'. 원본을 보존하고 자동 초기화를 중단했습니다.')}}
+ loaded=loaded||normalizeState(seed);await assetLocalDatabase.commit(JSON.parse(stateEnvelopeJson(loaded)),original?{recovery:original,legacyKey}:{});await assetLocalDatabase.read();
+ return loaded;
 }
 function syncHoldingLifecycle(a:StateAccount):StateAccount{if(!isCurrentAccount(a))return a;const byId=new Map(replay(a).holdings.map((h:StateRecord)=>[h.id,h.lifecycleStatus]));a.holdings.forEach((h:StateRecord)=>{h.lifecycleStatus=byId.get(h.id)||h.lifecycleStatus||'archived'});return a}
 function syncCurrentIsaSnapshots():void{if(!state?.accounts)return;const date=localYmd();for(const a of state.accounts.filter(isCurrentAccount)){const m=accountMetrics(a),securitiesValue=(m.holdings||[]).reduce((sum:number,h:StateRecord)=>sum+(Number(h.marketValue)||0),0),cost=Math.max(0,Number(m.cost)||0),cash=Math.max(0,Number(m.cash)||0),totalValue=Math.max(0,Number(m.value)||0);if(!(totalValue>0||cost>0||state.moduleVerification?.isa||(a.assetSnapshots||[]).some((x:StateRecord)=>x.meta?.autoSnapshot===true&&!x.meta?.qaFixture)))continue;const row={date,cost:Math.round(cost),value:Math.round(securitiesValue),cash:Math.round(cash),totalValue:Math.round(totalValue),meta:{autoSnapshot:true,accountId:a.id,valueBasis:'securities',totalValueBasis:'securities_plus_cash',grain:'day',verified:!!state.moduleVerification?.isa}},list=Array.isArray(a.assetSnapshots)?a.assetSnapshots:(a.assetSnapshots=[]),idx=list.findIndex((x:StateRecord)=>String(x.date||'').slice(0,10)===date&&x.meta?.autoSnapshot===true&&!x.meta?.qaFixture),protectedSnapshot=list.some((x:StateRecord)=>String(x.date||'').slice(0,10)===date&&x.meta?.autoSnapshot!==true&&!x.meta?.qaFixture);if(idx>=0)list[idx]=row;else if(!protectedSnapshot)list.push(row);list.sort((x:StateRecord,y:StateRecord)=>String(x.date).localeCompare(String(y.date)))}}
 function syncCurrentIsaSnapshot():void{return syncCurrentIsaSnapshots()}
 function syncCurrentPensionSnapshot():void{if(!state?.pension)return;const psVerified=!!state.moduleVerification?.pension,irpVerified=!!state.moduleVerification?.irp,date=localYmd(),month=date.slice(0,7),list=Array.isArray(state.pension.assetSnapshots)?state.pension.assetSnapshots:(state.pension.assetSnapshots=[]),idx=list.findIndex((x:StateRecord)=>String(x.date||'').slice(0,7)===month&&x.meta?.autoSnapshot===true&&!x.meta?.qaFixture),protectedSnapshot=list.some((x:StateRecord)=>String(x.date||'').slice(0,7)===month&&x.meta?.autoSnapshot!==true&&!x.meta?.qaFixture);if(idx<0&&protectedSnapshot)return;const prior=idx>=0?clone(list[idx]):{date,pension:{cost:0,value:0},irp:{cost:0,value:0},meta:{autoSnapshot:true}},ps=pensionAssetMetrics('pension'),irp=pensionAssetMetrics('irp'),psUsable=ps.value>.5||ps.cost>.5||psVerified||ps.source==='kis'||idx>=0&&(Number((prior.pension as StateRecord|undefined)?.value)||0)>.5,irpUsable=irp.value>.5||irp.cost>.5||irpVerified||irp.source==='kis'||idx>=0&&(Number((prior.irp as StateRecord|undefined)?.value)||0)>.5;if(!psUsable&&!irpUsable)return;prior.date=date;prior.meta={...(prior.meta||{}),autoSnapshot:true,grain:'month',verified:{pension:psVerified,irp:irpVerified},source:{pension:ps.source||'',irp:irp.source||''}};if(psUsable)prior.pension={cost:Math.round(ps.cost),value:Math.round(ps.value),cash:Math.round(ps.cash||0)};if(irpUsable)prior.irp={cost:Math.round(irp.cost),value:Math.round(irp.value),cash:Math.round(irp.cash||0)};if(idx>=0)list[idx]=prior;else list.push(prior);list.sort((a:StateRecord,b:StateRecord)=>String(a.date).localeCompare(String(b.date)))}
-function persist(notify=true):boolean{
+async function persist(notify=true):Promise<boolean>{
+ if(storageSavePending){if(notify)toast('앞선 기록을 저장하고 있습니다. 잠시 후 다시 시도해 주세요.');return false}
+ storageSavePending=true;updateStorageBusyUi();
  const before:StateData=clone((lastPersistedState||state) as StateData);
- try{state!.accounts.forEach((a:StateAccount)=>{syncHoldingLifecycle(a);rebuildLedgerIndexes(a)});syncCurrentPensionSnapshot();syncCurrentIsaSnapshot();const candidate=clone(state!),retention=compactStateSnapshots(candidate,localYmd());candidate.system={loadWarning:'',saveError:'',...(candidate.system||{})};candidate.system.saveError='';let raw=stateEnvelopeJson(candidate),bytes=stateEnvelopeBytes(raw);candidate.system.storageUsage={bytes,limit:MAX_STATE_BYTES,level:storageUsageLevel(bytes),snapshotRetention:{dailyMonths:SNAPSHOT_DAILY_KEEP_MONTHS,isaRemoved:retention.isaRemoved,kisRemoved:retention.kisRemoved}};raw=stateEnvelopeJson(candidate);bytes=stateEnvelopeBytes(raw);candidate.system.storageUsage.bytes=bytes;raw=stateEnvelopeJson(candidate);bytes=stateEnvelopeBytes(raw);if(bytes>MAX_STATE_BYTES)throw new Error(`저장 데이터 ${bytes.toLocaleString('ko-KR')}바이트가 안전한도 ${MAX_STATE_BYTES.toLocaleString('ko-KR')}바이트를 초과했습니다. ZIP 백업 후 거래 기록과 첨부 자료를 확인해 주세요.`);localStorage.setItem(KEY,raw);state=candidate;lastPersistedState=clone(state);try{if(typeof queueCloudStatePush==='function')queueCloudStatePush()}catch{}try{if(typeof queueAssetAutoBackup==='function')queueAssetAutoBackup()}catch{}try{if(typeof qaRenderStats==='function')qaRenderStats()}catch{}return true}
- catch(e:unknown){const message=`저장 실패: ${(e instanceof Error?e.message:String(e))||'로컬 저장소를 확인해 주세요.'}`;state=before;state!.system={loadWarning:'',saveError:'',...(state!.system||{})};state!.system.saveError=message;if(notify&&document.querySelector('#toast'))toast(message);return false}
+ try{
+  state!.accounts.forEach((a:StateAccount)=>{syncHoldingLifecycle(a);rebuildLedgerIndexes(a)});syncCurrentPensionSnapshot();syncCurrentIsaSnapshot();
+  const candidate=clone(state!),retention=compactStateSnapshots(candidate,localYmd());candidate.system={...(candidate.system||{}),loadWarning:'',saveError:''};
+  let raw=stateEnvelopeJson(candidate),bytes=stateEnvelopeBytes(raw);
+  candidate.system.storageUsage={bytes,limit:MAX_STATE_BYTES,backend:'indexeddb',level:storageUsageLevel(bytes),snapshotRetention:{dailyMonths:SNAPSHOT_DAILY_KEEP_MONTHS,isaRemoved:retention.isaRemoved,kisRemoved:retention.kisRemoved}};
+  raw=stateEnvelopeJson(candidate);bytes=stateEnvelopeBytes(raw);candidate.system.storageUsage.bytes=bytes;raw=stateEnvelopeJson(candidate);bytes=stateEnvelopeBytes(raw);
+  if(bytes>MAX_STATE_BYTES)throw new Error(`안전하게 처리할 수 있는 원장 크기 ${MAX_STATE_BYTES.toLocaleString('ko-KR')}바이트를 넘었습니다. 기록은 삭제하지 않았습니다. 백업 후 저장소를 확인해 주세요.`);
+  if(typeof assetLocalDatabase==='undefined')localStorage.setItem(KEY,raw);else await assetLocalDatabase.commit(JSON.parse(raw));
+  state=candidate;lastPersistedState=clone(state);
+  try{if(typeof queueCloudStatePush==='function')queueCloudStatePush()}catch{}
+  try{if(typeof queueAssetAutoBackup==='function')queueAssetAutoBackup()}catch{}
+  try{if(typeof qaRenderStats==='function')qaRenderStats()}catch{}
+  return true
+ }catch(e:unknown){const message=`저장 실패: ${(e instanceof Error?e.message:String(e))||'기기 저장소를 확인해 주세요.'}`;state=before;state!.system={...(state!.system||{}),saveError:message};if(notify&&document.querySelector('#toast'))toast(message);return false}
+ finally{storageSavePending=false;updateStorageBusyUi();const waiters=storageIdleWaiters;storageIdleWaiters=[];waiters.forEach(resolve=>resolve())}
 }

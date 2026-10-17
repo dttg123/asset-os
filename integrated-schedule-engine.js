@@ -70,7 +70,7 @@ function isaAccountsForDate(date = '') { const d = String(date || localYmd()), t
     return false; return true; }); }
 function resolveScheduleIsaAccount(sc, explicit = '', date = '') { const candidates = isaAccountsForDate(date || ''), requested = String(explicit || sc?.targetIsaAccountId || ''); if (requested && candidates.some(a => a.id === requested))
     return requested; return candidates.length === 1 ? candidates[0].id : ''; }
-function completeScheduleOccurrence(scheduleId, date, amountOverride = 0, targetPensionAccountId = '', targetIsaAccountId = '', loanPrincipalOverride = 0, loanInterestOverride = 0) {
+async function completeScheduleOccurrence(scheduleId, date, amountOverride = 0, targetPensionAccountId = '', targetIsaAccountId = '', loanPrincipalOverride = 0, loanInterestOverride = 0) {
     const request = validateScheduleCompletionRequest(scheduleId, date);
     if (!request.ok) {
         toast(request.error);
@@ -86,7 +86,7 @@ function completeScheduleOccurrence(scheduleId, date, amountOverride = 0, target
         toast(validationError);
         return false;
     }
-    if (!commitScheduleCompletion(request.schedule, date, draft))
+    if (!(await commitScheduleCompletion(request.schedule, date, draft)))
         return false;
     renderScheduleCompletion(date, draft.successMessage);
     return true;
@@ -152,7 +152,7 @@ function schedulePlannedAmount(s, date) {
     const latest = [...history].filter(x => x && validYmdDate(x.effectiveFrom) && Number.isFinite(x.amount) && x.amount > 0 && x.effectiveFrom <= date).sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom)).at(-1);
     return latest ? latest.amount : cardInstallmentTerms(s, date)?.total || Number(s.amount) || 0;
 }
-function updateSchedulePlannedAmount(id, date, amount, scope) {
+async function updateSchedulePlannedAmount(id, date, amount, scope) {
     const s = financeSchedules().find(x => x.id === id);
     if (!s || !validYmdDate(date) || !['once', 'future'].includes(scope) || !financialNumberInRange(amount) || !Number.isInteger(amount) || amount <= 0) {
         toast('일정과 금액을 확인해 주세요.');
@@ -166,7 +166,7 @@ function updateSchedulePlannedAmount(id, date, amount, scope) {
             delete s.amountOverrides[date];
         s.amountHistory = [...(Array.isArray(s.amountHistory) ? s.amountHistory : []).filter(x => x.effectiveFrom !== date), { effectiveFrom: date, amount }];
     }
-    if (!persist(false)) {
+    if (!(await persist(false))) {
         Object.assign(s, before);
         for (const key of ['amountOverrides', 'amountHistory'])
             if (!(key in before))
@@ -189,7 +189,7 @@ function cardPlanSummary(s, month) {
     const remainingPrincipal = Math.max(0, plan.purchaseAmount - paid);
     return { purchaseAmount: plan.purchaseAmount, remainingPrincipal, plannedAmount: date ? schedulePlannedAmount(s, date) : 0, estimatedInterest: terms?.interest || 0, actualAmount: actual ? Number(actual.meta?.actualAmount ?? actual.amount) || 0 : null, paidInstallments, totalInstallments, completed: totalInstallments > 0 && paidInstallments === totalInstallments && remainingPrincipal === 0 };
 }
-function createCardInstallment(input) {
+async function createCardInstallment(input) {
     const amount = Number(input.purchaseAmount), months = Number(input.months), rate = Number(input.annualRate) || 0, purchaseDate = String(input.purchaseDate || ''), first = String(input.firstPaymentDate || ''), name = String(input.name || '').trim(), mode = String(input.interestMode);
     if (!name || name.length > 80 || !validYmdDate(purchaseDate) || !validYmdDate(first) || first < purchaseDate || !Number.isInteger(amount) || amount <= 0 || !financialNumberInRange(amount) || !Number.isInteger(months) || months < 1 || months > 60 || amount < months || !['free', 'paid'].includes(mode) || !Number.isFinite(rate) || rate < 0 || rate > 100) {
         toast('구매금액·기간·첫 납부일을 확인해 주세요.');
@@ -206,7 +206,7 @@ function createCardInstallment(input) {
         state.financeSchedules = { items: [] };
     state.financeSchedules.items.push(s);
     const issues = integratedCandidateIssues(store);
-    if (issues.length || !persist(false)) {
+    if (issues.length || !(await persist(false))) {
         state.integrated = before;
         state.financeSchedules = schedulesBefore;
         if (issues.length)
@@ -215,7 +215,7 @@ function createCardInstallment(input) {
     }
     return id;
 }
-function removeUnpaidCardInstallment(id) {
+async function removeUnpaidCardInstallment(id) {
     const s = financeSchedules().find(x => x.id === id);
     if (!s?.cardPlan)
         return false;
@@ -229,7 +229,7 @@ function removeUnpaidCardInstallment(id) {
     store.liabilities = store.liabilities.filter(x => x.id !== s.liabilityId);
     if (state.financeSchedules)
         state.financeSchedules.items = financeSchedules().filter(x => x.id !== id);
-    if (!persist(false)) {
+    if (!(await persist(false))) {
         state.integrated = before;
         state.financeSchedules = schedules;
         return false;

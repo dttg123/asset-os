@@ -131,7 +131,8 @@ const STATE_MIGRATIONS = [
             settings.integratedLedgerFilter = 'all'; }) },
     { from: 20, to: 21, name: 'initialize storage diagnostics', migrate: data => migrationMutate(data, next => { const system = migrationRecord(next.system); next.system = system; if (typeof system.loadWarning !== 'string')
             system.loadWarning = ''; if (typeof system.saveError !== 'string')
-            system.saveError = ''; }) }
+            system.saveError = ''; }) },
+    { from: 21, to: 22, name: 'activate verified database storage without changing ledger records', migrate: data => data }
 ];
 const STATE_MIGRATION_BY_VERSION = new Map(STATE_MIGRATIONS.map(step => [step.from, step]));
 function stateMigrationPlan(fromVersion, toVersion = SCHEMA_VERSION) {

@@ -69,18 +69,17 @@ test('Excel CSV output is UTF-8 BOM, quoted safely, and neutralizes formulas',()
  assert.deepEqual(Array.from(entries,x=>x.name),['통합거래.csv','ISA거래.csv','연금거래.csv','월별요약.csv']);
 });
 
-test('cross-tab sync closes a dirty input before replacing state',()=>{
+test('cross-tab sync preserves dirty input and applies state only when clean',()=>{
  const boot=read('boot.js');
- const source=boot.match(/function applyExternalSavedState\(saved\)\s*\{[\s\S]*?\n\}/)?.[0];
+ const start=boot.indexOf('function applyExternalSavedState('),end=boot.indexOf("\n    window.addEventListener('storage'",start);const source=boot.slice(start,end);
  assert.ok(source,'storage application helper must exist');
  const calls=[];
  const context=vm.createContext({sheetMode:'input',sheetDirty:true,activeSheetId:'#registerSheet',holdingRegistrationDraft:{items:[1]},state:{old:true},lastPersistedState:null,closeSheets:options=>calls.push(['close',options]),normalizeState:data=>({normalized:data}),clone:value=>structuredClone(value),render:()=>calls.push(['render']),qaRenderStats:()=>calls.push(['qa']),showNotice:(title,message)=>calls.push(['notice',title,message]),toast:message=>calls.push(['toast',message])});
  vm.runInContext(source,context);
  assert.equal(vm.runInContext("applyExternalSavedState({data:{fresh:true}})",context),true);
- assert.equal(vm.runInContext('holdingRegistrationDraft',context),null);
- assert.equal(vm.runInContext('JSON.stringify(state)',context),'{"normalized":{"fresh":true}}');
- assert.deepEqual(calls.map(x=>x[0]),['close','render','qa','notice']);
- assert.equal(JSON.stringify(calls[0][1]),'{"all":true}');
+ assert.equal(vm.runInContext('holdingRegistrationDraft.items.length',context),1);
+ assert.equal(vm.runInContext('JSON.stringify(state)',context),'{"old":true}');
+ assert.deepEqual(calls.map(x=>x[0]),['notice']);
  calls.length=0;
  vm.runInContext("sheetDirty=false;activeSheetId='';holdingRegistrationDraft=null",context);
  assert.equal(vm.runInContext("applyExternalSavedState({data:{newer:true}})",context),false);

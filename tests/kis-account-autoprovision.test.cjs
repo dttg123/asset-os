@@ -1,4 +1,5 @@
 'use strict';
+(async()=>{
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
@@ -16,7 +17,7 @@ const context=vm.createContext({
 });
 vm.runInContext(fs.readFileSync(path.join(__dirname,'..','ui-settings.js'),'utf8'),context,{filename:'ui-settings.js'});
 
-const first=vm.runInContext('ensureKisLocalAccounts()',context);
+const first=(await vm.runInContext("(async()=>{return (await ensureKisLocalAccounts())})()",context));
 assert.deepEqual([...first],['pension','irp']);
 assert.equal(accounts.length,2);
 assert.equal(accounts[0].name,'한국투자 연금저축');
@@ -25,8 +26,10 @@ assert.equal(context.state.brokerKis.connections.pension.accountId,'account-1');
 assert.equal(context.state.brokerKis.connections.irp.accountId,'account-2');
 assert.equal(persisted,1);
 
-const second=vm.runInContext('ensureKisLocalAccounts()',context);
+const second=(await vm.runInContext("(async()=>{return (await ensureKisLocalAccounts())})()",context));
 assert.deepEqual([...second],[]);
 assert.equal(accounts.length,2);
 assert.equal(persisted,1);
 console.log('kis account autoprovision tests: PASS');
+
+})().catch(error=>{console.error(error);process.exitCode=1});

@@ -68,7 +68,8 @@ const STATE_MIGRATIONS:readonly MigrationStep[]=[
  {from:17,to:18,name:'initialize tax and risk settings',migrate:data=>migrationMutate(data,next=>{const settings=migrationRecord(next.settings);next.settings=settings;settings.pensionTaxProfile=migrationRecord(settings.pensionTaxProfile);settings.irpRiskClassifications=migrationRecord(settings.irpRiskClassifications)})},
  {from:18,to:19,name:'initialize integrated ledger metadata',migrate:data=>migrationMutate(data,next=>{for(const row of migrationRows(migrationRecord(next.integrated).ledger))row.meta=migrationRecord(row.meta)})},
  {from:19,to:20,name:'initialize integrated ledger filter',migrate:data=>migrationMutate(data,next=>{const settings=migrationRecord(next.settings);next.settings=settings;if(typeof settings.integratedLedgerFilter!=='string')settings.integratedLedgerFilter='all'})},
- {from:20,to:21,name:'initialize storage diagnostics',migrate:data=>migrationMutate(data,next=>{const system=migrationRecord(next.system);next.system=system;if(typeof system.loadWarning!=='string')system.loadWarning='';if(typeof system.saveError!=='string')system.saveError=''})}
+ {from:20,to:21,name:'initialize storage diagnostics',migrate:data=>migrationMutate(data,next=>{const system=migrationRecord(next.system);next.system=system;if(typeof system.loadWarning!=='string')system.loadWarning='';if(typeof system.saveError!=='string')system.saveError=''})},
+ {from:21,to:22,name:'activate verified database storage without changing ledger records',migrate:data=>data}
 ];
 const STATE_MIGRATION_BY_VERSION=new Map(STATE_MIGRATIONS.map(step=>[step.from,step]));
 

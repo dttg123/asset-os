@@ -50,7 +50,7 @@ async function refreshIsaQuotes({ manual = false } = {}) {
             Object.assign(a, snapshot);
             return { ...applied, ok: false };
         }
-        if (!persist(false)) {
+        if (!(await persist(false))) {
             Object.assign(a, snapshot);
             return { ok: false, error: 'PERSIST_FAILED' };
         }

@@ -11,11 +11,11 @@ vm.runInContext(fs.readFileSync(path.join(root,'src/domain/integrated-replay.js'
 const run=(source,values={})=>vm.runInContext(source,Object.assign(replayContext,values));
 const plain=value=>JSON.parse(JSON.stringify(value));
 
-test('independently checked golden ledger cases remain unchanged',()=>{
+test('independently checked golden ledger cases remain unchanged',async ()=>{
  const fixture=JSON.parse(fs.readFileSync(path.join(root,'tests/fixtures/golden/integrated-replay.json'),'utf8'));
  assert.equal(fixture.cases.length,15);
  for(const entry of fixture.cases){
-  const result=plain(run('calculateIntegratedReplay(__store,__rows)',{__store:fixture.store,__rows:entry.rows}));
+  const result=plain((await run('calculateIntegratedReplay(__store,__rows)',{__store:fixture.store,__rows:entry.rows})));
   const actual={cash:result.assets.cash,savings:result.assets.savings,loan:result.liabilities.loan,totalAssets:result.totalAssets,totalDebt:result.totalDebt,netAssets:result.netAssets};
   if(Object.hasOwn(entry.expected,'minCash'))actual.minCash=result.minAssets.cash;
   assert.deepEqual(actual,entry.expected,entry.name);

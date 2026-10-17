@@ -9,7 +9,7 @@ declare const QA_MODE:boolean;
 declare const brokerKisClient:{quotes:(links:IsaQuoteRecord[])=>Promise<IsaQuoteResponse>};
 declare function currentAccount():IsaQuoteAccount|null;
 declare function clone<T>(value:T):T;
-declare function persist(immediate?:boolean):boolean;
+declare function persist(immediate?:boolean):Promise<boolean>;
 declare function renderKeepingScroll():void;
 declare function toast(message:string):void;
 
@@ -59,7 +59,7 @@ async function refreshIsaQuotes({manual=false}:{manual?:boolean}={}):Promise<Isa
   if(!result.ok)return result;
   const snapshot=clone(a),applied=applyIsaQuoteResults(a,result.data.quotes,result.data.fetchedAt);
   if(!applied.ok){Object.assign(a,snapshot);return{...applied,ok:false}}
-  if(!persist(false)){Object.assign(a,snapshot);return{ok:false,error:'PERSIST_FAILED'}}
+  if(!(await persist(false))){Object.assign(a,snapshot);return{ok:false,error:'PERSIST_FAILED'}}
   if(manual){
    renderKeepingScroll();
    toast(applied.missing?`현재가 ${applied.updated}개 갱신 · ${applied.missing}개 미갱신`:`현재가 ${applied.updated}개 갱신 · 수량·매입가 유지`)

@@ -44,8 +44,8 @@ function compactStateSnapshots(input, referenceDate = localYmd()) {
     }
     return report;
 }
-const MAX_STATE_BYTES = 4000000;
+const MAX_STATE_BYTES = 48 * 1024 * 1024;
 const STORAGE_NOTICE_BYTES = Math.round(MAX_STATE_BYTES * .7), STORAGE_WARNING_BYTES = Math.round(MAX_STATE_BYTES * .85), STORAGE_CRITICAL_BYTES = Math.round(MAX_STATE_BYTES * .95);
 function storageUsageLevel(bytes) { return bytes >= STORAGE_CRITICAL_BYTES ? 'critical' : bytes >= STORAGE_WARNING_BYTES ? 'warning' : bytes >= STORAGE_NOTICE_BYTES ? 'notice' : 'ok'; }
-function stateEnvelopeJson(data = state) { const payload = QA_MODE && typeof qaStorageState === 'function' ? qaStorageState(data) : data; return JSON.stringify({ schemaVersion: SCHEMA_VERSION, appVersion: APP_VERSION, environment: APP_ENV, savedAt: new Date().toISOString(), data: payload }); }
+function stateEnvelopeJson(data = state) { const payload = data; return JSON.stringify({ schemaVersion: SCHEMA_VERSION, appVersion: APP_VERSION, environment: APP_ENV, savedAt: new Date().toISOString(), data: payload }); }
 function stateEnvelopeBytes(raw) { return typeof TextEncoder === 'function' ? new TextEncoder().encode(raw).length : raw.length * 2; }

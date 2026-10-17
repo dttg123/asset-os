@@ -38,7 +38,7 @@ declare function toast(message:string):void;
 declare function formatDateTime(value:unknown):string;
 declare function normalizeState(value:unknown):CloudAppState;
 declare function migrateStateData(value:unknown,version:number):{data:CloudRecord};
-declare function storeRecoveryCopy(key:string,raw:string):boolean;
+declare function storeRecoveryCopy(key:string,raw:string):Promise<boolean>;
 declare function pruneRecoveryKeys():void;
 declare function localYmd():string;
 declare function createBackupZipBytes(payload:CloudRecord):Uint8Array;
@@ -50,10 +50,16 @@ declare function showDialog(options:CloudRecord,onConfirm:()=>unknown):void;
 declare function cloudEnvelopeFingerprint(envelope:CloudEnvelope|null|undefined):string;
 declare function cloudPayloadValid(payload:unknown):payload is CloudEnvelope;
 declare function cloudPendingWriteFor(current:CloudPendingWrite|null,fingerprint:string,revision:number,createRequestId:()=>string):CloudPendingWrite;
-declare function cloudSaveRpcArguments(pending:CloudPendingWrite,payload:CloudEnvelope):CloudRecord;
+declare function cloudSaveRpcArguments(pending:CloudPendingWrite,payload:CloudRecord):CloudRecord;
 declare function cloudRpcResult(data:unknown):CloudRecord|null;
+declare function cloudDataHasMeaningfulRecords(data:unknown):boolean;
 declare function cloudReconcilePlan(local:CloudLocalState,row:CloudStateRow,force:CloudReconcileForce):{action:string;notify?:boolean};
 
+declare const assetLocalDatabase:{envelope:CloudEnvelope|null;revision:number;sync:{userId:string;baseRevision:number;baseFingerprint:string;pending?:CloudPendingWrite|null}|null;commit(envelope:CloudRecord):Promise<void>;saveSync(value:{userId:string;baseRevision:number;baseFingerprint:string;pending?:CloudPendingWrite|null}):Promise<void>};
+async function cloudPersistSyncMetadata():Promise<void>{const user=cloudUser();if(typeof assetLocalDatabase!=='undefined'&&user)await assetLocalDatabase.saveSync({userId:user.id,baseRevision:cloudBaseRevision,baseFingerprint:cloudBaseFingerprint,pending:cloudPendingWrite})}
+function cloudRestoreSyncMetadata():void{if(typeof assetLocalDatabase==='undefined')return;const saved=assetLocalDatabase.sync;if(saved&&saved.userId===cloudUser()?.id){cloudBaseRevision=saved.baseRevision;cloudBaseFingerprint=saved.baseFingerprint;cloudPendingWrite=saved.pending||null}else{cloudBaseRevision=0;cloudBaseFingerprint='';cloudPendingWrite=null}}
+declare function cloudEncodeEnvelope(client:CloudClient,payload:CloudRecord,requestId:string):Promise<CloudRecord>;
+declare function cloudDecodeEnvelope(client:CloudClient,payload:unknown):Promise<unknown>;
 const SUPABASE_URL='https://wjrzukoofscmvwicmoey.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_mZa3v8Ekw08_5tHQMNSPWQ_uMcioPDM';
 const SUPABASE_STATE_TABLE='asset_os_state';
@@ -89,10 +95,12 @@ function cloudAuthGateMessage(){
  if(cloudSyncStatus==='동기화 오류')return'클라우드 원장 동기화 중 오류가 발생했습니다. 다시 확인해 주세요.';
  return'클라우드 원장을 확인하지 못했습니다. 네트워크를 확인해 주세요.'
 }
+function cloudLocalOwnerMatches():boolean{return typeof assetLocalDatabase==='undefined'||!assetLocalDatabase.sync?.userId||assetLocalDatabase.sync.userId===cloudUser()?.id}
 async function startAssetAuthenticatedApp(){
  if(qaCloudBlocked()){cloudSetStatus('QA 로컬 전용','ok');assetAuthGateUnlock();return true}
  const callbackFailure=cloudAuthCallbackFailure();if(callbackFailure)return assetAuthGateState('error',callbackFailure);
  assetAuthGateState('loading');const initialized=await initSupabaseCloud();if(!initialized)return assetAuthGateState('error','Supabase 연결을 확인한 뒤 다시 시도해 주세요.');if(!cloudUser())return assetAuthGateState('login');
+ if(!cloudLocalOwnerMatches()){assetAppUnlocked=false;assetAuthGateState('error','이 기기 원장은 다른 로그인 계정의 자료입니다. 기존 계정으로 로그인해 주세요.');return false}
  const local=cloudLocalEnvelope(),canOpenLocal=local.stored&&cloudPayloadValid(local.envelope);
  cloudSetStatus('클라우드 확인 중','wait');if(canOpenLocal)assetAuthGateUnlock();
  const ok=await cloudReconcileState();if(ok){assetAuthGateUnlock();return true}
@@ -112,7 +120,7 @@ function cloudUserEmail(){return String(cloudUser()?.email||'')}
 function cloudTimeLabel(v:unknown){return v?formatDateTime(v):'-'}
 function cloudSetStatus(text:unknown,tone:CloudTone='wait',when=''){cloudSyncStatus=String(text||'');cloudSyncTone=tone;cloudLastSyncAt=when||cloudLastSyncAt;refreshCloudProfileUI()}
 function cloudLocalEnvelope():CloudLocalState{
- let raw='';try{raw=localStorage.getItem(KEY)||''}catch{}
+ let raw='';try{raw=typeof assetLocalDatabase!=='undefined'?(assetLocalDatabase.envelope?JSON.stringify(assetLocalDatabase.envelope):''):(localStorage.getItem(KEY)||'')}catch{}
  if(raw){try{const parsed:unknown=JSON.parse(raw);if(cloudPayloadValid(parsed))return{envelope:parsed,raw,stored:true}}catch{}}
  return{envelope:{schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,savedAt:'',data:clone(state||seed)},raw:'',stored:false}
 }
@@ -140,7 +148,7 @@ async function initSupabaseCloud(){
  if(!cloudWindow.supabase?.createClient){cloudSetStatus('클라우드 모듈 로드 실패','wait');return false}
  try{
   assetSupabaseClient=cloudWindow.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{autoRefreshToken:true,persistSession:true,detectSessionInUrl:true}});
-  assetSupabaseClient.auth.onAuthStateChange((event:unknown,session:CloudSession|null)=>{assetSupabaseSession=session||null;if(session)syncBrokerKisSessionFromCloud(session);if(event==='INITIAL_SESSION')return;setTimeout(()=>handleCloudAuthState(event,session).catch(()=>{}),0)});
+  assetSupabaseClient.auth.onAuthStateChange((event:unknown,session:CloudSession|null)=>{assetSupabaseSession=session||null;if(session)syncBrokerKisSessionFromCloud(session);if(event==='INITIAL_SESSION')return;setTimeout(async ()=>handleCloudAuthState(event,session).catch(()=>{}),0)});
   const {data,error}=await assetSupabaseClient.auth.getSession();
   if(error)throw error;
   assetSupabaseSession=data?.session||null;if(assetSupabaseSession)syncBrokerKisSessionFromCloud(assetSupabaseSession);
@@ -152,6 +160,7 @@ async function handleCloudAuthState(event:unknown,session:CloudSession|null){
  if(qaCloudBlocked())return false;
  assetSupabaseSession=session||null;if(session)syncBrokerKisSessionFromCloud(session);refreshCloudProfileUI();
  if(!session){cloudSetStatus('로그인 필요','wait');assetAppUnlocked=false;assetAuthGateState('login');return false}
+ if(!cloudLocalOwnerMatches()){assetAppUnlocked=false;assetAuthGateState('error','이 기기 원장은 다른 계정의 자료입니다. 기존 계정으로 로그인해 주세요.');return false}
  if(['INITIAL_SESSION','SIGNED_IN','TOKEN_REFRESHED','USER_UPDATED'].includes(String(event||''))){
   cloudSetStatus('동기화 확인 중','wait');
   const ok=await cloudReconcileState();if(ok)assetAuthGateUnlock();else if(!assetAppUnlocked)assetAuthGateState(cloudSyncStatus==='동기화 충돌 확인 필요'?'conflict':'error',cloudAuthGateMessage());return ok
@@ -182,19 +191,19 @@ async function cloudFetchStateRow():Promise<CloudFetchResult>{
  const {data,error}=await client.from(SUPABASE_STATE_TABLE).select('payload,updated_at,revision').eq('user_id',u.id).maybeSingle();
  if(error||data==null)return{row:null,error:error||null};
  if(!stateInputRecord(data)||!('payload' in data))return{row:null,error:{message:'클라우드 응답 형식 오류'}};
- return{row:{payload:data.payload,updated_at:typeof data.updated_at==='string'?data.updated_at:undefined,revision:data.revision},error:null}
+ return{row:{payload:typeof cloudDecodeEnvelope==='function'?await cloudDecodeEnvelope(client,data.payload):data.payload,updated_at:typeof data.updated_at==='string'?data.updated_at:undefined,revision:data.revision},error:null}
 }
 async function cloudPushState(envelope:CloudEnvelope=cloudCurrentEnvelope(),quiet=false):Promise<boolean>{
  if(qaCloudBlocked())return false;
- if(!cloudUser()||!assetSupabaseClient)return false;if(cloudSyncBusy){cloudPushPending=true;return false}
+ if(!cloudUser()||!assetSupabaseClient||!cloudLocalOwnerMatches())return false;if(cloudSyncBusy){cloudPushPending=true;return false}
  cloudPushPending=false;
  cloudSyncBusy=true;
  try{
  const payload={...clone(envelope),schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION};
  if(!payload.savedAt)payload.savedAt=new Date().toISOString();
   const payloadFingerprint=cloudEnvelopeFingerprint(payload);
-  cloudPendingWrite=cloudPendingWriteFor(cloudPendingWrite,payloadFingerprint,cloudBaseRevision,cloudRequestId);
-  const pending=cloudPendingWrite,{data,error}=await assetSupabaseClient.rpc('save_asset_os_state',cloudSaveRpcArguments(pending,payload));
+  cloudPendingWrite=cloudPendingWriteFor(cloudPendingWrite,JSON.stringify(payload),cloudBaseRevision,cloudRequestId);
+  await cloudPersistSyncMetadata();const pending=cloudPendingWrite,wire=typeof cloudEncodeEnvelope==='function'?await cloudEncodeEnvelope(assetSupabaseClient,payload,pending.requestId):payload,{data,error}=await assetSupabaseClient.rpc('save_asset_os_state',cloudSaveRpcArguments(pending,wire));
   if(error){if(cloudTableMissing(error)||cloudAtomicSaveMissing(error))cloudSetStatus('DB 설정 필요','wait');else cloudSetStatus('클라우드 저장 실패','wait');if(!quiet)toast(cloudTableMissing(error)||cloudAtomicSaveMissing(error)?'원자 저장 DB 설정이 아직 필요합니다.':'클라우드 저장을 확인해 주세요.');return false}
   const result=cloudRpcResult(data);
   if(!result){cloudSetStatus('클라우드 저장 실패','wait');return false}
@@ -203,8 +212,8 @@ async function cloudPushState(envelope:CloudEnvelope=cloudCurrentEnvelope(),quie
    if(!quiet)toast('다른 기기에서 원장이 변경됐습니다. 덮어쓰지 않고 충돌로 보호했습니다.');return false
   }
   if(result.outcome!=='saved'){cloudSetStatus('클라우드 저장 실패','wait');return false}
-  cloudBaseRevision=Number(result.new_revision)||pending.expectedRevision+1;cloudBaseFingerprint=payloadFingerprint;cloudPendingWrite=null;cloudConflict=null;const now=String(result.saved_at||new Date().toISOString());cloudSetStatus('동기화됨','ok',now);return true
- }finally{cloudSyncBusy=false;if(cloudPushPending){clearTimeout(cloudSyncTimer);cloudSyncTimer=setTimeout(()=>cloudPushState(cloudCurrentEnvelope(),true).catch(()=>{}),250)}}
+  cloudBaseRevision=Number(result.new_revision)||pending.expectedRevision+1;cloudBaseFingerprint=payloadFingerprint;cloudPendingWrite=null;cloudConflict=null;await cloudPersistSyncMetadata();const now=String(result.saved_at||new Date().toISOString());cloudSetStatus('동기화됨','ok',now);return true
+ }catch(error:unknown){cloudSetStatus('클라우드 저장 실패','wait');if(!quiet)toast(cloudErrorMessage(error)||'클라우드 저장을 확인해 주세요.');return false}finally{cloudSyncBusy=false;if(cloudPushPending){clearTimeout(cloudSyncTimer);cloudSyncTimer=setTimeout(()=>cloudPushState(cloudCurrentEnvelope(),true).catch(()=>{}),250)}}
 }
 function queueCloudStatePush(){
  if(qaCloudBlocked())return;
@@ -213,20 +222,23 @@ function queueCloudStatePush(){
  clearTimeout(cloudSyncTimer);cloudSyncTimer=setTimeout(()=>cloudPushState(cloudCurrentEnvelope(),true).catch(()=>{}),1200)
 }
 
-function cloudApplyRemoteEnvelope(payload:unknown,revision=cloudBaseRevision){
- if(!cloudPayloadValid(payload))throw new Error('클라우드 데이터 형식 오류');
+declare function waitForStorageSave():Promise<void>;
+declare function runStoredCommand<T>(command:()=>Promise<T>):Promise<T>;
+async function cloudApplyRemoteEnvelope(payload:unknown,revision=cloudBaseRevision){if(typeof runStoredCommand==='function')return runStoredCommand(()=>cloudApplyRemoteEnvelopeNow(payload,revision));return cloudApplyRemoteEnvelopeNow(payload,revision)}
+async function cloudApplyRemoteEnvelopeNow(payload:unknown,revision:number){
+ if(typeof waitForStorageSave==='function')await waitForStorageSave();if(!cloudPayloadValid(payload))throw new Error('클라우드 데이터 형식 오류');
  const local=cloudLocalEnvelope();
- if(local.raw)storeRecoveryCopy(`${KEY}-pre-cloud-${Date.now()}`,local.raw);
+ if(local.raw)(await storeRecoveryCopy(`${KEY}-pre-cloud-${Date.now()}`,local.raw));
  const migrated=migrateStateData(payload.data,Number(payload.schemaVersion)||SCHEMA_VERSION),normalized=normalizeState(migrated.data);
  const savedAt=String(payload.savedAt||new Date().toISOString());
- localStorage.setItem(KEY,JSON.stringify({schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,environment:APP_ENV,savedAt,data:normalized}));
+ const savedEnvelope={schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,environment:APP_ENV,savedAt,data:normalized};if(typeof assetLocalDatabase!=='undefined')await assetLocalDatabase.commit(savedEnvelope);else localStorage.setItem(KEY,JSON.stringify(savedEnvelope));
  state=normalized;lastPersistedState=clone(normalized);
- cloudBaseFingerprint=cloudEnvelopeFingerprint(payload);cloudBaseRevision=Number(revision)||0;cloudPendingWrite=null;cloudConflict=null;pruneRecoveryKeys();if(assetAppUnlocked)render();
+ cloudBaseFingerprint=cloudEnvelopeFingerprint(payload);cloudBaseRevision=Number(revision)||0;cloudPendingWrite=null;cloudConflict=null;await cloudPersistSyncMetadata();pruneRecoveryKeys();if(assetAppUnlocked)render();
 }
 
-function cloudBackupLocalConflict():true{
+async function cloudBackupLocalConflict():Promise<true>{
  const local=cloudLocalEnvelope();if(!local.stored||!cloudPayloadValid(local.envelope))throw new Error('이 기기 백업 데이터가 없습니다.');
- const raw=local.raw||JSON.stringify(local.envelope);storeRecoveryCopy(`${KEY}-pre-cloud-conflict-${Date.now()}`,raw);
+ const raw=local.raw||JSON.stringify(local.envelope);(await storeRecoveryCopy(`${KEY}-pre-cloud-conflict-${Date.now()}`,raw));
  const payload={format:BACKUP_FORMAT,schemaVersion:Number(local.envelope.schemaVersion)||SCHEMA_VERSION,appVersion:String(local.envelope.appVersion||APP_VERSION),environment:APP_ENV,exportedAt:new Date().toISOString(),data:clone(local.envelope.data)};
  const name=`AssetOS_conflict_local_${localYmd().replaceAll('-','')}_${APP_VERSION}.zip`;downloadBytes(createBackupZipBytes(payload),name);return true
 }
@@ -237,17 +249,17 @@ async function cloudResolveConflictPull():Promise<boolean>{
  cloudPrepareConflictResolution();const ok=await cloudReconcileState('pull');if(ok)assetAuthGateUnlock();else assetAuthGateState('conflict',cloudAuthGateMessage());return ok
 }
 async function cloudResolveConflictOverwrite():Promise<boolean>{
- try{cloudBackupLocalConflict()}catch(error:unknown){cloudSetStatus('충돌 백업 실패','wait');assetAuthGateState('conflict',`이 기기 원장을 백업하지 못해 덮어쓰기를 중단했습니다: ${cloudErrorMessage(error)}`);return false}
+ try{(await cloudBackupLocalConflict())}catch(error:unknown){cloudSetStatus('충돌 백업 실패','wait');assetAuthGateState('conflict',`이 기기 원장을 백업하지 못해 덮어쓰기를 중단했습니다: ${cloudErrorMessage(error)}`);return false}
  cloudPrepareConflictResolution();const local=cloudLocalEnvelope(),expected=Number(cloudConflict?.revision);if(!local.stored||!Number.isFinite(expected)){cloudSetStatus('동기화 충돌 확인 필요','wait');return false}
  cloudBaseRevision=expected;cloudPendingWrite=null;const ok=await cloudPushState(local.envelope,false);if(ok)assetAuthGateUnlock();return ok
 }
 
 async function cloudReconcileState(force:CloudReconcileForce='auto'):Promise<boolean>{
  if(qaCloudBlocked())return false;
- if(!cloudUser()||!assetSupabaseClient||cloudSyncBusy)return false;
+ if(!cloudUser()||!assetSupabaseClient||!cloudLocalOwnerMatches()||cloudSyncBusy)return false;
  cloudSyncBusy=true;
  try{
-  let local=cloudLocalEnvelope();const startedFingerprint=cloudEnvelopeFingerprint(local.envelope),{row,error}=await cloudFetchStateRow();
+  cloudRestoreSyncMetadata();let local=cloudLocalEnvelope();const startedFingerprint=cloudEnvelopeFingerprint(local.envelope),{row,error}=await cloudFetchStateRow();
   if(error){if(cloudTableMissing(error)||cloudAtomicSaveMissing(error))cloudSetStatus('DB 설정 필요','wait');else cloudSetStatus('동기화 확인 실패','wait');return false}
   if(!row){cloudBaseRevision=0;cloudBaseFingerprint='';cloudPendingWrite=null;cloudSyncBusy=false;return await cloudPushState(cloudCurrentEnvelope(),true)}
   const remote=row.payload;if(!cloudPayloadValid(remote)){cloudSetStatus('클라우드 데이터 확인 필요','wait');return false}
@@ -256,25 +268,33 @@ async function cloudReconcileState(force:CloudReconcileForce='auto'):Promise<boo
    if(remoteFingerprint!==startedFingerprint){cloudConflict={revision:remoteRevision};cloudPushPending=false;cloudSetStatus('동기화 충돌 확인 필요','wait');return false}
    local=latestLocal
   }
-  const plan=cloudReconcilePlan(local,row,force);
+  const hasBase=!!cloudBaseFingerprint,localChanged=hasBase&&latestFingerprint!==cloudBaseFingerprint,remoteChanged=hasBase&&remoteRevision!==cloudBaseRevision;
+  let plan=cloudReconcilePlan(local,row,force);
+  if(typeof assetLocalDatabase!=='undefined'&&force==='auto'&&local.stored&&cloudDataHasMeaningfulRecords(local.envelope.data)&&cloudDataHasMeaningfulRecords(remote.data)){
+   if(latestFingerprint===remoteFingerprint)plan={action:'synced'};
+   else if(!hasBase||localChanged&&remoteChanged)plan={action:'conflict'};
+   else if(remoteChanged)plan={action:'pull',notify:true};
+   else if(localChanged)plan={action:'push'};
+   else plan={action:'conflict'};
+  }
   if(plan.action==='reject-invalid'){cloudSetStatus('클라우드 데이터 확인 필요','wait');return false}
-  if(plan.action==='pull'){cloudApplyRemoteEnvelope(remote,remoteRevision);cloudSetStatus('클라우드에서 복원됨','ok',row.updated_at||remote.savedAt);if(plan.notify)toast('Supabase에서 최신 데이터를 복원했습니다.');return true}
+  if(plan.action==='pull'){(await cloudApplyRemoteEnvelope(remote,remoteRevision));cloudSetStatus('클라우드에서 복원됨','ok',row.updated_at||remote.savedAt);if(plan.notify)toast('Supabase에서 최신 데이터를 복원했습니다.');return true}
   if(plan.action==='protect-empty'){cloudSetStatus('빈 클라우드 자료 보호됨','wait');return false}
   if(plan.action==='push'){cloudBaseRevision=remoteRevision;cloudBaseFingerprint=cloudEnvelopeFingerprint(remote);cloudPendingWrite=null;cloudSyncBusy=false;return await cloudPushState(local.envelope,true)}
   if(plan.action==='conflict'){cloudConflict={revision:remoteRevision};cloudSetStatus('동기화 충돌 확인 필요','wait');return false}
   cloudBaseRevision=remoteRevision;cloudBaseFingerprint=cloudEnvelopeFingerprint(remote);cloudPendingWrite=null;cloudConflict=null;
-  cloudSetStatus('동기화됨','ok',row.updated_at||remote.savedAt);return true
+  await cloudPersistSyncMetadata();cloudSetStatus('동기화됨','ok',row.updated_at||remote.savedAt);return true
  }catch(e){cloudSetStatus('동기화 오류','wait');return false}
  finally{cloudSyncBusy=false;if(cloudPushPending&&cloudSyncStatus!=='동기화 충돌 확인 필요'){clearTimeout(cloudSyncTimer);cloudSyncTimer=setTimeout(()=>cloudPushState(cloudCurrentEnvelope(),true).catch(()=>{}),250)}}
 }
 
 function renderCloudAccountSheet(){
  const body=$('#cloudBody');if(!body)return;
- if(qaCloudBlocked()){body.innerHTML='<div class="cloud-account-card"><div class="cloud-account-icon">Q</div><div><strong>QA 로컬 전용</strong><small>Supabase 로그인·복원·업로드가 모두 차단되어 있습니다.</small></div></div><div class="cloud-note">이 화면의 데이터는 운영 원장과 다른 localStorage 키에만 저장됩니다.</div>';return}
+ if(qaCloudBlocked()){body.innerHTML='<div class="cloud-account-card"><div class="cloud-account-icon">Q</div><div><strong>QA 로컬 전용</strong><small>Supabase 로그인·복원·업로드가 모두 차단되어 있습니다.</small></div></div><div class="cloud-note">이 화면의 데이터는 운영 원장과 별도 기기 데이터베이스에만 저장됩니다.</div>';return}
  const u=cloudUser();
  if(!u){body.innerHTML=`<div class="cloud-account-card"><div class="cloud-account-icon">G</div><div><strong>Google 계정으로 연결</strong><small>로그인하면 Supabase에 원장을 보관하고 새 기기에서도 복원할 수 있습니다.</small></div></div><button id="cloudGoogleLogin" class="diagnostic-action cloud-primary">Google로 로그인</button><div class="cloud-note">로그인과 클라우드 원장 확인이 끝나야 Asset OS를 사용할 수 있습니다.</div>`;$('#cloudGoogleLogin')!.onclick=()=>signInAssetGoogle();return}
  const conflictActions=cloudSyncStatus==='동기화 충돌 확인 필요'?'<button id="cloudPullLatest" class="diagnostic-action cloud-primary">클라우드 최신본 불러오기</button><button id="cloudOverwriteAfterBackup" class="diagnostic-action cloud-secondary">이 기기 백업 후 덮어쓰기</button>':'';
- body.innerHTML=`<div class="cloud-account-card"><div class="cloud-account-icon">${escapeHtml((cloudUserLabel().charAt(0)||'G').toUpperCase())}</div><div><strong>${escapeHtml(cloudUserLabel())}</strong><small>${escapeHtml(cloudUserEmail())}</small></div></div><div class="diagnostic-list cloud-diagnostics"><div class="diagnostic-row"><span class="diagnostic-copy"><strong>Supabase</strong><small>revision ${cloudBaseRevision||'-'} · 자동 로그인 · 기기간 원장 복원</small></span><span class="diagnostic-value ${cloudSyncTone==='ok'?'ok':'wait'}">${escapeHtml(cloudSyncStatus)}</span></div><div class="diagnostic-row"><span class="diagnostic-copy"><strong>최근 동기화</strong><small>localStorage와 클라우드 중 최신본 사용</small></span><span class="diagnostic-value">${escapeHtml(cloudTimeLabel(cloudLastSyncAt))}</span></div></div><div class="cloud-actions">${conflictActions}<button id="cloudSyncNow" class="diagnostic-action cloud-primary">지금 동기화</button><button id="cloudLogout" class="diagnostic-action cloud-secondary">로그아웃</button></div><div class="cloud-note">충돌 시 자동 병합하지 않습니다. 덮어쓰기는 이 기기 ZIP 백업을 먼저 저장한 뒤에만 실행됩니다.</div>`;
+ body.innerHTML=`<div class="cloud-account-card"><div class="cloud-account-icon">${escapeHtml((cloudUserLabel().charAt(0)||'G').toUpperCase())}</div><div><strong>${escapeHtml(cloudUserLabel())}</strong><small>${escapeHtml(cloudUserEmail())}</small></div></div><div class="diagnostic-list cloud-diagnostics"><div class="diagnostic-row"><span class="diagnostic-copy"><strong>Supabase</strong><small>revision ${cloudBaseRevision||'-'} · 자동 로그인 · 기기간 원장 복원</small></span><span class="diagnostic-value ${cloudSyncTone==='ok'?'ok':'wait'}">${escapeHtml(cloudSyncStatus)}</span></div><div class="diagnostic-row"><span class="diagnostic-copy"><strong>최근 동기화</strong><small>기기 원장과 클라우드 변경 버전 확인</small></span><span class="diagnostic-value">${escapeHtml(cloudTimeLabel(cloudLastSyncAt))}</span></div></div><div class="cloud-actions">${conflictActions}<button id="cloudSyncNow" class="diagnostic-action cloud-primary">지금 동기화</button><button id="cloudLogout" class="diagnostic-action cloud-secondary">로그아웃</button></div><div class="cloud-note">충돌 시 자동 병합하지 않습니다. 덮어쓰기는 이 기기 ZIP 백업을 먼저 저장한 뒤에만 실행됩니다.</div>`;
  $('#cloudSyncNow')!.onclick=async()=>{cloudSetStatus('동기화 확인 중','wait');const ok=await cloudReconcileState();toast(ok?'클라우드 동기화를 확인했습니다.':'클라우드 동기화를 확인해 주세요.')};
  $('#cloudPullLatest')?.addEventListener('click',cloudResolveConflictPull);$('#cloudOverwriteAfterBackup')?.addEventListener('click',cloudResolveConflictOverwrite);
  $('#cloudLogout')!.onclick=()=>showDialog({title:'Google 로그아웃',message:'이 기기의 Asset OS 데이터는 유지됩니다. Google 계정 연결만 해제할까요?',confirmText:'로그아웃',cancelText:'취소'},()=>signOutAssetGoogle());

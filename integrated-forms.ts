@@ -38,7 +38,7 @@ declare function financialProductActiveOnDate(product:IntegratedRecord,date:stri
 declare function isQaIntegratedFixture(record:IntegratedRecord):boolean;
 declare function setting():IntegratedRecord;
 declare function integratedMonthKey(date:string):string;
-declare function persist():boolean;
+declare function persist():Promise<boolean>;
 declare function closeSheets(options?:IntegratedRecord):void;
 declare function nav(module:string,page:string):void;
 declare function haptic(kind:string):void;
@@ -167,8 +167,8 @@ function openIntegratedTransactionForm(id='',preset:IntegratedRecord={}):void{
   const apply=()=>{sheetDirty=false;openIntegratedTransactionForm('',{...entry,date:form.elements.date?.value||integratedEntryDateForMonth()});sheetDirty=true};
   if(sheetDirty)showDialog({title:'기록을 불러올까요?',message:'입력 중인 내용이 선택한 기록으로 바뀝니다.',confirmText:'불러오기',cancelText:'취소'},apply);else apply();
  }));
- form.querySelectorAll?.<HTMLButtonElement>('[data-entry-remove]').forEach(button=>button.addEventListener('click',()=>{const entries=integratedEntryFavorites(),before=clone(setting().integratedEntryFavorites);entries.splice(Number(button.dataset.entryRemove),1);setting().integratedEntryFavorites=entries;if(!persist()){setting().integratedEntryFavorites=before;return}button.closest('.entry-shortcut')?.remove();toast('자주 쓰는 기록에서 뺐어요.')}));
- form.addEventListener('submit',(event:SubmitEvent)=>{event.preventDefault();saveIntegratedTransaction(event.currentTarget as HTMLFormElement,!!(event.submitter as HTMLElement|null)?.hasAttribute('data-entry-continue'))});
+ form.querySelectorAll?.<HTMLButtonElement>('[data-entry-remove]').forEach(button=>button.addEventListener('click',async ()=>{const entries=integratedEntryFavorites(),before=clone(setting().integratedEntryFavorites);entries.splice(Number(button.dataset.entryRemove),1);setting().integratedEntryFavorites=entries;if(!(await persist())){setting().integratedEntryFavorites=before;return}button.closest('.entry-shortcut')?.remove();toast('자주 쓰는 기록에서 뺐어요.')}));
+ form.addEventListener('submit',async (event:SubmitEvent)=>{event.preventDefault();(await saveIntegratedTransaction(event.currentTarget as HTMLFormElement,!!(event.submitter as HTMLElement|null)?.hasAttribute('data-entry-continue')))});
 }
 
 function integratedFormLiveError(form:HTMLFormElement):string{
@@ -258,7 +258,7 @@ function integratedValidateCandidate(candidate:IntegratedRecord,editingId=''):st
  return issues.length?issues[0].replace('자산 잔액 음수:','잔액이 부족합니다:').replace('부채 잔액 음수:','대출잔액보다 많이 상환할 수 없습니다:'):'';
 }
 
-function saveIntegratedTransaction(form:HTMLFormElement,continueEntry=false):void{
+async function saveIntegratedTransaction(form:HTMLFormElement,continueEntry=false):Promise<void>{
  const rows=integratedCandidatesFromForm(form),editingId=form.dataset.editId||'';
  if(!rows.length){const message='기록할 금액을 입력해 주세요.',isLoan=String(new FormData(form).get('uiType')||'')==='loanPayment';formShowError(form,message,isLoan?'principal':'amount');toast(message);return}
  const test=clone(integratedStore());if(editingId)test.ledger=(test.ledger||[]).filter(t=>t.id!==editingId);
@@ -269,7 +269,7 @@ function saveIntegratedTransaction(form:HTMLFormElement,continueEntry=false):voi
  integratedStore().ledger.push(...rows);integratedStore().mode='live';integratedStore().label='내 통합 거래기록';setting().integratedMonth=integratedMonthKey(rows[0].date||'');integratedLedgerSearch='';integratedSearchDisplayLimit=50;setting().integratedLedgerFilter='all';
  const entry=integratedFormEntryPreset(form),favorite=integratedFormEntryPreset(form,true);
  if(!editingId&&!form.dataset.systemType&&entry){setting().integratedEntryLast=entry;if(new FormData(form).get('saveFavorite')&&favorite){const entries=integratedEntryFavorites().filter(item=>JSON.stringify(item)!==JSON.stringify(favorite));setting().integratedEntryFavorites=[favorite,...entries].slice(0,8)}}
- if(!persist())return;sheetDirty=false;closeSheets({all:true});nav('integrated','ledger');toast('저장했어요.');haptic('light');
+ if(!(await persist()))return;sheetDirty=false;closeSheets({all:true});nav('integrated','ledger');toast('저장했어요.');haptic('light');
  if(continueEntry&&!editingId&&!form.dataset.systemType)openIntegratedTransactionForm('',{...(entry||{}),date:rows[0].date});
 }
 
@@ -277,10 +277,10 @@ function openCashReconcileForm():void{
  const date=integratedEntryDateForMonth(),store=integratedStore(),current=Number(integratedReplay(store.ledger.filter(row=>String(row.date||'')<=date),store).assets['cash-main']||0);
  $('#formEyebrow').textContent='통합 · 가계부';$('#formTitle').textContent='현금 잔액 맞추기';
  $('#formBody').innerHTML=`<form id="cashReconcileForm" class="form"><div class="finance-form-note real">통장·현금의 실제 잔액을 입력하면 현재 기록과의 차이만 보정 원장으로 남깁니다. 기존 수입·지출 기록은 바꾸지 않습니다.</div><div class="form-grid"><div class="field"><label>확인일</label><input name="date" type="date" value="${escapeHtml(date)}" required></div><div class="field"><label>실제 잔액</label><input name="actualBalance" type="number" min="0" step="1" value="${escapeHtml(Math.round(current))}" required></div></div><div class="finance-settlement-box"><strong>기록상 잔액 ${won(current)}</strong>저장 전 확인일 기준으로 다시 계산합니다.</div><div class="field"><label>메모 <small>선택</small></label><input name="note" placeholder="예: 은행 앱 잔액 확인"></div><div class="form-error" role="alert" aria-live="polite" hidden></div><button class="integrated-form-save" type="submit">잔액 맞추기</button></form>`;
- openSheet('#formSheet',{mode:'input'});const form=$('#cashReconcileForm') as HTMLFormElement;form.addEventListener('submit',(event:SubmitEvent)=>{event.preventDefault();saveCashReconcile(event.currentTarget as HTMLFormElement)})
+ openSheet('#formSheet',{mode:'input'});const form=$('#cashReconcileForm') as HTMLFormElement;form.addEventListener('submit',async (event:SubmitEvent)=>{event.preventDefault();(await saveCashReconcile(event.currentTarget as HTMLFormElement))})
 }
 
-function saveCashReconcile(form:HTMLFormElement):void{
+async function saveCashReconcile(form:HTMLFormElement):Promise<void>{
  const data=new FormData(form),date=String(data.get('date')||ymd()),actual=Number(data.get('actualBalance')),note=String(data.get('note')||'').trim(),dateError=postedDateError(date);
  if(dateError){formShowError(form,dateError,'date');return}
  if(!Number.isFinite(actual)||actual<0||!financialNumberInRange(actual)){formShowError(form,'실제 잔액은 0원 이상 정확한 숫자로 입력해 주세요.','actualBalance');return}
@@ -289,15 +289,15 @@ function saveCashReconcile(form:HTMLFormElement):void{
  const candidate={id:uid('igl'),date,type:'adjustment',accountId:'cash-main',delta,category:'현금 잔액 맞춤',note,meta:{reconciliation:true,previousBalance:current,recordedBalance:actual}};
  const error=integratedValidateCandidate(candidate,'');if(error){formShowError(form,error,'actualBalance');return}
  store.ledger.push(candidate);store.mode='live';store.label='내 통합 거래기록';setting().integratedMonth=integratedMonthKey(date);integratedLedgerSearch='';integratedSearchDisplayLimit=50;setting().integratedLedgerFilter='all';
- if(!persist())return;sheetDirty=false;closeSheets({all:true});nav('integrated','summary');toast(`현금 잔액을 ${won(actual)}으로 맞췄습니다.`);haptic('light')
+ if(!(await persist()))return;sheetDirty=false;closeSheets({all:true});nav('integrated','summary');toast(`현금 잔액을 ${won(actual)}으로 맞췄습니다.`);haptic('light')
 }
 
 function deleteIntegratedTransaction(id:string):void{
  const tx=integratedStore().ledger.find(t=>t.id===id);if(!tx){toast('거래를 찾지 못했습니다.');return}if(tx.meta?.cardPlanId){toast('카드 구매와 미납 원금이 연결된 기록입니다.');return}if(tx.meta?.isaLifecycleAccountId){toast('ISA 정산에 연결된 거래는 개별 삭제할 수 없습니다.');return}
- showDialog({title:'이 거래를 삭제할까요?',message:`${tx.date} · ${tx.category||integratedTxLabel(tx)} 기록을 삭제합니다. 관련 합계가 즉시 다시 계산됩니다.`,confirmText:'삭제',cancelText:'취소',danger:true},()=>{
+ showDialog({title:'이 거래를 삭제할까요?',message:`${tx.date} · ${tx.category||integratedTxLabel(tx)} 기록을 삭제합니다. 관련 합계가 즉시 다시 계산됩니다.`,confirmText:'삭제',cancelText:'취소',danger:true},async ()=>{
   const before=clone(integratedStore());integratedStore().ledger=integratedStore().ledger.filter(t=>t.id!==id);const issues=integratedCandidateIssues(integratedStore());
   if(issues.length){state.integrated=before;toast('삭제하면 잔액이 맞지 않아 취소했습니다.');return}
-  integratedStore().mode='live';integratedStore().label='내 통합 거래기록';if(!persist())return;sheetDirty=false;closeSheets();nav('integrated','ledger');toast('거래를 삭제했습니다.');haptic('light');
+  integratedStore().mode='live';integratedStore().label='내 통합 거래기록';if(!(await persist()))return;sheetDirty=false;closeSheets();nav('integrated','ledger');toast('거래를 삭제했습니다.');haptic('light');
  });
 }
 
@@ -331,10 +331,10 @@ function openIntegratedRefundForm(id:string):void{
  $('#formEyebrow').textContent='통합 · 환불';$('#formTitle').textContent='환불·부분취소 기록';
  $('#formBody').innerHTML=`<form id="refundForm" class="form"><div class="readonly-row"><span>환불 가능한 잔액</span><strong>${won(remaining)}</strong></div><div class="field"><label>환불일</label><input name="date" type="date" value="${escapeHtml(localYmd())}" required></div><div class="field"><label>실제 환불액</label><input name="amount" type="number" min="1" max="${escapeHtml(remaining)}" value="${escapeHtml(remaining)}" required></div><div class="source-note">원래 지출은 보존하며 환불한 달의 소비에서 차감합니다.</div><button class="form-btn primary">환불 저장</button></form>`;
  openSheet('#formSheet',{mode:'input'});
- ($('#refundForm') as HTMLFormElement).onsubmit=(event:SubmitEvent)=>{
+ ($('#refundForm') as HTMLFormElement).onsubmit=async (event:SubmitEvent)=>{
   event.preventDefault();const form=event.currentTarget as HTMLFormElement,data=new FormData(form),before=clone(state),result=recordIntegratedRefund(id,String(data.get('date')),Number(data.get('amount')));
   if(!result.ok){toast(result.error);return}
   setting().integratedMonth=integratedMonthKey(String(data.get('date')));setting().integratedLedgerFilter='all';integratedLedgerSearch='';
-  if(!persist()){state=before;return}sheetDirty=false;closeSheets({all:true});nav('integrated','ledger');toast('환불을 기록했습니다.');
+  if(!(await persist())){state=before;return}sheetDirty=false;closeSheets({all:true});nav('integrated','ledger');toast('환불을 기록했습니다.');
  };
 }

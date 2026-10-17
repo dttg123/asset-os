@@ -71,19 +71,19 @@ function homeAlertCount() { const isaReady = homeSample().isaSource === 'asset-o
 function openAlertsCenter() { const isaReady = homeSample().isaSource === 'asset-os', issues = isaReady ? allIsaIssues() : [], alert = isaReady ? nearestMaturityAlert() : null, urgent = scheduleUrgentOccurrences(), system = homeSystemAlerts(); $('#sheetEyebrow').textContent = '알림'; $('#sheetTitle').textContent = '확인할 알림'; $('#sheetBody').innerHTML = `<div class="integrity-list">${urgent.map(o => `<button class="integrity-row" data-home-schedule="${escapeHtml(o.date)}"><i class="integrity-dot ${o.status === 'overdue' ? 'high' : ''}"></i><span class="integrity-copy"><strong>${escapeHtml(o.schedule.name)} · ${scheduleStatusLabel(o.status)}</strong><small>${escapeHtml(o.date)} · ${won(o.schedule.amount)}</small></span><span class="integrity-go">›</span></button>`).join('')}${issues.map(x => `<button class="integrity-row" data-integrity-account="${escapeHtml(x.accountId)}" ${x.transactionId ? `data-integrity-tx="${escapeHtml(x.transactionId)}"` : ''}><i class="integrity-dot ${x.severity === 'high' ? 'high' : ''}"></i><span class="integrity-copy"><strong>${escapeHtml(x.title)}</strong><small>${escapeHtml(state.accounts.find(a => a.id === x.accountId)?.name || 'ISA')} · ${escapeHtml(x.detail)}</small></span><span class="integrity-go">›</span></button>`).join('')}${system.map(item => `<button class="integrity-row" ${item.accountId ? `data-pension-balance-check="${escapeHtml(item.accountId)}"` : item.productId ? `data-finance-alert="${escapeHtml(item.productId)}"` : item.kind === 'backup' ? 'data-backup-alert' : item.kind === 'refresh' ? 'data-refresh-alert' : 'data-system-alert'}><i class="integrity-dot"></i><span class="integrity-copy"><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.detail)}</small></span><span class="integrity-go">›</span></button>`).join('')}${alert ? `<button class="integrity-row" data-maturity-alert="${escapeHtml(alert.account.id)}"><i class="integrity-dot"></i><span class="integrity-copy"><strong>${escapeHtml(alert.account.name)} 만기 ${alert.label}</strong><small>${alert.date}</small></span><span class="integrity-go">›</span></button>` : ''}${!urgent.length && !issues.length && !system.length && !alert ? '<div class="empty-state"><strong>지금 처리할 중요 알림이 없습니다.</strong></div>' : ''}</div>${homeInvestmentRefreshMarkup()}`; openSheet('#detailSheet'); setTimeout(() => bindIntegrityActions(), 0); }
 function bindIntegrityActions() {
     $$('[data-pension-balance-check]').forEach(button => button.onclick = () => openPensionBalanceDetail(button.dataset.pensionBalanceCheck || ''));
-    $$('[data-home-schedule]').forEach(b => b.onclick = () => { const d = b.dataset.homeSchedule; if (!d)
+    $$('[data-home-schedule]').forEach(b => b.onclick = async () => { const d = b.dataset.homeSchedule; if (!d)
         return; if (d === '날짜 미설정')
-        return nav('integrated', 'schedule'); openScheduleDay(d); });
-    $$('[data-integrity-account]').forEach(b => b.onclick = () => { const accountId = b.dataset.integrityAccount, txId = b.dataset.integrityTx; if (!accountId)
+        return nav('integrated', 'schedule'); (await openScheduleDay(d)); });
+    $$('[data-integrity-account]').forEach(b => b.onclick = async () => { const accountId = b.dataset.integrityAccount, txId = b.dataset.integrityTx; if (!accountId)
         return; const account = state.accounts.find(a => a.id === accountId); if (txId) {
         openTransactionDetail(txId, accountId);
         return;
     } if (account && isPastAccount(account)) {
         openArchivedAccountDetail(accountId);
         return;
-    } setting().selectedAccountId = accountId; persist(); closeSheets(); nav('isa', 'transactions'); });
-    $$('[data-maturity-alert]').forEach(b => b.onclick = () => { const accountId = b.dataset.maturityAlert; if (!accountId)
-        return; setting().selectedAccountId = accountId; persist(); closeSheets(); nav('isa', 'tax'); });
+    } setting().selectedAccountId = accountId; (await persist()); closeSheets(); nav('isa', 'transactions'); });
+    $$('[data-maturity-alert]').forEach(b => b.onclick = async () => { const accountId = b.dataset.maturityAlert; if (!accountId)
+        return; setting().selectedAccountId = accountId; (await persist()); closeSheets(); nav('isa', 'tax'); });
     $$('[data-finance-alert]').forEach(b => b.onclick = () => { const id = b.dataset.financeAlert; if (id)
         openFinancialProductDetail(id); });
     $$('[data-system-alert]').forEach(b => b.onclick = () => { closeSheets(); nav('integrated', 'summary'); });

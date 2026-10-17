@@ -75,8 +75,100 @@ function cloudReconcilePlan(local, row, force = 'auto') {
     return { action: 'synced' };
 }
 ;
+/* asset-os source: src/storage/cloud-codec.js */
+'use strict';
+const CLOUD_CHUNK_CHARS = 256 * 1024, CLOUD_MAX_RAW_BYTES = 64 * 1024 * 1024, CLOUD_MAX_CHUNKS = 384;
+function cloudWireObject(value) { return !!value && typeof value === 'object' && !Array.isArray(value); }
+async function cloudBoundedBytes(stream, limit) { const reader = stream.getReader(), chunks = []; let size = 0; try {
+    while (true) {
+        const next = await reader.read();
+        if (next.done)
+            break;
+        size += next.value.byteLength;
+        if (size > limit) {
+            await reader.cancel();
+            throw new Error('클라우드 자료가 처리 한도를 넘었습니다. 기존 원장은 보존했습니다.');
+        }
+        chunks.push(next.value);
+    }
+}
+finally {
+    reader.releaseLock();
+} const bytes = new Uint8Array(size); let offset = 0; for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+} return bytes; }
+async function cloudEncodeEnvelope(client, payload, requestId) {
+    const raw = JSON.stringify(payload), rawBytes = new TextEncoder().encode(raw).length;
+    if (rawBytes > CLOUD_MAX_RAW_BYTES)
+        throw new Error('클라우드 원장 처리 한도 초과');
+    const bytes = await cloudBoundedBytes(new Blob([raw]).stream().pipeThrough(new CompressionStream('gzip')), CLOUD_MAX_RAW_BYTES);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 16384)
+        binary += String.fromCharCode(...bytes.subarray(i, i + 16384));
+    const encoded = btoa(binary), count = Math.ceil(encoded.length / CLOUD_CHUNK_CHARS);
+    if (count < 1 || count > CLOUD_MAX_CHUNKS)
+        throw new Error('클라우드 분할 저장 한도 초과');
+    for (let index = 0; index < count; index++) {
+        const result = await client.rpc('stage_asset_os_state_chunk', { p_request_id: requestId, p_index: index, p_contents: encoded.slice(index * CLOUD_CHUNK_CHARS, (index + 1) * CLOUD_CHUNK_CHARS) });
+        if (result.error)
+            throw new Error(String(result.error.message || '클라우드 분할 저장 실패'));
+    }
+    return { schemaVersion: payload.schemaVersion, appVersion: payload.appVersion, environment: payload.environment, savedAt: payload.savedAt, encoding: 'gzip-chunks-v1', requestId, chunkCount: count, rawBytes, checksum: await localDbChecksum(raw), data: {} };
+}
+async function cloudDecodeEnvelope(client, payload) {
+    if (!cloudWireObject(payload) || payload.encoding !== 'gzip-chunks-v1')
+        return payload;
+    const count = Number(payload.chunkCount), rawBytes = Number(payload.rawBytes), requestId = String(payload.requestId || '');
+    if (!Number.isInteger(count) || count < 1 || count > CLOUD_MAX_CHUNKS || !Number.isInteger(rawBytes) || rawBytes < 1 || rawBytes > CLOUD_MAX_RAW_BYTES || !/^[a-f0-9-]{36}$/i.test(requestId) || !/^[a-f0-9]{64}$/.test(String(payload.checksum || '')))
+        throw new Error('클라우드 저장 정보 검증 실패');
+    let encoded = '';
+    for (let after = -1; after < count - 1;) {
+        const response = await client.rpc('read_asset_os_state_chunks', { p_request_id: requestId, p_after_index: after, p_limit: 8 });
+        if (response.error || !Array.isArray(response.data) || !response.data.length)
+            throw new Error('클라우드 기록 일부를 읽지 못했습니다. 기존 원장을 보존했습니다.');
+        for (const item of response.data) {
+            if (!cloudWireObject(item) || Number(item.chunk_index) !== after + 1 || typeof item.contents !== 'string' || item.contents.length > CLOUD_CHUNK_CHARS || after + 1 >= count)
+                throw new Error('클라우드 기록 순서 또는 크기 검증 실패');
+            after++;
+            encoded += item.contents;
+        }
+    }
+    let binary;
+    try {
+        binary = atob(encoded);
+    }
+    catch {
+        throw new Error('클라우드 저장 인코딩 오류');
+    }
+    ;
+    const packed = Uint8Array.from(binary, c => c.charCodeAt(0)), bytes = await cloudBoundedBytes(new Blob([packed]).stream().pipeThrough(new DecompressionStream('gzip')), rawBytes);
+    if (bytes.length !== rawBytes)
+        throw new Error('클라우드 원장 크기 검증 실패');
+    const raw = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    if (await localDbChecksum(raw) !== payload.checksum)
+        throw new Error('클라우드 원장 검증값 불일치');
+    const decoded = JSON.parse(raw);
+    if (!cloudWireObject(decoded) || decoded.schemaVersion !== payload.schemaVersion)
+        throw new Error('클라우드 데이터 버전 검증 실패');
+    return decoded;
+}
+;
 /* asset-os source: supabase-sync.js */
 'use strict';
+async function cloudPersistSyncMetadata() { const user = cloudUser(); if (typeof assetLocalDatabase !== 'undefined' && user)
+    await assetLocalDatabase.saveSync({ userId: user.id, baseRevision: cloudBaseRevision, baseFingerprint: cloudBaseFingerprint, pending: cloudPendingWrite }); }
+function cloudRestoreSyncMetadata() { if (typeof assetLocalDatabase === 'undefined')
+    return; const saved = assetLocalDatabase.sync; if (saved && saved.userId === cloudUser()?.id) {
+    cloudBaseRevision = saved.baseRevision;
+    cloudBaseFingerprint = saved.baseFingerprint;
+    cloudPendingWrite = saved.pending || null;
+}
+else {
+    cloudBaseRevision = 0;
+    cloudBaseFingerprint = '';
+    cloudPendingWrite = null;
+} }
 const SUPABASE_URL = 'https://wjrzukoofscmvwicmoey.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_mZa3v8Ekw08_5tHQMNSPWQ_uMcioPDM';
 const SUPABASE_STATE_TABLE = 'asset_os_state';
@@ -154,6 +246,7 @@ function cloudAuthGateMessage() {
         return '클라우드 원장 동기화 중 오류가 발생했습니다. 다시 확인해 주세요.';
     return '클라우드 원장을 확인하지 못했습니다. 네트워크를 확인해 주세요.';
 }
+function cloudLocalOwnerMatches() { return typeof assetLocalDatabase === 'undefined' || !assetLocalDatabase.sync?.userId || assetLocalDatabase.sync.userId === cloudUser()?.id; }
 async function startAssetAuthenticatedApp() {
     if (qaCloudBlocked()) {
         cloudSetStatus('QA 로컬 전용', 'ok');
@@ -169,6 +262,11 @@ async function startAssetAuthenticatedApp() {
         return assetAuthGateState('error', 'Supabase 연결을 확인한 뒤 다시 시도해 주세요.');
     if (!cloudUser())
         return assetAuthGateState('login');
+    if (!cloudLocalOwnerMatches()) {
+        assetAppUnlocked = false;
+        assetAuthGateState('error', '이 기기 원장은 다른 로그인 계정의 자료입니다. 기존 계정으로 로그인해 주세요.');
+        return false;
+    }
     const local = cloudLocalEnvelope(), canOpenLocal = local.stored && cloudPayloadValid(local.envelope);
     cloudSetStatus('클라우드 확인 중', 'wait');
     if (canOpenLocal)
@@ -204,7 +302,7 @@ function cloudSetStatus(text, tone = 'wait', when = '') { cloudSyncStatus = Stri
 function cloudLocalEnvelope() {
     let raw = '';
     try {
-        raw = localStorage.getItem(KEY) || '';
+        raw = typeof assetLocalDatabase !== 'undefined' ? (assetLocalDatabase.envelope ? JSON.stringify(assetLocalDatabase.envelope) : '') : (localStorage.getItem(KEY) || '');
     }
     catch { }
     if (raw) {
@@ -272,7 +370,7 @@ async function initSupabaseCloud() {
         assetSupabaseClient = cloudWindow.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, { auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true } });
         assetSupabaseClient.auth.onAuthStateChange((event, session) => { assetSupabaseSession = session || null; if (session)
             syncBrokerKisSessionFromCloud(session); if (event === 'INITIAL_SESSION')
-            return; setTimeout(() => handleCloudAuthState(event, session).catch(() => { }), 0); });
+            return; setTimeout(async () => handleCloudAuthState(event, session).catch(() => { }), 0); });
         const { data, error } = await assetSupabaseClient.auth.getSession();
         if (error)
             throw error;
@@ -297,6 +395,11 @@ async function handleCloudAuthState(event, session) {
         cloudSetStatus('로그인 필요', 'wait');
         assetAppUnlocked = false;
         assetAuthGateState('login');
+        return false;
+    }
+    if (!cloudLocalOwnerMatches()) {
+        assetAppUnlocked = false;
+        assetAuthGateState('error', '이 기기 원장은 다른 계정의 자료입니다. 기존 계정으로 로그인해 주세요.');
         return false;
     }
     if (['INITIAL_SESSION', 'SIGNED_IN', 'TOKEN_REFRESHED', 'USER_UPDATED'].includes(String(event || ''))) {
@@ -363,12 +466,12 @@ async function cloudFetchStateRow() {
         return { row: null, error: error || null };
     if (!stateInputRecord(data) || !('payload' in data))
         return { row: null, error: { message: '클라우드 응답 형식 오류' } };
-    return { row: { payload: data.payload, updated_at: typeof data.updated_at === 'string' ? data.updated_at : undefined, revision: data.revision }, error: null };
+    return { row: { payload: typeof cloudDecodeEnvelope === 'function' ? await cloudDecodeEnvelope(client, data.payload) : data.payload, updated_at: typeof data.updated_at === 'string' ? data.updated_at : undefined, revision: data.revision }, error: null };
 }
 async function cloudPushState(envelope = cloudCurrentEnvelope(), quiet = false) {
     if (qaCloudBlocked())
         return false;
-    if (!cloudUser() || !assetSupabaseClient)
+    if (!cloudUser() || !assetSupabaseClient || !cloudLocalOwnerMatches())
         return false;
     if (cloudSyncBusy) {
         cloudPushPending = true;
@@ -381,8 +484,9 @@ async function cloudPushState(envelope = cloudCurrentEnvelope(), quiet = false) 
         if (!payload.savedAt)
             payload.savedAt = new Date().toISOString();
         const payloadFingerprint = cloudEnvelopeFingerprint(payload);
-        cloudPendingWrite = cloudPendingWriteFor(cloudPendingWrite, payloadFingerprint, cloudBaseRevision, cloudRequestId);
-        const pending = cloudPendingWrite, { data, error } = await assetSupabaseClient.rpc('save_asset_os_state', cloudSaveRpcArguments(pending, payload));
+        cloudPendingWrite = cloudPendingWriteFor(cloudPendingWrite, JSON.stringify(payload), cloudBaseRevision, cloudRequestId);
+        await cloudPersistSyncMetadata();
+        const pending = cloudPendingWrite, wire = typeof cloudEncodeEnvelope === 'function' ? await cloudEncodeEnvelope(assetSupabaseClient, payload, pending.requestId) : payload, { data, error } = await assetSupabaseClient.rpc('save_asset_os_state', cloudSaveRpcArguments(pending, wire));
         if (error) {
             if (cloudTableMissing(error) || cloudAtomicSaveMissing(error))
                 cloudSetStatus('DB 설정 필요', 'wait');
@@ -413,9 +517,16 @@ async function cloudPushState(envelope = cloudCurrentEnvelope(), quiet = false) 
         cloudBaseFingerprint = payloadFingerprint;
         cloudPendingWrite = null;
         cloudConflict = null;
+        await cloudPersistSyncMetadata();
         const now = String(result.saved_at || new Date().toISOString());
         cloudSetStatus('동기화됨', 'ok', now);
         return true;
+    }
+    catch (error) {
+        cloudSetStatus('클라우드 저장 실패', 'wait');
+        if (!quiet)
+            toast(cloudErrorMessage(error) || '클라우드 저장을 확인해 주세요.');
+        return false;
     }
     finally {
         cloudSyncBusy = false;
@@ -437,31 +548,40 @@ function queueCloudStatePush() {
     clearTimeout(cloudSyncTimer);
     cloudSyncTimer = setTimeout(() => cloudPushState(cloudCurrentEnvelope(), true).catch(() => { }), 1200);
 }
-function cloudApplyRemoteEnvelope(payload, revision = cloudBaseRevision) {
+async function cloudApplyRemoteEnvelope(payload, revision = cloudBaseRevision) { if (typeof runStoredCommand === 'function')
+    return runStoredCommand(() => cloudApplyRemoteEnvelopeNow(payload, revision)); return cloudApplyRemoteEnvelopeNow(payload, revision); }
+async function cloudApplyRemoteEnvelopeNow(payload, revision) {
+    if (typeof waitForStorageSave === 'function')
+        await waitForStorageSave();
     if (!cloudPayloadValid(payload))
         throw new Error('클라우드 데이터 형식 오류');
     const local = cloudLocalEnvelope();
     if (local.raw)
-        storeRecoveryCopy(`${KEY}-pre-cloud-${Date.now()}`, local.raw);
+        (await storeRecoveryCopy(`${KEY}-pre-cloud-${Date.now()}`, local.raw));
     const migrated = migrateStateData(payload.data, Number(payload.schemaVersion) || SCHEMA_VERSION), normalized = normalizeState(migrated.data);
     const savedAt = String(payload.savedAt || new Date().toISOString());
-    localStorage.setItem(KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, appVersion: APP_VERSION, environment: APP_ENV, savedAt, data: normalized }));
+    const savedEnvelope = { schemaVersion: SCHEMA_VERSION, appVersion: APP_VERSION, environment: APP_ENV, savedAt, data: normalized };
+    if (typeof assetLocalDatabase !== 'undefined')
+        await assetLocalDatabase.commit(savedEnvelope);
+    else
+        localStorage.setItem(KEY, JSON.stringify(savedEnvelope));
     state = normalized;
     lastPersistedState = clone(normalized);
     cloudBaseFingerprint = cloudEnvelopeFingerprint(payload);
     cloudBaseRevision = Number(revision) || 0;
     cloudPendingWrite = null;
     cloudConflict = null;
+    await cloudPersistSyncMetadata();
     pruneRecoveryKeys();
     if (assetAppUnlocked)
         render();
 }
-function cloudBackupLocalConflict() {
+async function cloudBackupLocalConflict() {
     const local = cloudLocalEnvelope();
     if (!local.stored || !cloudPayloadValid(local.envelope))
         throw new Error('이 기기 백업 데이터가 없습니다.');
     const raw = local.raw || JSON.stringify(local.envelope);
-    storeRecoveryCopy(`${KEY}-pre-cloud-conflict-${Date.now()}`, raw);
+    (await storeRecoveryCopy(`${KEY}-pre-cloud-conflict-${Date.now()}`, raw));
     const payload = { format: BACKUP_FORMAT, schemaVersion: Number(local.envelope.schemaVersion) || SCHEMA_VERSION, appVersion: String(local.envelope.appVersion || APP_VERSION), environment: APP_ENV, exportedAt: new Date().toISOString(), data: clone(local.envelope.data) };
     const name = `AssetOS_conflict_local_${localYmd().replaceAll('-', '')}_${APP_VERSION}.zip`;
     downloadBytes(createBackupZipBytes(payload), name);
@@ -485,7 +605,7 @@ async function cloudResolveConflictPull() {
 }
 async function cloudResolveConflictOverwrite() {
     try {
-        cloudBackupLocalConflict();
+        (await cloudBackupLocalConflict());
     }
     catch (error) {
         cloudSetStatus('충돌 백업 실패', 'wait');
@@ -508,10 +628,11 @@ async function cloudResolveConflictOverwrite() {
 async function cloudReconcileState(force = 'auto') {
     if (qaCloudBlocked())
         return false;
-    if (!cloudUser() || !assetSupabaseClient || cloudSyncBusy)
+    if (!cloudUser() || !assetSupabaseClient || !cloudLocalOwnerMatches() || cloudSyncBusy)
         return false;
     cloudSyncBusy = true;
     try {
+        cloudRestoreSyncMetadata();
         let local = cloudLocalEnvelope();
         const startedFingerprint = cloudEnvelopeFingerprint(local.envelope), { row, error } = await cloudFetchStateRow();
         if (error) {
@@ -543,13 +664,26 @@ async function cloudReconcileState(force = 'auto') {
             }
             local = latestLocal;
         }
-        const plan = cloudReconcilePlan(local, row, force);
+        const hasBase = !!cloudBaseFingerprint, localChanged = hasBase && latestFingerprint !== cloudBaseFingerprint, remoteChanged = hasBase && remoteRevision !== cloudBaseRevision;
+        let plan = cloudReconcilePlan(local, row, force);
+        if (typeof assetLocalDatabase !== 'undefined' && force === 'auto' && local.stored && cloudDataHasMeaningfulRecords(local.envelope.data) && cloudDataHasMeaningfulRecords(remote.data)) {
+            if (latestFingerprint === remoteFingerprint)
+                plan = { action: 'synced' };
+            else if (!hasBase || localChanged && remoteChanged)
+                plan = { action: 'conflict' };
+            else if (remoteChanged)
+                plan = { action: 'pull', notify: true };
+            else if (localChanged)
+                plan = { action: 'push' };
+            else
+                plan = { action: 'conflict' };
+        }
         if (plan.action === 'reject-invalid') {
             cloudSetStatus('클라우드 데이터 확인 필요', 'wait');
             return false;
         }
         if (plan.action === 'pull') {
-            cloudApplyRemoteEnvelope(remote, remoteRevision);
+            (await cloudApplyRemoteEnvelope(remote, remoteRevision));
             cloudSetStatus('클라우드에서 복원됨', 'ok', row.updated_at || remote.savedAt);
             if (plan.notify)
                 toast('Supabase에서 최신 데이터를 복원했습니다.');
@@ -575,6 +709,7 @@ async function cloudReconcileState(force = 'auto') {
         cloudBaseFingerprint = cloudEnvelopeFingerprint(remote);
         cloudPendingWrite = null;
         cloudConflict = null;
+        await cloudPersistSyncMetadata();
         cloudSetStatus('동기화됨', 'ok', row.updated_at || remote.savedAt);
         return true;
     }
@@ -595,7 +730,7 @@ function renderCloudAccountSheet() {
     if (!body)
         return;
     if (qaCloudBlocked()) {
-        body.innerHTML = '<div class="cloud-account-card"><div class="cloud-account-icon">Q</div><div><strong>QA 로컬 전용</strong><small>Supabase 로그인·복원·업로드가 모두 차단되어 있습니다.</small></div></div><div class="cloud-note">이 화면의 데이터는 운영 원장과 다른 localStorage 키에만 저장됩니다.</div>';
+        body.innerHTML = '<div class="cloud-account-card"><div class="cloud-account-icon">Q</div><div><strong>QA 로컬 전용</strong><small>Supabase 로그인·복원·업로드가 모두 차단되어 있습니다.</small></div></div><div class="cloud-note">이 화면의 데이터는 운영 원장과 별도 기기 데이터베이스에만 저장됩니다.</div>';
         return;
     }
     const u = cloudUser();
@@ -605,7 +740,7 @@ function renderCloudAccountSheet() {
         return;
     }
     const conflictActions = cloudSyncStatus === '동기화 충돌 확인 필요' ? '<button id="cloudPullLatest" class="diagnostic-action cloud-primary">클라우드 최신본 불러오기</button><button id="cloudOverwriteAfterBackup" class="diagnostic-action cloud-secondary">이 기기 백업 후 덮어쓰기</button>' : '';
-    body.innerHTML = `<div class="cloud-account-card"><div class="cloud-account-icon">${escapeHtml((cloudUserLabel().charAt(0) || 'G').toUpperCase())}</div><div><strong>${escapeHtml(cloudUserLabel())}</strong><small>${escapeHtml(cloudUserEmail())}</small></div></div><div class="diagnostic-list cloud-diagnostics"><div class="diagnostic-row"><span class="diagnostic-copy"><strong>Supabase</strong><small>revision ${cloudBaseRevision || '-'} · 자동 로그인 · 기기간 원장 복원</small></span><span class="diagnostic-value ${cloudSyncTone === 'ok' ? 'ok' : 'wait'}">${escapeHtml(cloudSyncStatus)}</span></div><div class="diagnostic-row"><span class="diagnostic-copy"><strong>최근 동기화</strong><small>localStorage와 클라우드 중 최신본 사용</small></span><span class="diagnostic-value">${escapeHtml(cloudTimeLabel(cloudLastSyncAt))}</span></div></div><div class="cloud-actions">${conflictActions}<button id="cloudSyncNow" class="diagnostic-action cloud-primary">지금 동기화</button><button id="cloudLogout" class="diagnostic-action cloud-secondary">로그아웃</button></div><div class="cloud-note">충돌 시 자동 병합하지 않습니다. 덮어쓰기는 이 기기 ZIP 백업을 먼저 저장한 뒤에만 실행됩니다.</div>`;
+    body.innerHTML = `<div class="cloud-account-card"><div class="cloud-account-icon">${escapeHtml((cloudUserLabel().charAt(0) || 'G').toUpperCase())}</div><div><strong>${escapeHtml(cloudUserLabel())}</strong><small>${escapeHtml(cloudUserEmail())}</small></div></div><div class="diagnostic-list cloud-diagnostics"><div class="diagnostic-row"><span class="diagnostic-copy"><strong>Supabase</strong><small>revision ${cloudBaseRevision || '-'} · 자동 로그인 · 기기간 원장 복원</small></span><span class="diagnostic-value ${cloudSyncTone === 'ok' ? 'ok' : 'wait'}">${escapeHtml(cloudSyncStatus)}</span></div><div class="diagnostic-row"><span class="diagnostic-copy"><strong>최근 동기화</strong><small>기기 원장과 클라우드 변경 버전 확인</small></span><span class="diagnostic-value">${escapeHtml(cloudTimeLabel(cloudLastSyncAt))}</span></div></div><div class="cloud-actions">${conflictActions}<button id="cloudSyncNow" class="diagnostic-action cloud-primary">지금 동기화</button><button id="cloudLogout" class="diagnostic-action cloud-secondary">로그아웃</button></div><div class="cloud-note">충돌 시 자동 병합하지 않습니다. 덮어쓰기는 이 기기 ZIP 백업을 먼저 저장한 뒤에만 실행됩니다.</div>`;
     $('#cloudSyncNow').onclick = async () => { cloudSetStatus('동기화 확인 중', 'wait'); const ok = await cloudReconcileState(); toast(ok ? '클라우드 동기화를 확인했습니다.' : '클라우드 동기화를 확인해 주세요.'); };
     $('#cloudPullLatest')?.addEventListener('click', cloudResolveConflictPull);
     $('#cloudOverwriteAfterBackup')?.addEventListener('click', cloudResolveConflictOverwrite);
@@ -838,12 +973,12 @@ function qaDatasetStats() { const model = integratedFinancialModel(), isa = stat
 function qaRenderStats() { const box = $('#qaStats'); if (!box)
     return; const s = qaDatasetStats(); box.textContent = `${state.system?.qaDataset?.range || '직접 입력 QA'} · ${nf.format(s.total)}건 · 순자산 ${displayWon(s.netAssets)} · 대출 ${displayWon(s.totalDebt)}`; }
 function qaResetTransientViewState() { transactionDisplayLimit = 50; dividendDisplayLimit = 50; pensionTransactionDisplayLimit = 20; pensionTransactionSearch = ''; integratedLedgerSearch = ''; integratedSearchDisplayLimit = 50; setting().integratedLedgerFilter = 'all'; }
-function qaGenerateThirtyFiveYears() { if (!QA_MODE)
-    return false; state = qaBuildThirtyFiveYearState(); qaResetTransientViewState(); lastPersistedState = clone(state); const ok = persist(false); render(); qaRenderStats(); toast(ok ? 'QA 35년 실사용 데이터를 만들었습니다.' : 'QA 데이터 저장에 실패했습니다.'); return ok; }
-function qaResetData() { if (!QA_MODE)
-    return false; localStorage.removeItem(QA_STORAGE_KEY); state = normalizeState(seed); qaResetTransientViewState(); lastPersistedState = clone(state); persist(false); render(); qaRenderStats(); toast('QA 데이터만 초기화했습니다.'); return true; }
-function qaRunMistakes() { if (!QA_MODE)
-    return false; const before = { integrated: state.integrated.ledger.length, pension: state.pension.transactions.length }; const unsafe = Number.MAX_SAFE_INTEGER + 1, checks = [integratedValidateCandidate({ id: 'qa-mistake-zero', date: '2060-12-30', type: 'expense', amount: 0, fromAccountId: 'cash-main' }), integratedValidateCandidate({ id: 'qa-mistake-same', date: '2060-12-30', type: 'internalTransfer', amount: 1000, fromAccountId: 'cash-main', toAccountId: 'cash-main' }), integratedValidateCandidate({ id: 'qa-mistake-over', date: '2060-12-30', type: 'expense', amount: 1e12, fromAccountId: 'cash-main' }), integratedValidateCandidate({ id: 'qa-mistake-loan', date: '2060-12-30', type: 'debtPrincipal', amount: 1e12, fromAccountId: 'cash-main', liabilityId: 'finance-debt-qa-home-loan' }), pensionTransactionSave({ accountId: 'qa-irp', holdingId: 'qa-irp-h', type: 'sell', date: '2060-12-30', qty: 999999, price: 100000, fee: 0, tax: 0 }).error, integratedValidateCandidate({ id: 'qa-mistake-unsafe', date: '2060-12-30', type: 'income', amount: unsafe, toAccountId: 'cash-main' }), pensionTransactionSave({ accountId: 'qa-irp', type: 'interest', date: '2060-12-30', amount: unsafe, fee: 0, tax: 0 }).error, transactionNumericError({ type: 'buy', qty: Number.MAX_SAFE_INTEGER, price: 2, fee: 0, tax: 0 }), transactionNumericError({ type: 'interest', amount: 1000, fee: unsafe, tax: 0 }), transactionNumericError({ type: 'adjustment', setQty: unsafe, setAvg: 1, cashDelta: 0 })]; const blocked = checks.filter(Boolean).length === 10 && before.integrated === state.integrated.ledger.length && before.pension === state.pension.transactions.length; state.system.qaMistakes = { checkedAt: new Date().toISOString(), blocked, checks }; persist(false); toast(blocked ? '실수 10종이 모두 차단됐습니다.' : '실수 차단 결과를 확인해 주세요.'); return blocked; }
+async function qaGenerateThirtyFiveYears() { if (!QA_MODE)
+    return false; state = qaBuildThirtyFiveYearState(); qaResetTransientViewState(); lastPersistedState = clone(state); const ok = (await persist(false)); render(); qaRenderStats(); toast(ok ? 'QA 35년 실사용 데이터를 만들었습니다.' : 'QA 데이터 저장에 실패했습니다.'); return ok; }
+async function qaResetData() { if (!QA_MODE)
+    return false; localStorage.removeItem(QA_STORAGE_KEY); state = normalizeState(seed); qaResetTransientViewState(); lastPersistedState = clone(state); (await persist(false)); render(); qaRenderStats(); toast('QA 데이터만 초기화했습니다.'); return true; }
+async function qaRunMistakes() { if (!QA_MODE)
+    return false; const before = { integrated: state.integrated.ledger.length, pension: state.pension.transactions.length }; const unsafe = Number.MAX_SAFE_INTEGER + 1, checks = [integratedValidateCandidate({ id: 'qa-mistake-zero', date: '2060-12-30', type: 'expense', amount: 0, fromAccountId: 'cash-main' }), integratedValidateCandidate({ id: 'qa-mistake-same', date: '2060-12-30', type: 'internalTransfer', amount: 1000, fromAccountId: 'cash-main', toAccountId: 'cash-main' }), integratedValidateCandidate({ id: 'qa-mistake-over', date: '2060-12-30', type: 'expense', amount: 1e12, fromAccountId: 'cash-main' }), integratedValidateCandidate({ id: 'qa-mistake-loan', date: '2060-12-30', type: 'debtPrincipal', amount: 1e12, fromAccountId: 'cash-main', liabilityId: 'finance-debt-qa-home-loan' }), (await pensionTransactionSave({ accountId: 'qa-irp', holdingId: 'qa-irp-h', type: 'sell', date: '2060-12-30', qty: 999999, price: 100000, fee: 0, tax: 0 })).error, integratedValidateCandidate({ id: 'qa-mistake-unsafe', date: '2060-12-30', type: 'income', amount: unsafe, toAccountId: 'cash-main' }), (await pensionTransactionSave({ accountId: 'qa-irp', type: 'interest', date: '2060-12-30', amount: unsafe, fee: 0, tax: 0 })).error, transactionNumericError({ type: 'buy', qty: Number.MAX_SAFE_INTEGER, price: 2, fee: 0, tax: 0 }), transactionNumericError({ type: 'interest', amount: 1000, fee: unsafe, tax: 0 }), transactionNumericError({ type: 'adjustment', setQty: unsafe, setAvg: 1, cashDelta: 0 })]; const blocked = checks.filter(Boolean).length === 10 && before.integrated === state.integrated.ledger.length && before.pension === state.pension.transactions.length; state.system.qaMistakes = { checkedAt: new Date().toISOString(), blocked, checks }; (await persist(false)); toast(blocked ? '실수 10종이 모두 차단됐습니다.' : '실수 차단 결과를 확인해 주세요.'); return blocked; }
 function initQaMode() { if (!QA_MODE)
     return; document.documentElement.classList.add('qa-mode'); const banner = $('#qaBanner'); if (banner)
     banner.hidden = false; $$('.statuschip').forEach(x => x.textContent = `${APP_VERSION} QA`); const versionValue = $('#diagnosticsSheet .diagnostic-row:first-child .diagnostic-value'); if (versionValue)
@@ -853,215 +988,231 @@ function initQaMode() { if (!QA_MODE)
 'use strict';
 if ('serviceWorker' in navigator)
     window.addEventListener('load', async () => { const hadController = !!navigator.serviceWorker.controller; try {
-        const reg = await navigator.serviceWorker.register('./service-worker.js?v=0.6.23&build=20261018-1', { scope: './', updateViaCache: 'none' });
+        const reg = await navigator.serviceWorker.register('./service-worker.js?v=0.7.0&build=20261018-2', { scope: './', updateViaCache: 'none' });
         await reg.update();
         let refreshing = false;
         navigator.serviceWorker.addEventListener('controllerchange', () => { if (!hadController || refreshing)
-            return; refreshing = true; const key = 'asset-os-sw-reload-0.6.23-build20261018-1'; if (sessionStorage.getItem(key))
+            return; refreshing = true; const key = 'asset-os-sw-reload-0.7.0-build20261018-2'; if (sessionStorage.getItem(key))
             return; sessionStorage.setItem(key, '1'); location.reload(); });
     }
     catch { } });
 ;
 /* asset-os source: boot.js */
 'use strict';
-state = loadState();
-lastPersistedState = clone(state);
-function applyExternalSavedState(saved) {
-    const interruptedInput = sheetMode === 'input' && sheetDirty;
-    if (interruptedInput) {
-        if (activeSheetId === '#registerSheet')
-            holdingRegistrationDraft = null;
-        closeSheets({ all: true });
-    }
-    state = normalizeState(saved.data);
+async function bootAssetOs() {
+    state = (await loadState());
     lastPersistedState = clone(state);
-    render();
-    if (typeof qaRenderStats === 'function')
-        qaRenderStats();
-    if (interruptedInput)
-        showNotice('다른 화면에서 변경됨', '충돌로 인한 저장 누락을 막기 위해 작성 중이던 입력 화면을 닫고 최신 내용을 반영했습니다. 다시 열어 입력해 주세요.');
-    else
+    function applyExternalSavedState(saved) {
+        const interruptedInput = sheetMode === 'input' && sheetDirty;
+        if (interruptedInput) {
+            showNotice('다른 화면에서 변경됨', '작성 중인 내용은 유지했습니다. 다른 화면의 변경을 먼저 확인한 뒤 저장해 주세요.');
+            return true;
+        }
+        state = normalizeState(saved.data);
+        lastPersistedState = clone(state);
+        render();
+        if (typeof qaRenderStats === 'function')
+            qaRenderStats();
         toast('다른 화면의 최신 변경사항을 반영했습니다.');
-    return interruptedInput;
-}
-window.addEventListener('storage', event => {
-    if (event.storageArea !== localStorage || event.key !== KEY || !event.newValue)
-        return;
-    try {
-        const saved = JSON.parse(event.newValue);
-        if (!stateInputRecord(saved) || Number(saved.schemaVersion) !== SCHEMA_VERSION || stateDataShapeIssue(saved.data))
+        return interruptedInput;
+    }
+    window.addEventListener('storage', async (event) => {
+        if (event.storageArea !== localStorage || event.key !== `${KEY}-database-change` || !event.newValue)
             return;
-        applyExternalSavedState({ data: saved.data });
-    }
-    catch { }
-});
-$$('.nav').forEach(b => b.onclick = () => nav(b.dataset.root));
-window.addEventListener('hashchange', () => { resetTransientPanels(); window.scrollTo(0, 0); render(); });
-$('#profile').onclick = () => { refreshCloudProfileUI(); openSheet('#profileSheet'); };
-$('#scrim').onclick = () => requestCloseSheets('scrim');
-$('#closeFormSheet').onclick = () => requestCloseSheets('close-button');
-$('#dialogScrim').onclick = () => hideDialog(true);
-$('#confirmCancel').onclick = () => hideDialog(true);
-$('#confirmOk').onclick = () => { const cb = dialogConfirmAction; hideDialog(false); if (cb)
-    cb(); };
-document.addEventListener('input', e => { if ((e.target instanceof Element && e.target.closest('.sheet.open')) && sheetMode === 'input')
-    sheetDirty = true; });
-document.addEventListener('submit', e => { const form = e.target; if (!(form instanceof HTMLFormElement))
-    return; const now = Date.now(), last = Number(form.dataset.lastSubmitAt) || 0; if (now - last < 500) {
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    return;
-} form.dataset.lastSubmitAt = String(now); }, true);
-window.addEventListener('popstate', () => { if (suppressSheetPop) {
-    suppressSheetPop = false;
-    const y = pendingScrollRestore;
-    pendingScrollRestore = null;
-    if (y != null)
-        requestAnimationFrame(() => window.scrollTo(0, y));
-    return;
-} if ($$('.sheet.open').length)
-    requestCloseSheets('back', true); });
-$$('[data-profile-action]').forEach(b => b.onclick = () => { const x = b.dataset.profileAction; if (x === 'cloud-auth')
-    openCloudAccountSheet();
-else if (x === 'appearance')
-    openSheet('#appearanceSheet');
-else if (x === 'pension-settings')
-    openPensionSettings();
-else if (x === 'backup')
-    openBackupHub();
-else if (x === 'insurance')
-    openInsuranceHub();
-else if (x === 'ai-strategy')
-    openAiStrategy();
-else if (x === 'kis')
-    openKisSettings();
-else if (x === 'advanced')
-    openAdvancedSettings(); });
-$('#themeToggle').onchange = (e) => { setting().theme = e.target.checked ? 'dark' : 'light'; persist(); applyTheme(); };
-$('#fabToggle').onchange = (e) => { setting().fab = false; e.target.checked = false; persist(); applyTheme(); };
-$('#hapticToggle').onchange = (e) => { setting().haptics = e.target.checked; if (!persist())
-    return; applyTheme(); if (setting().haptics)
-    haptic('light'); toast(setting().haptics ? '터치 진동을 켰어요.' : '터치 진동을 껐어요.'); };
-$('#backupInput').onchange = async (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f)
-    await restoreBackupFile(f); };
-$('#initialImportInput').onchange = async (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f)
-    await importInitialMergeFile(f); };
-$('#accentChoices').onclick = (e) => { const b = (e.target instanceof Element ? e.target : null)?.closest('[data-value]'); if (!b)
-    return; setting().accent = b.dataset.value; persist(); applyTheme(); };
-$('#runDiagnostics').onclick = () => { let storageOk = true; try {
-    localStorage.setItem('__asset_os_test__', '1');
-    localStorage.removeItem('__asset_os_test__');
-}
-catch {
-    storageOk = false;
-} const issues = typeof systemIntegrityIssues === 'function' ? systemIntegrityIssues() : [], ok = storageOk && !issues.length; $('#localStatus').textContent = storageOk ? '정상' : '확인 필요'; $('#localStatus').className = 'diagnostic-value ' + (storageOk ? 'ok' : 'wait'); updateDiagnostics(); toast(ok ? '저장·금융 교차검증이 정상입니다.' : storageOk ? `금융 데이터 확인 필요 · ${issues.length}건` : '로컬 저장 권한을 확인해 주세요.'); };
-// Capture before an action replaces its button; existing save haptics are coalesced.
-document.addEventListener('click', e => {
-    const button = (e.target instanceof Element ? e.target : null)?.closest('button');
-    if (!e.isTrusted || !button || button.disabled || button.getAttribute('aria-disabled') === 'true')
+        await waitForStorageSave();
+        if (sheetMode === 'input' && sheetDirty) {
+            showNotice('다른 화면에서 변경됨', '작성 중인 내용은 유지했습니다. 다른 화면의 원장이 변경되어 현재 입력을 바로 저장할 수 없습니다. 내용을 확인한 뒤 최신 원장을 다시 열어 주세요.');
+            return;
+        }
+        try {
+            const saved = await assetLocalDatabase.read();
+            if (saved)
+                applyExternalSavedState({ data: saved.data });
+        }
+        catch (error) {
+            showNotice('원장 확인 필요', error instanceof Error ? error.message : '기기 저장소를 확인해 주세요.');
+        }
+    });
+    for (const eventName of ['click', 'submit', 'input', 'change'])
+        document.addEventListener(eventName, event => { if (storageSavePending || storageCommandPending) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+        } }, true);
+    $$('.nav').forEach(b => b.onclick = () => nav(b.dataset.root));
+    window.addEventListener('hashchange', () => { resetTransientPanels(); window.scrollTo(0, 0); render(); });
+    $('#profile').onclick = () => { refreshCloudProfileUI(); openSheet('#profileSheet'); };
+    $('#scrim').onclick = () => requestCloseSheets('scrim');
+    $('#closeFormSheet').onclick = () => requestCloseSheets('close-button');
+    $('#dialogScrim').onclick = () => hideDialog(true);
+    $('#confirmCancel').onclick = () => hideDialog(true);
+    $('#confirmOk').onclick = () => { const cb = dialogConfirmAction; hideDialog(false); if (cb)
+        cb(); };
+    document.addEventListener('input', e => { if ((e.target instanceof Element && e.target.closest('.sheet.open')) && sheetMode === 'input')
+        sheetDirty = true; });
+    document.addEventListener('submit', e => { const form = e.target; if (!(form instanceof HTMLFormElement))
+        return; const now = Date.now(), last = Number(form.dataset.lastSubmitAt) || 0; if (now - last < 500) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
         return;
-    if (button.matches('.nav,.menurow,.swatch,.primary,.integrated-record-primary,.integrated-form-save,.entry-continue,.pension-contribution-batch-open,[data-new-tx],[data-integrated-new],[data-profile-action],#profile,#alertBell,#confirmOk'))
-        haptic('light');
-}, true);
-$('#fab').onclick = actions;
-document.addEventListener('keydown', e => { if (e.key === 'Escape') {
-    if (!$('#confirmDialog').hidden)
-        hideDialog(true);
-    else
-        requestCloseSheets('escape');
-} });
-document.addEventListener('click', e => { const row = (e.target instanceof Element ? e.target : null)?.closest('[data-pension-archive-tx]'); if (row)
-    openPensionArchiveRecord(row.dataset.pensionArchiveTx); });
-document.addEventListener('click', e => { const allRefresh = (e.target instanceof Element ? e.target : null)?.closest('[data-investment-refresh-all]'); if (allRefresh)
-    refreshAllInvestments(); const failedRefresh = (e.target instanceof Element ? e.target : null)?.closest('[data-investment-refresh-failed]'); if (failedRefresh)
-    refreshFailedInvestments(); const refresh = (e.target instanceof Element ? e.target : null)?.closest('[data-pension-kis-refresh]'); if (refresh)
-    refreshPensionKisScope(); const taxProfile = (e.target instanceof Element ? e.target : null)?.closest('[data-pension-tax-profile]'); if (taxProfile)
-    openPensionTaxProfileForm(); const risk = (e.target instanceof Element ? e.target : null)?.closest('[data-pension-risk-classify]'); if (risk)
-    openPensionRiskClassificationForm(); const order = (e.target instanceof Element ? e.target : null)?.closest('[data-pension-kis-order]'); if (order)
-    openPensionKisOrderDetail(order.dataset.pensionKisOrder); const right = (e.target instanceof Element ? e.target : null)?.closest('[data-pension-kis-right]'); if (right)
-    openPensionKisRightDetail(right.dataset.pensionKisRight); });
-assetOsRuntimeApi = { version: APP_VERSION, schemaVersion: SCHEMA_VERSION, getState: () => clone(state), replaceState: (data) => { state = normalizeState(data); persist(false); render(); return clone(state); }, reset: resetLiveData, metrics: (id) => accountMetrics(state.accounts.find(a => a.id === id) || currentAccount()), replay: (account, txs) => replay(normalizeState({ settings: seed.settings, policies: seed.policies, accounts: [account] }).accounts[0], txs), normalize: normalizeState, ymd, addYears, applyReconcileSnapshot: (accountId, snapshot) => { const a = state.accounts.find(x => x.id === accountId); const r = applyReconcileSnapshot(a, snapshot); if (r.ok && !persist(false))
-        return { ok: false, error: 'PERSIST_FAILED' }; return r; }, findDuplicateTransaction: (accountId, tx) => findDuplicateTransaction(state.accounts.find(x => x.id === accountId), tx), annualContributionTotal: (id) => annualContributionTotal(state.accounts.find(a => a.id === id) || currentAccount()), registerHoldingFromBalance: (accountId, input) => { const a = state.accounts.find(x => x.id === accountId); const r = registerHoldingFromBalance(a, input); if (r.ok && !persist(false))
-        return { ok: false, error: 'PERSIST_FAILED' }; return r; }, applyHoldingRegistration: (accountId, draft) => applyHoldingRegistrationToAccount(state.accounts.find(x => x.id === accountId), draft), openArchivedAccountDetail, applyPolicyVersion: (kind, id) => applyPolicyVersion(kind, id), assignPolicyToAccount: (accountId, policyId, effectiveFrom) => { const r = assignPolicyToAccount(accountId, policyId, effectiveFrom || ymd()); persist(false); return r; }, taxableBreakdown: (id) => taxableBreakdown(state.accounts.find(a => a.id === id) || currentAccount()), consistencyIssues: (id) => clone(consistencyIssues(state.accounts.find(a => a.id === id) || currentAccount())), allIsaIssues: () => clone(allIsaIssues()), dividendCompositionModel: (accountId) => clone(compositionModel(state.accounts.find(a => a.id === accountId) || currentAccount())), dividendYieldFor: (accountId, key, period, amount) => dividendYieldFor(state.accounts.find(a => a.id === accountId) || currentAccount(), key, period, amount), transactionHistory: (accountId, txId) => clone((state.accounts.find(a => a.id === accountId) || currentAccount()).transactions.find(t => t.id === txId)?.revisions || []), persist: () => persist(false), isCurrentAccount: (a) => isCurrentAccount(a), isPastAccount: (a) => isPastAccount(a), transactionNumericError: (t) => transactionNumericError(t), isaTransactionDateError: (id, date) => isaTransactionDateError(state.accounts.find(a => a.id === id), date), pensionTransactionDateError: (id, date) => pensionTransactionDateError(pensionAccount(id), date), visibleHoldingCount: (id) => visibleHoldingCount(state.accounts.find(a => a.id === id)), setTransactionLimit: (n) => { transactionDisplayLimit = Number(n) || 50; render(); }, pensionContributionBatchCandidate: (input) => clone(pensionContributionBatchCandidate(clone(input || {}))), applyPensionContributionBatch: (input) => clone(applyPensionContributionBatch(clone(input || {}))), pensionSummary: (year) => clone(pensionSummary(year || String(businessYear()))), pensionMonthly: (year) => clone(pensionMonthly(year || String(businessYear()))), pensionAssetMetrics: (scope) => clone(pensionAssetMetrics(scope || pensionAssetScope())), pensionAssetModel: (scope, lens) => clone(pensionAssetModel(scope || pensionAssetScope(), lens || pensionAssetLens())), pensionRiskMetrics: () => clone(pensionRiskMetrics()), pensionIncomeSummary: (scope) => clone(pensionIncomeSummary(scope || pensionAssetScope())), pensionIncomeYears: (scope) => clone(pensionIncomeYears(scope || pensionAssetScope())), pensionIncomePrincipalAt: (scope, key, mode) => pensionIncomePrincipalAt(scope || pensionAssetScope(), key || '', mode || ''), pensionProjection: () => clone(pensionProjection()), pensionProjectionSeries: () => clone(pensionProjectionSeries()), pensionPerformanceContribution: (scope) => clone(pensionPerformanceContribution(scope || pensionAssetScope())), pensionSnapshotRows: (scope) => clone(pensionSnapshotRows(scope || 'all')), pensionAnalysisDisplayRows: (scope, period) => clone(pensionAnalysisDisplayRows(scope || 'all', period || '1y')), integratedSummary: (month) => clone(integratedSummary(month)), integratedReplay: () => clone(integratedReplay()), integratedIssues: () => clone(integratedIssues()), systemIntegrityIssues: () => clone(systemIntegrityIssues()), financialProductEventIssues: () => clone(financialProductEventIssues()), financeProductEventError: (e) => financeProductEventError(clone(e)), integratedStore: () => clone(integratedStore()), integratedValidateCandidate: (candidate, editingId) => integratedValidateCandidate(clone(candidate), editingId || ''), integratedRowsForMonth: (month) => clone(integratedRowsForMonth(month)), integratedFinancialModel: () => clone(integratedFinancialModel()), historicalFinancialModel: (date) => clone(historicalFinancialModel(date || localYmd())), financialGrowthBreakdown: (start, end) => clone(financialGrowthBreakdown(start, end)), financialGrowthSeries: (period) => clone(financialGrowthSeries(period || '6m')), backupPayload: () => clone(backupPayload()), backupZip: () => createBackupZipBytes(), parseBackupZip: (bytes) => clone(parseBackupZipBytes(bytes)), validateBackupPayload: (p) => clone(validateBackupPayload(clone(p))), syncCurrentIsaSnapshots: () => { syncCurrentIsaSnapshots(); return clone(state.accounts.filter(isCurrentAccount).map(a => ({ id: a.id, snapshots: a.assetSnapshots }))); }, syncCurrentPensionSnapshot: () => { syncCurrentPensionSnapshot(); return clone(state.pension.assetSnapshots); }, financialProducts: () => clone(financialProducts()), financeProductBalance: (id) => financeProductBalance(financialProduct(id)), financeProductBenefitBalance: (id) => financeProductBenefitBalance(financialProduct(id)), financeProductRecentInterest: (id) => clone(financeProductRecentInterest(financialProduct(id))), financeProductEvents: (id) => clone(financeProductEvents(id)), financeSchedules: () => clone(financeSchedules()), scheduleOccurrences: (month) => clone(scheduleOccurrences(month || integratedSelectedMonth())), scheduleUrgent: () => clone(scheduleUrgentOccurrences()), centralPensionRows: (year) => clone(centralPensionContributionRows(year || '')), centralIsaRows: (year) => clone(centralIsaContributionRows(year || '')), completeScheduleOccurrence: (id, date, amount, pensionTarget, isaTarget) => completeScheduleOccurrence(id, date, amount, pensionTarget, isaTarget), resolveSchedulePensionAccount: (id, target, date) => resolveSchedulePensionAccount(financeSchedules().find(x => x.id === id), target, date), resolveScheduleIsaAccount: (id, target, date) => resolveScheduleIsaAccount(financeSchedules().find(x => x.id === id), target, date), pensionAccountCash: (id) => pensionAccountCash(id), pensionAccountExposure: (id) => clone(pensionAccountExposure(id)), createPensionAccount: (input) => clone(createPensionAccount(clone(input || {}))), archivePensionAccount: (id) => clone(archivePensionAccount(id)), reopenPensionAccount: (id) => clone(reopenPensionAccount(id)), runtimeErrors: () => runtimeErrors, pensionTransactions: (scope) => clone(pensionTransactions(scope || 'all')), pensionTransactionIssues: (txs) => clone(pensionTransactionIssues(txs ? clone(txs) : pensionStore().transactions)), pensionTransactionSave: (tx, id) => { const r = pensionTransactionSave(clone(tx), id || ''); if (r.ok)
-        persist(false); return clone(r); }, pensionTransactionDelete: (id) => { const r = pensionTransactionDelete(id); if (r)
-        persist(false); return r; }, investmentRole: (h) => investmentRoleForHolding(h), policyForYear: (kind, year) => clone(policyForYear(kind, year)), isaComposition: (id) => clone(compositionModel(state.accounts.find(a => a.id === id) || currentAccount())), pensionCounts: () => ({ accounts: state.pension.accounts.length, contributions: state.pension.contributions.length, transactions: state.pension.transactions.length, holdings: state.pension.holdings.length, incomes: state.pension.incomes.length }), isaAnalysisDisplayRows: (period) => clone(isaAnalysisDisplayRows(currentAccount(), period || '1y')), counts: () => ({ accounts: state.accounts.length, holdings: state.accounts.reduce((sum, a) => sum + a.holdings.length, 0), dividends: state.accounts.reduce((sum, a) => sum + dividends(a).length, 0) }) };
-assetOsRuntimeApi.brokerKis = {
-    store: () => clone(state.brokerKis),
-    issues: () => clone(brokerKisIssues(state.brokerKis)),
-    importOrders: (rows, kind, accountId, fetchedAt, orderSyncThrough) => { const a = pensionAccount(accountId); if (!a || a.kind !== brokerKisKind(kind))
-        return { ok: false, error: 'KIS_ACCOUNT_LINK_MISMATCH' }; const before = clone(state.brokerKis), result = brokerKisImportOrderSnapshots(state.brokerKis, clone(rows || []), kind, accountId, fetchedAt || new Date().toISOString(), orderSyncThrough || ''); if (result.error) {
-        state.brokerKis = before;
-        return { ok: false, ...clone(result) };
-    } if (!persist(false)) {
-        state.brokerKis = before;
-        return { ok: false, error: 'PERSIST_FAILED' };
-    } return { ok: true, ...clone(result) }; },
-    importBalance: (input, kind, accountId, fetchedAt) => { const a = pensionAccount(accountId); if (!a || a.kind !== brokerKisKind(kind))
-        return { ok: false, error: 'KIS_ACCOUNT_LINK_MISMATCH' }; const before = clone(state.brokerKis), result = brokerKisImportBalanceSnapshot(state.brokerKis, clone(input || {}), kind, accountId, fetchedAt || new Date().toISOString()); if (!result.ok)
-        return result; if (!persist(false)) {
-        state.brokerKis = before;
-        return { ok: false, error: 'PERSIST_FAILED' };
-    } return clone(result); },
-    linkInstrument: (input) => { const h = pensionHoldingById(input?.holdingId); if (!h || h.accountId !== input?.accountId)
-        return { ok: false, error: 'KIS_INSTRUMENT_LINK_MISMATCH' }; const before = clone(state.brokerKis), result = brokerKisLinkInstrument(state.brokerKis, clone(input || {})); if (!result.ok)
-        return result; if (!persist(false)) {
-        state.brokerKis = before;
-        return { ok: false, error: 'PERSIST_FAILED' };
-    } return clone(result); },
-    ledgerDraft: (orderKey) => clone(brokerKisLedgerDraft(state.brokerKis, orderKey)),
-    matchOrder: (orderKey, transactionId) => { if (!pensionStore().transactions.some(x => x.id === transactionId))
-        return { ok: false, error: 'PENSION_TRANSACTION_NOT_FOUND' }; const tx = pensionStore().transactions.find(x => x.id === transactionId), before = clone(state.brokerKis), result = brokerKisMatchOrder(state.brokerKis, orderKey, transactionId, new Date().toISOString(), tx.qty); if (!result.ok)
-        return result; if (!persist(false)) {
-        state.brokerKis = before;
-        return { ok: false, error: 'PERSIST_FAILED' };
-    } return clone(result); },
-    importRights: (rows, kind, accountId, fetchedAt) => { const a = pensionAccount(accountId); if (!a || a.kind !== brokerKisKind(kind))
-        return { ok: false, error: 'KIS_ACCOUNT_LINK_MISMATCH' }; const before = clone(state.brokerKis), result = brokerKisImportRights(state.brokerKis, clone(rows || []), kind, accountId, fetchedAt || new Date().toISOString()); if (result.error) {
-        state.brokerKis = before;
-        return { ok: false, ...clone(result) };
-    } if (!persist(false)) {
-        state.brokerKis = before;
-        return { ok: false, error: 'PERSIST_FAILED' };
-    } return { ok: true, ...clone(result) }; },
-    latestBalance: (kind, accountId) => clone(brokerKisLatestBalance(state.brokerKis, kind, accountId)),
-    history: (kind) => clone(state.brokerKis.history?.[brokerKisKind(kind)] || brokerKisEmptyHistory(kind)),
-    beginHistory: (input) => { const before = clone(state.brokerKis), result = brokerKisBeginHistory(state.brokerKis, clone(input || {})); if (!result.ok)
-        return result; if (!persist(false)) {
-        state.brokerKis = before;
-        return { ok: false, error: 'PERSIST_FAILED' };
-    } return clone(result); },
-    updateHistory: (input) => { const before = clone(state.brokerKis), result = brokerKisUpdateHistory(state.brokerKis, clone(input || {})); if (!result.ok)
-        return result; if (!persist(false)) {
-        state.brokerKis = before;
-        return { ok: false, error: 'PERSIST_FAILED' };
-    } return clone(result); },
-    completeSync: (kind, accountId, completedAt) => { const a = pensionAccount(accountId); if (!a || a.kind !== brokerKisKind(kind))
-        return { ok: false, error: 'KIS_ACCOUNT_LINK_MISMATCH' }; const before = clone(state.brokerKis), connection = brokerKisCompleteSync(state.brokerKis, kind, accountId, completedAt || new Date().toISOString()); if (!persist(false)) {
-        state.brokerKis = before;
-        return { ok: false, error: 'PERSIST_FAILED' };
-    } return { ok: true, connection: clone(connection) }; },
-    failSync: (kind, accountId, error, failedAt) => { const before = clone(state.brokerKis), connection = brokerKisFailSync(state.brokerKis, kind, accountId, error, failedAt || new Date().toISOString()); if (!persist(false)) {
-        state.brokerKis = before;
-        return { ok: false, error: 'PERSIST_FAILED' };
-    } return { ok: false, error: connection.lastError, connection: clone(connection) }; }
-};
-assetOsRuntimeApi.brokerKisClient = brokerKisClient;
-if (QA_MODE)
-    window.__assetOS = assetOsRuntimeApi;
-else
-    try {
-        delete window.__assetOS;
+    } form.dataset.lastSubmitAt = String(now); }, true);
+    window.addEventListener('popstate', () => { if (suppressSheetPop) {
+        suppressSheetPop = false;
+        const y = pendingScrollRestore;
+        pendingScrollRestore = null;
+        if (y != null)
+            requestAnimationFrame(() => window.scrollTo(0, y));
+        return;
+    } if ($$('.sheet.open').length)
+        requestCloseSheets('back', true); });
+    $$('[data-profile-action]').forEach(b => b.onclick = async () => { const x = b.dataset.profileAction; if (x === 'cloud-auth')
+        openCloudAccountSheet();
+    else if (x === 'appearance')
+        openSheet('#appearanceSheet');
+    else if (x === 'pension-settings')
+        openPensionSettings();
+    else if (x === 'backup')
+        openBackupHub();
+    else if (x === 'insurance')
+        openInsuranceHub();
+    else if (x === 'ai-strategy')
+        openAiStrategy();
+    else if (x === 'kis')
+        (await openKisSettings());
+    else if (x === 'advanced')
+        openAdvancedSettings(); });
+    $('#themeToggle').onchange = async (e) => { setting().theme = e.target.checked ? 'dark' : 'light'; (await persist()); applyTheme(); };
+    $('#fabToggle').onchange = async (e) => { setting().fab = false; e.target.checked = false; (await persist()); applyTheme(); };
+    $('#hapticToggle').onchange = async (e) => { setting().haptics = e.target.checked; if (!(await persist()))
+        return; applyTheme(); if (setting().haptics)
+        haptic('light'); toast(setting().haptics ? '터치 진동을 켰어요.' : '터치 진동을 껐어요.'); };
+    $('#backupInput').onchange = async (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f)
+        await restoreBackupFile(f); };
+    $('#initialImportInput').onchange = async (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f)
+        await importInitialMergeFile(f); };
+    $('#accentChoices').onclick = async (e) => { const b = (e.target instanceof Element ? e.target : null)?.closest('[data-value]'); if (!b)
+        return; setting().accent = b.dataset.value; (await persist()); applyTheme(); };
+    $('#runDiagnostics').onclick = async () => { const storageOk = await assetLocalDatabase.probe(); const issues = typeof systemIntegrityIssues === 'function' ? systemIntegrityIssues() : [], ok = storageOk && !issues.length; $('#localStatus').textContent = storageOk ? '정상' : '확인 필요'; $('#localStatus').className = 'diagnostic-value ' + (storageOk ? 'ok' : 'wait'); updateDiagnostics(); toast(ok ? '저장·금융 교차검증이 정상입니다.' : storageOk ? `금융 데이터 확인 필요 · ${issues.length}건` : '로컬 저장 권한을 확인해 주세요.'); };
+    // Capture before an action replaces its button; existing save haptics are coalesced.
+    document.addEventListener('click', e => {
+        const button = (e.target instanceof Element ? e.target : null)?.closest('button');
+        if (!e.isTrusted || !button || button.disabled || button.getAttribute('aria-disabled') === 'true')
+            return;
+        if (button.matches('.nav,.menurow,.swatch,.primary,.integrated-record-primary,.integrated-form-save,.entry-continue,.pension-contribution-batch-open,[data-new-tx],[data-integrated-new],[data-profile-action],#profile,#alertBell,#confirmOk'))
+            haptic('light');
+    }, true);
+    $('#fab').onclick = actions;
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') {
+        if (!$('#confirmDialog').hidden)
+            hideDialog(true);
+        else
+            requestCloseSheets('escape');
+    } });
+    document.addEventListener('click', e => { const row = (e.target instanceof Element ? e.target : null)?.closest('[data-pension-archive-tx]'); if (row)
+        openPensionArchiveRecord(row.dataset.pensionArchiveTx); });
+    document.addEventListener('click', e => { const allRefresh = (e.target instanceof Element ? e.target : null)?.closest('[data-investment-refresh-all]'); if (allRefresh)
+        refreshAllInvestments(); const failedRefresh = (e.target instanceof Element ? e.target : null)?.closest('[data-investment-refresh-failed]'); if (failedRefresh)
+        refreshFailedInvestments(); const refresh = (e.target instanceof Element ? e.target : null)?.closest('[data-pension-kis-refresh]'); if (refresh)
+        refreshPensionKisScope(); const taxProfile = (e.target instanceof Element ? e.target : null)?.closest('[data-pension-tax-profile]'); if (taxProfile)
+        openPensionTaxProfileForm(); const risk = (e.target instanceof Element ? e.target : null)?.closest('[data-pension-risk-classify]'); if (risk)
+        openPensionRiskClassificationForm(); const order = (e.target instanceof Element ? e.target : null)?.closest('[data-pension-kis-order]'); if (order)
+        openPensionKisOrderDetail(order.dataset.pensionKisOrder); const right = (e.target instanceof Element ? e.target : null)?.closest('[data-pension-kis-right]'); if (right)
+        openPensionKisRightDetail(right.dataset.pensionKisRight); });
+    assetOsRuntimeApi = { version: APP_VERSION, schemaVersion: SCHEMA_VERSION, getState: () => clone(state), replaceState: async (data) => { state = normalizeState(data); (await persist(false)); render(); return clone(state); }, reset: resetLiveData, metrics: (id) => accountMetrics(state.accounts.find(a => a.id === id) || currentAccount()), replay: (account, txs) => replay(normalizeState({ settings: seed.settings, policies: seed.policies, accounts: [account] }).accounts[0], txs), normalize: normalizeState, ymd, addYears, applyReconcileSnapshot: async (accountId, snapshot) => { const a = state.accounts.find(x => x.id === accountId); const r = (await applyReconcileSnapshot(a, snapshot)); if (r.ok && !(await persist(false)))
+            return { ok: false, error: 'PERSIST_FAILED' }; return r; }, findDuplicateTransaction: (accountId, tx) => findDuplicateTransaction(state.accounts.find(x => x.id === accountId), tx), annualContributionTotal: (id) => annualContributionTotal(state.accounts.find(a => a.id === id) || currentAccount()), registerHoldingFromBalance: async (accountId, input) => { const a = state.accounts.find(x => x.id === accountId); const r = (await registerHoldingFromBalance(a, input)); if (r.ok && !(await persist(false)))
+            return { ok: false, error: 'PERSIST_FAILED' }; return r; }, applyHoldingRegistration: async (accountId, draft) => (await applyHoldingRegistrationToAccount(state.accounts.find(x => x.id === accountId), draft)), openArchivedAccountDetail, applyPolicyVersion: (kind, id) => applyPolicyVersion(kind, id), assignPolicyToAccount: async (accountId, policyId, effectiveFrom) => { const r = (await assignPolicyToAccount(accountId, policyId, effectiveFrom || ymd())); (await persist(false)); return r; }, taxableBreakdown: (id) => taxableBreakdown(state.accounts.find(a => a.id === id) || currentAccount()), consistencyIssues: (id) => clone(consistencyIssues(state.accounts.find(a => a.id === id) || currentAccount())), allIsaIssues: () => clone(allIsaIssues()), dividendCompositionModel: (accountId) => clone(compositionModel(state.accounts.find(a => a.id === accountId) || currentAccount())), dividendYieldFor: (accountId, key, period, amount) => dividendYieldFor(state.accounts.find(a => a.id === accountId) || currentAccount(), key, period, amount), transactionHistory: (accountId, txId) => clone((state.accounts.find(a => a.id === accountId) || currentAccount()).transactions.find(t => t.id === txId)?.revisions || []), persist: async () => (await persist(false)), isCurrentAccount: (a) => isCurrentAccount(a), isPastAccount: (a) => isPastAccount(a), transactionNumericError: (t) => transactionNumericError(t), isaTransactionDateError: (id, date) => isaTransactionDateError(state.accounts.find(a => a.id === id), date), pensionTransactionDateError: (id, date) => pensionTransactionDateError(pensionAccount(id), date), visibleHoldingCount: (id) => visibleHoldingCount(state.accounts.find(a => a.id === id)), setTransactionLimit: (n) => { transactionDisplayLimit = Number(n) || 50; render(); }, pensionContributionBatchCandidate: (input) => clone(pensionContributionBatchCandidate(clone(input || {}))), applyPensionContributionBatch: (input) => clone(applyPensionContributionBatch(clone(input || {}))), pensionSummary: (year) => clone(pensionSummary(year || String(businessYear()))), pensionMonthly: (year) => clone(pensionMonthly(year || String(businessYear()))), pensionAssetMetrics: (scope) => clone(pensionAssetMetrics(scope || pensionAssetScope())), pensionAssetModel: (scope, lens) => clone(pensionAssetModel(scope || pensionAssetScope(), lens || pensionAssetLens())), pensionRiskMetrics: () => clone(pensionRiskMetrics()), pensionIncomeSummary: (scope) => clone(pensionIncomeSummary(scope || pensionAssetScope())), pensionIncomeYears: (scope) => clone(pensionIncomeYears(scope || pensionAssetScope())), pensionIncomePrincipalAt: (scope, key, mode) => pensionIncomePrincipalAt(scope || pensionAssetScope(), key || '', mode || ''), pensionProjection: () => clone(pensionProjection()), pensionProjectionSeries: () => clone(pensionProjectionSeries()), pensionPerformanceContribution: (scope) => clone(pensionPerformanceContribution(scope || pensionAssetScope())), pensionSnapshotRows: (scope) => clone(pensionSnapshotRows(scope || 'all')), pensionAnalysisDisplayRows: (scope, period) => clone(pensionAnalysisDisplayRows(scope || 'all', period || '1y')), integratedSummary: (month) => clone(integratedSummary(month)), integratedReplay: () => clone(integratedReplay()), integratedIssues: () => clone(integratedIssues()), systemIntegrityIssues: () => clone(systemIntegrityIssues()), financialProductEventIssues: () => clone(financialProductEventIssues()), financeProductEventError: (e) => financeProductEventError(clone(e)), integratedStore: () => clone(integratedStore()), integratedValidateCandidate: (candidate, editingId) => integratedValidateCandidate(clone(candidate), editingId || ''), integratedRowsForMonth: (month) => clone(integratedRowsForMonth(month)), integratedFinancialModel: () => clone(integratedFinancialModel()), historicalFinancialModel: (date) => clone(historicalFinancialModel(date || localYmd())), financialGrowthBreakdown: (start, end) => clone(financialGrowthBreakdown(start, end)), financialGrowthSeries: (period) => clone(financialGrowthSeries(period || '6m')), backupPayload: () => clone(backupPayload()), backupZip: () => createBackupZipBytes(), parseBackupZip: (bytes) => clone(parseBackupZipBytes(bytes)), validateBackupPayload: (p) => clone(validateBackupPayload(clone(p))), syncCurrentIsaSnapshots: () => { syncCurrentIsaSnapshots(); return clone(state.accounts.filter(isCurrentAccount).map(a => ({ id: a.id, snapshots: a.assetSnapshots }))); }, syncCurrentPensionSnapshot: () => { syncCurrentPensionSnapshot(); return clone(state.pension.assetSnapshots); }, financialProducts: () => clone(financialProducts()), financeProductBalance: (id) => financeProductBalance(financialProduct(id)), financeProductBenefitBalance: (id) => financeProductBenefitBalance(financialProduct(id)), financeProductRecentInterest: (id) => clone(financeProductRecentInterest(financialProduct(id))), financeProductEvents: (id) => clone(financeProductEvents(id)), financeSchedules: () => clone(financeSchedules()), scheduleOccurrences: (month) => clone(scheduleOccurrences(month || integratedSelectedMonth())), scheduleUrgent: () => clone(scheduleUrgentOccurrences()), centralPensionRows: (year) => clone(centralPensionContributionRows(year || '')), centralIsaRows: (year) => clone(centralIsaContributionRows(year || '')), completeScheduleOccurrence: async (id, date, amount, pensionTarget, isaTarget) => (await completeScheduleOccurrence(id, date, amount, pensionTarget, isaTarget)), resolveSchedulePensionAccount: (id, target, date) => resolveSchedulePensionAccount(financeSchedules().find(x => x.id === id), target, date), resolveScheduleIsaAccount: (id, target, date) => resolveScheduleIsaAccount(financeSchedules().find(x => x.id === id), target, date), pensionAccountCash: (id) => pensionAccountCash(id), pensionAccountExposure: (id) => clone(pensionAccountExposure(id)), createPensionAccount: (input) => clone(createPensionAccount(clone(input || {}))), archivePensionAccount: (id) => clone(archivePensionAccount(id)), reopenPensionAccount: (id) => clone(reopenPensionAccount(id)), runtimeErrors: () => runtimeErrors, pensionTransactions: (scope) => clone(pensionTransactions(scope || 'all')), pensionTransactionIssues: (txs) => clone(pensionTransactionIssues(txs ? clone(txs) : pensionStore().transactions)), pensionTransactionSave: async (tx, id) => { const r = (await pensionTransactionSave(clone(tx), id || '')); if (r.ok && !(await persist(false)))
+            return { ok: false, error: 'PERSIST_FAILED' }; return clone(r); }, pensionTransactionDelete: async (id) => { const r = (await pensionTransactionDelete(id)); if (r && !(await persist(false)))
+            return false; return r; }, investmentRole: (h) => investmentRoleForHolding(h), policyForYear: (kind, year) => clone(policyForYear(kind, year)), isaComposition: (id) => clone(compositionModel(state.accounts.find(a => a.id === id) || currentAccount())), pensionCounts: () => ({ accounts: state.pension.accounts.length, contributions: state.pension.contributions.length, transactions: state.pension.transactions.length, holdings: state.pension.holdings.length, incomes: state.pension.incomes.length }), isaAnalysisDisplayRows: (period) => clone(isaAnalysisDisplayRows(currentAccount(), period || '1y')), counts: () => ({ accounts: state.accounts.length, holdings: state.accounts.reduce((sum, a) => sum + a.holdings.length, 0), dividends: state.accounts.reduce((sum, a) => sum + dividends(a).length, 0) }) };
+    assetOsRuntimeApi.brokerKis = {
+        store: () => clone(state.brokerKis),
+        issues: () => clone(brokerKisIssues(state.brokerKis)),
+        importOrders: async (rows, kind, accountId, fetchedAt, orderSyncThrough) => { const a = pensionAccount(accountId); if (!a || a.kind !== brokerKisKind(kind))
+            return { ok: false, error: 'KIS_ACCOUNT_LINK_MISMATCH' }; const before = clone(state.brokerKis), result = brokerKisImportOrderSnapshots(state.brokerKis, clone(rows || []), kind, accountId, fetchedAt || new Date().toISOString(), orderSyncThrough || ''); if (result.error) {
+            state.brokerKis = before;
+            return { ok: false, ...clone(result) };
+        } if (!(await persist(false))) {
+            state.brokerKis = before;
+            return { ok: false, error: 'PERSIST_FAILED' };
+        } return { ok: true, ...clone(result) }; },
+        importBalance: async (input, kind, accountId, fetchedAt) => { const a = pensionAccount(accountId); if (!a || a.kind !== brokerKisKind(kind))
+            return { ok: false, error: 'KIS_ACCOUNT_LINK_MISMATCH' }; const before = clone(state.brokerKis), result = brokerKisImportBalanceSnapshot(state.brokerKis, clone(input || {}), kind, accountId, fetchedAt || new Date().toISOString()); if (!result.ok)
+            return result; if (!(await persist(false))) {
+            state.brokerKis = before;
+            return { ok: false, error: 'PERSIST_FAILED' };
+        } return clone(result); },
+        linkInstrument: async (input) => { const h = pensionHoldingById(input?.holdingId); if (!h || h.accountId !== input?.accountId)
+            return { ok: false, error: 'KIS_INSTRUMENT_LINK_MISMATCH' }; const before = clone(state.brokerKis), result = brokerKisLinkInstrument(state.brokerKis, clone(input || {})); if (!result.ok)
+            return result; if (!(await persist(false))) {
+            state.brokerKis = before;
+            return { ok: false, error: 'PERSIST_FAILED' };
+        } return clone(result); },
+        ledgerDraft: (orderKey) => clone(brokerKisLedgerDraft(state.brokerKis, orderKey)),
+        matchOrder: async (orderKey, transactionId) => { if (!pensionStore().transactions.some(x => x.id === transactionId))
+            return { ok: false, error: 'PENSION_TRANSACTION_NOT_FOUND' }; const tx = pensionStore().transactions.find(x => x.id === transactionId), before = clone(state.brokerKis), result = brokerKisMatchOrder(state.brokerKis, orderKey, transactionId, new Date().toISOString(), tx.qty); if (!result.ok)
+            return result; if (!(await persist(false))) {
+            state.brokerKis = before;
+            return { ok: false, error: 'PERSIST_FAILED' };
+        } return clone(result); },
+        importRights: async (rows, kind, accountId, fetchedAt) => { const a = pensionAccount(accountId); if (!a || a.kind !== brokerKisKind(kind))
+            return { ok: false, error: 'KIS_ACCOUNT_LINK_MISMATCH' }; const before = clone(state.brokerKis), result = brokerKisImportRights(state.brokerKis, clone(rows || []), kind, accountId, fetchedAt || new Date().toISOString()); if (result.error) {
+            state.brokerKis = before;
+            return { ok: false, ...clone(result) };
+        } if (!(await persist(false))) {
+            state.brokerKis = before;
+            return { ok: false, error: 'PERSIST_FAILED' };
+        } return { ok: true, ...clone(result) }; },
+        latestBalance: (kind, accountId) => clone(brokerKisLatestBalance(state.brokerKis, kind, accountId)),
+        history: (kind) => clone(state.brokerKis.history?.[brokerKisKind(kind)] || brokerKisEmptyHistory(kind)),
+        beginHistory: async (input) => { const before = clone(state.brokerKis), result = brokerKisBeginHistory(state.brokerKis, clone(input || {})); if (!result.ok)
+            return result; if (!(await persist(false))) {
+            state.brokerKis = before;
+            return { ok: false, error: 'PERSIST_FAILED' };
+        } return clone(result); },
+        updateHistory: async (input) => { const before = clone(state.brokerKis), result = brokerKisUpdateHistory(state.brokerKis, clone(input || {})); if (!result.ok)
+            return result; if (!(await persist(false))) {
+            state.brokerKis = before;
+            return { ok: false, error: 'PERSIST_FAILED' };
+        } return clone(result); },
+        completeSync: async (kind, accountId, completedAt) => { const a = pensionAccount(accountId); if (!a || a.kind !== brokerKisKind(kind))
+            return { ok: false, error: 'KIS_ACCOUNT_LINK_MISMATCH' }; const before = clone(state.brokerKis), connection = brokerKisCompleteSync(state.brokerKis, kind, accountId, completedAt || new Date().toISOString()); if (!(await persist(false))) {
+            state.brokerKis = before;
+            return { ok: false, error: 'PERSIST_FAILED' };
+        } return { ok: true, connection: clone(connection) }; },
+        failSync: async (kind, accountId, error, failedAt) => { const before = clone(state.brokerKis), connection = brokerKisFailSync(state.brokerKis, kind, accountId, error, failedAt || new Date().toISOString()); if (!(await persist(false))) {
+            state.brokerKis = before;
+            return { ok: false, error: 'PERSIST_FAILED' };
+        } return { ok: false, error: connection.lastError, connection: clone(connection) }; }
+    };
+    const storedMethods = ['replaceState', 'applyReconcileSnapshot', 'registerHoldingFromBalance', 'assignPolicyToAccount', 'pensionTransactionSave', 'pensionTransactionDelete', 'persist', 'reset'];
+    for (const name of storedMethods) {
+        const command = assetOsRuntimeApi[name];
+        if (typeof command === 'function')
+            assetOsRuntimeApi[name] = (...args) => runStoredCommand(() => Promise.resolve(command(...args)));
     }
-    catch { }
-;
-brokerKisClient.configure(BROKER_KIS_PUBLIC_CONFIG);
-brokerKisClient.consumeRedirect();
-if (typeof initQaMode === 'function')
-    initQaMode();
-$('#assetAuthButton').onclick = async () => { if (cloudUser())
-    await startAssetAuthenticatedApp();
-else
-    await signInAssetGoogle(); };
-$('#assetAuthPull').onclick = cloudResolveConflictPull;
-$('#assetAuthOverwrite').onclick = cloudResolveConflictOverwrite;
-startAssetAuthenticatedApp().catch(() => assetAuthGateState('error', '연결 확인 중 오류가 발생했습니다. 다시 시도해 주세요.'));
+    const brokerCommands = assetOsRuntimeApi.brokerKis;
+    for (const name of ['importOrders', 'importBalance', 'linkInstrument', 'matchOrder', 'importRights', 'beginHistory', 'updateHistory', 'completeSync', 'failSync']) {
+        const command = brokerCommands[name];
+        if (typeof command === 'function')
+            brokerCommands[name] = (...args) => runStoredCommand(() => Promise.resolve(command(...args)));
+    }
+    assetOsRuntimeApi.brokerKisClient = brokerKisClient;
+    if (QA_MODE)
+        window.__assetOS = assetOsRuntimeApi;
+    else
+        try {
+            delete window.__assetOS;
+        }
+        catch { }
+    ;
+    brokerKisClient.configure(BROKER_KIS_PUBLIC_CONFIG);
+    brokerKisClient.consumeRedirect();
+    if (typeof initQaMode === 'function')
+        initQaMode();
+    $('#assetAuthButton').onclick = async () => { if (cloudUser())
+        await startAssetAuthenticatedApp();
+    else
+        await signInAssetGoogle(); };
+    $('#assetAuthPull').onclick = cloudResolveConflictPull;
+    $('#assetAuthOverwrite').onclick = cloudResolveConflictOverwrite;
+    startAssetAuthenticatedApp().catch(() => assetAuthGateState('error', '연결 확인 중 오류가 발생했습니다. 다시 시도해 주세요.'));
+}
+bootAssetOs().catch((error) => { assetAuthGateState('error', error instanceof Error ? error.message : '기기 저장소를 확인하지 못했습니다. 기존 데이터는 보존됩니다.'); });

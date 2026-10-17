@@ -882,3 +882,5 @@ html[data-theme="dark"]{--polish-accent:color-mix(in srgb,var(--accent) 65%,whit
 #integratedCardPlans{scroll-margin-top:90px}.card-plan-open{min-height:44px;gap:12px}.card-plan-open>strong{overflow-wrap:anywhere}
 
 #integratedCardPlans>.integrated-empty{min-height:0;padding:12px 0;text-align:left;font-size:13px}
+
+.storage-save-status{position:fixed;z-index:10000;left:50%;bottom:calc(90px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:10px 16px;border-radius:14px;background:var(--text,#263142);color:var(--bg,#fff);font-size:13px;box-shadow:0 4px 18px #0002;pointer-events:none;white-space:nowrap}
