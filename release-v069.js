@@ -217,7 +217,7 @@ integratedSchedulePage = function () {
         week.before(details);
         details.append(week, grid);
     }
-    return scheduleToolsMarkup(month) + template.innerHTML;
+    return template.innerHTML;
 };
 const v069SpendingPage = integratedSpendingPage;
 integratedSpendingPage = function () { const analysis = integratedSpendingAnalysis(integratedSelectedMonth()), template = document.createElement('template'); template.innerHTML = v069SpendingPage(); const budget = template.content.querySelector('[data-spending-budget]>span'), hint = template.content.querySelector('[data-spending-budget]>small'); if (budget)
@@ -288,7 +288,7 @@ openBackupHub = function () {
     const body = document.createElement('div');
     body.className = 'backup-grid';
     advanced.appendChild(body);
-    for (const key of ['data-phone-folder', 'data-phone-now', 'data-backup-drive', 'data-backup-keep']) {
+    for (const key of ['data-backup-csv', 'data-initial-import', 'data-phone-folder', 'data-phone-now', 'data-backup-drive', 'data-backup-keep']) {
         const button = grid.querySelector('[' + key + ']');
         if (button)
             body.appendChild(button);

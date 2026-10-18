@@ -39,3 +39,39 @@ test('failed final installment storage leaves debt and completion unchanged and 
  assert.equal((await run(c,'integratedReplay().totalDebt')),0);assert.equal((await run(c,"cardPlanSummary(financeSchedules()[0],'2026-02').completed")),true);
  assert.equal((await run(c,"state.integrated.ledger.filter(t=>t.meta?.scheduleDate==='2026-02-25').length")),1);
 });
+
+test('three-month principal splits preserve 360000 and 370000 won exactly',async()=>{
+ for(const [amount,expected] of [[360000,[120000,120000,120000]],[370000,[123333,123333,123334]]]){
+  const c=await setup();c.amount=amount;
+  assert.ok(await run(c,"createCardInstallment({name:'3개월',purchaseAmount:amount,months:3,purchaseDate:'2026-01-01',firstPaymentDate:'2026-01-31',interestMode:'free'})"));
+  const terms=['2026-01-31','2026-02-28','2026-03-31'].map(date=>{c.date=date;return run(c,'cardInstallmentTerms(financeSchedules()[0],date)')});
+  assert.deepEqual(terms.map(t=>t.principal),expected);assert.equal(terms.reduce((n,t)=>n+t.total,0),amount);
+ }
+});
+
+test('initial interest-free periods survive backup and post interest only after their boundary',async()=>{
+ const c=await setup();
+ assert.ok(await run(c,"createCardInstallment({name:'부분 무이자',purchaseAmount:370000,months:6,annualRate:12,interestMode:'partial',interestFreeMonths:3,purchaseDate:'2026-01-01',firstPaymentDate:'2026-01-31'})"));
+ await run(c,'state=normalizeState(validateBackupPayload(parseBackupZipBytes(createBackupZipBytes(backupPayload()))))');
+ let principal=0,interest=0;
+ for(let i=0;i<6;i++){
+  c.month='2026-'+String(i+1).padStart(2,'0');c.date=run(c,'scheduleDateForMonth(financeSchedules()[0],month)');
+  const terms=run(c,'cardInstallmentTerms(financeSchedules()[0],date)');
+  assert.equal(terms.interest,i<3?0:Math.round((370000-61666*i)*.01));principal+=terms.principal;interest+=terms.interest;
+  c.principal=terms.principal;c.interest=terms.interest;
+  assert.equal(await run(c,"completeScheduleOccurrence(financeSchedules()[0].id,date,0,'','',principal,interest)"),true);
+ }
+ assert.equal(principal,370000);assert.equal(interest,3700);assert.equal(run(c,'integratedReplay().totalDebt'),0);
+ assert.equal(run(c,"integratedReplay().assets['cash-main']"),10000000-370000-interest);
+ assert.equal(run(c,"cardPlanSummary(financeSchedules()[0],'2026-06').completed"),true);
+});
+
+test('invalid initial interest-free periods and malformed rates cannot mutate money',async()=>{
+ const c=await setup(),before=run(c,'JSON.stringify(state)');
+ for(const bad of [0,-1,3,4,1.5,'bad',null]){
+  c.bad=bad;assert.equal(await run(c,"createCardInstallment({name:'거부',purchaseAmount:370000,months:3,annualRate:12,interestMode:'partial',interestFreeMonths:bad,purchaseDate:'2026-01-01',firstPaymentDate:'2026-01-31'})"),'');
+  assert.equal(run(c,'JSON.stringify(state)'),before);
+ }
+ assert.equal(await run(c,"createCardInstallment({name:'거부',purchaseAmount:370000,months:3,annualRate:'broken',interestMode:'paid',purchaseDate:'2026-01-01',firstPaymentDate:'2026-01-31'})"),'');
+ assert.equal(run(c,'JSON.stringify(state)'),before);
+});
