@@ -156,7 +156,7 @@ integratedSchedulePage=function(){
  const finished=occ.filter(o=>o.status==='done');
  if(list)list.innerHTML=`<div class="schedule-pending-list">${pending.slice(0,5).map(row).join('')||'<div class="integrated-empty">선택한 달의 미완료 일정이 없어요.</div>'}</div>${pending.length>5?`<details class="schedule-fold schedule-pending-more"><summary>미완료 ${pending.length-5}건 더 보기</summary>${pending.slice(5).map(row).join('')}</details>`:''}${finished.length?`<details class="schedule-fold schedule-completed"><summary>완료 ${finished.length}건 보기</summary>${finished.map(row).join('')}</details>`:''}`;
  const week=template.content.querySelector('.schedule-week'),grid=template.content.querySelector('.schedule-grid');if(week&&grid){const details=document.createElement('details'),summary=document.createElement('summary');details.className='schedule-calendar-toggle';summary.textContent='달력 보기';details.append(summary);week.before(details);details.append(week,grid)}
- return scheduleToolsMarkup(month)+template.innerHTML;
+ return template.innerHTML;
 };
 
 const v069SpendingPage=integratedSpendingPage;
@@ -193,7 +193,7 @@ openBackupHub=function(){
  const advanced=document.createElement('details');advanced.className='source-note';
  const title=document.createElement('summary');title.textContent='고급 백업 설정';advanced.appendChild(title);
  const body=document.createElement('div');body.className='backup-grid';advanced.appendChild(body);
- for(const key of ['data-phone-folder','data-phone-now','data-backup-drive','data-backup-keep']){
+ for(const key of ['data-backup-csv','data-initial-import','data-phone-folder','data-phone-now','data-backup-drive','data-backup-keep']){
   const button=grid.querySelector('['+key+']');if(button)body.appendChild(button);
  }
  grid.after(advanced);

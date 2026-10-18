@@ -62,7 +62,7 @@ function centralIsaReplayRows(account:ScheduleRecord|null|undefined,includeArchi
 
 // Scheduled estimates are separate from immutable actual payment rows.
 type ScheduleAmountHistory={effectiveFrom:string;amount:number};
-type CardPlan={purchaseDate:string;firstPaymentDate:string;purchaseAmount:number;months:number;annualRate:number;interestMode:string};
+type CardPlan={purchaseDate:string;firstPaymentDate:string;purchaseAmount:number;months:number;annualRate:number;interestMode:string;interestFreeMonths?:number};
 declare function financialNumberInRange(value:unknown):boolean;
 declare function validYmdDate(value:string):boolean;
 declare function clone<T>(value:T):T;
@@ -75,7 +75,8 @@ function cardInstallmentTerms(s:ScheduleRecord,date:string){
  const first=String(plan.firstPaymentDate),index=(Number(date.slice(0,4))-Number(first.slice(0,4)))*12+Number(date.slice(5,7))-Number(first.slice(5,7));
  if(index<0||index>=plan.months)return null;
  const base=Math.floor(plan.purchaseAmount/plan.months),principal=index===plan.months-1?plan.purchaseAmount-base*(plan.months-1):base;
- const balance=plan.purchaseAmount-base*index,interest=plan.interestMode==='free'?0:Math.round(balance*plan.annualRate/1200);
+ const freeMonths=plan.interestFreeMonths??0;if(!Number.isInteger(freeMonths)||freeMonths<0||freeMonths>=plan.months)return null;
+ const balance=plan.purchaseAmount-base*index,interest=plan.interestMode==='free'||index<freeMonths?0:Math.round(balance*plan.annualRate/1200);
  return{index:index+1,principal,interest,total:principal+interest};
 }
 function schedulePlannedAmount(s:ScheduleRecord,date:string):number{
@@ -104,13 +105,13 @@ function cardPlanSummary(s:ScheduleRecord,month:string){
  return{purchaseAmount:plan.purchaseAmount,remainingPrincipal,plannedAmount:date?schedulePlannedAmount(s,date):0,estimatedInterest:terms?.interest||0,actualAmount:actual?Number(actual.meta?.actualAmount??actual.amount)||0:null,paidInstallments,totalInstallments,completed:totalInstallments>0&&paidInstallments===totalInstallments&&remainingPrincipal===0};
 }
 async function createCardInstallment(input:Record<string,unknown>):Promise<string>{
- const amount=Number(input.purchaseAmount),months=Number(input.months),rate=Number(input.annualRate)||0,purchaseDate=String(input.purchaseDate||''),first=String(input.firstPaymentDate||''),name=String(input.name||'').trim(),mode=String(input.interestMode);
- if(!name||name.length>80||!validYmdDate(purchaseDate)||!validYmdDate(first)||first<purchaseDate||!Number.isInteger(amount)||amount<=0||!financialNumberInRange(amount)||!Number.isInteger(months)||months<1||months>60||amount<months||!['free','paid'].includes(mode)||!Number.isFinite(rate)||rate<0||rate>100){toast('구매금액·기간·첫 납부일을 확인해 주세요.');return''}
+ const amount=Number(input.purchaseAmount),months=Number(input.months),rate=Number(input.annualRate??0),purchaseDate=String(input.purchaseDate||''),first=String(input.firstPaymentDate||''),name=String(input.name||'').trim(),mode=String(input.interestMode),freeMonths=mode==='partial'?Number(input.interestFreeMonths):0;
+ if(!name||name.length>80||!validYmdDate(purchaseDate)||!validYmdDate(first)||first<purchaseDate||!Number.isInteger(amount)||amount<=0||!financialNumberInRange(amount)||!Number.isInteger(months)||months<1||months>60||amount<months||!['free','paid','partial'].includes(mode)||!Number.isInteger(freeMonths)||freeMonths<0||freeMonths>=months||(mode==='partial'&&freeMonths<1)||!Number.isFinite(rate)||rate<0||rate>100){toast('구매금액·기간·납부일·이자 설정을 확인해 주세요.');return''}
  const store=integratedStore(),before=clone(store),schedulesBefore=clone(state.financeSchedules),id=uid('card-plan'),liabilityId=uid('card-debt');
  const liabilities=store.liabilities as ScheduleRecord[],ledger=store.ledger as ScheduleRecord[];
  liabilities.push({id:liabilityId,kind:'other',name,cardPlanId:id});
  ledger.push({id:uid('igl'),date:purchaseDate,type:'openingLiability',amount,liabilityId,category:name,meta:{cardPlanId:id}}, {id:uid('igl'),date:purchaseDate,type:'externalExpense',amount,category:name,note:'카드 구매 · 원금 납부는 지출에 다시 포함하지 않음',meta:{cardPlanId:id,cardPurchase:true}});
- const plan:CardPlan={purchaseDate,firstPaymentDate:first,purchaseAmount:amount,months,annualRate:mode==='free'?0:rate,interestMode:mode};
+ const plan:CardPlan={purchaseDate,firstPaymentDate:first,purchaseAmount:amount,months,annualRate:mode==='free'?0:rate,interestMode:mode,...(mode==='partial'?{interestFreeMonths:freeMonths}:{})};
  const s:ScheduleRecord={id,name,kind:'loan',amount:0,amountMode:'estimate',day:Number(first.slice(8,10)),startDate:first,active:true,liabilityId,source:'user',cardPlan:plan};s.amount=cardInstallmentTerms(s,first)?.total||0;
  if(!state.financeSchedules)state.financeSchedules={items:[]};state.financeSchedules.items.push(s);
  const issues=integratedCandidateIssues(store);

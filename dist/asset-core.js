@@ -5,7 +5,7 @@ const BROKER_KIS_PUBLIC_CONFIG = Object.freeze({ projectUrl: 'https://wjrzukoofs
 const QA_MODE = typeof location !== 'undefined' && /(?:^|[?&])qa=1(?:&|$)/.test(String(location.search || ''));
 const QA_STORAGE_KEY = 'asset-os-qa-v0.5', LIVE_STORAGE_KEY = 'asset-os-v1.9.45-live';
 const DEFAULT_FINANCE_DAY = 25;
-const APP_VERSION = 'v0.7.1', APP_ENV = QA_MODE ? 'qa' : 'live', SCHEMA_VERSION = 22, KEY = QA_MODE ? QA_STORAGE_KEY : LIVE_STORAGE_KEY, LEGACY_KEYS = ['asset-os-v1.9.22-central-schedule', 'asset-os-v1.9.20-real-finance', 'asset-os-v1.9.19-finance-linked', 'asset-os-v1.9.18-integrated-ui-refine', 'asset-os-v1.9.17-integrated-complete-stage1', 'asset-os-v1.9.16-integrated-ledger-stage2', 'asset-os-v1.9.9-pension-step2-analysis', 'asset-os-v1.9.7-pension-step2-precision', 'asset-os-v1.9.6-pension-step2-refine', 'asset-os-v1.9.5-pension-step2', 'asset-os-v1.9.4-pension-step1', 'asset-os-v1.9.3-pension-step1', 'asset-os-v1.9.2-isa-review', 'asset-os-v1.9.1-isa-review', 'asset-os-v1.9-isa-review', 'asset-os-v1.8-isa-review', 'asset-os-v1.7-isa-review', 'asset-os-v1.6.1-isa-review', 'asset-os-v1.6-isa-review', 'asset-os-v1.5-isa-review', 'asset-os-v1.4-isa-review', 'asset-os-v1.3-isa-review'];
+const APP_VERSION = 'v0.7.2', APP_ENV = QA_MODE ? 'qa' : 'live', SCHEMA_VERSION = 22, KEY = QA_MODE ? QA_STORAGE_KEY : LIVE_STORAGE_KEY, LEGACY_KEYS = ['asset-os-v1.9.22-central-schedule', 'asset-os-v1.9.20-real-finance', 'asset-os-v1.9.19-finance-linked', 'asset-os-v1.9.18-integrated-ui-refine', 'asset-os-v1.9.17-integrated-complete-stage1', 'asset-os-v1.9.16-integrated-ledger-stage2', 'asset-os-v1.9.9-pension-step2-analysis', 'asset-os-v1.9.7-pension-step2-precision', 'asset-os-v1.9.6-pension-step2-refine', 'asset-os-v1.9.5-pension-step2', 'asset-os-v1.9.4-pension-step1', 'asset-os-v1.9.3-pension-step1', 'asset-os-v1.9.2-isa-review', 'asset-os-v1.9.1-isa-review', 'asset-os-v1.9-isa-review', 'asset-os-v1.8-isa-review', 'asset-os-v1.7-isa-review', 'asset-os-v1.6.1-isa-review', 'asset-os-v1.6-isa-review', 'asset-os-v1.5-isa-review', 'asset-os-v1.4-isa-review', 'asset-os-v1.3-isa-review'];
 const nf = new Intl.NumberFormat('ko-KR');
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const INVESTMENT_ROLES = ['성장', '배당', '현금흐름', '안정', '현금'];
@@ -1374,7 +1374,10 @@ function cardInstallmentTerms(s, date) {
     if (index < 0 || index >= plan.months)
         return null;
     const base = Math.floor(plan.purchaseAmount / plan.months), principal = index === plan.months - 1 ? plan.purchaseAmount - base * (plan.months - 1) : base;
-    const balance = plan.purchaseAmount - base * index, interest = plan.interestMode === 'free' ? 0 : Math.round(balance * plan.annualRate / 1200);
+    const freeMonths = plan.interestFreeMonths ?? 0;
+    if (!Number.isInteger(freeMonths) || freeMonths < 0 || freeMonths >= plan.months)
+        return null;
+    const balance = plan.purchaseAmount - base * index, interest = plan.interestMode === 'free' || index < freeMonths ? 0 : Math.round(balance * plan.annualRate / 1200);
     return { index: index + 1, principal, interest, total: principal + interest };
 }
 function schedulePlannedAmount(s, date) {
@@ -1423,16 +1426,16 @@ function cardPlanSummary(s, month) {
     return { purchaseAmount: plan.purchaseAmount, remainingPrincipal, plannedAmount: date ? schedulePlannedAmount(s, date) : 0, estimatedInterest: terms?.interest || 0, actualAmount: actual ? Number(actual.meta?.actualAmount ?? actual.amount) || 0 : null, paidInstallments, totalInstallments, completed: totalInstallments > 0 && paidInstallments === totalInstallments && remainingPrincipal === 0 };
 }
 async function createCardInstallment(input) {
-    const amount = Number(input.purchaseAmount), months = Number(input.months), rate = Number(input.annualRate) || 0, purchaseDate = String(input.purchaseDate || ''), first = String(input.firstPaymentDate || ''), name = String(input.name || '').trim(), mode = String(input.interestMode);
-    if (!name || name.length > 80 || !validYmdDate(purchaseDate) || !validYmdDate(first) || first < purchaseDate || !Number.isInteger(amount) || amount <= 0 || !financialNumberInRange(amount) || !Number.isInteger(months) || months < 1 || months > 60 || amount < months || !['free', 'paid'].includes(mode) || !Number.isFinite(rate) || rate < 0 || rate > 100) {
-        toast('구매금액·기간·첫 납부일을 확인해 주세요.');
+    const amount = Number(input.purchaseAmount), months = Number(input.months), rate = Number(input.annualRate ?? 0), purchaseDate = String(input.purchaseDate || ''), first = String(input.firstPaymentDate || ''), name = String(input.name || '').trim(), mode = String(input.interestMode), freeMonths = mode === 'partial' ? Number(input.interestFreeMonths) : 0;
+    if (!name || name.length > 80 || !validYmdDate(purchaseDate) || !validYmdDate(first) || first < purchaseDate || !Number.isInteger(amount) || amount <= 0 || !financialNumberInRange(amount) || !Number.isInteger(months) || months < 1 || months > 60 || amount < months || !['free', 'paid', 'partial'].includes(mode) || !Number.isInteger(freeMonths) || freeMonths < 0 || freeMonths >= months || (mode === 'partial' && freeMonths < 1) || !Number.isFinite(rate) || rate < 0 || rate > 100) {
+        toast('구매금액·기간·납부일·이자 설정을 확인해 주세요.');
         return '';
     }
     const store = integratedStore(), before = clone(store), schedulesBefore = clone(state.financeSchedules), id = uid('card-plan'), liabilityId = uid('card-debt');
     const liabilities = store.liabilities, ledger = store.ledger;
     liabilities.push({ id: liabilityId, kind: 'other', name, cardPlanId: id });
     ledger.push({ id: uid('igl'), date: purchaseDate, type: 'openingLiability', amount, liabilityId, category: name, meta: { cardPlanId: id } }, { id: uid('igl'), date: purchaseDate, type: 'externalExpense', amount, category: name, note: '카드 구매 · 원금 납부는 지출에 다시 포함하지 않음', meta: { cardPlanId: id, cardPurchase: true } });
-    const plan = { purchaseDate, firstPaymentDate: first, purchaseAmount: amount, months, annualRate: mode === 'free' ? 0 : rate, interestMode: mode };
+    const plan = { purchaseDate, firstPaymentDate: first, purchaseAmount: amount, months, annualRate: mode === 'free' ? 0 : rate, interestMode: mode, ...(mode === 'partial' ? { interestFreeMonths: freeMonths } : {}) };
     const s = { id, name, kind: 'loan', amount: 0, amountMode: 'estimate', day: Number(first.slice(8, 10)), startDate: first, active: true, liabilityId, source: 'user', cardPlan: plan };
     s.amount = cardInstallmentTerms(s, first)?.total || 0;
     if (!state.financeSchedules)
@@ -2647,7 +2650,7 @@ function backupFileName() { return typeof assetManagedBackupName === 'function' 
 function backupHealth(now = new Date()) {
     const managed = typeof assetBackupSettings === 'function' ? assetBackupSettings() : { phoneEnabled: false, lastPhoneBackupAt: '', phonePermission: 'unknown' }, enabled = !!managed.phoneEnabled, last = String(managed.lastPhoneBackupAt || ''), lastTime = Date.parse(last);
     if (!enabled)
-        return { level: 'setup', label: '백업 폴더 미지정', detail: '휴대폰 백업 폴더를 지정하면 저장할 때 자동으로 사본을 남깁니다.', lastBackupAt: '' };
+        return { level: 'setup', label: '전체 ZIP으로 백업하세요', detail: '폴더 자동백업은 선택 사항이에요. 전체 ZIP 하나로 데이터를 보관하고 복원할 수 있어요.', lastBackupAt: '' };
     if (!Number.isFinite(lastTime))
         return { level: 'danger', label: '자동백업 확인 필요', detail: '폴더는 연결됐지만 완료된 자동백업 기록이 없습니다.', lastBackupAt: '' };
     const ageDays = Math.max(0, Math.floor((now.getTime() - lastTime) / 86400000));
@@ -2736,7 +2739,7 @@ function openBackupHub() {
     const pickerWindow = window, size = new Blob([JSON.stringify(backupPayload())]).size, securePicker = typeof pickerWindow.showSaveFilePicker === 'function' && window.isSecureContext, folderApi = typeof pickerWindow.showDirectoryPicker === 'function' && window.isSecureContext, managed = typeof assetBackupSettings === 'function' ? assetBackupSettings() : { phoneEnabled: false, lastPhoneBackupAt: '', phonePermission: 'unknown' }, health = backupHealth();
     $('#sheetEyebrow').textContent = '데이터 보호';
     $('#sheetTitle').textContent = '백업·복원';
-    $('#sheetBody').innerHTML = `<div class="backup-health ${health.level}"><span>${health.level === 'good' ? '✓' : health.level === 'setup' ? '○' : '!'}</span><div><strong>${health.label}</strong><small>${health.detail}</small></div></div><div class=backup-grid><button class="backup-action primary" data-phone-folder><strong>휴대폰 백업 폴더 ${managed.phoneEnabled ? '변경' : '지정'}</strong><small>${folderApi ? '한 번 지정하면 같은 폴더에 자동 저장합니다.' : '이 브라우저는 고정 폴더를 지원하지 않아 일반 ZIP 저장을 사용합니다.'}</small></button><button class=backup-action data-phone-now ${managed.phoneEnabled ? '' : 'disabled'}><strong>휴대폰 자동백업 지금 실행</strong><small>${managed.lastPhoneBackupAt ? `마지막 ${formatDateTime(managed.lastPhoneBackupAt)}` : '아직 자동백업 없음'} · 같은 날짜 파일은 교체</small></button><button class=backup-action data-backup-zip><strong>${securePicker ? 'ZIP 백업 · 저장 위치 선택' : 'ZIP 백업 · 다운로드'}</strong><small>${securePicker ? '저장 위치를 직접 선택합니다.' : 'Downloads에 저장합니다.'}</small></button><button class=backup-action data-backup-drive><strong>Google Drive로 보내기</strong><small>공유 가능한 백업 TXT를 Drive로 보냅니다.</small></button><button class=backup-action data-backup-keep><strong>영구보관 ZIP</strong><small>자동 정리에서 제외되는 _keep 파일을 만듭니다.</small></button><button class=backup-action data-backup-restore><strong>ZIP / JSON / TXT 복원</strong><small>schema 4~${SCHEMA_VERSION} 파일을 검증하고 정상일 때만 교체합니다.</small></button></div><div class=backup-status-note>현재 원본 약 ${Math.max(1, Math.round(size / 1024))}KB · schema ${SCHEMA_VERSION}<br>백업 파일은 최근 30일 일별·이전 월 1개를 보관하고, _pre / _keep은 삭제하지 않습니다.<br>앱 잔고는 최근 6개월 일별·이전 월별로 보존합니다.</div>`;
+    $('#sheetBody').innerHTML = `<div class="backup-health ${health.level}"><span>${health.level === 'good' ? '✓' : health.level === 'setup' ? '○' : '!'}</span><div><strong>${health.label}</strong><small>${health.detail}</small></div></div><div class=backup-grid><button class="backup-action primary" data-phone-folder><strong>휴대폰 백업 폴더 ${managed.phoneEnabled ? '변경' : '지정'}</strong><small>${folderApi ? '한 번 지정하면 같은 폴더에 자동 저장합니다.' : '이 브라우저는 고정 폴더를 지원하지 않아 일반 ZIP 저장을 사용합니다.'}</small></button><button class=backup-action data-phone-now ${managed.phoneEnabled ? '' : 'disabled'}><strong>휴대폰 자동백업 지금 실행</strong><small>${managed.lastPhoneBackupAt ? `마지막 ${formatDateTime(managed.lastPhoneBackupAt)}` : '아직 자동백업 없음'} · 같은 날짜 파일은 교체</small></button><button class=backup-action data-backup-zip><strong>${securePicker ? '전체 ZIP 백업 · 저장 위치 선택' : '전체 ZIP 백업 · 다운로드'}</strong><small>전체 원장·계좌·일정·설정을 하나의 파일로 저장합니다. ${securePicker ? '저장 위치를 직접 선택합니다.' : 'Downloads에 저장합니다.'}</small></button><button class=backup-action data-backup-drive><strong>Google Drive로 보내기</strong><small>공유 가능한 백업 TXT를 Drive로 보냅니다.</small></button><button class=backup-action data-backup-keep><strong>영구보관 ZIP</strong><small>자동 정리에서 제외되는 _keep 파일을 만듭니다.</small></button><button class=backup-action data-backup-restore><strong>백업 파일로 복원</strong><small>schema 4~${SCHEMA_VERSION} ZIP·JSON·TXT 파일을 검증하고 정상일 때만 교체합니다.</small></button></div><div class=backup-status-note>현재 원본 약 ${Math.max(1, Math.round(size / 1024))}KB · schema ${SCHEMA_VERSION}<br>백업 파일은 최근 30일 일별·이전 월 1개를 보관하고, _pre / _keep은 삭제하지 않습니다.<br>앱 잔고는 최근 6개월 일별·이전 월별로 보존합니다.</div>`;
     if (typeof appendInitialImportBackupAction === 'function')
         appendInitialImportBackupAction($('#sheetBody .backup-grid'));
     openSheet('#detailSheet');
