@@ -152,4 +152,8 @@ test('token refresh cannot start cloud replacement while device storage recovery
  vm.runInContext(`state=null;__reconciles=0;cloudReconcileState=async()=>{__reconciles++;return true}`,device);
  assert.equal(await vm.runInContext(`handleCloudAuthState('TOKEN_REFRESHED',{user:{id:'owner'}})`,device),false);
  assert.equal(device.__reconciles,0);assert.equal(database.revision,2);
+ let removed=0;const originalLookup=device.$;device.$=selector=>selector==='#storageRecovery'?{remove(){removed++}}:originalLookup(selector);
+ assert.equal(await vm.runInContext(`handleCloudAuthState('SIGNED_IN',{user:{id:'different-owner'}})`,device),false);
+ assert.equal(removed,1,'account changes must remove retained recovery controls');assert.equal(device.__reconciles,0);
+ vm.runInContext(`assetAuthGateState('login')`,device);assert.equal(removed,2,'returning to login must remove recovery controls');
 });
