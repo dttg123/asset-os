@@ -200,3 +200,31 @@ test('@core editing deposit interest keeps its account and observation aligned a
  await page.evaluate(id=>openIntegratedTransactionDetail(id),before.tx.id);await page.locator('[data-integrated-delete-detail]').click();await page.getByRole('button',{name:'삭제',exact:true}).last().click();await expect(page.getByText('거래를 삭제했습니다.',{exact:true})).toBeVisible();await page.reload();await page.waitForFunction(()=>!!window.__assetOS);
  expect(await page.evaluate(id=>({row:state.integrated.ledger.some(t=>t.id===id),event:state.financialProducts.events.some(e=>e.meta?.ledgerId===id)}),before.tx.id)).toEqual({row:false,event:false});
 });
+
+test('@core duplicate expenses, busy-submit protection and refund edit/delete dependencies survive ZIP restore',async({page})=>{
+ test.setTimeout(90000);await page.goto('/index.html?qa=1#/home');await page.waitForFunction(()=>!!window.__assetOS);
+ await page.evaluate(async()=>{const next=window.__assetOS.getState();next.financeSchedules={items:[]};next.financialProducts={items:[],events:[]};next.integrated.ledger=[{id:'matrix-cash',type:'openingAsset',date:'2026-01-01',toAccountId:'cash-main',amount:10000000}];await window.__assetOS.replaceState(next);nav('integrated','summary')});
+ const form=page.locator('#integratedTxForm');
+ for(let index=0;index<2;index++){
+  await page.evaluate(()=>openIntegratedTransactionForm('',{uiType:'lifeExpense',category:'동일 지출',date:'2026-01-25'}));await form.locator('[name=amount]').fill('1000');
+  if(index===0)await page.evaluate(()=>{const commit=assetLocalDatabase.commit.bind(assetLocalDatabase);assetLocalDatabase.commit=async(...args)=>{assetLocalDatabase.commit=commit;await new Promise(resolve=>{window.__matrixReleaseCommit=resolve});return commit(...args)}});
+  await form.locator('.integrated-form-save').click();
+  if(index===0){await page.waitForFunction(()=>typeof window.__matrixReleaseCommit==='function');await expect(form.locator('.integrated-form-save')).toBeDisabled();await page.evaluate(()=>{document.querySelector('#integratedTxForm').requestSubmit();document.querySelector('#integratedTxForm').requestSubmit()});expect(await page.evaluate(()=>state.integrated.ledger.filter(t=>t.category==='동일 지출').length)).toBe(1);await page.evaluate(()=>window.__matrixReleaseCommit())}
+  await expect(page.locator('#formSheet')).not.toHaveClass(/open/);await page.waitForFunction(()=>!storageSavePending&&!sheetBackTimer&&!suppressSheetPop);
+ }
+ await page.reload();await page.waitForFunction(()=>!!window.__assetOS);
+ const originals=await page.evaluate(()=>state.integrated.ledger.filter(t=>t.category==='동일 지출'));
+ expect(originals).toHaveLength(2);expect(new Set(originals.map(t=>t.id)).size).toBe(2);
+ await page.evaluate(id=>openIntegratedTransactionForm(id),originals[0].id);await form.locator('[name=amount]').fill('1600');await form.locator('.integrated-form-save').click();await expect(page.locator('#formSheet')).not.toHaveClass(/open/);await page.waitForFunction(()=>!storageSavePending&&!sheetBackTimer&&!suppressSheetPop);
+ await page.evaluate(id=>openIntegratedTransactionDetail(id),originals[0].id);await page.locator('[data-refund]').click();await page.locator('#refundForm [name=date]').fill('2026-01-26');await page.locator('#refundForm [name=amount]').fill('600');await page.locator('#refundForm button').click();await expect(page.getByText('환불을 기록했습니다.',{exact:true})).toBeVisible();await page.waitForFunction(()=>!storageSavePending&&!sheetBackTimer&&!suppressSheetPop);
+ await page.reload();await page.waitForFunction(()=>!!window.__assetOS);
+ const baseline=await page.evaluate(()=>{window.__matrixZip=new File([createBackupZipBytes()],'matrix.zip',{type:'application/zip'});return{cash:integratedReplay().assets['cash-main'],rows:JSON.stringify(state.integrated.ledger)}});expect(baseline.cash).toBe(9998000);
+ await page.evaluate(id=>openIntegratedTransactionForm(id),originals[0].id);await form.locator('[name=amount]').fill('500');await form.locator('.integrated-form-save').click();await expect(form.getByRole('alert')).toContainText('환불');expect(await page.evaluate(()=>JSON.stringify(state.integrated.ledger))).toBe(baseline.rows);
+ await page.evaluate(()=>{sheetDirty=false;closeSheets({all:true})});await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
+ await page.evaluate(id=>deleteIntegratedTransaction(id),originals[0].id);await page.locator('#confirmOk').click();await expect(page.getByText('삭제하면 잔액이 맞지 않아 취소했습니다.',{exact:true})).toBeVisible();expect(await page.evaluate(()=>JSON.stringify(state.integrated.ledger))).toBe(baseline.rows);
+ const refundId=await page.evaluate(id=>state.integrated.ledger.find(t=>t.meta?.refundOf===id).id,originals[0].id);
+ for(const id of [refundId,originals[0].id]){await page.evaluate(id=>deleteIntegratedTransaction(id),id);await page.locator('#confirmOk').click();await expect(page.getByText('거래를 삭제했습니다.',{exact:true})).toBeVisible();await page.waitForFunction(()=>!storageSavePending&&!sheetBackTimer&&!suppressSheetPop)}
+ expect(await page.evaluate(()=>integratedReplay().assets['cash-main'])).toBe(9999000);
+ await page.evaluate(async()=>{await restoreBackupFile(window.__matrixZip)});await page.locator('#confirmOk').click();await page.waitForFunction(()=>!storageSavePending&&state.integrated.ledger.some(t=>t.type==='refund'));await page.reload();await page.waitForFunction(()=>!!window.__assetOS);
+ expect(await page.evaluate(()=>({cash:integratedReplay().assets['cash-main'],rows:JSON.stringify(state.integrated.ledger)}))).toEqual(baseline);
+});
