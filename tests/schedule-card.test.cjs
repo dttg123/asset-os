@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const root=path.join(__dirname,'..');
-function env(){const storage=new Map(),c=vm.createContext({console,Date,Set,Map,URL,Blob,TextEncoder,TextDecoder,Uint8Array,DataView,ArrayBuffer,Intl,Math,JSON,Number,String,Boolean,Object,RegExp,Promise,localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)},document:{querySelector:()=>null,querySelectorAll:()=>[],documentElement:{dataset:{}},body:{dataset:{}}},window:{addEventListener:()=>{}},navigator:{},location:{search:'?qa=1',hash:''},setTimeout:()=>0,clearTimeout:()=>{}});for(const f of ['core-config.js','src/integrations/kis-normalization.js','broker-kis.js','data-defaults.js','src/domain/integrated-replay.js','src/domain/integrated-ledger-core.js','src/domain/integrated-ledger.js','src/domain/integrated-ledger-validation.js','src/domain/financial-current.js','src/domain/financial-history.js','src/domain/integrated-spending.js','integrated-schedule-engine.js','integrated-finance-engine.js','src/storage/state-migrations.js','src/storage/snapshot-retention.js','store-state.js','core-accessors.js','src/domain/investment-position.js','pension-contributions.js','pension-ledger.js','pension-assets.js','isa-validation.js','isa-ledger.js','isa-registration.js','isa-maturity-policy.js','integrated-forms.js','integrated-finance-ui.js','insurance.js','backup.js','export-csv.js','integrated-pages.js','src/app/schedule-completion.js'])vm.runInContext(fs.readFileSync(path.join(root,f),'utf8'),c,{filename:f});const bytes=fs.readFileSync(path.join(root,'tests/fixtures/legacy/schema-v21-30y-backup.zip')),offset=30+bytes.readUInt16LE(26)+bytes.readUInt16LE(28);c.fixture=JSON.parse(require('node:zlib').inflateRawSync(bytes.subarray(offset,offset+bytes.readUInt32LE(18))).toString()).data;vm.runInContext('state=normalizeState(fixture)',c);return c}
+function env(){const storage=new Map(),c=vm.createContext({console,Date,Set,Map,URL,Blob,TextEncoder,TextDecoder,Uint8Array,DataView,ArrayBuffer,Intl,Math,JSON,Number,String,Boolean,Object,RegExp,Promise,localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)},document:{querySelector:()=>null,querySelectorAll:()=>[],documentElement:{dataset:{}},body:{dataset:{}}},window:{addEventListener:()=>{}},navigator:{},location:{search:'?qa=1',hash:''},setTimeout:()=>0,clearTimeout:()=>{}});for(const f of ['core-config.js','src/integrations/kis-normalization.js','broker-kis.js','data-defaults.js','src/domain/integrated-replay.js','src/domain/integrated-ledger-core.js','src/domain/integrated-ledger.js','src/domain/integrated-ledger-validation.js','src/domain/financial-current.js','src/domain/financial-history.js','src/domain/integrated-spending.js','integrated-schedule-engine.js','integrated-finance-engine.js','src/storage/state-migrations.js','src/storage/snapshot-retention.js','store-state.js','core-accessors.js','src/domain/investment-position.js','pension-contributions.js','pension-ledger.js','pension-assets.js','isa-validation.js','isa-ledger.js','isa-registration.js','isa-maturity-policy.js','integrated-forms.js','ui-render.js','integrated-finance-ui.js','insurance.js','backup.js','export-csv.js','integrated-pages.js','src/app/schedule-completion.js'])vm.runInContext(fs.readFileSync(path.join(root,f),'utf8'),c,{filename:f});const bytes=fs.readFileSync(path.join(root,'tests/fixtures/legacy/schema-v21-30y-backup.zip')),offset=30+bytes.readUInt16LE(26)+bytes.readUInt16LE(28);c.fixture=JSON.parse(require('node:zlib').inflateRawSync(bytes.subarray(offset,offset+bytes.readUInt32LE(18))).toString()).data;vm.runInContext('state=normalizeState(fixture)',c);return c}
 const run=(c,s)=>vm.runInContext(s,c);
 
 async function setup(){const c=env();(await run(c,"globalThis.productionPersist=persist;state=normalizeState(seed);persist=()=>true;toast=()=>{};renderScheduleCompletion=()=>{};state.integrated.ledger=[{id:'cash',date:'2026-01-01',type:'openingAsset',toAccountId:'cash-main',amount:10000000}];state.financeSchedules={items:[]}"));return c}
@@ -74,4 +74,66 @@ test('invalid initial interest-free periods and malformed rates cannot mutate mo
  }
  assert.equal(await run(c,"createCardInstallment({name:'거부',purchaseAmount:370000,months:3,annualRate:'broken',interestMode:'paid',purchaseDate:'2026-01-01',firstPaymentDate:'2026-01-31'})"),'');
  assert.equal(run(c,'JSON.stringify(state)'),before);
+});
+
+test('same-date equal-amount installments only complete their own linked payment',async()=>{
+ const c=await setup();await run(c,"(async()=>{for(const name of ['TV','냉장고'])await createCardInstallment({name,purchaseAmount:360000,months:3,purchaseDate:'2026-01-01',firstPaymentDate:'2026-01-31',interestMode:'free'});await completeScheduleOccurrence(financeSchedules()[0].id,'2026-01-31',0,'','',120000,0)})()");
+ assert.equal(run(c,"scheduleCompletionTx(financeSchedules()[1].id,'2026-01-31')"),null);
+ assert.equal(run(c,"cardPlanSummary(financeSchedules()[1],'2026-01').paidInstallments"),0);
+ assert.equal(await run(c,"completeScheduleOccurrence(financeSchedules()[1].id,'2026-01-31',0,'','',120000,0)"),true);
+ assert.equal(run(c,'integratedReplay().totalDebt'),480000);
+});
+
+test('deleting scheduled principal removes its paired interest and completion, preserving other payments',async()=>{
+ const c=await setup();await run(c,"(async()=>{for(const name of ['TV','냉장고'])await createCardInstallment({name,purchaseAmount:360000,months:3,annualRate:12,purchaseDate:'2026-01-01',firstPaymentDate:'2026-01-31',interestMode:'paid'});for(const s of financeSchedules())await completeScheduleOccurrence(s.id,'2026-01-31',0,'','',120000,3600)})()");
+ const other=run(c,"JSON.stringify(state.integrated.ledger.filter(t=>t.meta?.scheduleId===financeSchedules()[1].id))");
+ await run(c,"(async()=>{globalThis.sheetDirty=false;showDialog=(_options,confirm)=>{globalThis.confirmDeletion=confirm};closeSheets=()=>{};nav=()=>{};haptic=()=>{};deleteIntegratedTransaction(state.integrated.ledger.find(t=>t.meta?.scheduleId===financeSchedules()[0].id&&t.type==='debtPrincipal').id);await confirmDeletion()})()");
+ assert.equal(run(c,"state.integrated.ledger.filter(t=>t.meta?.scheduleId===financeSchedules()[0].id).length"),0);
+ assert.equal(run(c,"scheduleCompletionTx(financeSchedules()[0].id,'2026-01-31')"),null);
+ assert.equal(run(c,"JSON.stringify(state.integrated.ledger.filter(t=>t.meta?.scheduleId===financeSchedules()[1].id))"),other);
+ assert.equal(run(c,'integratedReplay().totalDebt'),600000);
+});
+
+test('editing deposit interest note preserves its credited account and product metadata',async()=>{
+ const c=await setup();c.FormData=class{constructor(form){this.data=form.data}get(k){return this.data[k]??null}};
+ run(c,"state.integrated.accounts.push({id:'deposit-interest',name:'예금',kind:'deposit'});state.integrated.ledger.push({id:'interest-note',date:'2026-01-31',type:'externalIncome',amount:1000,toAccountId:'deposit-interest',productId:'deposit',category:'예금 이자',note:'원래',meta:{financeInterest:true,periodStart:'2026-01-01',periodEnd:'2026-01-31'}});globalThis.editForm={dataset:{editId:'interest-note'},data:{uiType:'externalIncome',date:'2026-01-31',amount:'1000',category:'예금 이자',note:'수정'}}");
+ const candidate=run(c,'integratedCandidatesFromForm(editForm)[0]');
+ assert.equal(candidate.toAccountId,'deposit-interest');assert.equal(candidate.productId,'deposit');assert.equal(candidate.meta.financeInterest,true);assert.equal(candidate.note,'수정');
+});
+
+test('legacy loan matching never equates empty product IDs and ambiguous manual rows stay unlinked',async()=>{
+ const c=await setup();run(c,"state.integrated.liabilities.push({id:'loan-a',name:'대출 A'},{id:'loan-b',name:'대출 B'});state.financeSchedules.items=[{id:'a',name:'대출 A',kind:'loan',liabilityId:'loan-a',amount:1000,day:25,active:true},{id:'b',name:'대출 B',kind:'loan',liabilityId:'loan-b',amount:1000,day:25,active:true}];state.integrated.ledger.push({id:'manual-a',date:'2026-01-25',type:'debtInterest',amount:1000,liabilityId:'loan-a',fromAccountId:'cash-main'});");
+ assert.equal(run(c,"scheduleCompletionTx('a','2026-01-25').id"),'manual-a');assert.equal(run(c,"scheduleCompletionTx('b','2026-01-25')"),null);
+ run(c,"state.financeSchedules.items.push({...financeSchedules()[0],id:'duplicate-a'})");assert.equal(run(c,"scheduleCompletionTx('a','2026-01-25')"),null);
+});
+
+test('incomplete loan components are not completed or duplicated, and deletion failure restores the whole group',async()=>{
+ const c=await setup();await run(c,"(async()=>{await createCardInstallment({name:'유이자',purchaseAmount:360000,months:3,annualRate:12,purchaseDate:'2026-01-01',firstPaymentDate:'2026-01-31',interestMode:'paid'});await completeScheduleOccurrence(financeSchedules()[0].id,'2026-01-31',0,'','',120000,3600)})()");
+ const original=run(c,'JSON.stringify(state.integrated)');
+ await run(c,"(async()=>{globalThis.sheetDirty=false;showDialog=(_options,confirm)=>{globalThis.confirmDeletion=confirm};closeSheets=()=>{};nav=()=>{};haptic=()=>{};persist=()=>false;deleteIntegratedTransaction(state.integrated.ledger.find(t=>t.type==='debtInterest').id);await confirmDeletion()})()");
+ assert.equal(run(c,'JSON.stringify(state.integrated)'),original);
+ run(c,"persist=()=>true;state.integrated.ledger=state.integrated.ledger.filter(t=>t.type!=='debtPrincipal')");
+ assert.equal(run(c,"scheduleCompletionTx(financeSchedules()[0].id,'2026-01-31')"),null);
+ const partial=run(c,'JSON.stringify(state.integrated)');assert.equal(await run(c,"completeScheduleOccurrence(financeSchedules()[0].id,'2026-01-31',0,'','',120000,3600)"),false);assert.equal(run(c,'JSON.stringify(state.integrated)'),partial);
+ await run(c,"(async()=>{deleteIntegratedTransaction(state.integrated.ledger.find(t=>t.type==='debtInterest').id);await confirmDeletion()})()");assert.equal(run(c,"state.integrated.ledger.some(t=>t.meta?.scheduleId)"),false);
+});
+
+test('interest edits and deletions synchronize observations, reject invalid periods and roll back failed writes',async()=>{
+ const c=await setup();c.FormData=class{constructor(form){this.data=form.data}get(k){return this.data[k]??null}};
+ run(c,"globalThis.sheetDirty=false;closeSheets=()=>{};nav=()=>{};haptic=()=>{};integratedFormEntryPreset=()=>null;formShowError=(_form,message)=>{globalThis.formError=message};state.financialProducts={items:[{id:'deposit',name:'예금',type:'deposit',status:'active',startDate:'2026-01-01'}],events:[{id:'observed',productId:'deposit',date:'2026-01-31',type:'interestObserved',amount:1000,note:'원래',meta:{ledgerId:'interest-note',includedInAsset:true,periodStart:'2026-01-01',periodEnd:'2026-01-31'}}]};state.integrated.accounts.push({id:'deposit-interest',name:'예금',kind:'deposit',productId:'deposit'});state.integrated.ledger.push({id:'interest-note',date:'2026-01-31',type:'externalIncome',amount:1000,toAccountId:'deposit-interest',productId:'deposit',category:'예금 이자',note:'원래',meta:{financeInterest:true}});globalThis.editForm={dataset:{editId:'interest-note'},data:{uiType:'externalIncome',date:'2026-01-31',amount:'2000',category:'예금 이자',note:'수정'}}");
+ await run(c,'saveIntegratedTransaction(editForm)');assert.equal(run(c,"integratedReplay().assets['deposit-interest']"),2000);assert.equal(run(c,"state.financialProducts.events[0].amount"),2000);assert.equal(run(c,"state.financialProducts.events[0].note"),'수정');
+ const before=run(c,'JSON.stringify({integrated:state.integrated,events:state.financialProducts.events})');
+ run(c,"editForm.data.date='2026-01-20'");await run(c,'saveIntegratedTransaction(editForm)');assert.match(c.formError,/종료일.*확인일/);assert.equal(run(c,'JSON.stringify({integrated:state.integrated,events:state.financialProducts.events})'),before);
+ run(c,"editForm.data.date='2026-01-31';editForm.data.amount='3000';persist=()=>false");await run(c,'saveIntegratedTransaction(editForm)');assert.equal(run(c,'JSON.stringify({integrated:state.integrated,events:state.financialProducts.events})'),before);
+ await run(c,"(async()=>{showDialog=(_options,confirm)=>{globalThis.confirmDeletion=confirm};deleteIntegratedTransaction('interest-note');await confirmDeletion()})()");assert.equal(run(c,'JSON.stringify({integrated:state.integrated,events:state.financialProducts.events})'),before);
+ await run(c,"(async()=>{persist=()=>true;deleteIntegratedTransaction('interest-note');await confirmDeletion()})()");assert.equal(run(c,"state.financialProducts.events.length"),0);assert.equal(run(c,"integratedReplay().assets['deposit-interest']"),0);
+});
+
+test('product-linked repayment and transfer memo edits retain category, funding metadata and account routing',async()=>{
+ const c=await setup();c.FormData=class{constructor(form){this.data=form.data}get(k){return this.data[k]??null}};
+ run(c,"state.integrated.accounts.push({id:'deposit-interest',name:'예금',kind:'deposit'});state.integrated.ledger.push({id:'repay-note',date:'2026-01-31',type:'debtPrincipal',amount:1000,fromAccountId:'cash-main',liabilityId:'debt-qa',productId:'loan-qa',category:'회사 대출 상환',meta:{fundingSource:'tracked'}},{id:'transfer-note',date:'2026-01-31',type:'internalTransfer',amount:1000,fromAccountId:'cash-main',toAccountId:'deposit-interest',productId:'deposit',category:'예금 납입',meta:{fundingSource:'tracked'}})");
+ for(const [id,uiType,category] of [['repay-note','loanPayment','회사 대출 상환'],['transfer-note','savingInvestment','예금 납입']]){
+  c.editForm={dataset:{editId:id},data:{uiType,date:'2026-01-31',amount:'1000',principal:'1000',interest:'0',liabilityId:'debt-qa',toAccountId:'deposit-interest',category,note:'메모 변경'}};
+  const candidate=run(c,'integratedCandidatesFromForm(editForm)[0]');assert.equal(candidate.category,category);assert.equal(candidate.meta.fundingSource,'tracked');assert.ok(candidate.productId);assert.equal(candidate.fromAccountId,'cash-main');assert.equal(candidate.note,'메모 변경');
+ }
 });

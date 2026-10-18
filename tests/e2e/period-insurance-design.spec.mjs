@@ -159,3 +159,44 @@ test('@core inactive card interest controls never block saving and active contro
   await page.evaluate(()=>nav('integrated','summary'));
  }
 });
+
+test('@core equal card installments remain independent and deleting one payment reverses its whole occurrence',async({page})=>{
+ await page.goto('/index.html?qa=1#/home');await page.waitForFunction(()=>!!window.__assetOS);
+ const ids=await page.evaluate(async()=>{
+  const next=window.__assetOS.getState();next.financeSchedules={items:[]};next.financialProducts={items:[],events:[]};next.integrated.liabilities=[];next.integrated.ledger=[{id:'cash',date:'2026-01-01',type:'openingAsset',amount:10000000,toAccountId:'cash-main'}];next.settings.integratedMonth='2026-01';await window.__assetOS.replaceState(next);
+  const ids=[];for(const name of ['TV 검사','냉장고 검사'])ids.push(await createCardInstallment({name,purchaseAmount:360000,months:3,annualRate:12,purchaseDate:'2026-01-01',firstPaymentDate:'2026-01-31',interestMode:'paid'}));nav('integrated','schedule');return ids;
+ });
+ for(let index=0;index<ids.length;index++){
+  await page.locator(`.schedule-list [data-fixed-cost-item="${ids[index]}"]`).click();
+  await page.locator(`[data-schedule-loan-principal="${ids[index]}"]`).fill('120000');await page.locator(`[data-schedule-loan-interest="${ids[index]}"]`).fill('3600');await page.locator(`[data-schedule-complete="${ids[index]}"]`).click();
+  await expect(page.locator(`[data-schedule-actual-edit="${ids[index]}"]`)).toBeVisible();
+  if(index===0)expect(await page.evaluate(id=>scheduleCompletionTx(id,'2026-01-31'),ids[1])).toBeNull();
+  await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
+ }
+ await page.reload();await page.waitForFunction(()=>!!window.__assetOS);await page.evaluate(()=>nav('integrated','schedule'));
+ const other=await page.evaluate(id=>JSON.stringify(state.integrated.ledger.filter(t=>t.meta?.scheduleId===id)),ids[1]);
+ await page.locator('.schedule-completed summary').click();await page.locator(`.schedule-list [data-fixed-cost-item="${ids[0]}"]`).click();const principalId=await page.evaluate(id=>state.integrated.ledger.find(t=>t.meta?.scheduleId===id&&t.type==='debtPrincipal').id,ids[0]);await page.locator(`[data-schedule-record="${principalId}"]`).click();await page.locator('[data-integrated-delete-detail]').click();
+ await expect(page.getByText('이번 납부 기록을 삭제할까요?',{exact:true})).toBeVisible();await page.getByRole('button',{name:'삭제',exact:true}).last().click();
+ await expect(page.getByText('거래를 삭제했습니다.',{exact:true})).toBeVisible();await page.reload();await page.waitForFunction(()=>!!window.__assetOS);
+ const result=await page.evaluate(ids=>({first:scheduleCompletionTx(ids[0],'2026-01-31'),left:state.integrated.ledger.filter(t=>t.meta?.scheduleId===ids[0]).length,other:JSON.stringify(state.integrated.ledger.filter(t=>t.meta?.scheduleId===ids[1])),debt:integratedReplay().totalDebt,cash:integratedReplay().assets['cash-main']}),ids);
+ expect(result).toEqual({first:null,left:0,other,debt:600000,cash:9876400});
+ await page.evaluate(()=>nav('integrated','schedule'));await page.locator(`.schedule-list [data-fixed-cost-item="${ids[0]}"]`).click();await expect(page.locator(`[data-schedule-complete="${ids[0]}"]`)).toBeVisible();
+});
+
+test('@core editing deposit interest keeps its account and observation aligned after reload and deletion',async({page})=>{
+ await page.goto('/index.html?qa=1#/home');await page.waitForFunction(()=>!!window.__assetOS);
+ await page.evaluate(async()=>{
+  const next=window.__assetOS.getState();next.financialProducts={items:[{id:'qa-deposit',name:'예금 검사',type:'deposit',status:'active',startDate:'2026-01-01',annualRate:3}],events:[]};next.financeSchedules={items:[]};next.integrated.ledger=[];await window.__assetOS.replaceState(next);nav('integrated','ledger');openFinanceInterestCreditForm('qa-deposit');
+ });
+ const credit=page.locator('#financeInterestCreditForm');await credit.locator('[name=date]').fill('2026-01-31');await credit.locator('[name=amount]').fill('1000');await credit.locator('[type=submit],button.integrated-form-save').click();
+ await expect(page.getByText('실제 이자를 반영했습니다.',{exact:true})).toBeVisible();await expect(page.locator('[data-finance-edit="qa-deposit"]')).toBeVisible();
+ const before=await page.evaluate(()=>({tx:state.integrated.ledger.find(t=>t.meta?.financeInterest),cash:integratedReplay().assets['cash-main']||0}));
+ await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
+ await page.evaluate(id=>openIntegratedTransactionDetail(id),before.tx.id);await page.locator('[data-integrated-edit]').click();
+ await page.locator('#integratedTxForm .entry-extra summary').click();await page.locator('#integratedTxForm [name=note]').fill('메모만 수정');await page.locator('#integratedTxForm .integrated-form-save').first().click();
+ await expect(page.getByText('저장했어요.',{exact:true})).toBeVisible();await page.reload();await page.waitForFunction(()=>!!window.__assetOS);
+ const after=await page.evaluate(id=>({tx:state.integrated.ledger.find(t=>t.id===id),event:state.financialProducts.events.find(e=>e.meta?.ledgerId===id),cash:integratedReplay().assets['cash-main']||0}),before.tx.id);
+ expect(after.tx.toAccountId).toBe(before.tx.toAccountId);expect(after.tx.productId).toBe('qa-deposit');expect(after.tx.meta.financeInterest).toBe(true);expect(after.tx.note).toBe('메모만 수정');expect(after.event.note).toBe('메모만 수정');expect(after.cash).toBe(before.cash);
+ await page.evaluate(id=>openIntegratedTransactionDetail(id),before.tx.id);await page.locator('[data-integrated-delete-detail]').click();await page.getByRole('button',{name:'삭제',exact:true}).last().click();await expect(page.getByText('거래를 삭제했습니다.',{exact:true})).toBeVisible();await page.reload();await page.waitForFunction(()=>!!window.__assetOS);
+ expect(await page.evaluate(id=>({row:state.integrated.ledger.some(t=>t.id===id),event:state.financialProducts.events.some(e=>e.meta?.ledgerId===id)}),before.tx.id)).toEqual({row:false,event:false});
+});

@@ -30,8 +30,40 @@ function clampEndedProductSchedules(target:ScheduleState=state){const products:S
 function closeFinanceProductSchedules(productId:unknown,date:unknown){const end=String(date||localYmd());for(const s of financeSchedules()){if(String(s.productId||'')!==String(productId))continue;if(!s.endDate||String(s.endDate)>end)s.endDate=end}}
 function scheduleMonthDays(month:unknown){const [y,m]=String(month).split('-').map(Number),days=new Date(y,m,0).getDate();return{y,m,days}}
 function scheduleDateForMonth(s:ScheduleRecord,month:unknown){if(!s.active||!s.day)return'';const {y,m,days}=scheduleMonthDays(month),day=Math.min(Number(s.day),days),date=`${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`;if(s.startDate&&date<s.startDate)return'';if(s.endDate&&date>s.endDate)return'';if(s.cardPlan&&!cardInstallmentTerms(s,date))return'';return date}
-function scheduleFallbackMatches(s:ScheduleRecord|undefined,date:unknown,t:ScheduleRecord){if(!s||String(t.date)!==String(date)||(Number(t.amount)||0)!==schedulePlannedAmount(s,String(date)))return false;const account=integratedStore().accounts.find((a:ScheduleRecord)=>a.id===t.toAccountId),sameName=normalizeName(t.category)===normalizeName(s.name);if(s.kind==='income')return t.type==='externalIncome'&&sameName;if(['investment','saving'].includes(s.kind||'')){if(!['internalTransfer','externalAssetIn'].includes(t.type||''))return false;if(s.productId)return account?.productId===s.productId;const targetKind=s.targetKind||integratedStore().accounts.find((a:ScheduleRecord)=>a.id===scheduleTargetAccount(s))?.kind||'';return account?.kind===targetKind&&(sameName||['isa','pension','irp'].includes(targetKind))}if(s.kind==='loan')return ['debtInterest','debtInterestExternal','debtPrincipal','externalDebtPrincipal'].includes(t.type||'')&&(String(t.liabilityId||'')===String(s.liabilityId||'')||String(t.productId||'')===String(s.productId||'')||sameName);if(['insurance','expense'].includes(s.kind||''))return ['expense','externalExpense'].includes(t.type||'')&&sameName;return false}
-function scheduleCompletionTx(scheduleId:string,date:string,sourceRows:ScheduleRecord[]|null=null){const rows=sourceRows||integratedOperationalLedger(),explicit=rows.find(t=>t.meta?.scheduleId===scheduleId&&t.meta?.scheduleDate===date);if(explicit)return explicit;const schedule=financeSchedules().find(s=>s.id===scheduleId);return rows.find(t=>scheduleFallbackMatches(schedule,date,t))||null}
+function scheduleFallbackMatches(s:ScheduleRecord|undefined,date:unknown,t:ScheduleRecord){
+ if(!s||s.cardPlan||t.meta?.scheduleId||t.meta?.cardPlanId||t.meta?.analysisOnly||String(t.date)!==String(date)||(Number(t.amount)||0)!==schedulePlannedAmount(s,String(date)))return false;
+ const account=integratedStore().accounts.find((a:ScheduleRecord)=>a.id===t.toAccountId),sameName=normalizeName(t.category)===normalizeName(s.name);
+ if(s.kind==='income')return t.type==='externalIncome'&&sameName;
+ if(['investment','saving'].includes(s.kind||'')){
+  if(!['internalTransfer','externalAssetIn'].includes(t.type||''))return false;
+  if(s.productId)return account?.productId===s.productId;
+  const target=scheduleTargetAccount(s);if(target&&t.toAccountId!==target)return false;
+  const targetKind=s.targetKind||integratedStore().accounts.find((a:ScheduleRecord)=>a.id===target)?.kind||'';
+  return account?.kind===targetKind&&(sameName||['isa','pension','irp'].includes(targetKind))
+ }
+ if(s.kind==='loan'){
+  if(!['debtInterest','debtInterestExternal','debtPrincipal','externalDebtPrincipal'].includes(t.type||''))return false;
+  if(s.liabilityId)return t.liabilityId===s.liabilityId;
+  if(s.productId)return t.productId===s.productId;
+  return sameName
+ }
+ if(['insurance','expense'].includes(s.kind||''))return ['expense','externalExpense'].includes(t.type||'')&&sameName;
+ return false
+}
+function scheduleCompletionTx(scheduleId:string,date:string,sourceRows:ScheduleRecord[]|null=null){
+ const rows=sourceRows||integratedOperationalLedger(),schedule=financeSchedules().find(s=>s.id===scheduleId);
+ const linked=rows.filter(t=>t.meta?.scheduleId===scheduleId&&t.meta?.scheduleDate===date),explicit=linked[0];
+ if(explicit){
+  if(schedule?.kind==='loan'){
+   const principal=Number(explicit.meta?.loanPrincipal||0),interest=Number(explicit.meta?.loanInterest||0);
+   const paidPrincipal=linked.filter(t=>['debtPrincipal','externalDebtPrincipal'].includes(t.type||'')&&t.liabilityId===schedule.liabilityId).reduce((sum,t)=>sum+Number(t.amount||0),0);
+   const paidInterest=linked.filter(t=>['debtInterest','debtInterestExternal'].includes(t.type||'')&&t.liabilityId===schedule.liabilityId).reduce((sum,t)=>sum+Number(t.amount||0),0);
+   if(principal>0&&paidPrincipal!==principal||interest>0&&paidInterest!==interest)return null
+  }
+  return explicit
+ }
+ return rows.find(t=>scheduleFallbackMatches(schedule,date,t)&&financeSchedules().filter(s=>scheduleDateForMonth({...s,active:true},date.slice(0,7))===date&&scheduleFallbackMatches(s,date,t)).length===1)||null
+}
 function scheduleOccurrenceStatus(s:ScheduleRecord,date:string,knownTx?:ScheduleRecord|null){const tx=arguments.length>=3?knownTx:scheduleCompletionTx(s.id,date);if(tx)return'done';const today=localYmd();if(date<today)return'overdue';if(date===today)return'today';const diff=Math.round((new Date(date+'T00:00:00').getTime()-new Date(today+'T00:00:00').getTime())/86400000);return diff<=3?'soon':'planned'}
 function scheduleStatusLabel(st:string){return({done:'완료',overdue:'미완료',today:'오늘',soon:'임박',planned:'예정'} as Record<string,string>)[st]||'예정'}
 function scheduleOccurrences(month=integratedSelectedMonth()){const rows=integratedOperationalLedger();return financeSchedules().map(s=>{const date=scheduleDateForMonth(s.active?s:{...s,active:true},month);if(!date)return null;const tx=scheduleCompletionTx(s.id,date,rows);if(!s.active&&!tx)return null;return{schedule:s,date,status:scheduleOccurrenceStatus(s,date,tx),tx}}).filter((o):o is ScheduleOccurrence=>!!o&&(o.schedule.kind!=='income'||o.status==='done')).sort((a,b)=>a.date.localeCompare(b.date)||String(a.schedule.name).localeCompare(String(b.schedule.name),'ko'))}
