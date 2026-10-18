@@ -130,7 +130,7 @@ integratedSummaryPage=function(){
  const label=template.content.querySelector('.integrated-overview-label');if(label)label.textContent=f.isComplete?'순금융자산 · 현재 기준':'확인된 금융자산 · 현재 기준';
  const sub=template.content.querySelector('.integrated-overview-sub');if(sub)sub.innerHTML=`<span>${f.isComplete?'금융자산':'확인된 금융자산'} <strong class="${escapeHtml(amountClass(f.totalAssets))}" title="${escapeHtml(won(f.totalAssets))}">${displayWon(f.totalAssets)}</strong></span><span>${f.isComplete?'부채':'확인된 부채'} <strong class="${escapeHtml(amountClass(f.totalDebt))}" title="${escapeHtml(won(f.totalDebt))}">${displayWon(f.totalDebt)}</strong></span>`;
  const list=template.content.querySelector('.integrated-asset-list');if(list)list.innerHTML=v069AssetGroups(f);
- const quick=template.content.querySelector('.household-quick');quick?.insertAdjacentHTML('beforebegin',integratedSummaryEntryMarkup());
+ const quick=template.content.querySelector('.household-quick');quick?.insertAdjacentHTML('afterend',integratedSummaryEntryMarkup());
  const schedule=template.content.querySelector('[data-fixed-cost-card]'),total=pending.reduce((sum,o)=>sum+scheduleOccurrenceDisplayAmount(o),0);
  if(schedule){
   const title=schedule.querySelector('.fixed-cost-head strong'),small=schedule.querySelector('.fixed-cost-head small'),amount=schedule.querySelector('.fixed-cost-head-right b'),body=schedule.querySelector('[data-fixed-cost-body]');
