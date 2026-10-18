@@ -45,7 +45,7 @@ assert.doesNotMatch(isaQuoteSource,/maybeAutoRefreshIsaQuotes|ISA_QUOTE_REFRESH_
  assert.deepEqual(ranges,[{from:'2026-05-30',to:'2026-06-29'},{from:'2026-06-30',to:'2026-07-30'},{from:'2026-07-31',to:'2026-08-30'},{from:'2026-08-31',to:'2026-09-04'}]);
  const concurrentKinds=[];let releasePension;const pensionGate=new Promise(resolve=>{releasePension=resolve});context.concurrentKinds=concurrentKinds;context.pensionGate=pensionGate;
  vm.runInContext('runKisCurrentSync=async function(kind){concurrentKinds.push(kind);if(kind==="pension")await pensionGate;return{ok:true}}',context);
- const pensionRun=(await vm.runInContext("(async()=>{return (await refreshBrokerKisManually([\"pension\"]))})()",context));await Promise.resolve();const irpRun=(await vm.runInContext("(async()=>{return (await refreshBrokerKisManually([\"irp\"]))})()",context));releasePension();
+ const pensionRun=(vm.runInContext("(async()=>{return (await refreshBrokerKisManually([\"pension\"]))})()",context));await Promise.resolve();const irpRun=(vm.runInContext("(async()=>{return (await refreshBrokerKisManually([\"irp\"]))})()",context));releasePension();
  const [pensionResult,irpResult]=await Promise.all([pensionRun,irpRun]);assert.equal(pensionResult.ok,true);assert.equal(irpResult.ok,true);assert.deepEqual(concurrentKinds,['pension','irp'],'겹친 요청도 각 계좌를 한 번씩 실제 갱신해야 한다');
  console.log('kis manual refresh tests: PASS');
 })().catch(error=>{console.error(error);process.exitCode=1});

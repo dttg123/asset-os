@@ -4,8 +4,10 @@ type LocalJson=Record<string,unknown>;
 type LocalArraySpec={path:string[];count:number};
 type LocalRow={key:string;collection:string;ordinal:number;date:string;value:unknown};
 type LocalHead={format:1;revision:number;envelope:LocalJson;arrays:LocalArraySpec[];checksum:string;bytes:number;updatedAt:string};
+type LocalRecovery={key:string;raw:string;createdAt:string;legacyKey?:string};
+type LocalRescue={head?:LocalHead;rows:LocalRow[];copies:LocalRecovery[];sync?:LocalSync};
 type LocalSync={userId:string;baseRevision:number;baseFingerprint:string;pending?:{fingerprint:string;requestId:string;expectedRevision:number}|null};
-declare const KEY:string,APP_ENV:string;
+declare const KEY:string,APP_ENV:string,SCHEMA_VERSION:number;
 const LOCAL_DATABASE_FORMAT=1;
 let localDatabase:IDBDatabase|null=null,localDatabaseRevision=0,localDatabaseEnvelope:LocalJson|null=null;
 let localDatabaseRows=new Map<string,string>(),localDatabaseReady=false;
@@ -48,16 +50,32 @@ async function localDbRead():Promise<LocalJson|null>{
  if(head.format!==LOCAL_DATABASE_FORMAT)throw new Error('새 버전 앱에서 저장한 자료입니다. 앱을 업데이트해 주세요.');const envelope=localDbUnpack(head,rows);if(await localDbChecksum(JSON.stringify(envelope))!==head.checksum)throw new Error('저장 데이터 검증값이 일치하지 않습니다. 자동 덮어쓰기를 중단했습니다.');
  localDatabaseRevision=head.revision;localDatabaseRows=new Map(rows.map(row=>[row.key,JSON.stringify(row)]));localDatabaseEnvelope=envelope;localDatabaseReady=true;return envelope
 }
-async function localDbCommit(envelope:LocalJson,{recovery,legacyKey=KEY,expectedRevision=localDatabaseRevision}:{recovery?:string;legacyKey?:string;expectedRevision?:number}={}):Promise<void>{
+async function localDbCommit(envelope:LocalJson,{recovery,damagedSource,legacyKey=KEY,expectedRevision=localDatabaseRevision}:{recovery?:string;damagedSource?:string;legacyKey?:string;expectedRevision?:number}={}):Promise<void>{
  if(!localDatabaseReady)throw new Error('기기 저장소를 다시 열어 확인해 주세요.');const raw=JSON.stringify(envelope),packed=localDbPack(envelope),checksum=await localDbChecksum(raw),currentRows=new Map(packed.rows.map(row=>[row.key,JSON.stringify(row)])),changed=packed.rows.filter(row=>currentRows.get(row.key)!==localDatabaseRows.get(row.key)),removed=[...localDatabaseRows.keys()].filter(key=>!currentRows.has(key));
  const head:LocalHead={format:1,revision:expectedRevision+1,envelope:packed.envelope,arrays:packed.arrays,checksum,bytes:new TextEncoder().encode(raw).length,updatedAt:new Date().toISOString()},tx=localDbTransaction(['meta','records','recovery'],'readwrite'),done=localDbDone(tx),meta=tx.objectStore('meta');
- let conflict=false,writeError:unknown=null;const request=meta.get('head');request.onsuccess=()=>{try{const prior=request.result as LocalHead|undefined;if((prior?.revision||0)!==expectedRevision){conflict=true;tx.abort();return}for(const row of changed)tx.objectStore('records').put(row);for(const key of removed)tx.objectStore('records').delete(key);if(recovery)tx.objectStore('recovery').put({key:'before-migration',raw:recovery,legacyKey,createdAt:head.updatedAt});meta.put(head,'head');}catch(error){writeError=error;tx.abort()}};
+ let conflict=false,writeError:unknown=null;const request=meta.get('head');request.onsuccess=()=>{try{const prior=request.result as LocalHead|undefined;if((prior?.revision||0)!==expectedRevision){conflict=true;tx.abort();return}for(const row of changed)tx.objectStore('records').put(row);for(const key of removed)tx.objectStore('records').delete(key);if(recovery)tx.objectStore('recovery').put({key:'before-migration',raw:recovery,legacyKey,createdAt:head.updatedAt});if(damagedSource)tx.objectStore('recovery').put({key:'before-repair',raw:damagedSource,createdAt:head.updatedAt});meta.put(head,'head');}catch(error){writeError=error;tx.abort()}};
  try{await done}catch(error){if(writeError)throw writeError;if(conflict)throw new Error('다른 화면에서 원장이 변경됐습니다. 작성 중인 내용은 유지됩니다. 최신 원장을 확인한 뒤 다시 저장해 주세요.');throw error}
  localDatabaseRevision=head.revision;localDatabaseRows=currentRows;localDatabaseEnvelope=JSON.parse(raw) as LocalJson;
  try{localStorage.setItem(`${KEY}-database-change`,JSON.stringify({revision:head.revision,at:head.updatedAt}))}catch{}
 }
-async function localDbRecovery(key:string,raw:string):Promise<true>{await localDbOpen();const tx=localDbTransaction(['recovery'],'readwrite'),done=localDbDone(tx);const store=tx.objectStore('recovery'),createdAt=new Date().toISOString(),scan=store.getAll();scan.onsuccess=()=>{const prior=(scan.result as Array<{key:string;createdAt:string}>).filter(row=>row.key!=='before-migration'&&row.key!==key);prior.push({key,createdAt});prior.sort((a,b)=>b.createdAt.localeCompare(a.createdAt)||b.key.localeCompare(a.key));for(const old of prior.slice(3))store.delete(old.key);store.put({key,raw,createdAt})};await done;const read=localDbTransaction(['recovery'],'readonly'),readDone=localDbDone(read),result=await localDbRequest(read.objectStore('recovery').get(key)) as {raw?:string}|undefined;await readDone;if(result?.raw!==raw)throw new Error('복구용 사본 검증 실패');return true}
+async function localDbRecovery(key:string,raw:string):Promise<true>{await localDbOpen();const tx=localDbTransaction(['recovery'],'readwrite'),done=localDbDone(tx);const store=tx.objectStore('recovery'),createdAt=new Date().toISOString(),scan=store.getAll();scan.onsuccess=()=>{const prior=(scan.result as Array<{key:string;createdAt:string}>).filter(row=>row.key!=='before-migration'&&row.key!=='before-repair'&&row.key!==key);prior.push({key,createdAt});prior.sort((a,b)=>b.createdAt.localeCompare(a.createdAt)||b.key.localeCompare(a.key));for(const old of prior.slice(3))store.delete(old.key);store.put({key,raw,createdAt})};await done;const read=localDbTransaction(['recovery'],'readonly'),readDone=localDbDone(read),result=await localDbRequest(read.objectStore('recovery').get(key)) as {raw?:string}|undefined;await readDone;if(result?.raw!==raw)throw new Error('복구용 사본 검증 실패');return true}
 async function localDbSaveSync(value:LocalSync):Promise<void>{const tx=localDbTransaction(['meta'],'readwrite'),done=localDbDone(tx);tx.objectStore('meta').put(value,'sync');await done;localDatabaseSync=JSON.parse(JSON.stringify(value)) as LocalSync}
 async function localDbUsage():Promise<{usage:number;quota:number;persistent:boolean}>{const estimate=await navigator.storage?.estimate?.();return{usage:Number(estimate?.usage)||0,quota:Number(estimate?.quota)||0,persistent:!!(await navigator.storage?.persisted?.())}}
 async function localDbProbe():Promise<boolean>{try{const key='storage-probe',value=crypto.randomUUID(),tx=localDbTransaction(['meta'],'readwrite'),done=localDbDone(tx);tx.objectStore('meta').put(value,key);await done;const read=localDbTransaction(['meta'],'readwrite'),readDone=localDbDone(read),request=read.objectStore('meta').get(key);let matched=false;request.onsuccess=()=>{matched=request.result===value;read.objectStore('meta').delete(key)};await readDone;return matched}catch{return false}}
-const assetLocalDatabase={read:localDbRead,commit:localDbCommit,recovery:localDbRecovery,saveSync:localDbSaveSync,usage:localDbUsage,probe:localDbProbe,get envelope(){return localDatabaseEnvelope},get revision(){return localDatabaseRevision},get sync(){return localDatabaseSync}};
+async function localDbRescue(userId:string):Promise<LocalRescue>{
+ if(APP_ENV!=='qa'&&!userId)throw new Error('기존 계정으로 로그인한 뒤 복구해 주세요.');
+ await localDbOpen();const tx=localDbTransaction(['meta','records','recovery'],'readonly'),done=localDbDone(tx);
+ const [head,rows,copies,sync]=await Promise.all([localDbRequest(tx.objectStore('meta').get('head')) as Promise<LocalHead|undefined>,localDbRequest(tx.objectStore('records').getAll()) as Promise<LocalRow[]>,localDbRequest(tx.objectStore('recovery').getAll()) as Promise<LocalRecovery[]>,localDbRequest(tx.objectStore('meta').get('sync')) as Promise<LocalSync|undefined>]);await done;
+ if(APP_ENV!=='qa'&&sync?.userId&&sync.userId!==userId)throw new Error('이 원장을 저장했던 계정으로 로그인해 주세요.');
+ return{head,rows,copies,sync}
+}
+async function localDbRepair(envelope:LocalJson,userId:string,expectedRevision:number):Promise<void>{
+ const source=await localDbRescue(userId),head=source.head;
+ if(head&&(head.format!==LOCAL_DATABASE_FORMAT||Number(head.envelope?.schemaVersion)>SCHEMA_VERSION||!Number.isSafeInteger(head.revision)||head.revision<0))throw new Error('현재 버전에서 복구할 수 없는 원장입니다. 원본을 내려받아 확인해 주세요.');
+ if((head?.revision||0)!==expectedRevision)throw new Error('복구 준비 중 다른 화면에서 원장이 변경됐습니다. 다시 확인해 주세요.');
+ const legacy=source.copies.find(copy=>copy.key==='before-migration');
+ if(legacy?.legacyKey){const old=localStorage.getItem(legacy.legacyKey);if(old&&old!==legacy.raw)throw new Error('이전 버전에서 수정한 원본이 있습니다. 원본을 내려받아 두 자료를 먼저 확인해 주세요.');}
+ localDatabaseRevision=expectedRevision;localDatabaseRows=new Map(source.rows.map(row=>[row.key,JSON.stringify(row)]));localDatabaseReady=true;
+ try{await localDbCommit(envelope,{expectedRevision,damagedSource:JSON.stringify({head:source.head,rows:source.rows})});await localDbRead()}catch(error){localDatabaseReady=false;throw error}
+}
+const assetLocalDatabase={rescue:localDbRescue,repair:localDbRepair,read:localDbRead,commit:localDbCommit,recovery:localDbRecovery,saveSync:localDbSaveSync,usage:localDbUsage,probe:localDbProbe,get envelope(){return localDatabaseEnvelope},get revision(){return localDatabaseRevision},get sync(){return localDatabaseSync}};

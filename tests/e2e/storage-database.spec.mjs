@@ -57,3 +57,33 @@ test('@core a busy month shows fifty ledger rows and expands without dropping re
  await page.locator('[data-integrated-search-more]').click();await expect(page.locator('[data-integrated-tx]')).toHaveCount(125);
  await expect(page.locator('[data-integrated-search-more]')).toHaveCount(0);expect(await page.evaluate(()=>state.integrated.ledger.length)).toBe(125);
 });
+
+test('@core damaged startup preserves originals and recovers a verified backup after a failed repair',async({page})=>{
+ test.setTimeout(90000);const errors=[];page.on('pageerror',error=>errors.push(String(error)));
+ await page.goto('/index.html?qa=1#/home');await ready(page);
+ const saved=await page.evaluate(async()=>{const next=window.__assetOS.getState();next.integrated.ledger=[{id:'repair-original',type:'openingAsset',date:'2026-01-01',toAccountId:'cash-main',amount:3456789,meta:{evidence:'preserve'}}];await window.__assetOS.replaceState(next);const payload=backupPayload(),revision=assetLocalDatabase.revision;const tx=localDatabase.transaction(['meta'],'readwrite'),done=localDbDone(tx),store=tx.objectStore('meta'),head=await localDbRequest(store.get('head'));head.checksum='0'.repeat(64);store.put(head,'head');await done;return{payload,revision}});
+ await page.reload();await expect(page.locator('#storageRecovery')).toBeVisible();await page.screenshot({path:`/tmp/asset-recovery-${test.info().project.name}.png`});expect(await page.evaluate(()=>!!window.__assetOS)).toBe(false);
+ const pending=page.waitForEvent('download');await page.locator('#recoveryDownload').click();const download=await pending;const raw=JSON.parse(await readFile(await download.path(),'utf8'));expect(raw.format).toBe('asset-os-recovery-v1');expect(raw.head.checksum).toBe('0'.repeat(64));expect(raw.rows.some(row=>row.value?.id==='repair-original')).toBe(true);
+ await page.locator('#recoveryFile').setInputFiles({name:'invalid.json',mimeType:'application/json',buffer:Buffer.from('{"wrong":true}')});await expect(page.locator('#assetAuthStatus')).toContainText('복구하지 않았습니다');
+ const file={name:'verified.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(saved.payload))};
+ await page.locator('#recoveryFile').setInputFiles(file);await expect(page.locator('#recoveryPreview')).toContainText('verified.json');await page.locator('#recoveryCancel').click();expect(await page.evaluate(async()=>(await assetLocalDatabase.rescue('')).head.revision)).toBe(saved.revision);
+ await page.locator('#recoveryFile').setInputFiles(file);
+ await page.locator('#recoveryFile').setInputFiles({name:'bad-after-good.json',mimeType:'application/json',buffer:Buffer.from('{}')});await expect(page.locator('#recoveryConfirm')).toBeHidden();
+ await page.locator('#recoveryFile').setInputFiles(file);
+ await page.evaluate(()=>{globalThis.__originalRecoveryPut=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(value,...args){if(this.name==='recovery'&&value?.key==='before-repair')throw new DOMException('repair quota test','QuotaExceededError');return globalThis.__originalRecoveryPut.call(this,value,...args)}});
+ await page.locator('#recoveryConfirm').click();await expect(page.locator('#assetAuthStatus')).toContainText('복구 실패');
+ expect(await page.evaluate(async()=>{const current=await assetLocalDatabase.rescue('');return{revision:current.head.revision,checksum:current.head.checksum,hasOriginal:current.rows.some(row=>row.value?.id==='repair-original'),hasRecovery:current.copies.some(copy=>copy.key==='before-repair')}})).toEqual({revision:saved.revision,checksum:'0'.repeat(64),hasOriginal:true,hasRecovery:false});
+ await page.evaluate(()=>{IDBObjectStore.prototype.put=globalThis.__originalRecoveryPut});await page.locator('#recoveryConfirm').click();await ready(page);
+ expect(await page.evaluate(async()=>({amount:state.integrated.ledger[0].amount,meta:state.integrated.ledger[0].meta.evidence,old:JSON.parse((await assetLocalDatabase.rescue('')).copies.find(copy=>copy.key==='before-repair').raw).head.checksum}))).toEqual({amount:3456789,meta:'preserve',old:'0'.repeat(64)});
+ await page.reload();await ready(page);expect(await page.evaluate(()=>state.integrated.ledger[0].amount)).toBe(3456789);expect(errors).toEqual([]);
+});
+
+test('@core recovery cannot replace a future-version database or another owners ledger',async({page})=>{
+ await page.goto('/index.html');await page.waitForFunction(()=>localDatabaseReady);await expect(page.locator('#assetAuthButton')).toHaveText('Google로 로그인');
+ const result=await page.evaluate(async()=>{const revision=assetLocalDatabase.revision;await assetLocalDatabase.saveSync({userId:'original-owner',baseRevision:1,baseFingerprint:'kept'});let readBlocked=false,writeBlocked=false,futureBlocked=false;try{await assetLocalDatabase.rescue('other-owner')}catch{readBlocked=true}try{await assetLocalDatabase.repair(assetLocalDatabase.envelope,'other-owner',revision)}catch{writeBlocked=true}
+ const tx=localDatabase.transaction(['meta'],'readwrite'),done=localDbDone(tx),store=tx.objectStore('meta'),head=await localDbRequest(store.get('head'));head.envelope.schemaVersion=SCHEMA_VERSION+1;store.put(head,'head');await done;try{await assetLocalDatabase.repair(assetLocalDatabase.envelope,'original-owner',revision)}catch{futureBlocked=true}const source=await assetLocalDatabase.rescue('original-owner');return{readBlocked,writeBlocked,futureBlocked,revision:source.head.revision,expected:revision,schema:source.head.envelope.schemaVersion,expectedSchema:SCHEMA_VERSION+1}});
+ expect(result.readBlocked).toBe(true);expect(result.writeBlocked).toBe(true);expect(result.futureBlocked).toBe(true);expect(result.revision).toBe(result.expected);expect(result.schema).toBe(result.expectedSchema);
+ await page.evaluate(async()=>{globalThis.__switchEvents=[];assetSupabaseSession={user:{id:'other-owner'}};assetSupabaseClient={auth:{signOut:async()=>{globalThis.__switchEvents.push('signed-out');return{error:null}},signInWithOAuth:async options=>{globalThis.__switchOptions=options;return{error:null}}}};brokerKisClient.signOut=()=>({ok:true});await startAssetAuthenticatedApp()});
+ await expect(page.locator('#assetAuthStatus')).toContainText('다른 로그인 계정');await expect(page.locator('#assetAuthSwitch')).toBeVisible();await page.locator('#assetAuthSwitch').click();
+ await page.waitForFunction(()=>!!globalThis.__switchOptions);expect(await page.evaluate(()=>({events:globalThis.__switchEvents,provider:globalThis.__switchOptions.provider,prompt:globalThis.__switchOptions.options.queryParams.prompt,owner:assetLocalDatabase.sync.userId}))).toEqual({events:['signed-out'],provider:'google',prompt:'select_account',owner:'original-owner'});
+});

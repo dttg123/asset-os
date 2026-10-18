@@ -14,7 +14,7 @@ type CloudFetchResult={row:CloudStateRow|null;error:CloudRecord|null};
 type CloudApiResult<T>={data:T;error:CloudRecord|null};
 interface CloudQuery {select(fields:string):CloudQuery;eq(key:string,value:string):CloudQuery;maybeSingle():Promise<CloudApiResult<unknown>>}
 interface CloudClient {
- auth:{onAuthStateChange(callback:(event:string,session:CloudSession|null)=>void):unknown;getSession():Promise<CloudApiResult<{session:CloudSession|null}>>;signInWithOAuth(options:{provider:string;options:{redirectTo:string}}):Promise<{error:CloudRecord|null}>;signOut():Promise<{error:CloudRecord|null}>};
+ auth:{onAuthStateChange(callback:(event:string,session:CloudSession|null)=>void):unknown;getSession():Promise<CloudApiResult<{session:CloudSession|null}>>;signInWithOAuth(options:{provider:string;options:{redirectTo:string;queryParams?:Record<string,string>}}):Promise<{error:CloudRecord|null}>;signOut():Promise<{error:CloudRecord|null}>};
  from(table:string):CloudQuery;
  rpc(name:string,args:CloudRecord):Promise<CloudApiResult<unknown>>;
 }
@@ -79,6 +79,7 @@ function cloudAuthCallbackFailure(){
 
 function assetAuthGateState(mode:CloudAuthGateMode,message=''){
  const gate=$('#assetAuthGate'),button=$('#assetAuthButton'),status=$('#assetAuthStatus'),conflict=$('#assetAuthConflict');if(!gate||!button||!status)return;
+ const switchAccount=$('#assetAuthSwitch');if(switchAccount){switchAccount.hidden=mode!=='error'||!cloudUser();switchAccount.onclick=async()=>{if(await signOutAssetGoogle())await signInAssetGoogle(true)}};
  gate.hidden=false;document.documentElement.classList.add('asset-auth-locked');status.className=`asset-auth-status ${mode==='error'?'error':''}`;
  button.hidden=mode==='conflict';if(conflict)conflict.hidden=mode!=='conflict';
  if(mode==='loading'){button.disabled=true;button.textContent='연결 확인 중';status.textContent=message||'Supabase 세션을 확인하고 있습니다.'}
@@ -160,6 +161,8 @@ async function handleCloudAuthState(event:unknown,session:CloudSession|null){
  if(qaCloudBlocked())return false;
  assetSupabaseSession=session||null;if(session)syncBrokerKisSessionFromCloud(session);refreshCloudProfileUI();
  if(!session){cloudSetStatus('로그인 필요','wait');assetAppUnlocked=false;assetAuthGateState('login');return false}
+ // Storage recovery has no trusted in-memory ledger yet. A token refresh must not start a remote replacement during repair.
+ if(!state)return false;
  if(!cloudLocalOwnerMatches()){assetAppUnlocked=false;assetAuthGateState('error','이 기기 원장은 다른 계정의 자료입니다. 기존 계정으로 로그인해 주세요.');return false}
  if(['INITIAL_SESSION','SIGNED_IN','TOKEN_REFRESHED','USER_UPDATED'].includes(String(event||''))){
   cloudSetStatus('동기화 확인 중','wait');
@@ -168,12 +171,12 @@ async function handleCloudAuthState(event:unknown,session:CloudSession|null){
  return true
 }
 
-async function signInAssetGoogle(){
+async function signInAssetGoogle(selectAccount=false){
  if(qaCloudBlocked()){toast('QA 모드에서는 Google 로그인이 차단됩니다.');return false}
  if(!assetSupabaseClient&&!(await initSupabaseCloud()))return false;
  const client=assetSupabaseClient;if(!client)return false;
  cloudSetStatus('Google 로그인 이동 중','wait');
- const {error}=await client.auth.signInWithOAuth({provider:'google',options:{redirectTo:SUPABASE_REDIRECT_URL}});
+ const {error}=await client.auth.signInWithOAuth({provider:'google',options:{redirectTo:SUPABASE_REDIRECT_URL,...(selectAccount?{queryParams:{prompt:'select_account'}}:{})}});
  if(error){cloudSetStatus(`로그인 실패: ${error.message}`,'wait');toast('Google 로그인을 시작하지 못했습니다.');return false}
  return true
 }

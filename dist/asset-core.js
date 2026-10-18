@@ -5,7 +5,7 @@ const BROKER_KIS_PUBLIC_CONFIG = Object.freeze({ projectUrl: 'https://wjrzukoofs
 const QA_MODE = typeof location !== 'undefined' && /(?:^|[?&])qa=1(?:&|$)/.test(String(location.search || ''));
 const QA_STORAGE_KEY = 'asset-os-qa-v0.5', LIVE_STORAGE_KEY = 'asset-os-v1.9.45-live';
 const DEFAULT_FINANCE_DAY = 25;
-const APP_VERSION = 'v0.7.0', APP_ENV = QA_MODE ? 'qa' : 'live', SCHEMA_VERSION = 22, KEY = QA_MODE ? QA_STORAGE_KEY : LIVE_STORAGE_KEY, LEGACY_KEYS = ['asset-os-v1.9.22-central-schedule', 'asset-os-v1.9.20-real-finance', 'asset-os-v1.9.19-finance-linked', 'asset-os-v1.9.18-integrated-ui-refine', 'asset-os-v1.9.17-integrated-complete-stage1', 'asset-os-v1.9.16-integrated-ledger-stage2', 'asset-os-v1.9.9-pension-step2-analysis', 'asset-os-v1.9.7-pension-step2-precision', 'asset-os-v1.9.6-pension-step2-refine', 'asset-os-v1.9.5-pension-step2', 'asset-os-v1.9.4-pension-step1', 'asset-os-v1.9.3-pension-step1', 'asset-os-v1.9.2-isa-review', 'asset-os-v1.9.1-isa-review', 'asset-os-v1.9-isa-review', 'asset-os-v1.8-isa-review', 'asset-os-v1.7-isa-review', 'asset-os-v1.6.1-isa-review', 'asset-os-v1.6-isa-review', 'asset-os-v1.5-isa-review', 'asset-os-v1.4-isa-review', 'asset-os-v1.3-isa-review'];
+const APP_VERSION = 'v0.7.1', APP_ENV = QA_MODE ? 'qa' : 'live', SCHEMA_VERSION = 22, KEY = QA_MODE ? QA_STORAGE_KEY : LIVE_STORAGE_KEY, LEGACY_KEYS = ['asset-os-v1.9.22-central-schedule', 'asset-os-v1.9.20-real-finance', 'asset-os-v1.9.19-finance-linked', 'asset-os-v1.9.18-integrated-ui-refine', 'asset-os-v1.9.17-integrated-complete-stage1', 'asset-os-v1.9.16-integrated-ledger-stage2', 'asset-os-v1.9.9-pension-step2-analysis', 'asset-os-v1.9.7-pension-step2-precision', 'asset-os-v1.9.6-pension-step2-refine', 'asset-os-v1.9.5-pension-step2', 'asset-os-v1.9.4-pension-step1', 'asset-os-v1.9.3-pension-step1', 'asset-os-v1.9.2-isa-review', 'asset-os-v1.9.1-isa-review', 'asset-os-v1.9-isa-review', 'asset-os-v1.8-isa-review', 'asset-os-v1.7-isa-review', 'asset-os-v1.6.1-isa-review', 'asset-os-v1.6-isa-review', 'asset-os-v1.5-isa-review', 'asset-os-v1.4-isa-review', 'asset-os-v1.3-isa-review'];
 const nf = new Intl.NumberFormat('ko-KR');
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const INVESTMENT_ROLES = ['성장', '배당', '현금흐름', '안정', '현금'];
@@ -342,8 +342,10 @@ function brokerKisImportBalanceSnapshot(store, input, accountKind, accountId, fe
     if (!kind || !timestamp)
         return { ok: false, error: 'KIS_RESPONSE_METADATA_INVALID' };
     // A missing/invalid response is not an authoritative zero balance.
-    const validAmount = (value) => typeof value !== 'boolean' && value !== null && value !== undefined && String(value).trim() !== '' && Number.isFinite(Number(String(value).replaceAll(',', ''))) && Number(String(value).replaceAll(',', '')) >= 0 && Number(String(value).replaceAll(',', '')) <= Number.MAX_SAFE_INTEGER;
+    const validAmount = (value, signed = false) => (typeof value === 'number' || typeof value === 'string') && String(value).trim() !== '' && Number.isFinite(Number(String(value).replaceAll(',', ''))) && (signed || Number(String(value).replaceAll(',', '')) >= 0) && Math.abs(Number(String(value).replaceAll(',', ''))) <= Number.MAX_SAFE_INTEGER;
     if (!input || typeof input !== 'object' || !validAmount(input.cash) || !validAmount(input.totalValue) || (input.securitiesValue !== undefined && !validAmount(input.securitiesValue)) || (input.holdings !== undefined && (!Array.isArray(input.holdings) || input.holdings.some(row => !row || typeof row !== 'object' || Array.isArray(row)))))
+        return { ok: false, error: 'KIS_BALANCE_INVALID' };
+    if (Array.isArray(input.holdings) && input.holdings.some((row) => ['quantity', 'avgPrice', 'currentPrice', 'marketValue', 'profitLoss'].some(key => row[key] !== undefined && !validAmount(row[key], key === 'profitLoss'))))
         return { ok: false, error: 'KIS_BALANCE_INVALID' };
     const target = store || brokerKisEmptyStore(), snapshot = brokerKisNormalizeBalanceSnapshot({ ...input, authoritative: true }, kind, accountId, timestamp);
     if (!snapshot.accountId)
@@ -2084,7 +2086,7 @@ async function localDbRead() {
     localDatabaseReady = true;
     return envelope;
 }
-async function localDbCommit(envelope, { recovery, legacyKey = KEY, expectedRevision = localDatabaseRevision } = {}) {
+async function localDbCommit(envelope, { recovery, damagedSource, legacyKey = KEY, expectedRevision = localDatabaseRevision } = {}) {
     if (!localDatabaseReady)
         throw new Error('기기 저장소를 다시 열어 확인해 주세요.');
     const raw = JSON.stringify(envelope), packed = localDbPack(envelope), checksum = await localDbChecksum(raw), currentRows = new Map(packed.rows.map(row => [row.key, JSON.stringify(row)])), changed = packed.rows.filter(row => currentRows.get(row.key) !== localDatabaseRows.get(row.key)), removed = [...localDatabaseRows.keys()].filter(key => !currentRows.has(key));
@@ -2104,6 +2106,8 @@ async function localDbCommit(envelope, { recovery, legacyKey = KEY, expectedRevi
             tx.objectStore('records').delete(key);
         if (recovery)
             tx.objectStore('recovery').put({ key: 'before-migration', raw: recovery, legacyKey, createdAt: head.updatedAt });
+        if (damagedSource)
+            tx.objectStore('recovery').put({ key: 'before-repair', raw: damagedSource, createdAt: head.updatedAt });
         meta.put(head, 'head');
     }
     catch (error) {
@@ -2128,7 +2132,7 @@ async function localDbCommit(envelope, { recovery, legacyKey = KEY, expectedRevi
     }
     catch { }
 }
-async function localDbRecovery(key, raw) { await localDbOpen(); const tx = localDbTransaction(['recovery'], 'readwrite'), done = localDbDone(tx); const store = tx.objectStore('recovery'), createdAt = new Date().toISOString(), scan = store.getAll(); scan.onsuccess = () => { const prior = scan.result.filter(row => row.key !== 'before-migration' && row.key !== key); prior.push({ key, createdAt }); prior.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.key.localeCompare(a.key)); for (const old of prior.slice(3))
+async function localDbRecovery(key, raw) { await localDbOpen(); const tx = localDbTransaction(['recovery'], 'readwrite'), done = localDbDone(tx); const store = tx.objectStore('recovery'), createdAt = new Date().toISOString(), scan = store.getAll(); scan.onsuccess = () => { const prior = scan.result.filter(row => row.key !== 'before-migration' && row.key !== 'before-repair' && row.key !== key); prior.push({ key, createdAt }); prior.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.key.localeCompare(a.key)); for (const old of prior.slice(3))
     store.delete(old.key); store.put({ key, raw, createdAt }); }; await done; const read = localDbTransaction(['recovery'], 'readonly'), readDone = localDbDone(read), result = await localDbRequest(read.objectStore('recovery').get(key)); await readDone; if (result?.raw !== raw)
     throw new Error('복구용 사본 검증 실패'); return true; }
 async function localDbSaveSync(value) { const tx = localDbTransaction(['meta'], 'readwrite'), done = localDbDone(tx); tx.objectStore('meta').put(value, 'sync'); await done; localDatabaseSync = JSON.parse(JSON.stringify(value)); }
@@ -2146,7 +2150,42 @@ async function localDbProbe() { try {
 catch {
     return false;
 } }
-const assetLocalDatabase = { read: localDbRead, commit: localDbCommit, recovery: localDbRecovery, saveSync: localDbSaveSync, usage: localDbUsage, probe: localDbProbe, get envelope() { return localDatabaseEnvelope; }, get revision() { return localDatabaseRevision; }, get sync() { return localDatabaseSync; } };
+async function localDbRescue(userId) {
+    if (APP_ENV !== 'qa' && !userId)
+        throw new Error('기존 계정으로 로그인한 뒤 복구해 주세요.');
+    await localDbOpen();
+    const tx = localDbTransaction(['meta', 'records', 'recovery'], 'readonly'), done = localDbDone(tx);
+    const [head, rows, copies, sync] = await Promise.all([localDbRequest(tx.objectStore('meta').get('head')), localDbRequest(tx.objectStore('records').getAll()), localDbRequest(tx.objectStore('recovery').getAll()), localDbRequest(tx.objectStore('meta').get('sync'))]);
+    await done;
+    if (APP_ENV !== 'qa' && sync?.userId && sync.userId !== userId)
+        throw new Error('이 원장을 저장했던 계정으로 로그인해 주세요.');
+    return { head, rows, copies, sync };
+}
+async function localDbRepair(envelope, userId, expectedRevision) {
+    const source = await localDbRescue(userId), head = source.head;
+    if (head && (head.format !== LOCAL_DATABASE_FORMAT || Number(head.envelope?.schemaVersion) > SCHEMA_VERSION || !Number.isSafeInteger(head.revision) || head.revision < 0))
+        throw new Error('현재 버전에서 복구할 수 없는 원장입니다. 원본을 내려받아 확인해 주세요.');
+    if ((head?.revision || 0) !== expectedRevision)
+        throw new Error('복구 준비 중 다른 화면에서 원장이 변경됐습니다. 다시 확인해 주세요.');
+    const legacy = source.copies.find(copy => copy.key === 'before-migration');
+    if (legacy?.legacyKey) {
+        const old = localStorage.getItem(legacy.legacyKey);
+        if (old && old !== legacy.raw)
+            throw new Error('이전 버전에서 수정한 원본이 있습니다. 원본을 내려받아 두 자료를 먼저 확인해 주세요.');
+    }
+    localDatabaseRevision = expectedRevision;
+    localDatabaseRows = new Map(source.rows.map(row => [row.key, JSON.stringify(row)]));
+    localDatabaseReady = true;
+    try {
+        await localDbCommit(envelope, { expectedRevision, damagedSource: JSON.stringify({ head: source.head, rows: source.rows }) });
+        await localDbRead();
+    }
+    catch (error) {
+        localDatabaseReady = false;
+        throw error;
+    }
+}
+const assetLocalDatabase = { rescue: localDbRescue, repair: localDbRepair, read: localDbRead, commit: localDbCommit, recovery: localDbRecovery, saveSync: localDbSaveSync, usage: localDbUsage, probe: localDbProbe, get envelope() { return localDatabaseEnvelope; }, get revision() { return localDatabaseRevision; }, get sync() { return localDatabaseSync; } };
 ;
 /* asset-os source: store-state.js */
 'use strict';
@@ -2711,6 +2750,101 @@ function openBackupHub() {
 }
 async function resetLiveData() { state = normalizeState(seed); if (!(await persist()))
     return false; applyTheme(); render(); toast('초기 실사용 상태로 초기화했습니다.'); return true; }
+async function openStorageRecovery(error) {
+    const message = backupErrorMessage(error) || '기기 원장을 확인하지 못했습니다.';
+    assetAuthGateState('error', message);
+    const retry = document.querySelector('#assetAuthButton'), status = document.querySelector('#assetAuthStatus'), card = document.querySelector('.asset-auth-card');
+    if (!retry || !status || !card)
+        return;
+    retry.onclick = () => location.reload();
+    try {
+        if (!QA_MODE) {
+            await initSupabaseCloud();
+            if (!cloudUser()) {
+                retry.textContent = 'Google로 로그인';
+                retry.onclick = () => { void signInAssetGoogle(); };
+                status.textContent = message + ' 기존 계정으로 로그인하면 복구 메뉴를 엽니다.';
+                return;
+            }
+        }
+        assetAuthGateState('error', message);
+        const userId = cloudUser()?.id || '', source = await assetLocalDatabase.rescue(userId), revision = source.head?.revision || 0;
+        document.querySelector('#storageRecovery')?.remove();
+        const panel = document.createElement('div');
+        panel.id = 'storageRecovery';
+        panel.className = 'storage-recovery';
+        card.appendChild(panel);
+        const help = document.createElement('p');
+        help.textContent = '자동으로 초기화하지 않았습니다. 원본을 내려받거나 확인한 백업으로 복구할 수 있습니다.';
+        panel.appendChild(help);
+        const addButton = (label, id, action) => { const button = document.createElement('button'); button.id = id; button.type = 'button'; button.className = 'asset-auth-secondary'; button.textContent = label; button.onclick = action; panel.appendChild(button); return button; };
+        addButton('현재 원본 내려받기', 'recoveryDownload', () => downloadBytes(new TextEncoder().encode(JSON.stringify({ format: 'asset-os-recovery-v1', environment: APP_ENV, exportedAt: new Date().toISOString(), head: source.head, rows: source.rows })), `AssetOS_recovery_original_${Date.now()}.json`, 'application/json'));
+        let pending = null, busy = false;
+        const detail = document.createElement('p');
+        detail.id = 'recoveryPreview';
+        detail.hidden = true;
+        const confirmation = document.createElement('div');
+        confirmation.hidden = true;
+        const confirm = document.createElement('button');
+        confirm.id = 'recoveryConfirm';
+        confirm.type = 'button';
+        confirm.textContent = '이 백업으로 복구';
+        const cancel = document.createElement('button');
+        cancel.id = 'recoveryCancel';
+        cancel.type = 'button';
+        cancel.className = 'asset-auth-secondary';
+        cancel.textContent = '취소';
+        const clearCandidate = () => { pending = null; detail.hidden = true; confirmation.hidden = true; };
+        const selectCandidate = (payload, label) => { clearCandidate(); pending = validateBackupPayload(payload); const raw = stateEnvelopeJson(pending); if (new TextEncoder().encode(raw).length > MAX_STATE_BYTES) {
+            pending = null;
+            throw new Error('백업이 앱의 안전한 처리 한도를 넘습니다. 원본은 변경하지 않았습니다.');
+        } detail.textContent = label + ' 자료로 교체합니다. 현재 원본은 기기에 별도로 보존합니다. 확인 후 복구해 주세요.'; detail.hidden = false; confirmation.hidden = false; };
+        const file = document.createElement('input');
+        file.id = 'recoveryFile';
+        file.type = 'file';
+        file.accept = '.zip,.json,.txt';
+        file.hidden = true;
+        panel.appendChild(file);
+        addButton('백업 파일 선택', 'recoveryChooseFile', () => file.click());
+        file.onchange = async () => { const selected = file.files?.[0]; file.value = ''; if (!selected || busy)
+            return; clearCandidate(); try {
+            selectCandidate(await parseBackupFile(selected), selected.name);
+        }
+        catch (issue) {
+            status.textContent = '복구하지 않았습니다: ' + backupErrorMessage(issue);
+        } };
+        for (const copy of source.copies.filter(copy => copy.key !== 'before-repair').sort((a, b) => b.createdAt.localeCompare(a.createdAt))) {
+            try {
+                const saved = JSON.parse(copy.raw), payload = { format: BACKUP_FORMAT, schemaVersion: saved.schemaVersion, environment: saved.environment || APP_ENV, data: saved.data };
+                validateBackupPayload(payload);
+                addButton(`기기 보관 사본 · ${formatDateTime(copy.createdAt)}`, 'recoveryCopy-' + copy.key, () => { try {
+                    selectCandidate(payload, formatDateTime(copy.createdAt) + ' 기기 보관 사본');
+                }
+                catch (issue) {
+                    status.textContent = backupErrorMessage(issue);
+                } });
+            }
+            catch { }
+        }
+        confirmation.append(confirm, cancel);
+        panel.append(detail, confirmation);
+        cancel.onclick = clearCandidate;
+        confirm.onclick = async () => { if (!pending || busy)
+            return; busy = true; const buttons = Array.from(card.querySelectorAll('button')); buttons.forEach(button => button.disabled = true); status.textContent = '원본을 보존하고 백업을 복구하고 있습니다.'; try {
+            await assetLocalDatabase.repair(JSON.parse(stateEnvelopeJson(pending)), userId, revision);
+            status.textContent = '복구를 확인했습니다. 앱을 다시 엽니다.';
+            location.reload();
+        }
+        catch (issue) {
+            status.textContent = '복구 실패: ' + backupErrorMessage(issue);
+            busy = false;
+            buttons.forEach(button => button.disabled = false);
+        } };
+    }
+    catch (issue) {
+        status.textContent = message + ' ' + backupErrorMessage(issue);
+    }
+}
 ;
 /* asset-os source: export-csv.js */
 'use strict';

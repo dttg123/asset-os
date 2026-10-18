@@ -19,7 +19,7 @@ const expectNoHorizontalOverflow=async page=>{
 
 test('@smoke isolated QA shell opens without production sync',async({page})=>{
  await preparePage(page);
- await page.goto(app);
+ await page.goto(app);await page.waitForFunction(()=>!!window.__assetOS);
  await expect(page.getByRole('heading',{name:'홈',exact:true})).toBeVisible();
  await expect(page.getByText('QA 전용 · 운영 데이터 분리')).toBeVisible();
  await page.getByRole('button',{name:'내 Asset OS 열기'}).click();
@@ -30,7 +30,7 @@ test('@smoke isolated QA shell opens without production sync',async({page})=>{
 
 test('@core long data survives reload and every primary route renders',async({page})=>{
  await preparePage(page);
- await page.goto(app);
+ await page.goto(app);await page.waitForFunction(()=>!!window.__assetOS);
  await page.getByRole('button',{name:'35년 생성'}).click();
  const dialog=page.getByRole('dialog',{name:'QA 35년 실사용 데이터 생성'});
  await dialog.getByRole('button',{name:'생성'}).click();
@@ -65,7 +65,7 @@ test('@core @release authentication gate exposes only safe conflict actions',asy
 
 test('@core finance interest and backup health work through their real sheets',async({page})=>{
  await preparePage(page);
- await page.goto(app);
+ await page.goto(app);await page.waitForFunction(()=>!!window.__assetOS);
  await page.evaluate(async ()=>{
   const next=window.__assetOS.getState(),id='e2e-deposit',accountId=`finance-asset-${id}`;
   next.financialProducts=next.financialProducts||{items:[],events:[]};
@@ -97,7 +97,7 @@ test('@core finance interest and backup health work through their real sheets',a
 
 test('@core integrated input rejects unsafe amounts and saves a valid transaction',async({page})=>{
  await preparePage(page);
- await page.goto(app);
+ await page.goto(app);await page.waitForFunction(()=>!!window.__assetOS);
  const before=await page.evaluate(()=>window.__assetOS.getState().integrated.ledger.length);
  await page.evaluate(()=>openIntegratedTransactionForm());
  const form=page.locator('#integratedTxForm');
@@ -118,7 +118,7 @@ test('@core integrated input rejects unsafe amounts and saves a valid transactio
 
 test('@core ISA and pension interest save through typed form controls',async({page})=>{
  await preparePage(page);
- await page.goto(app);
+ await page.goto(app);await page.waitForFunction(()=>!!window.__assetOS);
  await page.evaluate(async ()=>{
   const next=window.__assetOS.getState();
   next.accounts=[{id:'e2e-input-isa',name:'입력 테스트 ISA',status:'active',openedAt:'2026-01-01',baselineDate:'2026-01-01',baselineCash:0,holdings:[],transactions:[],reconciliations:[]}];
@@ -148,7 +148,7 @@ test('@core ISA and pension interest save through typed form controls',async({pa
 
 test('@core AI form presets produce a scoped zero-funding rebalance download',async({page})=>{
  await preparePage(page);
- await page.goto(app);
+ await page.goto(app);await page.waitForFunction(()=>!!window.__assetOS);
  await page.evaluate(async ()=>{
   const next=window.__assetOS.getState();
   next.accounts=[];
@@ -178,7 +178,7 @@ test('@core AI form presets produce a scoped zero-funding rebalance download',as
 
 test('@core secure mobile backup downloads a restorable ZIP when file pickers are unavailable',async({page})=>{
  await preparePage(page);
- await page.goto(app);
+ await page.goto(app);await page.waitForFunction(()=>!!window.__assetOS);
  await page.evaluate(async ()=>{
   Object.defineProperty(window,'showSaveFilePicker',{configurable:true,value:undefined});
   Object.defineProperty(window,'showDirectoryPicker',{configurable:true,value:undefined});
@@ -206,7 +206,7 @@ test('@core secure mobile backup downloads a restorable ZIP when file pickers ar
 
 test('@core Drive backup shares TXT, respects cancellation, and downloads ZIP after permission denial',async({page})=>{
  await preparePage(page);
- await page.goto(app);
+ await page.goto(app);await page.waitForFunction(()=>!!window.__assetOS);
  let downloads=0;
  page.on('download',()=>downloads++);
  for(const outcome of ['success','AbortError','NotAllowedError']){
@@ -246,7 +246,7 @@ test('@core Drive backup shares TXT, respects cancellation, and downloads ZIP af
 
 test('@core haptic settings control vibration and unsupported browsers remain usable',async({page})=>{
  await preparePage(page);
- await page.goto(app);
+ await page.goto(app);await page.waitForFunction(()=>!!window.__assetOS);
  const calls=await page.evaluate(()=>{
   const patterns=[];
   Object.defineProperty(navigator,'vibrate',{configurable:true,value:pattern=>{patterns.push(pattern);return true}});
@@ -267,7 +267,7 @@ test('@core haptic settings control vibration and unsupported browsers remain us
 
 test('@core AI sharing uses pension cash after a balance discrepancy without blocking a funded request',async({page})=>{
  await preparePage(page);
- await page.goto(app);
+ await page.goto(app);await page.waitForFunction(()=>!!window.__assetOS);
  await page.evaluate(async ()=>{
   const next=window.__assetOS.getState();
   next.accounts=[];
@@ -296,7 +296,7 @@ test('@core AI sharing uses pension cash after a balance discrepancy without blo
 });
 
 test('@core quick entry saves continuously, remembers fields, copies safely and persists favorites',async({page})=>{
- await preparePage(page);await page.goto(app);
+ await preparePage(page);await page.goto(app);await page.waitForFunction(()=>!!window.__assetOS);
  await page.evaluate(()=>openIntegratedTransactionForm());
  let form=page.locator('#integratedTxForm');
  await form.locator('[name="amount"]').fill('250000');
@@ -325,7 +325,7 @@ test('@core quick entry saves continuously, remembers fields, copies safely and 
 });
 
 test('@core native integrated summary opens presets and card installments without silent writes',async({page})=>{
- await preparePage(page);await page.goto(app);
+ await preparePage(page);await page.goto(app);await page.waitForFunction(()=>!!window.__assetOS);
  await page.evaluate(async ()=>{
   const next=window.__assetOS.getState();next.financialProducts={items:[],events:[]};next.financeSchedules={items:[]};next.integrated.liabilities=[];
   next.integrated.ledger=[{id:'native-cash',date:'2026-01-01',type:'openingAsset',toAccountId:'cash-main',amount:10000000}];
@@ -362,7 +362,7 @@ test('@core native integrated summary opens presets and card installments withou
 });
 
 test('@core @release schedule and card sheets connect purchase, payment correction and recurrence scope',async({page})=>{
- await preparePage(page);await page.goto(app);
+ await preparePage(page);await page.goto(app);await page.waitForFunction(()=>!!window.__assetOS);
  await page.evaluate(async ()=>{const next=window.__assetOS.getState();next.financialProducts={items:[],events:[]};next.financeSchedules={items:[]};next.integrated.liabilities=[];next.integrated.ledger=[{id:'card-cash',date:'2026-01-01',type:'openingAsset',toAccountId:'cash-main',amount:10000000}];next.settings.integratedMonth='2026-02';(await window.__assetOS.replaceState(next));nav('integrated','schedule')});
  await page.getByRole('button',{name:'＋ 구매 기록',exact:true}).click();
  const card=page.locator('#cardInstallmentForm');await card.locator('[name="name"]').fill('TV · 국민카드');await card.locator('[name="purchaseAmount"]').fill('1200000');await card.locator('[name="purchaseDate"]').fill('2026-01-10');await card.locator('[name="firstPaymentDate"]').fill('2026-02-25');await card.locator('[name="months"]').selectOption('12');await card.locator('[name="interestMode"]').selectOption('paid');await card.locator('[name="annualRate"]').fill('12');await card.getByRole('button',{name:'구매 기록 저장'}).click();
@@ -381,7 +381,7 @@ test('@core @release schedule and card sheets connect purchase, payment correcti
 });
 
 test('@core @release money balances survive settlement, malformed refresh, save failure and explicit zero after reload',async({page})=>{
- await preparePage(page);await page.goto(app);
+ await preparePage(page);await page.goto(app);await page.waitForFunction(()=>!!window.__assetOS);
  await page.evaluate(async ()=>{
   const next=window.__assetOS.getState();next.accounts=[];next.pension.accounts=[{id:'money-flow',kind:'pension',name:'QA 돈 흐름',status:'active',openedAt:'2026-01-01'}];next.pension.holdings=[];next.pension.transactions=[];next.pension.assetSnapshots=[];next.integrated.ledger=[];next.brokerKis={};next.moduleVerification={isa:true,pension:true,irp:true};next.settings.pensionAssetScope='pension';next.settings.backupV04={phoneEnabled:false};(await window.__assetOS.replaceState(next));
   window.__moneyTime=new Date().toISOString();window.__moneyBalance={cash:100000,cashDetail:{depositCash:100000,settledCash:300000,nextDayCash:100000,availableCash:100000},securitiesValue:200000,totalValue:500000,holdings:[{productCode:'MONEY',productName:'QA ETF',quantity:20,avgPrice:9000,currentPrice:10000,marketValue:200000,profitLoss:20000}]};
@@ -408,7 +408,7 @@ test('@core @release money balances survive settlement, malformed refresh, save 
 });
 
 test('@core unified app keeps alerts behind the header bell and preserves account detail actions',async({page})=>{
- await preparePage(page);await page.goto(app);
+ await preparePage(page);await page.goto(app);await page.waitForFunction(()=>!!window.__assetOS);
  await page.evaluate(async ()=>{
   const next=window.__assetOS.getState();next.accounts=[];next.pension.accounts=[];next.pension.holdings=[];next.pension.transactions=[];next.pension.contributions=[];
   next.financialProducts={items:[],events:[]};next.financeSchedules={items:[]};next.integrated.ledger=[];next.integrated.liabilities=[];next.brokerKis={connections:{}};next.settings.backupV04={...(next.settings.backupV04||{}),phoneEnabled:false};
@@ -438,7 +438,7 @@ test('@core unified app keeps alerts behind the header bell and preserves accoun
 test('@core settings preserve preferences and haptic opt-out across reload',async({page})=>{
  await preparePage(page);
  await page.addInitScript(()=>{window.__qaVibrations=[];Object.defineProperty(navigator,'vibrate',{configurable:true,value:pattern=>{window.__qaVibrations.push(pattern);return true}})});
- await page.goto(app);
+ await page.goto(app);await page.waitForFunction(()=>!!window.__assetOS);
  await page.getByRole('button',{name:'내 Asset OS 열기'}).click();
  await page.locator('[data-profile-action="appearance"]').click();
  await expect(page.locator('#appearanceSheet')).toHaveAttribute('aria-hidden','false');
@@ -468,7 +468,7 @@ test('@core settings preserve preferences and haptic opt-out across reload',asyn
 
 test('@core pension plan stays open when saving fails',async({page})=>{
  await preparePage(page);
- await page.goto(app);
+ await page.goto(app);await page.waitForFunction(()=>!!window.__assetOS);
  await page.evaluate(()=>openPensionSettings());
  const sheet=page.locator('#detailSheet');
  await expect(sheet).toHaveAttribute('aria-hidden','false');
@@ -488,7 +488,7 @@ test('@core pension plan stays open when saving fails',async({page})=>{
 });
 
 test('@core refresh result updates in the open alerts sheet and survives reload',async({page})=>{
- await preparePage(page);await page.goto(app);
+ await preparePage(page);await page.goto(app);await page.waitForFunction(()=>!!window.__assetOS);
  await page.evaluate(async ()=>{
   state.accounts=[];state.brokerKis.connections.pension.lastCompleteSyncAt='2026-10-13T03:00:00Z';state.brokerKis.connections.irp.lastCompleteSyncAt='2026-09-04T01:17:00Z';
   kisConnectedAccount=()=>({id:'refresh-test'});
@@ -512,7 +512,7 @@ test('@core refresh result updates in the open alerts sheet and survives reload'
 });
 
 test('@core asset charts select recorded dates at the edges and through native date controls',async({page})=>{
- await preparePage(page);await page.goto(app);
+ await preparePage(page);await page.goto(app);await page.waitForFunction(()=>!!window.__assetOS);
  await page.evaluate(()=>{
   state.pension.assetSnapshots=[{date:'2060-09-04',pension:{cost:39000000,value:40000000},irp:{cost:0,value:0}},{date:'2060-10-13',pension:{cost:39338332,value:43434207},irp:{cost:0,value:0}}];
   setting().pensionAssetScope='all';openPensionAssetAnalysis();
@@ -538,7 +538,7 @@ test('@core asset charts select recorded dates at the edges and through native d
 });
 
 test('@core imported balance totals stay authoritative and unexplained differences open a comparison',async({page})=>{
- await preparePage(page);await page.goto(app);
+ await preparePage(page);await page.goto(app);await page.waitForFunction(()=>!!window.__assetOS);
  await page.evaluate(async ()=>{
   const next=window.__assetOS.getState();next.accounts=[];next.pension.accounts=[{id:'balance-ui',kind:'pension',name:'QA 연금저축',status:'active',openedAt:'2026-01-01'}];next.pension.holdings=[];next.pension.transactions=[];next.brokerKis={};next.settings.pensionAssetScope='pension';next.settings.backupV04={phoneEnabled:false};(await window.__assetOS.replaceState(next));
   window.__qaBalanceAt=new Date().toISOString();(await window.__assetOS.brokerKis.importBalance({cash:100000,cashDetail:{depositCash:100000,settledCash:100000,nextDayCash:100000,availableCash:100000},securitiesValue:200000,totalValue:264602,holdings:[{productCode:'CHECK',productName:'QA ETF',quantity:20,avgPrice:9000,currentPrice:10000,marketValue:200000}]},'pension','balance-ui',window.__qaBalanceAt));
@@ -559,7 +559,7 @@ test('@core imported balance totals stay authoritative and unexplained differenc
 });
 
 test('@core money history uses a covered baseline and explains debt and adjustment sources',async({page})=>{
- await preparePage(page);await page.goto(app);
+ await preparePage(page);await page.goto(app);await page.waitForFunction(()=>!!window.__assetOS);
  await page.evaluate(async ()=>{
   const next=window.__assetOS.getState(),today=localYmd(),y=Number(today.slice(0,4)),month=today.slice(0,7);
   next.accounts=[];next.pension.accounts=[{id:'history-p',kind:'pension',status:'active',name:'QA pension',openedAt:`${y-1}-01-01`}];next.pension.holdings=[];next.pension.transactions=[];next.pension.contributions=[];next.brokerKis=brokerKisEmptyStore();

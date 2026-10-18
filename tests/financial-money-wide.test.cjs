@@ -109,3 +109,8 @@ test('money: equal-time trade order survives editing and ZIP restore despite opp
  assert.equal((await e.run(`pensionTransactionSave({...state.pension.transactions[0],price:110},'z-first').ok`)),true);assert.equal((await e.run(`pensionAssetMetrics('pension').holdingCost`)),410);assert.equal((await e.run(`pensionAssetMetrics('pension').cash`)),1680);
  (await e.run('state=validateBackupPayload(parseBackupZipBytes(createBackupZipBytes()))'));assert.equal((await e.run(`pensionAssetMetrics('pension').holdingCost`)),410);assert.deepEqual(e.plain((await e.run('state.pension.transactions.map(x=>x.id)'))),['z-first','b-second','a-third']);
 });
+
+test('money: malformed holding numbers cannot replace a verified broker snapshot',async()=>{
+ const e=await pensionEnv();await importBalance(e,balance(100000,64602));const before=JSON.stringify(e.plain(await e.run('state.brokerKis')));
+ for(const patch of [{quantity:'broken'},{quantity:-1},{marketValue:null},{currentPrice:Infinity},{avgPrice:true},{profitLoss:'broken'}]){const candidate=balance(100000,64602);Object.assign(candidate.holdings[0],patch);assert.equal((await importBalance(e,candidate,'2026-10-13T04:00:00Z')).ok,false,JSON.stringify(patch));assert.equal(JSON.stringify(e.plain(await e.run('state.brokerKis'))),before)}
+});
