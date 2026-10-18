@@ -887,3 +887,57 @@ html[data-theme="dark"]{--polish-accent:color-mix(in srgb,var(--accent) 65%,whit
 .storage-recovery{margin-top:18px;text-align:left;max-height:55dvh;overflow:auto}.storage-recovery p{font-size:14px;line-height:1.6;margin:12px 0}.storage-recovery button{margin-top:9px}.storage-recovery [hidden]{display:none!important}
 
 #cardInstallmentForm [hidden]{display:none!important}
+
+/* Domestic finance app finish: a quiet canvas, grouped balances, actions before shortcuts. */
+html,body{background:var(--bg)}
+:root{--bg:#f4f5f7;--bg2:#f4f5f7;--line:#e8ebef}
+html[data-theme="dark"]{--bg:#10151e;--bg2:#10151e;--line:#2c394a}
+body[data-root="integrated"]{--bg:#f4f5f7;--bg2:#f4f5f7}
+html[data-theme="dark"] body[data-root="integrated"]{--bg:#10151e;--bg2:#10151e}
+.topbar{background:var(--bg)}.brand{color:var(--muted);font-size:11px;font-weight:600;letter-spacing:.035em}
+main,body[data-root="integrated"] main{padding:8px 16px 28px!important}
+.stack,body[data-root="integrated"] .stack{gap:14px!important}
+.card,.modulehero,.policy-card,.account-card,.finance-product-card{border-radius:22px;border:0;box-shadow:none}
+.home-app-stack .hero,.isa-hero,.pension-credit-hero,.pension-asset-hero,.integrated-overview-hero,body[data-root="integrated"] .spending-hero{padding:22px!important;border:0!important;border-radius:22px!important;background:var(--surface)!important;background-image:none!important}
+.home-app-stack .hero .herohead{padding-right:24px}.home-app-stack .hero .heropeek{right:14px;top:44px}
+.home-app-stack .heroamount:not(.amount-xlong):not(.amount-xxlong){font-size:clamp(30px,8.4vw,38px)!important;font-weight:700!important;letter-spacing:-.045em!important}
+.home-app-stack .hero .home-module-caption{font-size:12px;line-height:1.55;margin-top:8px}.home-app-stack .hero .change{margin-top:14px;font-size:13px}
+.home-account-list{padding:18px 16px 8px;background:var(--surface);border-radius:22px}
+.home-account-list .sectionhead{padding:0 2px;margin-bottom:8px}.home-account-list .sectionhead h2{font-size:17px}
+.home-account-list .summary-card{border-radius:0;background:transparent}.home-account-list .summary-card+.summary-card{border-top:1px solid var(--line)}
+.home-account-list .card-main{min-height:72px}.home-account-list .detail-trigger{min-height:72px;min-width:36px}.home-account-list .module-icon{width:34px;height:34px;border-radius:12px;box-shadow:none}
+.home-account-list .module-pension{background:color-mix(in srgb,var(--positive) 12%,var(--surface));color:var(--positive)}
+.home-account-list .module-cash{background:color-mix(in srgb,#8765d9 12%,var(--surface));color:light-dark(#7451bc,#bdabef)}
+.home-plan .summary-card{background:var(--surface);border-radius:22px;padding:18px 18px!important}.home-plan .amount{font-size:24px;font-weight:650}.home-plan .detail-trigger{right:18px;top:13px}
+.home-change-compare{background:var(--surface);border-radius:22px;padding:18px}.home-compare-delta{font-size:21px;margin:8px 0 12px}.home-compare-values{font-size:11px}.home-compare-values b{font-size:12px;font-weight:500}
+.module-primary-tabs{margin-bottom:4px!important}.account-selector{background:var(--surface)!important;border-radius:18px!important}
+.common-portfolio-card{padding:20px!important;background:var(--surface)!important;border-radius:22px!important}
+.isa-summary-facts,.monthly-card{padding:20px;background:var(--surface);border-radius:22px}
+.pension-goal{background:var(--surface);border-radius:22px;padding:18px 20px}.pension-contribution-batch-open{background:var(--accent);color:#fff;min-height:52px;border-radius:16px}
+.native-isa-entry>.primary,.integrated-record-primary{min-height:52px;border-radius:16px;font-size:16px;font-weight:600;box-shadow:none}
+body[data-root="integrated"] .household-quick{padding:16px;background:var(--surface);border-radius:22px;margin-top:2px}
+.integrated-record-tools{padding-top:4px}.integrated-record-tools button{min-height:44px;font-size:13px}
+.integrated-quick-presets{padding:16px;background:var(--surface);border-radius:22px}.integrated-quick-presets h2{font-size:15px;margin:0 0 12px}
+.integrated-preset-list{gap:8px}.integrated-preset-list .preset-tile{min-height:88px;padding:12px 10px;gap:8px;border-radius:15px;background:var(--surface2)}
+.preset-copy strong{font-size:14px;line-height:1.45}.preset-copy small{font-size:12px;line-height:1.5}.preset-copy .preset-context{font-size:11px}.preset-icon{width:28px;height:28px;border-radius:9px}.preset-icon svg{width:19px;height:19px}.preset-chevron{display:none}
+.integrated-view-tools{margin-top:-14px}.integrated-view-tools button{background:transparent;font-size:13px;padding:6px 10px}
+.integrated-view-tools [data-card-hub]{background:var(--surface);border-radius:12px}
+.integrated-month-mini,.integrated-consumption-preview{background:var(--surface);border-radius:22px;overflow:hidden}
+body[data-root="integrated"] .integrated-fixed-cost-card{background:var(--surface)!important;border:0!important;border-radius:22px!important;padding:4px 16px!important}
+.sheet{border-radius:28px 28px 0 0;scroll-padding-bottom:90px}.sheet-drag-zone{border-bottom:1px solid var(--line)}
+.sheethead h2{font-size:23px;font-weight:650;letter-spacing:-.035em}.field input,.field select,.field textarea{border:1px solid transparent;background:var(--surface2);border-radius:14px;padding:14px;font-size:16px}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(--soft)}
+.field.has-error input,.field.has-error select,.field.has-error textarea,[aria-invalid="true"]{border-color:var(--negative)}
+:is(#formBody,#registerBody) form>.integrated-form-save{position:sticky;bottom:0;z-index:3;min-height:52px;box-shadow:0 -10px 0 var(--surface);border-radius:16px}
+.entry-save-actions{padding-top:12px}.entry-save-actions button{min-height:52px;border-radius:16px}.entry-extra,.entry-library{border:0;background:var(--surface2);border-radius:14px}
+.bottomnav{border-top:1px solid var(--line);background:var(--surface)}.nav{min-height:52px}.nav.active svg{border-radius:8px;box-shadow:0 0 0 5px var(--soft)}
+@media(max-width:370px){.home-account-list .card-main{min-height:84px}.home-account-list .detail-trigger{min-height:84px}.integrated-quick-presets{padding:14px}.preset-icon{display:none}.integrated-preset-list .preset-tile{padding:12px}.common-portfolio-card{padding:16px!important}}
+.isa-hero-link,.home-trend-head>span,.home-plan .detail-trigger,.integrated-view-tools button:not(:disabled){color:color-mix(in srgb,var(--accent2) 90%,#000)}
+html[data-theme="dark"] :is(.isa-hero-link,.integrated-view-tools button:not(:disabled),.home-trend-head>span,.home-plan .detail-trigger){color:var(--polish-accent)}
+html[data-theme="dark"] .account-selector .status-badge{color:#8adfc4}
+html[data-storage-saving="true"] :is(.integrated-form-save,.entry-continue,.native-isa-entry>.primary){opacity:.65;cursor:wait}
+@media(max-width:370px){.sheet .form-grid:has(input[type="date"]){grid-template-columns:minmax(0,1fr)}}
+.sheethead .eyebrow{color:var(--muted)}
+.integrated-record-primary,.integrated-form-save,.native-isa-entry>.primary,.pension-contribution-batch-open,.form-btn.primary,.dialog-actions .primary{background:var(--accent2)!important;color:#fff}
+.tabs .tab.active,.integrated-tabs button.active{color:color-mix(in srgb,var(--accent2) 90%,#000)!important}
+html[data-theme="dark"] .tabs .tab.active,html[data-theme="dark"] .integrated-tabs button.active{color:var(--polish-accent)!important}

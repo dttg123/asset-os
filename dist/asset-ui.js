@@ -159,7 +159,7 @@ function bindIntegrityActions() {
 }
 function homeTrendMarkup() { const rows = financialGrowthSeries('3m').filter(row => row.coverage?.complete && Number.isFinite(row.netAssets)); if (rows.length < 2)
     return ''; const first = rows[0], last = rows.at(-1), delta = last.netAssets - first.netAssets, changeClass = delta < 0 ? 'negative' : delta > 0 ? 'positive' : 'neutral'; return `<button class="home-trend home-change-compare" data-home-growth><span class="home-trend-head"><strong>순자산 변화</strong><span>상세 보기 ›</span></span><strong class="home-compare-delta ${escapeHtml(changeClass)}">${delta === 0 ? '변화 없음' : signed(delta)}</strong><span class="home-compare-values"><span>${escapeHtml(first.asOf)}<b>${won(first.netAssets)}</b></span><span aria-hidden="true">→</span><span>${escapeHtml(last.asOf)}<b>${won(last.netAssets)}</b></span></span></button>`; }
-function home() { const s = homeSample(); return `<div class="stack home-app-stack"><button class="hero" data-detail="total"><div class="herohead"><div class="label">순금융자산</div><span class="heropeek">›</span></div><div class="heroamount ${amountClass(s.total - s.debt)}" title="${escapeHtml(won(s.total - s.debt))}">${displayWon(s.total - s.debt)}</div><div class="home-module-caption">보유 금융자산에서 대출·부채 차감</div>${homeChangeMarkup()}</button>${homeTrendMarkup()}<section class="card home-account-list"><div class="sectionhead"><h2>내 계좌</h2></div>${['isa', 'pension', 'cash'].map(homeAccountRow).join('')}</section><section class="home-plan">${homeCard('contribution')}</section></div>`; }
+function home() { const s = homeSample(); return `<div class="stack home-app-stack"><button class="hero" data-detail="total"><div class="herohead"><div class="label">순금융자산</div><span class="heropeek">›</span></div><div class="heroamount ${amountClass(s.total - s.debt)}" title="${escapeHtml(won(s.total - s.debt))}">${displayWon(s.total - s.debt)}</div><div class="home-module-caption">보유 금융자산에서 대출·부채 차감</div>${homeChangeMarkup()}</button><section class="card home-account-list"><div class="sectionhead"><h2>내 계좌</h2></div>${['isa', 'pension', 'cash'].map(homeAccountRow).join('')}</section><section class="home-plan">${homeCard('contribution')}</section>${homeTrendMarkup()}</div>`; }
 ;
 /* asset-os source: isa-summary.js */
 'use strict';
@@ -3339,7 +3339,7 @@ integratedSummaryPage = function () {
     if (list)
         list.innerHTML = v069AssetGroups(f);
     const quick = template.content.querySelector('.household-quick');
-    quick?.insertAdjacentHTML('beforebegin', integratedSummaryEntryMarkup());
+    quick?.insertAdjacentHTML('afterend', integratedSummaryEntryMarkup());
     const schedule = template.content.querySelector('[data-fixed-cost-card]'), total = pending.reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0);
     if (schedule) {
         const title = schedule.querySelector('.fixed-cost-head strong'), small = schedule.querySelector('.fixed-cost-head small'), amount = schedule.querySelector('.fixed-cost-head-right b'), body = schedule.querySelector('[data-fixed-cost-body]');

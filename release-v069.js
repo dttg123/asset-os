@@ -150,7 +150,7 @@ integratedSummaryPage = function () {
     if (list)
         list.innerHTML = v069AssetGroups(f);
     const quick = template.content.querySelector('.household-quick');
-    quick?.insertAdjacentHTML('beforebegin', integratedSummaryEntryMarkup());
+    quick?.insertAdjacentHTML('afterend', integratedSummaryEntryMarkup());
     const schedule = template.content.querySelector('[data-fixed-cost-card]'), total = pending.reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0);
     if (schedule) {
         const title = schedule.querySelector('.fixed-cost-head strong'), small = schedule.querySelector('.fixed-cost-head small'), amount = schedule.querySelector('.fixed-cost-head-right b'), body = schedule.querySelector('[data-fixed-cost-body]');

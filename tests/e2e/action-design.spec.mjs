@@ -80,3 +80,51 @@ test('@core visual polish preserves navigation and money with motion enabled or 
  expect(await page.evaluate(()=>({ledger:JSON.stringify(state.integrated.ledger),net:integratedFinancialModel().netAssets}))).toEqual(before);
  expect(errors).toEqual([]);
 });
+
+test('@core domestic polish prioritizes accounts and entry, keeps save reachable and supports dark accents',async({page},info)=>{
+ await page.goto('/index.html?qa=1#/home');await page.waitForFunction(()=>!!window.__assetOS);
+ const before=await page.evaluate(()=>JSON.stringify(state.integrated.ledger));
+ const order=await page.evaluate(()=>[...document.querySelector('.home-app-stack').children].map(el=>el.className));
+ expect(order[0]).toBe('hero');expect(order[1]).toContain('home-account-list');expect(order[2]).toBe('home-plan');
+ await page.evaluate(()=>nav('integrated','summary'));
+ const primary=page.locator('[data-household-expense]'),presets=page.locator('.integrated-quick-presets');
+ expect((await primary.boundingBox()).y).toBeLessThan((await presets.boundingBox()).y);
+ await primary.click();await expect(page.locator('#formSheet')).toHaveClass(/open/);
+ for(const width of [320,390,412]){
+  await page.setViewportSize({width,height:600});
+  await page.locator('#formSheet').evaluate(el=>{el.scrollTop=el.scrollHeight});
+  await expect.poll(async()=>{const box=await page.locator('#integratedTxForm .entry-save-actions').boundingBox();return box?Math.round(box.y+box.height):Infinity}).toBeLessThanOrEqual(601);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1)).toBe(true);
+ }
+ await page.evaluate(()=>{sheetDirty=false;closeSheets({all:true})});await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
+ await page.setViewportSize({width:412,height:915});
+ await page.evaluate(()=>{nav('integrated','summary');document.documentElement.dataset.theme='dark';document.body.dataset.theme='dark'});
+ const contrasts=await page.evaluate(async()=>{
+  const canvas=document.createElement('canvas');canvas.width=canvas.height=1;const ctx=canvas.getContext('2d');
+  const luminance=color=>{
+   ctx.fillStyle=color;ctx.fillRect(0,0,1,1);
+   const pixels=ctx.getImageData(0,0,1,1).data;
+   const channels=[...pixels].slice(0,3).map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4});
+   return channels[0]*.2126+channels[1]*.7152+channels[2]*.0722;
+  };
+  const ratio=(a,b)=>{a=luminance(a);b=luminance(b);return(Math.max(a,b)+.05)/(Math.min(a,b)+.05)};
+  const results=[];
+  for(const theme of ['light','dark'])for(const accent of ['blue','mint','purple','orange']){
+   document.documentElement.dataset.theme=theme;document.documentElement.dataset.accent=accent;
+   await new Promise(resolve=>requestAnimationFrame(resolve));
+   const tabElement=document.querySelector('.integrated-tabs button.active'),buttonElement=document.querySelector('[data-household-expense]');
+   await Promise.all([tabElement,buttonElement].flatMap(el=>el.getAnimations()).map(animation=>animation.finished.catch(()=>{})));
+   const tab=getComputedStyle(tabElement),button=getComputedStyle(buttonElement);
+   results.push({theme,accent,tab:ratio(tab.color,getComputedStyle(document.body).backgroundColor),button:ratio(button.color,button.backgroundColor)});
+  }
+  document.documentElement.dataset.theme='dark';document.documentElement.dataset.accent='blue';return results;
+ });
+ for(const row of contrasts){expect(row.tab,JSON.stringify(row)).toBeGreaterThanOrEqual(4.5);expect(row.button,JSON.stringify(row)).toBeGreaterThanOrEqual(4.5)}
+ expect(await page.evaluate(()=>JSON.stringify(state.integrated.ledger))).toBe(before);
+ await page.addStyleTag({content:'#qaBanner{display:none!important}'});
+ await page.screenshot({path:`/tmp/asset-domestic-final-${info.project.name}.png`,animations:'disabled'});
+ await page.locator('[data-card-hub]').click();await page.locator('[data-card-plan-new]').click();
+ await page.setViewportSize({width:320,height:600});
+ await expect.poll(async()=>{const box=await page.locator('#cardInstallmentForm button[type="submit"]').boundingBox();return box?Math.round(box.y+box.height):Infinity}).toBeLessThanOrEqual(601);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1)).toBe(true);
+});
