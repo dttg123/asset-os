@@ -79,6 +79,7 @@ function cloudAuthCallbackFailure(){
 
 function assetAuthGateState(mode:CloudAuthGateMode,message=''){
  const gate=$('#assetAuthGate'),button=$('#assetAuthButton'),status=$('#assetAuthStatus'),conflict=$('#assetAuthConflict');if(!gate||!button||!status)return;
+ $('#storageRecovery')?.remove();
  const switchAccount=$('#assetAuthSwitch');if(switchAccount){switchAccount.hidden=mode!=='error'||!cloudUser();switchAccount.onclick=async()=>{if(await signOutAssetGoogle())await signInAssetGoogle(true)}};
  gate.hidden=false;document.documentElement.classList.add('asset-auth-locked');status.className=`asset-auth-status ${mode==='error'?'error':''}`;
  button.hidden=mode==='conflict';if(conflict)conflict.hidden=mode!=='conflict';
@@ -159,7 +160,7 @@ async function initSupabaseCloud(){
 
 async function handleCloudAuthState(event:unknown,session:CloudSession|null){
  if(qaCloudBlocked())return false;
- assetSupabaseSession=session||null;if(session)syncBrokerKisSessionFromCloud(session);refreshCloudProfileUI();
+ const priorOwner=cloudUser()?.id;assetSupabaseSession=session||null;if(priorOwner!==cloudUser()?.id)$('#storageRecovery')?.remove();if(session)syncBrokerKisSessionFromCloud(session);refreshCloudProfileUI();
  if(!session){cloudSetStatus('로그인 필요','wait');assetAppUnlocked=false;assetAuthGateState('login');return false}
  // Storage recovery has no trusted in-memory ledger yet. A token refresh must not start a remote replacement during repair.
  if(!state)return false;

@@ -133,10 +133,11 @@ async function openStorageRecovery(error:unknown):Promise<void>{
   if(!QA_MODE){await initSupabaseCloud();if(!cloudUser()){retry.textContent='Google로 로그인';retry.onclick=()=>{void signInAssetGoogle()};status.textContent=message+' 기존 계정으로 로그인하면 복구 메뉴를 엽니다.';return}}
   assetAuthGateState('error',message);
   const userId=cloudUser()?.id||'',source=await assetLocalDatabase.rescue(userId),revision=source.head?.revision||0;
+  const ensureOwner=()=>{if(!QA_MODE&&cloudUser()?.id!==userId)throw new Error('로그인이 변경됐습니다. 앱을 다시 열어 확인해 주세요.')};ensureOwner();
   document.querySelector('#storageRecovery')?.remove();const panel=document.createElement('div');panel.id='storageRecovery';panel.className='storage-recovery';card.appendChild(panel);
   const help=document.createElement('p');help.textContent='자동으로 초기화하지 않았습니다. 원본을 내려받거나 확인한 백업으로 복구할 수 있습니다.';panel.appendChild(help);
   const addButton=(label:string,id:string,action:()=>void)=>{const button=document.createElement('button');button.id=id;button.type='button';button.className='asset-auth-secondary';button.textContent=label;button.onclick=action;panel.appendChild(button);return button};
-  addButton('현재 원본 내려받기','recoveryDownload',()=>downloadBytes(new TextEncoder().encode(JSON.stringify({format:'asset-os-recovery-v1',environment:APP_ENV,exportedAt:new Date().toISOString(),head:source.head,rows:source.rows})),`AssetOS_recovery_original_${Date.now()}.json`,'application/json'));
+  addButton('현재 원본 내려받기','recoveryDownload',()=>{try{ensureOwner();downloadBytes(new TextEncoder().encode(JSON.stringify({format:'asset-os-recovery-v1',environment:APP_ENV,exportedAt:new Date().toISOString(),head:source.head,rows:source.rows})),`AssetOS_recovery_original_${Date.now()}.json`,'application/json')}catch(issue){status.textContent=backupErrorMessage(issue)}});
   let pending:BackupState|null=null,busy=false;const detail=document.createElement('p');detail.id='recoveryPreview';detail.hidden=true;
   const confirmation=document.createElement('div');confirmation.hidden=true;
   const confirm=document.createElement('button');confirm.id='recoveryConfirm';confirm.type='button';confirm.textContent='이 백업으로 복구';
@@ -149,6 +150,6 @@ async function openStorageRecovery(error:unknown):Promise<void>{
   for(const copy of source.copies.filter(copy=>copy.key!=='before-repair').sort((a,b)=>b.createdAt.localeCompare(a.createdAt))){try{const saved=JSON.parse(copy.raw) as BackupRecord,payload={format:BACKUP_FORMAT,schemaVersion:saved.schemaVersion,environment:saved.environment||APP_ENV,data:saved.data};validateBackupPayload(payload);addButton(`기기 보관 사본 · ${formatDateTime(copy.createdAt)}`,'recoveryCopy-'+copy.key,()=>{try{selectCandidate(payload,formatDateTime(copy.createdAt)+' 기기 보관 사본')}catch(issue){status.textContent=backupErrorMessage(issue)}})}catch{}}
   confirmation.append(confirm,cancel);panel.append(detail,confirmation);
   cancel.onclick=clearCandidate;
-  confirm.onclick=async()=>{if(!pending||busy)return;busy=true;const buttons=Array.from(card.querySelectorAll<HTMLButtonElement>('button'));buttons.forEach(button=>button.disabled=true);status.textContent='원본을 보존하고 백업을 복구하고 있습니다.';try{await assetLocalDatabase.repair(JSON.parse(stateEnvelopeJson(pending)) as BackupRecord,userId,revision);status.textContent='복구를 확인했습니다. 앱을 다시 엽니다.';location.reload()}catch(issue){status.textContent='복구 실패: '+backupErrorMessage(issue);busy=false;buttons.forEach(button=>button.disabled=false)}};
+  confirm.onclick=async()=>{if(!pending||busy)return;busy=true;const buttons=Array.from(card.querySelectorAll<HTMLButtonElement>('button'));buttons.forEach(button=>button.disabled=true);status.textContent='원본을 보존하고 백업을 복구하고 있습니다.';try{ensureOwner();await assetLocalDatabase.repair(JSON.parse(stateEnvelopeJson(pending)) as BackupRecord,userId,revision);status.textContent='복구를 확인했습니다. 앱을 다시 엽니다.';location.reload()}catch(issue){status.textContent='복구 실패: '+backupErrorMessage(issue);busy=false;buttons.forEach(button=>button.disabled=false)}};
  }catch(issue){status.textContent=message+' '+backupErrorMessage(issue)}
 }

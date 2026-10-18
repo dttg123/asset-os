@@ -200,6 +200,7 @@ function assetAuthGateState(mode, message = '') {
     const gate = $('#assetAuthGate'), button = $('#assetAuthButton'), status = $('#assetAuthStatus'), conflict = $('#assetAuthConflict');
     if (!gate || !button || !status)
         return;
+    $('#storageRecovery')?.remove();
     const switchAccount = $('#assetAuthSwitch');
     if (switchAccount) {
         switchAccount.hidden = mode !== 'error' || !cloudUser();
@@ -394,7 +395,10 @@ async function initSupabaseCloud() {
 async function handleCloudAuthState(event, session) {
     if (qaCloudBlocked())
         return false;
+    const priorOwner = cloudUser()?.id;
     assetSupabaseSession = session || null;
+    if (priorOwner !== cloudUser()?.id)
+        $('#storageRecovery')?.remove();
     if (session)
         syncBrokerKisSessionFromCloud(session);
     refreshCloudProfileUI();
@@ -998,11 +1002,11 @@ function initQaMode() { if (!QA_MODE)
 'use strict';
 if ('serviceWorker' in navigator)
     window.addEventListener('load', async () => { const hadController = !!navigator.serviceWorker.controller; try {
-        const reg = await navigator.serviceWorker.register('./service-worker.js?v=0.7.1&build=20261018-3', { scope: './', updateViaCache: 'none' });
+        const reg = await navigator.serviceWorker.register('./service-worker.js?v=0.7.1&build=20261018-4', { scope: './', updateViaCache: 'none' });
         await reg.update();
         let refreshing = false;
         navigator.serviceWorker.addEventListener('controllerchange', () => { if (!hadController || refreshing)
-            return; refreshing = true; const key = 'asset-os-sw-reload-0.7.1-build20261018-3'; if (sessionStorage.getItem(key))
+            return; refreshing = true; const key = 'asset-os-sw-reload-0.7.1-build20261018-4'; if (sessionStorage.getItem(key))
             return; sessionStorage.setItem(key, '1'); location.reload(); });
     }
     catch { } });

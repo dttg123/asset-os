@@ -43,6 +43,7 @@ function assetAuthGateState(mode, message = '') {
     const gate = $('#assetAuthGate'), button = $('#assetAuthButton'), status = $('#assetAuthStatus'), conflict = $('#assetAuthConflict');
     if (!gate || !button || !status)
         return;
+    $('#storageRecovery')?.remove();
     const switchAccount = $('#assetAuthSwitch');
     if (switchAccount) {
         switchAccount.hidden = mode !== 'error' || !cloudUser();
@@ -237,7 +238,10 @@ async function initSupabaseCloud() {
 async function handleCloudAuthState(event, session) {
     if (qaCloudBlocked())
         return false;
+    const priorOwner = cloudUser()?.id;
     assetSupabaseSession = session || null;
+    if (priorOwner !== cloudUser()?.id)
+        $('#storageRecovery')?.remove();
     if (session)
         syncBrokerKisSessionFromCloud(session);
     refreshCloudProfileUI();
