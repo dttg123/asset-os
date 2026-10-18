@@ -8,6 +8,8 @@ function validateScheduleCompletionRequest(scheduleId, date) {
         return { ok: false, error: '해당 일정의 예정일과 일치하지 않습니다.' };
     if (scheduleCompletionTx(scheduleId, date))
         return { ok: false, error: '이미 완료된 일정입니다.' };
+    if (integratedStore().ledger.some(row => row.meta?.scheduleId === scheduleId && row.meta?.scheduleDate === date))
+        return { ok: false, error: '이번 납부 기록이 일부 남아 있습니다. 거래에서 연결된 납부를 삭제한 뒤 다시 기록해 주세요.' };
     const dateError = postedDateError(date);
     if (dateError)
         return { ok: false, error: dateError };

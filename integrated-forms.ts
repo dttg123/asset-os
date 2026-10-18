@@ -5,7 +5,7 @@ type IntegratedStore={accounts:IntegratedRecord[];liabilities:IntegratedRecord[]
 type RefundResult={ok:false;error:string}|{ok:true;row:IntegratedRecord};
 type IntegratedInputForm=HTMLFormElement&{elements:HTMLFormControlsCollection&{category?:HTMLInputElement;uiType?:HTMLSelectElement;toAccountId?:HTMLSelectElement;date?:HTMLInputElement}};
 
-declare let state:{accounts:IntegratedRecord[];integrated?:IntegratedStore},sheetDirty:boolean,integratedLedgerSearch:string,integratedSearchDisplayLimit:number;
+declare let state:{accounts:IntegratedRecord[];integrated?:IntegratedStore;financialProducts?:{events:IntegratedRecord[]}},sheetDirty:boolean,integratedLedgerSearch:string,integratedSearchDisplayLimit:number;
 declare const $:<T extends HTMLElement=HTMLElement>(selector:string)=>T;
 declare function integratedStore():IntegratedStore;
 declare function isaContributionModel(account:IntegratedRecord,date:string,store:IntegratedStore):{overage:number};
@@ -34,6 +34,7 @@ declare function formShowError(form:HTMLFormElement,message?:string,fieldName?:s
 declare function formClearError(form:HTMLFormElement):boolean;
 declare function formatDate(value:unknown):string;
 declare function financialProduct(id:string):IntegratedRecord|null;
+declare function financeProductEventError(event:IntegratedRecord):string;
 declare function financialProductActiveOnDate(product:IntegratedRecord,date:string):boolean;
 declare function isQaIntegratedFixture(record:IntegratedRecord):boolean;
 declare function setting():IntegratedRecord;
@@ -190,27 +191,27 @@ function integratedFormLiveError(form:HTMLFormElement):string{
 
 function integratedCandidatesFromForm(form:HTMLFormElement):IntegratedRecord[]{
  const data=new FormData(form),systemType=form.dataset.systemType||'',editingId=String(form.dataset.editId||''),existing=editingId?(integratedStore().ledger||[]).find(t=>t.id===editingId):null;
- const date=String(data.get('date')||ymd()),note=String(data.get('note')||'').trim(),base={date,note,sequence:existing&&String(existing.date)===date&&Number.isFinite(Number(existing.sequence))?Number(existing.sequence):nextIntegratedSequence(date),createdAt:existing?.createdAt||new Date().toISOString()};
+ const date=String(data.get('date')||ymd()),note=String(data.get('note')||'').trim(),base={...(existing?.productId?{productId:existing.productId,meta:clone(existing.meta||{})}:{}),date,note,sequence:existing&&String(existing.date)===date&&Number.isFinite(Number(existing.sequence))?Number(existing.sequence):nextIntegratedSequence(date),createdAt:existing?.createdAt||new Date().toISOString()};
  if(systemType){
   const amount=Number(data.get('amount')),category=String(data.get('category')||systemType);
   if(systemType==='openingAsset')return[{...base,id:form.dataset.editId||uid('igl'),type:'openingAsset',amount,toAccountId:String(data.get('toAccountId')||''),category}];
   if(systemType==='openingLiability')return[{...base,id:form.dataset.editId||uid('igl'),type:'openingLiability',amount,liabilityId:String(data.get('liabilityId')||''),category}];
  }
  const type=String(data.get('uiType')||''),amount=Number(data.get('amount')),category=String(data.get('category')||integratedDefaultCategory(type)).trim();
- if(type==='externalIncome')return[{...base,id:editingId||uid('igl'),type:'externalIncome',amount,toAccountId:'cash-main',category}];
- if(type==='lifeExpense')return[{...base,id:editingId||uid('igl'),type:existing?.type==='externalExpense'?'externalExpense':'expense',fixed:!!existing?.fixed,amount,fromAccountId:existing?.type==='externalExpense'?undefined:'cash-main',category,...(existing?.productId?{productId:existing.productId,meta:clone(existing.meta||{})}:{})}];
+ if(type==='externalIncome')return[{...base,id:editingId||uid('igl'),type:'externalIncome',amount,toAccountId:existing?.type==='externalIncome'?existing.toAccountId:'cash-main',category,...(existing?.type==='externalIncome'?{productId:existing.productId,meta:clone(existing.meta||{})}:{})}];
+ if(type==='lifeExpense')return[{...base,id:editingId||uid('igl'),type:existing?.type==='externalExpense'?'externalExpense':'expense',fixed:!!existing?.fixed,amount,fromAccountId:existing?.type==='externalExpense'?undefined:existing?.fromAccountId||'cash-main',category,...(existing?.productId?{productId:existing.productId,meta:clone(existing.meta||{})}:{})}];
  if(type==='savingInvestment'){
   const toAccountId=String(data.get('toAccountId')||''),targetKind=integratedStore().accounts.find(a=>a.id===toAccountId)?.kind||'',requested=String(data.get('targetPensionAccountId')||'');
   const candidates=['pension','irp'].includes(targetKind)?pensionAccountsForKind(targetKind,date):[],resolved=requested&&candidates.some(a=>a.id===requested)?requested:(candidates.length===1?candidates[0].id:'');
   const isaRequested=String(data.get('targetIsaAccountId')||''),isaCandidates=targetKind==='isa'?isaAccountsForDate(date):[],isaResolved=isaRequested&&isaCandidates.some(a=>a.id===isaRequested)?isaRequested:(isaCandidates.length===1?isaCandidates[0].id:'');
-  const meta=['pension','irp'].includes(targetKind)?{targetPensionAccountId:resolved,pensionRoutingRequired:!resolved}:targetKind==='isa'?{targetIsaAccountId:isaResolved,isaRoutingRequired:!isaResolved}:{};
-  return[{...base,id:editingId||uid('igl'),type:'internalTransfer',amount,fromAccountId:'cash-main',toAccountId,category:category||integratedAccountName(toAccountId),meta}];
+  const routing=['pension','irp'].includes(targetKind)?{targetPensionAccountId:resolved,pensionRoutingRequired:!resolved}:targetKind==='isa'?{targetIsaAccountId:isaResolved,isaRoutingRequired:!isaResolved}:{};
+  return[{...base,id:editingId||uid('igl'),type:'internalTransfer',amount,fromAccountId:existing?.fromAccountId||'cash-main',toAccountId,category:category||integratedAccountName(toAccountId),meta:{...clone(existing?.meta||{}),...routing}}];
  }
  if(type==='loanPayment'){
   const principal=Number(data.get('principal'))||0,interest=Number(data.get('interest'))||0,liabilityId=String(data.get('liabilityId')||''),rows:IntegratedRecord[]=[];
   const principalId=editingId&&existing?.type==='debtPrincipal'?editingId:uid('igl'),interestId=editingId&&existing?.type==='debtInterest'?editingId:uid('igl');
-  if(principal>0)rows.push({...base,id:principalId,type:'debtPrincipal',amount:principal,fromAccountId:'cash-main',liabilityId,category:'대출 원금상환'});
-  if(interest>0)rows.push({...base,id:interestId,type:'debtInterest',amount:interest,fromAccountId:'cash-main',liabilityId,category:'대출 이자'});
+  if(principal>0)rows.push({...base,id:principalId,type:'debtPrincipal',amount:principal,fromAccountId:'cash-main',liabilityId,category:existing?.type==='debtPrincipal'?category:'대출 원금상환'});
+  if(interest>0)rows.push({...base,id:interestId,type:'debtInterest',amount:interest,fromAccountId:'cash-main',liabilityId,category:existing?.type==='debtInterest'?category:'대출 이자'});
   return rows;
  }
  return[];
@@ -259,17 +260,22 @@ function integratedValidateCandidate(candidate:IntegratedRecord,editingId=''):st
 }
 
 async function saveIntegratedTransaction(form:HTMLFormElement,continueEntry=false):Promise<void>{
- const rows=integratedCandidatesFromForm(form),editingId=form.dataset.editId||'';
+ const rows=integratedCandidatesFromForm(form),editingId=form.dataset.editId||'',existing=integratedStore().ledger.find(t=>t.id===editingId);
+ if(existing?.productId&&integratedUiType(existing)!==String(new FormData(form).get('uiType')||form.dataset.systemType||'')){formShowError(form,'금융상품에 연결된 거래는 기존 유형을 유지해 주세요.');return}
+ if(existing?.productId&&rows.some(row=>row.toAccountId!==existing.toAccountId||row.fromAccountId!==existing.fromAccountId||row.liabilityId!==existing.liabilityId)){formShowError(form,'금융상품에 연결된 계좌·대출은 해당 상품 화면에서 관리해 주세요.');return}
+ if(editingId)for(const event of state.financialProducts?.events||[]){if(event.meta?.ledgerId!==editingId)continue;const row=rows[0];if(!row)continue;const error=financeProductEventError({...event,date:row.date,amount:row.amount,note:row.note});if(error){formShowError(form,error);return}}
  if(!rows.length){const message='기록할 금액을 입력해 주세요.',isLoan=String(new FormData(form).get('uiType')||'')==='loanPayment';formShowError(form,message,isLoan?'principal':'amount');toast(message);return}
  const test=clone(integratedStore());if(editingId)test.ledger=(test.ledger||[]).filter(t=>t.id!==editingId);
  for(const row of rows){const error=integratedValidateCandidate(row,editingId);if(error){formShowError(form,error);toast(error);return}test.ledger.push(row)}
  const combinedIssues=[...integratedCandidateIssues(test),...integratedPolicyLimitIssues(test)];
  if(combinedIssues.length){const message=combinedIssues[0].replace('자산 잔액 음수:','잔액이 부족합니다:').replace('부채 잔액 음수:','대출잔액보다 많이 상환할 수 없습니다:'),isLoan=rows.some(row=>row.type==='loanPayment');formShowError(form,message,isLoan?'principal':'amount');toast(message);return}
+ const before=clone(integratedStore()),previousEvents=state.financialProducts?clone(state.financialProducts.events):null;
  if(editingId)integratedStore().ledger=integratedStore().ledger.filter(t=>t.id!==editingId);
+ if(editingId&&state.financialProducts)for(const event of state.financialProducts.events){if(event.meta?.ledgerId!==editingId)continue;const row=rows[0];event.date=row.date;event.amount=row.amount;event.note=row.note}
  integratedStore().ledger.push(...rows);integratedStore().mode='live';integratedStore().label='내 통합 거래기록';setting().integratedMonth=integratedMonthKey(rows[0].date||'');integratedLedgerSearch='';integratedSearchDisplayLimit=50;setting().integratedLedgerFilter='all';
  const entry=integratedFormEntryPreset(form),favorite=integratedFormEntryPreset(form,true);
  if(!editingId&&!form.dataset.systemType&&entry){setting().integratedEntryLast=entry;if(new FormData(form).get('saveFavorite')&&favorite){const entries=integratedEntryFavorites().filter(item=>JSON.stringify(item)!==JSON.stringify(favorite));setting().integratedEntryFavorites=[favorite,...entries].slice(0,8)}}
- if(!(await persist()))return;sheetDirty=false;closeSheets({all:true});nav('integrated','ledger');toast('저장했어요.');haptic('light');
+ if(!(await persist())){state.integrated=before;if(state.financialProducts&&previousEvents)state.financialProducts.events=previousEvents;return}sheetDirty=false;closeSheets({all:true});nav('integrated','ledger');toast('저장했어요.');haptic('light');
  if(continueEntry&&!editingId&&!form.dataset.systemType)openIntegratedTransactionForm('',{...(entry||{}),date:rows[0].date});
 }
 
@@ -294,10 +300,17 @@ async function saveCashReconcile(form:HTMLFormElement):Promise<void>{
 
 function deleteIntegratedTransaction(id:string):void{
  const tx=integratedStore().ledger.find(t=>t.id===id);if(!tx){toast('거래를 찾지 못했습니다.');return}if(tx.meta?.cardPlanId){toast('카드 구매와 미납 원금이 연결된 기록입니다.');return}if(tx.meta?.isaLifecycleAccountId){toast('ISA 정산에 연결된 거래는 개별 삭제할 수 없습니다.');return}
- showDialog({title:'이 거래를 삭제할까요?',message:`${tx.date} · ${tx.category||integratedTxLabel(tx)} 기록을 삭제합니다. 관련 합계가 즉시 다시 계산됩니다.`,confirmText:'삭제',cancelText:'취소',danger:true},async ()=>{
-  const before=clone(integratedStore());integratedStore().ledger=integratedStore().ledger.filter(t=>t.id!==id);const issues=integratedCandidateIssues(integratedStore());
+ const linkedPayment=!!tx.meta?.scheduleId&&!!tx.meta?.scheduleDate;
+ const message=linkedPayment?`${tx.date} · 연결된 이번 납부의 원금·이자를 함께 삭제하고 일정을 미완료로 되돌립니다. 다른 회차는 유지합니다.`:`${tx.date} · ${tx.category||integratedTxLabel(tx)} 기록을 삭제합니다. 관련 합계가 즉시 다시 계산됩니다.`;
+ showDialog({title:linkedPayment?'이번 납부 기록을 삭제할까요?':'이 거래를 삭제할까요?',message,confirmText:'삭제',cancelText:'취소',danger:true},async ()=>{
+  const store=integratedStore(),before=clone(store),events=state.financialProducts?.events,previousEvents=events?clone(events):null;
+  const removed=store.ledger.filter(t=>t.id===id||(linkedPayment&&t.meta?.scheduleId===tx.meta?.scheduleId&&t.meta?.scheduleDate===tx.meta?.scheduleDate)),ids=new Set(removed.map(t=>t.id));
+  store.ledger=store.ledger.filter(t=>!ids.has(t.id));const issues=integratedCandidateIssues(store);
   if(issues.length){state.integrated=before;toast('삭제하면 잔액이 맞지 않아 취소했습니다.');return}
-  integratedStore().mode='live';integratedStore().label='내 통합 거래기록';if(!(await persist()))return;sheetDirty=false;closeSheets();nav('integrated','ledger');toast('거래를 삭제했습니다.');haptic('light');
+  if(state.financialProducts&&events)state.financialProducts.events=events.filter(e=>!ids.has(String(e.meta?.ledgerId||'')));
+  store.mode='live';store.label='내 통합 거래기록';
+  if(!(await persist())){state.integrated=before;if(state.financialProducts&&previousEvents)state.financialProducts.events=previousEvents;return}
+  sheetDirty=false;closeSheets();nav('integrated','ledger');toast('거래를 삭제했습니다.');haptic('light');
  });
 }
 

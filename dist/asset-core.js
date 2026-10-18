@@ -5,7 +5,7 @@ const BROKER_KIS_PUBLIC_CONFIG = Object.freeze({ projectUrl: 'https://wjrzukoofs
 const QA_MODE = typeof location !== 'undefined' && /(?:^|[?&])qa=1(?:&|$)/.test(String(location.search || ''));
 const QA_STORAGE_KEY = 'asset-os-qa-v0.5', LIVE_STORAGE_KEY = 'asset-os-v1.9.45-live';
 const DEFAULT_FINANCE_DAY = 25;
-const APP_VERSION = 'v0.7.4', APP_ENV = QA_MODE ? 'qa' : 'live', SCHEMA_VERSION = 22, KEY = QA_MODE ? QA_STORAGE_KEY : LIVE_STORAGE_KEY, LEGACY_KEYS = ['asset-os-v1.9.22-central-schedule', 'asset-os-v1.9.20-real-finance', 'asset-os-v1.9.19-finance-linked', 'asset-os-v1.9.18-integrated-ui-refine', 'asset-os-v1.9.17-integrated-complete-stage1', 'asset-os-v1.9.16-integrated-ledger-stage2', 'asset-os-v1.9.9-pension-step2-analysis', 'asset-os-v1.9.7-pension-step2-precision', 'asset-os-v1.9.6-pension-step2-refine', 'asset-os-v1.9.5-pension-step2', 'asset-os-v1.9.4-pension-step1', 'asset-os-v1.9.3-pension-step1', 'asset-os-v1.9.2-isa-review', 'asset-os-v1.9.1-isa-review', 'asset-os-v1.9-isa-review', 'asset-os-v1.8-isa-review', 'asset-os-v1.7-isa-review', 'asset-os-v1.6.1-isa-review', 'asset-os-v1.6-isa-review', 'asset-os-v1.5-isa-review', 'asset-os-v1.4-isa-review', 'asset-os-v1.3-isa-review'];
+const APP_VERSION = 'v0.7.5', APP_ENV = QA_MODE ? 'qa' : 'live', SCHEMA_VERSION = 22, KEY = QA_MODE ? QA_STORAGE_KEY : LIVE_STORAGE_KEY, LEGACY_KEYS = ['asset-os-v1.9.22-central-schedule', 'asset-os-v1.9.20-real-finance', 'asset-os-v1.9.19-finance-linked', 'asset-os-v1.9.18-integrated-ui-refine', 'asset-os-v1.9.17-integrated-complete-stage1', 'asset-os-v1.9.16-integrated-ledger-stage2', 'asset-os-v1.9.9-pension-step2-analysis', 'asset-os-v1.9.7-pension-step2-precision', 'asset-os-v1.9.6-pension-step2-refine', 'asset-os-v1.9.5-pension-step2', 'asset-os-v1.9.4-pension-step1', 'asset-os-v1.9.3-pension-step1', 'asset-os-v1.9.2-isa-review', 'asset-os-v1.9.1-isa-review', 'asset-os-v1.9-isa-review', 'asset-os-v1.8-isa-review', 'asset-os-v1.7-isa-review', 'asset-os-v1.6.1-isa-review', 'asset-os-v1.6-isa-review', 'asset-os-v1.5-isa-review', 'asset-os-v1.4-isa-review', 'asset-os-v1.3-isa-review'];
 const nf = new Intl.NumberFormat('ko-KR');
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const INVESTMENT_ROLES = ['성장', '배당', '현금흐름', '안정', '현금'];
@@ -1259,20 +1259,51 @@ function scheduleDateForMonth(s, month) { if (!s.active || !s.day)
     return ''; if (s.endDate && date > s.endDate)
     return ''; if (s.cardPlan && !cardInstallmentTerms(s, date))
     return ''; return date; }
-function scheduleFallbackMatches(s, date, t) { if (!s || String(t.date) !== String(date) || (Number(t.amount) || 0) !== schedulePlannedAmount(s, String(date)))
-    return false; const account = integratedStore().accounts.find((a) => a.id === t.toAccountId), sameName = normalizeName(t.category) === normalizeName(s.name); if (s.kind === 'income')
-    return t.type === 'externalIncome' && sameName; if (['investment', 'saving'].includes(s.kind || '')) {
-    if (!['internalTransfer', 'externalAssetIn'].includes(t.type || ''))
+function scheduleFallbackMatches(s, date, t) {
+    if (!s || s.cardPlan || t.meta?.scheduleId || t.meta?.cardPlanId || t.meta?.analysisOnly || String(t.date) !== String(date) || (Number(t.amount) || 0) !== schedulePlannedAmount(s, String(date)))
         return false;
-    if (s.productId)
-        return account?.productId === s.productId;
-    const targetKind = s.targetKind || integratedStore().accounts.find((a) => a.id === scheduleTargetAccount(s))?.kind || '';
-    return account?.kind === targetKind && (sameName || ['isa', 'pension', 'irp'].includes(targetKind));
-} if (s.kind === 'loan')
-    return ['debtInterest', 'debtInterestExternal', 'debtPrincipal', 'externalDebtPrincipal'].includes(t.type || '') && (String(t.liabilityId || '') === String(s.liabilityId || '') || String(t.productId || '') === String(s.productId || '') || sameName); if (['insurance', 'expense'].includes(s.kind || ''))
-    return ['expense', 'externalExpense'].includes(t.type || '') && sameName; return false; }
-function scheduleCompletionTx(scheduleId, date, sourceRows = null) { const rows = sourceRows || integratedOperationalLedger(), explicit = rows.find(t => t.meta?.scheduleId === scheduleId && t.meta?.scheduleDate === date); if (explicit)
-    return explicit; const schedule = financeSchedules().find(s => s.id === scheduleId); return rows.find(t => scheduleFallbackMatches(schedule, date, t)) || null; }
+    const account = integratedStore().accounts.find((a) => a.id === t.toAccountId), sameName = normalizeName(t.category) === normalizeName(s.name);
+    if (s.kind === 'income')
+        return t.type === 'externalIncome' && sameName;
+    if (['investment', 'saving'].includes(s.kind || '')) {
+        if (!['internalTransfer', 'externalAssetIn'].includes(t.type || ''))
+            return false;
+        if (s.productId)
+            return account?.productId === s.productId;
+        const target = scheduleTargetAccount(s);
+        if (target && t.toAccountId !== target)
+            return false;
+        const targetKind = s.targetKind || integratedStore().accounts.find((a) => a.id === target)?.kind || '';
+        return account?.kind === targetKind && (sameName || ['isa', 'pension', 'irp'].includes(targetKind));
+    }
+    if (s.kind === 'loan') {
+        if (!['debtInterest', 'debtInterestExternal', 'debtPrincipal', 'externalDebtPrincipal'].includes(t.type || ''))
+            return false;
+        if (s.liabilityId)
+            return t.liabilityId === s.liabilityId;
+        if (s.productId)
+            return t.productId === s.productId;
+        return sameName;
+    }
+    if (['insurance', 'expense'].includes(s.kind || ''))
+        return ['expense', 'externalExpense'].includes(t.type || '') && sameName;
+    return false;
+}
+function scheduleCompletionTx(scheduleId, date, sourceRows = null) {
+    const rows = sourceRows || integratedOperationalLedger(), schedule = financeSchedules().find(s => s.id === scheduleId);
+    const linked = rows.filter(t => t.meta?.scheduleId === scheduleId && t.meta?.scheduleDate === date), explicit = linked[0];
+    if (explicit) {
+        if (schedule?.kind === 'loan') {
+            const principal = Number(explicit.meta?.loanPrincipal || 0), interest = Number(explicit.meta?.loanInterest || 0);
+            const paidPrincipal = linked.filter(t => ['debtPrincipal', 'externalDebtPrincipal'].includes(t.type || '') && t.liabilityId === schedule.liabilityId).reduce((sum, t) => sum + Number(t.amount || 0), 0);
+            const paidInterest = linked.filter(t => ['debtInterest', 'debtInterestExternal'].includes(t.type || '') && t.liabilityId === schedule.liabilityId).reduce((sum, t) => sum + Number(t.amount || 0), 0);
+            if (principal > 0 && paidPrincipal !== principal || interest > 0 && paidInterest !== interest)
+                return null;
+        }
+        return explicit;
+    }
+    return rows.find(t => scheduleFallbackMatches(schedule, date, t) && financeSchedules().filter(s => scheduleDateForMonth({ ...s, active: true }, date.slice(0, 7)) === date && scheduleFallbackMatches(s, date, t)).length === 1) || null;
+}
 function scheduleOccurrenceStatus(s, date, knownTx) { const tx = arguments.length >= 3 ? knownTx : scheduleCompletionTx(s.id, date); if (tx)
     return 'done'; const today = localYmd(); if (date < today)
     return 'overdue'; if (date === today)
@@ -1484,6 +1515,8 @@ function validateScheduleCompletionRequest(scheduleId, date) {
         return { ok: false, error: '해당 일정의 예정일과 일치하지 않습니다.' };
     if (scheduleCompletionTx(scheduleId, date))
         return { ok: false, error: '이미 완료된 일정입니다.' };
+    if (integratedStore().ledger.some(row => row.meta?.scheduleId === scheduleId && row.meta?.scheduleDate === date))
+        return { ok: false, error: '이번 납부 기록이 일부 남아 있습니다. 거래에서 연결된 납부를 삭제한 뒤 다시 기록해 주세요.' };
     const dateError = postedDateError(date);
     if (dateError)
         return { ok: false, error: dateError };

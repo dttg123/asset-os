@@ -26,20 +26,51 @@ function scheduleDateForMonth(s, month) { if (!s.active || !s.day)
     return ''; if (s.endDate && date > s.endDate)
     return ''; if (s.cardPlan && !cardInstallmentTerms(s, date))
     return ''; return date; }
-function scheduleFallbackMatches(s, date, t) { if (!s || String(t.date) !== String(date) || (Number(t.amount) || 0) !== schedulePlannedAmount(s, String(date)))
-    return false; const account = integratedStore().accounts.find((a) => a.id === t.toAccountId), sameName = normalizeName(t.category) === normalizeName(s.name); if (s.kind === 'income')
-    return t.type === 'externalIncome' && sameName; if (['investment', 'saving'].includes(s.kind || '')) {
-    if (!['internalTransfer', 'externalAssetIn'].includes(t.type || ''))
+function scheduleFallbackMatches(s, date, t) {
+    if (!s || s.cardPlan || t.meta?.scheduleId || t.meta?.cardPlanId || t.meta?.analysisOnly || String(t.date) !== String(date) || (Number(t.amount) || 0) !== schedulePlannedAmount(s, String(date)))
         return false;
-    if (s.productId)
-        return account?.productId === s.productId;
-    const targetKind = s.targetKind || integratedStore().accounts.find((a) => a.id === scheduleTargetAccount(s))?.kind || '';
-    return account?.kind === targetKind && (sameName || ['isa', 'pension', 'irp'].includes(targetKind));
-} if (s.kind === 'loan')
-    return ['debtInterest', 'debtInterestExternal', 'debtPrincipal', 'externalDebtPrincipal'].includes(t.type || '') && (String(t.liabilityId || '') === String(s.liabilityId || '') || String(t.productId || '') === String(s.productId || '') || sameName); if (['insurance', 'expense'].includes(s.kind || ''))
-    return ['expense', 'externalExpense'].includes(t.type || '') && sameName; return false; }
-function scheduleCompletionTx(scheduleId, date, sourceRows = null) { const rows = sourceRows || integratedOperationalLedger(), explicit = rows.find(t => t.meta?.scheduleId === scheduleId && t.meta?.scheduleDate === date); if (explicit)
-    return explicit; const schedule = financeSchedules().find(s => s.id === scheduleId); return rows.find(t => scheduleFallbackMatches(schedule, date, t)) || null; }
+    const account = integratedStore().accounts.find((a) => a.id === t.toAccountId), sameName = normalizeName(t.category) === normalizeName(s.name);
+    if (s.kind === 'income')
+        return t.type === 'externalIncome' && sameName;
+    if (['investment', 'saving'].includes(s.kind || '')) {
+        if (!['internalTransfer', 'externalAssetIn'].includes(t.type || ''))
+            return false;
+        if (s.productId)
+            return account?.productId === s.productId;
+        const target = scheduleTargetAccount(s);
+        if (target && t.toAccountId !== target)
+            return false;
+        const targetKind = s.targetKind || integratedStore().accounts.find((a) => a.id === target)?.kind || '';
+        return account?.kind === targetKind && (sameName || ['isa', 'pension', 'irp'].includes(targetKind));
+    }
+    if (s.kind === 'loan') {
+        if (!['debtInterest', 'debtInterestExternal', 'debtPrincipal', 'externalDebtPrincipal'].includes(t.type || ''))
+            return false;
+        if (s.liabilityId)
+            return t.liabilityId === s.liabilityId;
+        if (s.productId)
+            return t.productId === s.productId;
+        return sameName;
+    }
+    if (['insurance', 'expense'].includes(s.kind || ''))
+        return ['expense', 'externalExpense'].includes(t.type || '') && sameName;
+    return false;
+}
+function scheduleCompletionTx(scheduleId, date, sourceRows = null) {
+    const rows = sourceRows || integratedOperationalLedger(), schedule = financeSchedules().find(s => s.id === scheduleId);
+    const linked = rows.filter(t => t.meta?.scheduleId === scheduleId && t.meta?.scheduleDate === date), explicit = linked[0];
+    if (explicit) {
+        if (schedule?.kind === 'loan') {
+            const principal = Number(explicit.meta?.loanPrincipal || 0), interest = Number(explicit.meta?.loanInterest || 0);
+            const paidPrincipal = linked.filter(t => ['debtPrincipal', 'externalDebtPrincipal'].includes(t.type || '') && t.liabilityId === schedule.liabilityId).reduce((sum, t) => sum + Number(t.amount || 0), 0);
+            const paidInterest = linked.filter(t => ['debtInterest', 'debtInterestExternal'].includes(t.type || '') && t.liabilityId === schedule.liabilityId).reduce((sum, t) => sum + Number(t.amount || 0), 0);
+            if (principal > 0 && paidPrincipal !== principal || interest > 0 && paidInterest !== interest)
+                return null;
+        }
+        return explicit;
+    }
+    return rows.find(t => scheduleFallbackMatches(schedule, date, t) && financeSchedules().filter(s => scheduleDateForMonth({ ...s, active: true }, date.slice(0, 7)) === date && scheduleFallbackMatches(s, date, t)).length === 1) || null;
+}
 function scheduleOccurrenceStatus(s, date, knownTx) { const tx = arguments.length >= 3 ? knownTx : scheduleCompletionTx(s.id, date); if (tx)
     return 'done'; const today = localYmd(); if (date < today)
     return 'overdue'; if (date === today)
