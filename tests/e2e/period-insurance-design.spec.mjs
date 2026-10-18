@@ -2,7 +2,7 @@ import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 test.beforeEach(async({page})=>{if(process.env.ASSET_OS_QA_SDK_PATH){const body=await readFile(process.env.ASSET_OS_QA_SDK_PATH);await page.route('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4',route=>route.fulfill({body,contentType:'text/javascript'}))}});
 test('@core selected months and insurance payment status stay explicit without changing money',async({page},info)=>{
- await page.goto('/index.html?qa=1#/home');
+ await page.goto('/index.html?qa=1#/home');await page.waitForFunction(()=>!!window.__assetOS);
  await page.evaluate(async ()=>{
   const next=window.__assetOS.getState();next.settings.integratedMonth='2026-02';
   next.insurance={policies:[
@@ -29,7 +29,7 @@ test('@core selected months and insurance payment status stay explicit without c
 
 test('@core today defaults ignore stale months and thirty schedules stay compact with direct card access',async({page},info)=>{
  await page.clock.setFixedTime(new Date('2026-10-17T03:00:00Z'));
- await page.goto('/index.html?qa=1#/home');
+ await page.goto('/index.html?qa=1#/home');await page.waitForFunction(()=>!!window.__assetOS);
  await page.evaluate(async ()=>{
   localYmd=(d)=>{const value=d||new Date();return value.getFullYear()+'-'+String(value.getMonth()+1).padStart(2,'0')+'-'+String(value.getDate()).padStart(2,'0')};
   const next=window.__assetOS.getState();next.settings.integratedMonth='2026-09';next.settings.integratedMonthViewedOn='2026-10-16';
@@ -65,7 +65,7 @@ test('@core today defaults ignore stale months and thirty schedules stay compact
 });
 
 test('@core final card installment remains saved and completed history survives reload',async({page})=>{
- await page.clock.setFixedTime(new Date('2026-10-17T03:00:00Z'));await page.goto('/index.html?qa=1#/home');
+ await page.clock.setFixedTime(new Date('2026-10-17T03:00:00Z'));await page.goto('/index.html?qa=1#/home');await page.waitForFunction(()=>!!window.__assetOS);
  const id=await page.evaluate(async ()=>{
   const next=window.__assetOS.getState();next.financialProducts={items:[],events:[]};next.financeSchedules={items:[]};next.integrated.liabilities=[];
   next.integrated.ledger=[{id:'cash',date:'2026-01-01',type:'openingAsset',amount:10000000,toAccountId:'cash-main'}];(await window.__assetOS.replaceState(next));

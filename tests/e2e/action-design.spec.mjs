@@ -4,7 +4,7 @@ test.beforeEach(async({page})=>{
  if(process.env.ASSET_OS_QA_SDK_PATH){const body=await readFile(process.env.ASSET_OS_QA_SDK_PATH);await page.route('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4',route=>route.fulfill({body,contentType:'text/javascript'}))}
 });
 test('@core action design keeps historical dates explicit and close preserves unsaved edits',async({page},info)=>{
- await page.goto('/index.html?qa=1#/home');
+ await page.goto('/index.html?qa=1#/home');await page.waitForFunction(()=>!!window.__assetOS);
  await page.evaluate(async ()=>{
   const next=window.__assetOS.getState();next.settings.integratedMonth='2026-02';
   next.settings.integratedEntryFavorites=[{uiType:'externalIncome',category:'월급',amount:100000,toAccountId:'cash-main',note:'기본급'},{uiType:'externalIncome',category:'월급',amount:200000,toAccountId:'qa-other',note:'상여'}];
@@ -38,7 +38,7 @@ test('@core action design keeps historical dates explicit and close preserves un
 });
 
 test('@core refresh labels distinguish ISA prices from pension balances',async({page})=>{
- await page.goto('/index.html?qa=1#/home');await page.getByRole('button',{name:/검토·중요 알림/}).click();
+ await page.goto('/index.html?qa=1#/home');await page.waitForFunction(()=>!!window.__assetOS);await page.getByRole('button',{name:/검토·중요 알림/}).click();
  await expect(page.locator('.refresh-scope-note')).toContainText('ISA는 시세만');
  await page.locator('.refresh-account-times summary').click();
  await expect(page.locator('.refresh-account-times')).toContainText('ISA 시세');
@@ -47,7 +47,7 @@ test('@core refresh labels distinguish ISA prices from pension balances',async({
 
 test('@core visual polish preserves navigation and money with motion enabled or reduced',async({page},info)=>{
  const errors=[];page.on('pageerror',e=>errors.push(String(e)));
- await page.goto('/index.html?qa=1#/home');
+ await page.goto('/index.html?qa=1#/home');await page.waitForFunction(()=>!!window.__assetOS);
  await page.getByRole('button',{name:'35년 생성',exact:true}).click();
  await page.getByRole('dialog',{name:'QA 35년 실사용 데이터 생성'}).getByRole('button',{name:'생성',exact:true}).click();
  await expect(page.getByText(/2026-2060 · 7,740건/)).toBeVisible({timeout:30_000});
