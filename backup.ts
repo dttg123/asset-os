@@ -117,3 +117,38 @@ function openBackupHub(){
  $('[data-phone-folder]').onclick=async()=>{if(await assetConnectPhoneBackup())openBackupHub()};$('[data-phone-now]').onclick=async ()=>(await assetWritePhoneBackup());$('[data-backup-zip]').onclick=saveZipBackup;$('[data-backup-drive]').onclick=shareDriveBackup;$('[data-backup-keep]').onclick=assetCreateKeepBackup;$('[data-backup-restore]').onclick=()=>$('#backupInput').click()
 }
 async function resetLiveData(){state=normalizeState(seed);if(!(await persist()))return false;applyTheme();render();toast('초기 실사용 상태로 초기화했습니다.');return true}
+
+
+declare const QA_MODE:boolean,MAX_STATE_BYTES:number;
+declare function assetAuthGateState(mode:string,message?:string):void;
+declare function initSupabaseCloud():Promise<boolean>;
+declare function cloudUser():{id:string}|null;
+declare function signInAssetGoogle():Promise<boolean>;
+declare const assetLocalDatabase:{rescue(userId:string):Promise<{head?:{revision:number};rows:unknown[];copies:Array<{key:string;raw:string;createdAt:string}>}>;repair(envelope:BackupRecord,userId:string,expectedRevision:number):Promise<void>};
+async function openStorageRecovery(error:unknown):Promise<void>{
+ const message=backupErrorMessage(error)||'기기 원장을 확인하지 못했습니다.';
+ assetAuthGateState('error',message);const retry=document.querySelector<HTMLButtonElement>('#assetAuthButton'),status=document.querySelector<HTMLElement>('#assetAuthStatus'),card=document.querySelector<HTMLElement>('.asset-auth-card');
+ if(!retry||!status||!card)return;retry.onclick=()=>location.reload();
+ try{
+  if(!QA_MODE){await initSupabaseCloud();if(!cloudUser()){retry.textContent='Google로 로그인';retry.onclick=()=>{void signInAssetGoogle()};status.textContent=message+' 기존 계정으로 로그인하면 복구 메뉴를 엽니다.';return}}
+  assetAuthGateState('error',message);
+  const userId=cloudUser()?.id||'',source=await assetLocalDatabase.rescue(userId),revision=source.head?.revision||0;
+  document.querySelector('#storageRecovery')?.remove();const panel=document.createElement('div');panel.id='storageRecovery';panel.className='storage-recovery';card.appendChild(panel);
+  const help=document.createElement('p');help.textContent='자동으로 초기화하지 않았습니다. 원본을 내려받거나 확인한 백업으로 복구할 수 있습니다.';panel.appendChild(help);
+  const addButton=(label:string,id:string,action:()=>void)=>{const button=document.createElement('button');button.id=id;button.type='button';button.className='asset-auth-secondary';button.textContent=label;button.onclick=action;panel.appendChild(button);return button};
+  addButton('현재 원본 내려받기','recoveryDownload',()=>downloadBytes(new TextEncoder().encode(JSON.stringify({format:'asset-os-recovery-v1',environment:APP_ENV,exportedAt:new Date().toISOString(),head:source.head,rows:source.rows})),`AssetOS_recovery_original_${Date.now()}.json`,'application/json'));
+  let pending:BackupState|null=null,busy=false;const detail=document.createElement('p');detail.id='recoveryPreview';detail.hidden=true;
+  const confirmation=document.createElement('div');confirmation.hidden=true;
+  const confirm=document.createElement('button');confirm.id='recoveryConfirm';confirm.type='button';confirm.textContent='이 백업으로 복구';
+  const cancel=document.createElement('button');cancel.id='recoveryCancel';cancel.type='button';cancel.className='asset-auth-secondary';cancel.textContent='취소';
+  const clearCandidate=()=>{pending=null;detail.hidden=true;confirmation.hidden=true};
+  const selectCandidate=(payload:unknown,label:string)=>{clearCandidate();pending=validateBackupPayload(payload);const raw=stateEnvelopeJson(pending);if(new TextEncoder().encode(raw).length>MAX_STATE_BYTES){pending=null;throw new Error('백업이 앱의 안전한 처리 한도를 넘습니다. 원본은 변경하지 않았습니다.')}detail.textContent=label+' 자료로 교체합니다. 현재 원본은 기기에 별도로 보존합니다. 확인 후 복구해 주세요.';detail.hidden=false;confirmation.hidden=false;};
+  const file=document.createElement('input');file.id='recoveryFile';file.type='file';file.accept='.zip,.json,.txt';file.hidden=true;panel.appendChild(file);
+  addButton('백업 파일 선택','recoveryChooseFile',()=>file.click());
+  file.onchange=async()=>{const selected=file.files?.[0];file.value='';if(!selected||busy)return;clearCandidate();try{selectCandidate(await parseBackupFile(selected),selected.name)}catch(issue){status.textContent='복구하지 않았습니다: '+backupErrorMessage(issue)}};
+  for(const copy of source.copies.filter(copy=>copy.key!=='before-repair').sort((a,b)=>b.createdAt.localeCompare(a.createdAt))){try{const saved=JSON.parse(copy.raw) as BackupRecord,payload={format:BACKUP_FORMAT,schemaVersion:saved.schemaVersion,environment:saved.environment||APP_ENV,data:saved.data};validateBackupPayload(payload);addButton(`기기 보관 사본 · ${formatDateTime(copy.createdAt)}`,'recoveryCopy-'+copy.key,()=>{try{selectCandidate(payload,formatDateTime(copy.createdAt)+' 기기 보관 사본')}catch(issue){status.textContent=backupErrorMessage(issue)}})}catch{}}
+  confirmation.append(confirm,cancel);panel.append(detail,confirmation);
+  cancel.onclick=clearCandidate;
+  confirm.onclick=async()=>{if(!pending||busy)return;busy=true;const buttons=Array.from(card.querySelectorAll<HTMLButtonElement>('button'));buttons.forEach(button=>button.disabled=true);status.textContent='원본을 보존하고 백업을 복구하고 있습니다.';try{await assetLocalDatabase.repair(JSON.parse(stateEnvelopeJson(pending)) as BackupRecord,userId,revision);status.textContent='복구를 확인했습니다. 앱을 다시 엽니다.';location.reload()}catch(issue){status.textContent='복구 실패: '+backupErrorMessage(issue);busy=false;buttons.forEach(button=>button.disabled=false)}};
+ }catch(issue){status.textContent=message+' '+backupErrorMessage(issue)}
+}

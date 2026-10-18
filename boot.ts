@@ -252,4 +252,5 @@ $('#assetAuthOverwrite').onclick=cloudResolveConflictOverwrite;
 startAssetAuthenticatedApp().catch(()=>assetAuthGateState('error','연결 확인 중 오류가 발생했습니다. 다시 시도해 주세요.'));
 
 }
-bootAssetOs().catch((error:unknown)=>{assetAuthGateState('error',error instanceof Error?error.message:'기기 저장소를 확인하지 못했습니다. 기존 데이터는 보존됩니다.');});
+declare function openStorageRecovery(error:unknown):Promise<void>;
+bootAssetOs().catch((error:unknown)=>openStorageRecovery(error).catch(()=>assetAuthGateState('error','기기 저장소를 확인하지 못했습니다. 기존 데이터는 보존됩니다.')));

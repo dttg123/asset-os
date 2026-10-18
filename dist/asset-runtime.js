@@ -200,6 +200,13 @@ function assetAuthGateState(mode, message = '') {
     const gate = $('#assetAuthGate'), button = $('#assetAuthButton'), status = $('#assetAuthStatus'), conflict = $('#assetAuthConflict');
     if (!gate || !button || !status)
         return;
+    const switchAccount = $('#assetAuthSwitch');
+    if (switchAccount) {
+        switchAccount.hidden = mode !== 'error' || !cloudUser();
+        switchAccount.onclick = async () => { if (await signOutAssetGoogle())
+            await signInAssetGoogle(true); };
+    }
+    ;
     gate.hidden = false;
     document.documentElement.classList.add('asset-auth-locked');
     status.className = `asset-auth-status ${mode === 'error' ? 'error' : ''}`;
@@ -397,6 +404,9 @@ async function handleCloudAuthState(event, session) {
         assetAuthGateState('login');
         return false;
     }
+    // Storage recovery has no trusted in-memory ledger yet. A token refresh must not start a remote replacement during repair.
+    if (!state)
+        return false;
     if (!cloudLocalOwnerMatches()) {
         assetAppUnlocked = false;
         assetAuthGateState('error', '이 기기 원장은 다른 계정의 자료입니다. 기존 계정으로 로그인해 주세요.');
@@ -413,7 +423,7 @@ async function handleCloudAuthState(event, session) {
     }
     return true;
 }
-async function signInAssetGoogle() {
+async function signInAssetGoogle(selectAccount = false) {
     if (qaCloudBlocked()) {
         toast('QA 모드에서는 Google 로그인이 차단됩니다.');
         return false;
@@ -424,7 +434,7 @@ async function signInAssetGoogle() {
     if (!client)
         return false;
     cloudSetStatus('Google 로그인 이동 중', 'wait');
-    const { error } = await client.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: SUPABASE_REDIRECT_URL } });
+    const { error } = await client.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: SUPABASE_REDIRECT_URL, ...(selectAccount ? { queryParams: { prompt: 'select_account' } } : {}) } });
     if (error) {
         cloudSetStatus(`로그인 실패: ${error.message}`, 'wait');
         toast('Google 로그인을 시작하지 못했습니다.');
@@ -988,11 +998,11 @@ function initQaMode() { if (!QA_MODE)
 'use strict';
 if ('serviceWorker' in navigator)
     window.addEventListener('load', async () => { const hadController = !!navigator.serviceWorker.controller; try {
-        const reg = await navigator.serviceWorker.register('./service-worker.js?v=0.7.0&build=20261018-2', { scope: './', updateViaCache: 'none' });
+        const reg = await navigator.serviceWorker.register('./service-worker.js?v=0.7.1&build=20261018-3', { scope: './', updateViaCache: 'none' });
         await reg.update();
         let refreshing = false;
         navigator.serviceWorker.addEventListener('controllerchange', () => { if (!hadController || refreshing)
-            return; refreshing = true; const key = 'asset-os-sw-reload-0.7.0-build20261018-2'; if (sessionStorage.getItem(key))
+            return; refreshing = true; const key = 'asset-os-sw-reload-0.7.1-build20261018-3'; if (sessionStorage.getItem(key))
             return; sessionStorage.setItem(key, '1'); location.reload(); });
     }
     catch { } });
@@ -1215,4 +1225,4 @@ async function bootAssetOs() {
     $('#assetAuthOverwrite').onclick = cloudResolveConflictOverwrite;
     startAssetAuthenticatedApp().catch(() => assetAuthGateState('error', '연결 확인 중 오류가 발생했습니다. 다시 시도해 주세요.'));
 }
-bootAssetOs().catch((error) => { assetAuthGateState('error', error instanceof Error ? error.message : '기기 저장소를 확인하지 못했습니다. 기존 데이터는 보존됩니다.'); });
+bootAssetOs().catch((error) => openStorageRecovery(error).catch(() => assetAuthGateState('error', '기기 저장소를 확인하지 못했습니다. 기존 데이터는 보존됩니다.')));

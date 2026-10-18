@@ -146,3 +146,10 @@ test('a different signed-in owner cannot upload the existing local ledger',async
  const database={revision:1,lastRequestId:'',payload:null,failAfterCommit:false},phone=client(database,'other');phone.assetLocalDatabase={sync:{userId:'original-owner',baseRevision:1,baseFingerprint:'original'}};phone.__envelope={data:{accounts:[{id:'private'}]}};
  assert.equal(await vm.runInContext('cloudPushState(__envelope)',phone),false);assert.equal(database.payload,null);assert.equal(database.revision,1);
 });
+
+test('token refresh cannot start cloud replacement while device storage recovery is active',async()=>{
+ const database={revision:2,lastRequestId:'remote',payload:null,failAfterCommit:false},device=client(database,'owner');
+ vm.runInContext(`state=null;__reconciles=0;cloudReconcileState=async()=>{__reconciles++;return true}`,device);
+ assert.equal(await vm.runInContext(`handleCloudAuthState('TOKEN_REFRESHED',{user:{id:'owner'}})`,device),false);
+ assert.equal(device.__reconciles,0);assert.equal(database.revision,2);
+});

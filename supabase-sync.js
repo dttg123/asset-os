@@ -43,6 +43,13 @@ function assetAuthGateState(mode, message = '') {
     const gate = $('#assetAuthGate'), button = $('#assetAuthButton'), status = $('#assetAuthStatus'), conflict = $('#assetAuthConflict');
     if (!gate || !button || !status)
         return;
+    const switchAccount = $('#assetAuthSwitch');
+    if (switchAccount) {
+        switchAccount.hidden = mode !== 'error' || !cloudUser();
+        switchAccount.onclick = async () => { if (await signOutAssetGoogle())
+            await signInAssetGoogle(true); };
+    }
+    ;
     gate.hidden = false;
     document.documentElement.classList.add('asset-auth-locked');
     status.className = `asset-auth-status ${mode === 'error' ? 'error' : ''}`;
@@ -240,6 +247,9 @@ async function handleCloudAuthState(event, session) {
         assetAuthGateState('login');
         return false;
     }
+    // Storage recovery has no trusted in-memory ledger yet. A token refresh must not start a remote replacement during repair.
+    if (!state)
+        return false;
     if (!cloudLocalOwnerMatches()) {
         assetAppUnlocked = false;
         assetAuthGateState('error', '이 기기 원장은 다른 계정의 자료입니다. 기존 계정으로 로그인해 주세요.');
@@ -256,7 +266,7 @@ async function handleCloudAuthState(event, session) {
     }
     return true;
 }
-async function signInAssetGoogle() {
+async function signInAssetGoogle(selectAccount = false) {
     if (qaCloudBlocked()) {
         toast('QA 모드에서는 Google 로그인이 차단됩니다.');
         return false;
@@ -267,7 +277,7 @@ async function signInAssetGoogle() {
     if (!client)
         return false;
     cloudSetStatus('Google 로그인 이동 중', 'wait');
-    const { error } = await client.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: SUPABASE_REDIRECT_URL } });
+    const { error } = await client.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: SUPABASE_REDIRECT_URL, ...(selectAccount ? { queryParams: { prompt: 'select_account' } } : {}) } });
     if (error) {
         cloudSetStatus(`로그인 실패: ${error.message}`, 'wait');
         toast('Google 로그인을 시작하지 못했습니다.');
