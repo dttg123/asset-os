@@ -172,7 +172,7 @@ function openCardInstallmentForm() {
     const form = $('#cardInstallmentForm');
     const updateInterestFields = () => { const mode = form.elements.namedItem('interestMode').value, months = Number(form.elements.namedItem('months').value), free = form.elements.namedItem('interestFreeMonths'), rate = form.querySelector('[data-card-rate]'), partial = form.querySelector('[data-card-free-months]'); if (rate)
         rate.hidden = mode === 'free'; if (partial)
-        partial.hidden = mode !== 'partial'; free.required = mode === 'partial'; free.max = String(Math.max(0, months - 1)); };
+        partial.hidden = mode !== 'partial'; free.disabled = mode !== 'partial'; free.required = mode === 'partial'; free.max = String(Math.max(0, months - 1)); form.elements.namedItem('annualRate').disabled = mode === 'free'; };
     updateInterestFields();
     form.addEventListener('change', () => { updateInterestFields(); sheetDirty = true; });
     form.onsubmit = async (e) => { e.preventDefault(); const id = (await createCardInstallment(Object.fromEntries(new FormData(form).entries()))); if (!id)

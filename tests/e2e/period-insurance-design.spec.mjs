@@ -128,3 +128,34 @@ test('@core card entry is centralized and partial interest persists with one ful
  await page.screenshot({path:`/tmp/asset-simple-backup-${info.project.name}.png`,animations:'disabled'});
  await page.getByText('고급 백업 설정',{exact:true}).click();await expect(page.locator('[data-backup-csv]')).toBeVisible();await expect(page.locator('[data-initial-import]')).toBeVisible();
 });
+
+test('@core inactive card interest controls never block saving and active controls remain validated',async({page})=>{
+ await page.goto('/index.html?qa=1#/home');await page.waitForFunction(()=>!!window.__assetOS);
+ await page.evaluate(async()=>{const next=window.__assetOS.getState();next.financeSchedules={items:[]};next.financialProducts={items:[]};next.liabilities={items:[]};next.integrated.ledger=[];await window.__assetOS.replaceState(next);nav('integrated','summary')});
+ for(const amount of [360000,370000]){
+  await page.locator('[data-card-hub]').click();await page.locator('[data-card-plan-new]').click();
+  const form=page.locator('#cardInstallmentForm'),free=form.locator('[name=interestFreeMonths]'),rate=form.locator('[name=annualRate]');
+  await form.locator('[name=name]').fill('무이자 저장 '+amount);await form.locator('[name=purchaseAmount]').fill(String(amount));
+  await form.locator('[name=purchaseDate]').fill('2026-01-01');await form.locator('[name=firstPaymentDate]').fill('2026-01-31');
+  for(const months of ['1','2','3']){
+   await form.locator('[name=months]').selectOption(months);
+   expect(await form.evaluate(el=>el.checkValidity())).toBe(true);
+  }
+  await expect(free).toBeDisabled();await expect(rate).toBeDisabled();
+  await form.locator('[name=interestMode]').selectOption('partial');await expect(free).toBeEnabled();await expect(rate).toBeEnabled();
+  await free.fill('3');expect(await form.evaluate(el=>el.checkValidity())).toBe(false);
+  await free.fill('1');await rate.fill('101');expect(await form.evaluate(el=>el.checkValidity())).toBe(false);
+  await form.locator('[name=interestMode]').selectOption('paid');await expect(free).toBeDisabled();expect(await form.evaluate(el=>el.checkValidity())).toBe(false);
+  await rate.fill('12');expect(await form.evaluate(el=>el.checkValidity())).toBe(true);
+  await rate.fill('101');await form.locator('[name=interestMode]').selectOption('free');
+  expect(await form.evaluate(el=>el.checkValidity())).toBe(true);
+  expect(await form.evaluate(el=>{const data=new FormData(el);return data.has('interestFreeMonths')||data.has('annualRate')})).toBe(false);
+  const before=await page.evaluate(()=>state.financeSchedules.items.length);
+  await form.locator('[type=submit]').click();await expect(page.getByText('구매와 할부 일정을 저장했어요.',{exact:true})).toBeVisible();await expect(page.locator('#formSheet')).not.toHaveClass(/open/);
+  await page.reload();await page.waitForFunction(()=>!!window.__assetOS);
+  const result=await page.evaluate(()=>({count:financeSchedules().length,plans:financeSchedules().map(s=>({amount:s.cardPlan.purchaseAmount,rate:s.cardPlan.annualRate,mode:s.cardPlan.interestMode,principal:['2026-01-31','2026-02-28','2026-03-31'].map(date=>cardInstallmentTerms(s,date).principal)}))}));
+  expect(result.count).toBe(before+1);expect(result.plans.map(p=>p.principal)).toEqual(amount===360000?[[120000,120000,120000]]:[[120000,120000,120000],[123333,123333,123334]]);
+  for(const plan of result.plans){expect(plan.mode).toBe('free');expect(plan.rate).toBe(0)}
+  await page.evaluate(()=>nav('integrated','summary'));
+ }
+});
