@@ -107,8 +107,14 @@ test('@core card entry is centralized and partial interest persists with one ful
  await page.locator('#cardInstallmentForm button[type="submit"]').click();
  expect(await page.evaluate(()=>financeSchedules().length)).toBe(0);
  await page.locator('#cardInstallmentForm [name="interestFreeMonths"]').fill('3');
+ await page.evaluate(()=>{const commit=assetLocalDatabase.commit;assetLocalDatabase.commit=async(...args)=>{await new Promise(resolve=>{window.__releaseCardCommit=resolve});return commit(...args)}});
  await page.locator('#cardInstallmentForm button[type="submit"]').click();
- await page.waitForFunction(()=>financeSchedules().some(s=>s.cardPlan?.interestMode==='partial'));
+ await page.waitForFunction(()=>typeof window.__releaseCardCommit==='function');
+ await expect(page.locator('#formSheet')).toHaveClass(/open/);
+ await expect(page.getByText('구매와 할부 일정을 저장했어요.',{exact:true})).toBeHidden();
+ await page.evaluate(()=>window.__releaseCardCommit());
+ await expect(page.getByText('구매와 할부 일정을 저장했어요.',{exact:true})).toBeVisible();
+ await expect(page.locator('#formSheet')).not.toHaveClass(/open/);
  await page.reload();await page.waitForFunction(()=>!!window.__assetOS);
  const result=await page.evaluate(()=>{const s=financeSchedules().find(s=>s.cardPlan);return{count:financeSchedules().length,plan:s.cardPlan,free:cardInstallmentTerms(s,'2026-03-31').interest,paid:cardInstallmentTerms(s,'2026-04-30').interest}});
  expect(result.count).toBe(1);expect(result.plan.interestFreeMonths).toBe(3);expect(result.free).toBe(0);expect(result.paid).toBe(1850);
