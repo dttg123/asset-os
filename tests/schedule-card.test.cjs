@@ -137,3 +137,56 @@ test('product-linked repayment and transfer memo edits retain category, funding 
   const candidate=run(c,'integratedCandidatesFromForm(editForm)[0]');assert.equal(candidate.category,category);assert.equal(candidate.meta.fundingSource,'tracked');assert.ok(candidate.productId);assert.equal(candidate.fromAccountId,'cash-main');assert.equal(candidate.note,'메모 변경');
  }
 });
+
+for(const kind of ['income','expense','insurance','saving','investment','loan'])test(`collision lifecycle matrix: ${kind} keeps schedule identity through retry, correction, deletion and ZIP restore`,async()=>{
+ const c=await setup();c.matrixKind=kind;
+ run(c,"globalThis.sheetDirty=false;closeSheets=()=>{};nav=()=>{};haptic=()=>{};showDialog=(_options,confirm)=>{globalThis.confirmDeletion=confirm};state.integrated.accounts.push({id:'matrix-target',name:'검사 예금',kind:'deposit'});state.integrated.liabilities.push({id:'matrix-loan-a',name:'검사 대출'},{id:'matrix-loan-b',name:'검사 대출'});state.integrated.ledger.push({id:'matrix-debt-a',date:'2026-01-01',type:'openingLiability',liabilityId:'matrix-loan-a',amount:100000},{id:'matrix-debt-b',date:'2026-01-01',type:'openingLiability',liabilityId:'matrix-loan-b',amount:100000});state.financeSchedules.items=['a','b'].map(suffix=>({id:'matrix-'+suffix,name:'동일 이름',kind:matrixKind,amount:1000,day:25,startDate:'2026-01-01',active:true,targetAccountId:'matrix-target',targetKind:'deposit',liabilityId:'matrix-loan-'+suffix}));persist=productionPersist;lastPersistedState=clone(state)");
+ // Actual persistence failure must not mark a payment complete or leak a row.
+ const before=run(c,'JSON.stringify(state.integrated.ledger)');run(c,"localStorage.setItem=()=>{throw new Error('matrix quota')}");
+ assert.equal(await run(c,"completeScheduleOccurrence('matrix-a','2026-01-25',1000,'','',1000,0)"),false);
+ assert.equal(run(c,'JSON.stringify(state.integrated.ledger)'),before);assert.equal(run(c,"scheduleCompletionTx('matrix-a','2026-01-25')"),null);
+ run(c,'localStorage.setItem=()=>{}');assert.equal(await run(c,"completeScheduleOccurrence('matrix-a','2026-01-25',1000,'','',1000,0)"),true);
+ assert.equal(run(c,"scheduleCompletionTx('matrix-b','2026-01-25')"),null);
+ assert.equal(await run(c,"completeScheduleOccurrence('matrix-a','2026-01-25',1000,'','',1000,0)"),false);
+ for(const [id,date] of [['matrix-b','2026-01-25'],['matrix-a','2026-02-25'],['matrix-b','2026-02-25']]){c.matrixId=id;c.matrixDate=date;assert.equal(await run(c,"completeScheduleOccurrence(matrixId,matrixDate,1000,'','',1000,0)"),true)}
+ assert.equal(await run(c,"updateScheduleActualPayment('matrix-a','2026-01-25',2000,2000,0)"),true);
+ assert.equal(run(c,"Number(scheduleCompletionTx('matrix-b','2026-01-25').meta.actualAmount)"),1000);
+ await run(c,'state=normalizeState(validateBackupPayload(parseBackupZipBytes(createBackupZipBytes(backupPayload()))))');
+ const kept=run(c,"JSON.stringify(state.integrated.ledger.filter(t=>t.meta?.scheduleId&&(t.meta.scheduleId!=='matrix-a'||t.meta.scheduleDate!=='2026-01-25')))");
+ await run(c,"(async()=>{deleteIntegratedTransaction(scheduleCompletionTx('matrix-a','2026-01-25').id);await confirmDeletion()})()");
+ assert.equal(run(c,"scheduleCompletionTx('matrix-a','2026-01-25')"),null);
+ assert.equal(run(c,"JSON.stringify(state.integrated.ledger.filter(t=>t.meta?.scheduleId))"),kept);
+ await run(c,'state=normalizeState(validateBackupPayload(parseBackupZipBytes(createBackupZipBytes(backupPayload()))))');
+ assert.equal(run(c,"scheduleCompletionTx('matrix-a','2026-01-25')"),null);
+ assert.equal(run(c,"state.integrated.ledger.filter(t=>t.meta?.scheduleId).length"),3);
+ assert.equal(run(c,"integratedReplay().assets['cash-main']"),10000000+(kind==='income'?3000:-3000));
+ assert.equal(run(c,'integratedReplay().totalDebt'),kind==='loan'?197000:200000);
+ assert.equal(run(c,"integratedReplay().assets['matrix-target']||0"),['saving','investment'].includes(kind)?3000:0);
+});
+
+for(const type of ['externalIncome','expense','internalTransfer','debtPrincipal'])test(`manual transaction matrix: ${type} edits only one duplicate and failed writes preserve money`,async()=>{
+ const c=await setup();c.matrixType=type;c.FormData=class{constructor(form){this.data=form.data}get(k){return this.data[k]??null}};
+ run(c,"globalThis.sheetDirty=false;closeSheets=()=>{};nav=()=>{};haptic=()=>{};showDialog=(_options,confirm)=>{globalThis.confirmDeletion=confirm};integratedFormEntryPreset=()=>null;formShowError=(_form,message)=>{globalThis.formError=message};state.integrated.accounts.push({id:'manual-target',name:'예금',kind:'deposit'});state.integrated.liabilities.push({id:'manual-loan',name:'대출'});state.integrated.ledger.push({id:'manual-debt',date:'2026-01-01',type:'openingLiability',liabilityId:'manual-loan',amount:100000});for(const suffix of ['a','b'])state.integrated.ledger.push({id:'manual-'+suffix,date:'2026-01-25',type:matrixType,amount:1000,category:'동일 기록',note:'원본',...(matrixType==='externalIncome'?{toAccountId:'cash-main'}:matrixType==='expense'?{fromAccountId:'cash-main'}:matrixType==='internalTransfer'?{fromAccountId:'cash-main',toAccountId:'manual-target'}:{fromAccountId:'cash-main',liabilityId:'manual-loan'})});persist=productionPersist;lastPersistedState=clone(state)");
+ const other=run(c,"JSON.stringify(state.integrated.ledger.find(t=>t.id==='manual-b'))");
+ c.editForm={dataset:{editId:'manual-a'},data:{uiType:({externalIncome:'externalIncome',expense:'lifeExpense',internalTransfer:'savingInvestment',debtPrincipal:'loanPayment'})[type],date:'2026-01-25',amount:'1500',principal:'1500',interest:'0',category:'동일 기록',note:'한 건만 수정',toAccountId:'manual-target',liabilityId:'manual-loan'}};
+ await run(c,'saveIntegratedTransaction(editForm)');assert.equal(run(c,"state.integrated.ledger.find(t=>t.id==='manual-a').amount"),1500);assert.equal(run(c,"JSON.stringify(state.integrated.ledger.find(t=>t.id==='manual-b'))"),other);
+ const stable=run(c,'JSON.stringify(state.integrated)');run(c,"editForm.data.amount='2000';editForm.data.principal='2000';localStorage.setItem=()=>{throw new Error('manual quota')}");await run(c,'saveIntegratedTransaction(editForm)');assert.equal(run(c,'JSON.stringify(state.integrated)'),stable);
+ run(c,'localStorage.setItem=()=>{}');await run(c,"(async()=>{deleteIntegratedTransaction('manual-a');await confirmDeletion()})()");
+ await run(c,'state=normalizeState(validateBackupPayload(parseBackupZipBytes(createBackupZipBytes(backupPayload()))))');
+ assert.equal(run(c,"state.integrated.ledger.filter(t=>t.id==='manual-b').length"),1);assert.equal(run(c,"state.integrated.ledger.some(t=>t.id==='manual-a')"),false);
+ assert.equal(run(c,"integratedReplay().assets['cash-main']"),10000000+(type==='externalIncome'?1000:-1000));assert.equal(run(c,'integratedReplay().totalDebt'),type==='debtPrincipal'?99000:100000);
+});
+
+for(const type of ['expense','externalExpense'])test(`refund dependency matrix: ${type} protects original edits and deletes without touching its duplicate`,async()=>{
+ const c=await setup();c.matrixType=type;c.FormData=class{constructor(form){this.data=form.data}get(k){return this.data[k]??null}};
+ run(c,"globalThis.sheetDirty=false;closeSheets=()=>{};nav=()=>{};haptic=()=>{};showDialog=(_options,confirm)=>{globalThis.confirmDeletion=confirm};integratedFormEntryPreset=()=>null;formShowError=(_form,message)=>{globalThis.formError=message};for(const suffix of ['a','b'])state.integrated.ledger.push({id:'refund-original-'+suffix,date:'2026-01-25',type:matrixType,amount:1000,category:'동일 지출',...(matrixType==='expense'?{fromAccountId:'cash-main'}:{})});globalThis.refundResult=recordIntegratedRefund('refund-original-a','2026-01-26',500);persist=productionPersist;lastPersistedState=clone(state)");
+ assert.equal(c.refundResult.ok,true);const before=run(c,'JSON.stringify(state.integrated)');
+ c.editForm={dataset:{editId:'refund-original-a'},data:{uiType:'lifeExpense',date:'2026-01-25',amount:'400',category:'동일 지출',note:'거부'}};
+ await run(c,'saveIntegratedTransaction(editForm)');assert.match(c.formError,/환불/);assert.equal(run(c,'JSON.stringify(state.integrated)'),before);
+ run(c,"editForm.data.amount='1000';editForm.data.date='2026-01-27'");await run(c,'saveIntegratedTransaction(editForm)');assert.match(c.formError,/환불/);assert.equal(run(c,'JSON.stringify(state.integrated)'),before);
+ await run(c,"(async()=>{deleteIntegratedTransaction('refund-original-a');await confirmDeletion()})()");assert.equal(run(c,'JSON.stringify(state.integrated)'),before);
+ await run(c,"(async()=>{deleteIntegratedTransaction(refundResult.row.id);await confirmDeletion();deleteIntegratedTransaction('refund-original-a');await confirmDeletion()})()");
+ await run(c,'state=normalizeState(validateBackupPayload(parseBackupZipBytes(createBackupZipBytes(backupPayload()))))');
+ assert.equal(run(c,"state.integrated.ledger.filter(t=>t.id==='refund-original-b').length"),1);assert.equal(run(c,"state.integrated.ledger.some(t=>t.meta?.refundOf==='refund-original-a')"),false);
+ assert.equal(run(c,"integratedReplay().assets['cash-main']"),type==='expense'?9999000:10000000);
+});
