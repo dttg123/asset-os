@@ -32,6 +32,6 @@ function normalizeIntegrated(input) {
     out.ledger = out.ledger.map((t, i) => { const date = String(t.date || ymd()); perDate[date] = (perDate[date] || 0) + 1; const sequence = Number.isFinite(Number(t.sequence)) ? Number(t.sequence) : perDate[date], createdAt = String(t.createdAt || `${date}T00:00:00.${String(Math.min(999, perDate[date])).padStart(3, '0')}`); return { ...t, id: String(t.id || `integrated-ledger-${i + 1}`), date, type: String(t.type || ''), amount: Number(t.amount) || 0, fixed: !!t.fixed, category: String(t.category || ''), note: String(t.note || ''), sourceModule: String(t.sourceModule || ''), sourceId: String(t.sourceId || ''), productId: String(t.productId || ''), sequence, createdAt, meta: t.meta && typeof t.meta === 'object' ? clone(t.meta) : {} }; });
     for (const link of base.accounts.filter(a => ['cash', 'isa', 'pension', 'irp'].includes(a.kind)))
         if (!out.accounts.some(a => a.id === link.id))
-            out.accounts.push(clone(link));
+            out.accounts.push({ ...clone(link), productId: String(link.productId || '') });
     return out;
 }
