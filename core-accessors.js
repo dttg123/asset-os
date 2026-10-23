@@ -7,7 +7,7 @@ function viewPreferenceValue(key, value) {
         return typeof value === 'boolean';
     if (typeof value !== 'string' || value.length > 256)
         return false;
-    const choices = { pensionAssetScope: ['all', 'pension', 'irp'], spendingPeriod: ['month', 'year'], spendingView: ['categories', 'items'], policyTab: ['isa', 'pension', 'irp', 'finance'], dividendPeriod: ['month', 'year', 'recent'], integratedLedgerFilter: ['all', 'income', 'expense', 'saving', 'debt'] };
+    const choices = { pensionAssetScope: ['all', 'pension', 'irp'], spendingPeriod: ['month', 'quarter', 'half', 'year', 'years'], spendingView: ['categories', 'items'], policyTab: ['isa', 'pension', 'irp', 'finance'], dividendPeriod: ['month', 'year', 'recent'], integratedLedgerFilter: ['all', 'income', 'expense', 'saving', 'debt'] };
     if (choices[key])
         return choices[key].includes(value);
     if (key === 'integratedMonth')
