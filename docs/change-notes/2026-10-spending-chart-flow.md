@@ -14,3 +14,5 @@
 Synthetic domain tests cover picker pollution, explicit custom categories/rename, original source equality, independent duplicate records, insurance grouping and linked refunds. Browser tests cover inline selection, unchanged global month, item-scoped transactions, negative exact amounts, date pagination, category search, 320/412/768px, both themes, and enlarged chart text. Existing financial and ZIP/reload suites remain enabled.
 
 A separate private QA copy of an existing full source snapshot is used for actual record display and preservation checks with external/cloud requests blocked. No operating database write is needed. Private records and screenshots stay outside the repository and CI. Hardware-specific certification is not claimed.
+
+Final visual review also checks that expanding the category picker does not stretch the adjacent date input. Form grid items align at the top.
