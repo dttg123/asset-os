@@ -61,5 +61,6 @@
   "release-v069.ts",
   "qa-mode.ts",
   "pwa.ts",
-  "boot.ts"
+  "boot.ts",
+  "card-management-ui.ts"
 ]

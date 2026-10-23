@@ -4,6 +4,104 @@ const root=path.join(__dirname,'..');
 function env(){const storage=new Map(),c=vm.createContext({console,Date,Set,Map,URL,Blob,TextEncoder,TextDecoder,Uint8Array,DataView,ArrayBuffer,Intl,Math,JSON,Number,String,Boolean,Object,RegExp,Promise,localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)},document:{querySelector:()=>null,querySelectorAll:()=>[],documentElement:{dataset:{}},body:{dataset:{}}},window:{addEventListener:()=>{}},navigator:{},location:{search:'?qa=1',hash:''},setTimeout:()=>0,clearTimeout:()=>{}});for(const f of ['core-config.js','src/integrations/kis-normalization.js','broker-kis.js','data-defaults.js','src/domain/integrated-replay.js','src/domain/integrated-ledger-core.js','src/domain/integrated-ledger.js','src/domain/integrated-ledger-validation.js','src/domain/financial-current.js','src/domain/financial-history.js','src/domain/integrated-spending.js','integrated-schedule-engine.js','integrated-finance-engine.js','src/storage/state-migrations.js','src/storage/snapshot-retention.js','store-state.js','core-accessors.js','src/domain/investment-position.js','pension-contributions.js','pension-ledger.js','pension-assets.js','isa-validation.js','isa-ledger.js','isa-registration.js','isa-maturity-policy.js','integrated-forms.js','ui-render.js','integrated-finance-ui.js','insurance.js','backup.js','export-csv.js','integrated-pages.js','src/app/schedule-completion.js'])vm.runInContext(fs.readFileSync(path.join(root,f),'utf8'),c,{filename:f});const bytes=fs.readFileSync(path.join(root,'tests/fixtures/legacy/schema-v21-30y-backup.zip')),offset=30+bytes.readUInt16LE(26)+bytes.readUInt16LE(28);c.fixture=JSON.parse(require('node:zlib').inflateRawSync(bytes.subarray(offset,offset+bytes.readUInt32LE(18))).toString()).data;vm.runInContext('state=normalizeState(fixture)',c);return c}
 const run=(c,s)=>vm.runInContext(s,c);
 
+async function setupCardV2(){const c=await setup();await run(c,"(async()=>{globalThis.cardTestError='';toast=x=>{globalThis.cardTestError=x};globalThis.testCard=await saveCardAccount({name:'가상 국민카드',issuer:'국민카드',paymentDay:14});return globalThis.newPurchase=(extra={})=>createCardPurchase({name:'가상 TV',cardId:testCard,category:'가전·전자',merchant:'가상 가맹점',purchaseAmount:370000,months:3,purchaseDate:'2026-01-01',firstPaymentDate:'2026-01-14',interestMode:'free',...extra})})()");return c}
+
+test('card v2: three independent ledgers preserve gross purchase and exact remainder without modifying investment data',async()=>{
+ const c=await setupCardV2(),isa=run(c,'JSON.stringify(state.accounts)'),pension=run(c,'JSON.stringify(state.pension)');assert.ok(await run(c,"(async()=>{return globalThis.v2id=await newPurchase()})()"));
+ assert.equal(run(c,'integratedReplay().totalDebt'),370000);assert.equal(run(c,"integratedSpendingAnalysis('2026-01').total"),370000);
+ assert.deepEqual(JSON.parse(run(c,"JSON.stringify(['2026-01-14','2026-02-14','2026-03-14'].map(d=>cardInstallmentTerms(financeSchedules()[0],d).principal))")),[123333,123333,123334]);
+ assert.equal(run(c,'JSON.stringify(state.accounts)'),isa);assert.equal(run(c,'JSON.stringify(state.pension)'),pension);
+ assert.equal(run(c,"cardLedgerDataIssue(state)"),'');
+ await run(c,'state=normalizeState(validateBackupPayload(parseBackupZipBytes(createBackupZipBytes(backupPayload()))))');assert.equal(run(c,'cardV2(financeSchedules()[0]).purchaseAmount'),370000);
+});
+
+test('card v2: actual issuer bill, discount and points reduce debt once and cash only by actual cash payment',async()=>{
+ const c=await setupCardV2();assert.ok(await run(c,"(async()=>{return globalThis.v2id=await newPurchase({purchaseAmount:1200000,months:12})})()"));
+ assert.ok(await run(c,"(async()=>{return globalThis.v2bill=await saveCardBill(v2id,{issuedDate:'2026-01-05',dueDate:'2026-01-14',principal:100000,interest:3000,principalDiscount:5000,interestDiscount:0})})()"));
+ assert.equal(run(c,'integratedReplay().totalDebt'),1195000);assert.equal(run(c,"integratedSpendingAnalysis('2026-01').total"),1195000);
+ assert.equal(run(c,'integratedReplay().assets["cash-main"]'),10000000);assert.equal(run(c,"schedulePlannedAmount(financeSchedules()[0],'2026-01-14')"),98000);
+ assert.ok(await run(c,"recordCardPayment(v2id,{billId:v2bill,date:'2026-01-10',pointsPrincipal:2000,pointsInterest:0})"));
+ assert.equal(run(c,'integratedReplay().totalDebt'),1100000);assert.equal(run(c,'integratedReplay().assets["cash-main"]'),9904000);
+ assert.equal(run(c,"integratedSpendingAnalysis('2026-01').total"),1195000);assert.equal(run(c,"scheduleOccurrences('2026-01')[0].status"),'done');
+ const stable=run(c,'JSON.stringify(state)');assert.equal(await run(c,"recordCardPayment(v2id,{billId:v2bill,date:'2026-01-10'})"),'');assert.equal(run(c,'JSON.stringify(state)'),stable);
+ await run(c,'state=normalizeState(validateBackupPayload(parseBackupZipBytes(createBackupZipBytes(backupPayload()))))');assert.equal(run(c,'cardLedgerDataIssue(state)'),'');assert.equal(run(c,'integratedReplay().totalDebt'),1100000);
+});
+
+test('card v2: one bill prepayment leaves future installments while payoff settles the whole principal',async()=>{
+ const c=await setupCardV2();await run(c,"(async()=>{globalThis.v2id=await newPurchase();return globalThis.v2bill=await saveCardBill(v2id,{issuedDate:'2026-01-02',dueDate:'2026-01-14',principal:123333,interest:0})})()");
+ assert.ok(await run(c,"recordCardPayment(v2id,{billId:v2bill,date:'2026-01-03'})"));assert.equal(run(c,'cardRemaining(financeSchedules()[0])'),246667);assert.equal(run(c,"scheduleOccurrences('2026-02').length"),1);
+ assert.ok(await run(c,"(async()=>{return globalThis.payoff=await recordCardPayment(v2id,{kind:'payoff',date:'2026-01-04',principal:246667,interest:777})})()"));
+ assert.equal(run(c,'cardRemaining(financeSchedules()[0])'),0);assert.equal(run(c,"scheduleOccurrences('2026-02').length"),0);assert.equal(run(c,'integratedReplay().assets["cash-main"]'),9629223);
+ assert.equal(await run(c,'removeCardPayment(v2id,payoff)'),true);assert.equal(run(c,'cardRemaining(financeSchedules()[0])'),246667);
+});
+
+test('card v2: identical same-day same-merchant purchases remain independent through edits, refunds and deletion',async()=>{
+ const c=await setupCardV2();await run(c,"(async()=>{globalThis.a=await newPurchase();return globalThis.b=await newPurchase()})()");const other=run(c,'JSON.stringify(financeSchedules().find(s=>s.id===b))');
+ assert.equal(await run(c,"updateCardPurchase(a,{name:'수정 TV',cardId:testCard,purchaseAmount:360000,months:3,purchaseDate:'2026-01-01',firstPaymentDate:'2026-01-14',interestMode:'free',category:'가전·전자'})"),true);
+ assert.ok(await run(c,"(async()=>{return globalThis.ref=await recordCardRefund(a,{date:'2026-01-02',amount:60000})})()"));assert.equal(run(c,'cardRemaining(financeSchedules().find(s=>s.id===a))'),300000);
+ assert.equal(run(c,'JSON.stringify(financeSchedules().find(s=>s.id===b))'),other);assert.equal(await run(c,'removeCardRefund(a,ref)'),true);assert.equal(await run(c,'removeUnpaidCardInstallment(a)'),true);
+ assert.equal(run(c,'financeSchedules().length'),1);assert.equal(run(c,'financeSchedules()[0].id'),run(c,'b'));assert.equal(run(c,'integratedReplay().totalDebt'),370000);
+});
+
+test('card v2: paid refunds distinguish actual cash, restored points and unpaid principal',async()=>{
+ const c=await setupCardV2();await run(c,"(async()=>{globalThis.v2id=await newPurchase({purchaseAmount:100000,months:1});globalThis.v2bill=await saveCardBill(v2id,{issuedDate:'2026-01-02',dueDate:'2026-01-14',principal:100000,interest:0});return await recordCardPayment(v2id,{billId:v2bill,date:'2026-01-03',pointsPrincipal:20000})})()");
+ const stable=run(c,'JSON.stringify(state)');assert.equal(await run(c,"recordCardRefund(v2id,{date:'2026-01-04',amount:100000})"),'');assert.equal(run(c,'JSON.stringify(state)'),stable,'refund destination must never be guessed');
+ assert.ok(await run(c,"recordCardRefund(v2id,{date:'2026-01-04',amount:100000,cashAmount:80000,pointsAmount:20000})"));assert.equal(run(c,'integratedReplay().assets["cash-main"]'),10000000);assert.equal(run(c,'integratedReplay().totalDebt'),0);assert.equal(run(c,"integratedSpendingAnalysis('2026-01').total"),0);
+});
+
+test('card v2: actual bills can differ by one won, interest waiver rounds are explicit, and zero-cash payments survive restore',async()=>{
+ const c=await setupCardV2();await run(c,"(async()=>{return globalThis.v2id=await newPurchase({purchaseAmount:360000,months:6,interestMode:'partial',paidInterestRounds:[1,2,3],annualRate:12})})()");
+ assert.equal(run(c,"cardInstallmentTerms(financeSchedules()[0],'2026-01-14').interest"),3600);assert.equal(run(c,"cardInstallmentTerms(financeSchedules()[0],'2026-04-14').interest"),0);
+ assert.ok(await run(c,"(async()=>{return globalThis.v2bill=await saveCardBill(v2id,{issuedDate:'2026-01-02',dueDate:'2026-01-15',principal:60001,interest:3600})})()"));assert.equal(run(c,"scheduleDateForMonth(financeSchedules()[0],'2026-01')"),'2026-01-15');
+ assert.ok(await run(c,"recordCardPayment(v2id,{billId:v2bill,date:'2026-01-03',pointsPrincipal:60001,pointsInterest:3600})"));assert.equal(run(c,'integratedReplay().assets["cash-main"]'),10000000);
+ await run(c,'state=normalizeState(validateBackupPayload(parseBackupZipBytes(createBackupZipBytes(backupPayload()))))');assert.equal(run(c,"scheduleOccurrences('2026-01')[0].status"),'done');assert.equal(run(c,'cardRemaining(financeSchedules()[0])'),299999);
+});
+
+test('card v2: failed writes and invalid money preserve purchase, bill, payment and non-card ledgers',async()=>{
+ const c=await setupCardV2();const before=run(c,'JSON.stringify(state)');await run(c,'persist=()=>false');assert.equal(await run(c,'newPurchase()'),'');assert.equal(run(c,'JSON.stringify(state)'),before);
+ await run(c,"(async()=>{persist=()=>true;return globalThis.v2id=await newPurchase()})()");const stable=run(c,'JSON.stringify(state)');await run(c,'persist=()=>false');assert.equal(await run(c,"saveCardBill(v2id,{issuedDate:'2026-01-02',dueDate:'2026-01-14',principal:123333,interest:0})"),'');assert.equal(run(c,'JSON.stringify(state)'),stable);
+ await run(c,'persist=()=>true');for(const expression of ["newPurchase({purchaseAmount:1.5})","newPurchase({purchaseAmount:Number.MAX_SAFE_INTEGER+1})","newPurchase({interestMode:'partial',paidInterestRounds:[0,4]})","recordCardRefund(v2id,{date:'2025-12-31',amount:1})"]){assert.equal(await run(c,expression),'');assert.equal(run(c,'JSON.stringify(state)'),stable)}
+});
+
+test('card v2: malformed card backups are rejected rather than normalizing away financial evidence',async()=>{
+ const c=await setupCardV2();await run(c,"(async()=>{globalThis.v2id=await newPurchase();globalThis.v2bill=await saveCardBill(v2id,{issuedDate:'2026-01-02',dueDate:'2026-01-14',principal:123333,interest:0});return await recordCardPayment(v2id,{billId:v2bill,date:'2026-01-03'})})()");
+ for(const corrupt of ["data.financeSchedules.items[0].cardPlan.payments[0].rowIds=[]","data.financeSchedules.items[0].cardPlan.bills='broken'","data.settings.cardAccounts[0].paymentDay=32","data.financeSchedules.items[0].cardPlan.payments[0].cash++"]){c.corrupt=corrupt;assert.throws(()=>run(c,"(()=>{const payload=backupPayload(),data=payload.data;eval(corrupt);return validateBackupPayload(payload)})()"),/카드/)}
+ assert.equal(run(c,'cardRemaining(financeSchedules()[0])'),246667);
+});
+
+test('card v2: production persistence quota failure rolls back bill and payment as one operation',async()=>{
+ const c=await setupCardV2();await run(c,"(async()=>{globalThis.v2id=await newPurchase();persist=productionPersist;lastPersistedState=clone(state);localStorage.setItem=()=>{throw new Error('quota-v2')}})()");
+ const before=run(c,'JSON.stringify({integrated:state.integrated,schedules:state.financeSchedules})');assert.equal(await run(c,"saveCardBill(v2id,{issuedDate:'2026-01-02',dueDate:'2026-01-14',principal:123333,interest:10,principalDiscount:100})"),'');assert.equal(run(c,'JSON.stringify({integrated:state.integrated,schedules:state.financeSchedules})'),before);
+ await run(c,"(async()=>{localStorage.setItem=()=>{};globalThis.v2bill=await saveCardBill(v2id,{issuedDate:'2026-01-02',dueDate:'2026-01-14',principal:123333,interest:10,principalDiscount:100});lastPersistedState=clone(state);localStorage.setItem=()=>{throw new Error('quota-v2')}})()");
+ const stable=run(c,'JSON.stringify({integrated:state.integrated,schedules:state.financeSchedules})');assert.equal(await run(c,"recordCardPayment(v2id,{billId:v2bill,date:'2026-01-03',pointsPrincipal:3000})"),'');assert.equal(run(c,'JSON.stringify({integrated:state.integrated,schedules:state.financeSchedules})'),stable);assert.equal(run(c,'cardRemaining(financeSchedules()[0])'),369900);
+});
+
+test('card v2: a fully waived bill records zero cash without losing completion after ZIP restore',async()=>{
+ const c=await setupCardV2();await run(c,"(async()=>{globalThis.v2id=await newPurchase({purchaseAmount:10000,months:1});globalThis.v2bill=await saveCardBill(v2id,{issuedDate:'2026-01-02',dueDate:'2026-01-14',principal:10000,interest:0,principalDiscount:10000})})()");
+ assert.equal(run(c,'cardPlanSummary(financeSchedules()[0],"2026-01").completed'),false);assert.ok(await run(c,"recordCardPayment(v2id,{billId:v2bill,date:'2026-01-03'})"));assert.equal(run(c,'integratedReplay().assets["cash-main"]'),10000000);
+ await run(c,'state=normalizeState(validateBackupPayload(parseBackupZipBytes(createBackupZipBytes(backupPayload()))))');assert.equal(run(c,'cardPlanSummary(financeSchedules()[0],"2026-01").completed'),true);assert.equal(run(c,"scheduleOccurrences('2026-01')[0].status"),'done');
+});
+
+test('spending v2: annual sums, refund item identity and category remapping preserve raw financial rows',async()=>{
+ const c=await setupCardV2();await run(c,"(async()=>{globalThis.v2id=await newPurchase();await recordCardRefund(v2id,{date:'2026-02-02',amount:70000})})()");
+ assert.equal(run(c,"integratedSpendingAnalysis('2026').total"),300000);assert.equal(run(c,"integratedSpendingAnalysis('2026-02').items[0].key"),'가상 TV');assert.equal(run(c,"integratedSpendingAnalysis('2026-02').total"),-70000);
+ const before=run(c,'JSON.stringify(state.integrated.ledger)');assert.equal(await run(c,"saveSpendingCategory('가전·전자','가전·생활')"),true);assert.equal(run(c,"integratedSpendingAnalysis('2026').categories[0].key"),'가전·생활');assert.equal(run(c,'JSON.stringify(state.integrated.ledger)'),before);
+ const settings=run(c,'JSON.stringify(state.settings)');await run(c,'persist=()=>false');assert.equal(await run(c,"saveSpendingCategory('가전·생활','기타')"),false);assert.equal(run(c,'JSON.stringify(state.settings)'),settings);
+});
+
+test('card v2: an actual interest refund restores cash or points without reducing purchase consumption twice',async()=>{
+ const c=await setupCardV2();await run(c,"(async()=>{globalThis.v2id=await newPurchase({purchaseAmount:100000,months:1});globalThis.v2bill=await saveCardBill(v2id,{issuedDate:'2026-01-02',dueDate:'2026-01-14',principal:100000,interest:3000});await recordCardPayment(v2id,{billId:v2bill,date:'2026-01-03',pointsInterest:1000})})()");
+ assert.equal(run(c,'integratedReplay().assets["cash-main"]'),9898000);assert.ok(await run(c,"recordCardRefund(v2id,{date:'2026-01-04',amount:0,interestCashAmount:2000,interestPointsAmount:1000})"));
+ assert.equal(run(c,'integratedReplay().assets["cash-main"]'),9900000);assert.equal(run(c,"integratedSpendingAnalysis('2026-01').total"),100000);assert.equal(run(c,"integratedSummary('2026-01').fixed"),0);assert.equal(run(c,'cardRemaining(financeSchedules()[0])'),0);
+ assert.equal(await run(c,"recordCardRefund(v2id,{date:'2026-01-04',amount:0,interestCashAmount:1})"),'');
+ await run(c,'state=normalizeState(validateBackupPayload(parseBackupZipBytes(createBackupZipBytes(backupPayload()))))');assert.equal(run(c,'cardLedgerDataIssue(state)'),'');
+});
+
+test('card v2: subsequent interest estimates account for confirmed refunds instead of the original balance',async()=>{
+ const c=await setupCardV2();await run(c,"(async()=>{globalThis.v2id=await newPurchase({purchaseAmount:360000,months:6,interestMode:'paid',annualRate:12});globalThis.v2bill=await saveCardBill(v2id,{issuedDate:'2026-01-02',dueDate:'2026-01-14',principal:60000,interest:3600});await recordCardPayment(v2id,{billId:v2bill,date:'2026-01-14'});await recordCardRefund(v2id,{date:'2026-01-15',amount:30000})})()");
+ assert.equal(run(c,"cardInstallmentTerms(financeSchedules()[0],'2026-02-14').interest"),2700);assert.equal(run(c,'cardRemaining(financeSchedules()[0])'),270000);
+});
+
 async function setup(){const c=env();(await run(c,"globalThis.productionPersist=persist;state=normalizeState(seed);persist=()=>true;toast=()=>{};renderScheduleCompletion=()=>{};state.integrated.ledger=[{id:'cash',date:'2026-01-01',type:'openingAsset',toAccountId:'cash-main',amount:10000000}];state.financeSchedules={items:[]}"));return c}
 test('one occurrence and future changes keep earlier estimates and actual rows intact after restore',async ()=>{const c=(await setup());(await run(c,"state.financeSchedules.items=[{id:'s',name:'관리비',kind:'expense',amount:100000,day:25,startDate:'2026-01-01',active:true}]"));assert.equal((await run(c,"(async()=>{return (await updateSchedulePlannedAmount('s','2026-02-25',150000,'once'))})()")),true);assert.equal((await run(c,"schedulePlannedAmount(financeSchedules()[0],'2026-03-25')")),100000);assert.equal((await run(c,"(async()=>{return (await updateSchedulePlannedAmount('s','2026-03-25',200000,'future'))})()")),true);(await run(c,'state=normalizeState(JSON.parse(JSON.stringify(state)))'));assert.equal((await run(c,"schedulePlannedAmount(financeSchedules()[0],'2026-01-25')")),100000);assert.equal((await run(c,"schedulePlannedAmount(financeSchedules()[0],'2026-02-25')")),150000);assert.equal((await run(c,"schedulePlannedAmount(financeSchedules()[0],'2026-04-25')")),200000);assert.equal((await run(c,"(async()=>{return (await completeScheduleOccurrence('s','2026-03-25',210000))})()")),true);assert.equal((await run(c,"scheduleOccurrences('2026-03')[0].tx.meta.scheduledAmount")),200000);assert.equal((await run(c,"scheduleOccurrenceUiLabel(scheduleOccurrences('2026-03')[0])")),'금액 다름');const recordId=(await run(c,"scheduleOccurrences('2026-03')[0].tx.id"));assert.equal((await run(c,"(async()=>{return (await updateScheduleActualPayment('s','2026-03-25',220000))})()")),true);assert.equal((await run(c,"scheduleOccurrences('2026-03')[0].tx.id")),recordId);assert.equal((await run(c,"scheduleOccurrences('2026-03')[0].tx.meta.actualAmount")),220000);assert.equal((await run(c,"schedulePlannedAmount(financeSchedules()[0],'2026-04-25')")),200000);assert.equal((await run(c,"state.integrated.ledger.filter(t=>t.meta?.scheduleId==='s').length")),1)});
 test('24-month no-interest purchase totals exactly, tracks debt and never counts principal twice as spending',async ()=>{const c=(await setup());(await run(c,"(async()=>{return (await createCardInstallment({name:'TV',purchaseAmount:3100000,months:24,purchaseDate:'2026-01-10',firstPaymentDate:'2026-01-31',interestMode:'free'}))})()"));assert.equal((await run(c,"integratedReplay().totalDebt")),3100000);assert.equal((await run(c,"integratedSpendingAnalysis('2026-01').total")),3100000);let principal=0;for(let i=0;i<24;i++){c.index=i;const date=(await run(c,"(()=>{const d=new Date(2026,index,1);return scheduleDateForMonth(financeSchedules()[0],d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'))})()"));c.date=date;const amount=(await run(c,"cardInstallmentTerms(financeSchedules()[0],date).principal"));principal+=amount;c.amount=amount;assert.equal((await run(c,"(async()=>{return (await completeScheduleOccurrence(financeSchedules()[0].id,date,0,'','',amount,0))})()")),true,date)}assert.equal(principal,3100000);assert.equal((await run(c,'integratedReplay().totalDebt')),0);assert.equal((await run(c,"integratedReplay().assets['cash-main']")),6900000);assert.equal((await run(c,"cardPlanSummary(financeSchedules()[0],'2027-12').remainingPrincipal")),0);assert.equal((await run(c,"scheduleOccurrences('2028-01').length")),0);(await run(c,'state=normalizeState(JSON.parse(JSON.stringify(state)))'));assert.equal((await run(c,'integratedReplay().totalDebt')),0);assert.equal((await run(c,"integratedSpendingAnalysis('2026-02').total")),0);assert.equal((await run(c,"financeSchedules()[0].cardPlan.months")),24)});
@@ -189,4 +287,39 @@ for(const type of ['expense','externalExpense'])test(`refund dependency matrix: 
  await run(c,'state=normalizeState(validateBackupPayload(parseBackupZipBytes(createBackupZipBytes(backupPayload()))))');
  assert.equal(run(c,"state.integrated.ledger.filter(t=>t.id==='refund-original-b').length"),1);assert.equal(run(c,"state.integrated.ledger.some(t=>t.meta?.refundOf==='refund-original-a')"),false);
  assert.equal(run(c,"integratedReplay().assets['cash-main']"),type==='expense'?9999000:10000000);
+});
+
+function historyInput(cardId,extra={}){return {name:'가상 과거 구매',cardId,purchaseAmount:370000,months:3,purchaseDate:'2026-01-01',firstPaymentDate:'2026-01-14',interestMode:'free',category:'기타',historyBaseline:{asOf:'2026-02-10',remainingPrincipal:123300,sourceKey:'synthetic-history-a',includeSpending:false,statements:[{month:'2026-01',round:1,principal:123400,interest:0,remainingPrincipal:246600,status:'paid',source:'synthetic-a'},{month:'2026-02',round:2,principal:123300,interest:0,remainingPrincipal:123300,status:'paid',source:'synthetic-b'},{month:'2026-03',round:3,principal:123300,interest:0,remainingPrincipal:0,status:'scheduled',source:'synthetic-c'}]},...extra}}
+test('card history: confirmed principal imports without invented cash or duplicate consumption and repeats are idempotent',async()=>{
+ const c=await setupCardV2();c.historyInput=historyInput(run(c,'testCard'));const cash=run(c,"integratedReplay().assets['cash-main']"),isa=run(c,'JSON.stringify(state.accounts)'),pension=run(c,'JSON.stringify(state.pension)');
+ const id=await run(c,'importCardHistory(historyInput)');assert.ok(id);c.historyId=id;
+ assert.equal(run(c,"integratedReplay().assets['cash-main']"),cash);assert.equal(run(c,'integratedReplay().totalDebt'),123300);assert.equal(run(c,"integratedSpendingAnalysis('2026').total"),0);assert.equal(run(c,'cardV2(financeSchedules()[0]).payments.length'),0);assert.equal(run(c,"scheduleOccurrences('2026-02').length"),0);assert.equal(run(c,"scheduleOccurrences('2027-01').length"),0);
+ assert.equal(await run(c,'importCardHistory(historyInput)'),id);assert.equal(run(c,'financeSchedules().length'),1);assert.equal(run(c,'JSON.stringify(state.accounts)'),isa);assert.equal(run(c,'JSON.stringify(state.pension)'),pension);
+ await run(c,'state=normalizeState(validateBackupPayload(parseBackupZipBytes(createBackupZipBytes(backupPayload()))))');assert.equal(run(c,'cardLedgerDataIssue(state)'),'');assert.equal(run(c,'cardRemaining(financeSchedules()[0])'),123300);
+});
+test('card history: paid evidence cannot be charged again, early writes fail and confirmed future bills accept real payment',async()=>{
+ const c=await setupCardV2();c.historyInput=historyInput(run(c,'testCard'));const id=await run(c,'importCardHistory(historyInput)');c.historyId=id;
+ assert.equal(await run(c,"saveCardBill(historyId,{issuedDate:'2026-02-10',dueDate:'2026-02-14',principal:123300})"),'');
+ const bill=await run(c,"saveCardBill(historyId,{issuedDate:'2026-02-10',dueDate:'2026-03-14',principal:123300})");assert.ok(bill);c.historyBill=bill;
+ assert.equal(await run(c,"recordCardPayment(historyId,{billId:historyBill,date:'2026-02-09'})"),'');const cash=run(c,"integratedReplay().assets['cash-main']");assert.ok(await run(c,"recordCardPayment(historyId,{billId:historyBill,date:'2026-02-11',pointsPrincipal:300})"));assert.equal(run(c,'cardRemaining(financeSchedules()[0])'),0);assert.equal(run(c,"integratedReplay().assets['cash-main']"),cash-123000);assert.equal(run(c,"integratedSpendingAnalysis('2026').total"),0);
+});
+test('card history: zero balance is complete while evidence and original amount survive without zero-value financial postings',async()=>{
+ const c=await setupCardV2();const input=historyInput(run(c,'testCard'));input.historyBaseline.remainingPrincipal=0;input.historyBaseline.statements=[{month:'2026-01',round:1,principal:370000,interest:0,remainingPrincipal:0,status:'paid',paidDate:'2026-01-05',source:'synthetic-full-prepay'}];c.historyInput=input;
+ const id=await run(c,'importCardHistory(historyInput)');assert.ok(id);c.historyId=id;assert.equal(run(c,'cardPlanSummary(financeSchedules()[0],"2026-01").completed'),true);assert.equal(run(c,"state.integrated.ledger.filter(x=>x.amount===0).length"),0);assert.equal(await run(c,'removeUnpaidCardInstallment(historyId)'),false);assert.equal(await run(c,'updateCardPurchase(historyId,historyInput)'),false);
+ await run(c,'state=normalizeState(validateBackupPayload(parseBackupZipBytes(createBackupZipBytes(backupPayload()))))');assert.equal(run(c,'cardV2(financeSchedules()[0]).grossAmount'),370000);assert.equal(run(c,'cardV2(financeSchedules()[0]).historyBaseline.statements[0].paidDate'),'2026-01-05');
+});
+test('card history: inconsistent balances, source collisions, failed persistence and malformed backups preserve originals',async()=>{
+ const c=await setupCardV2();const input=historyInput(run(c,'testCard'));c.historyInput=input;const before=run(c,'JSON.stringify(state.integrated)');input.historyBaseline.statements[1].remainingPrincipal=1;assert.equal(await run(c,'importCardHistory(historyInput)'),'');assert.equal(run(c,'JSON.stringify(state.integrated)'),before);
+ c.historyInput=historyInput(run(c,'testCard'));await run(c,'persist=async()=>false');assert.equal(await run(c,'importCardHistory(historyInput)'),'');assert.equal(run(c,'JSON.stringify(state.integrated)'),before);await run(c,'persist=async()=>true');assert.ok(await run(c,'importCardHistory(historyInput)'));
+ const stable=run(c,'JSON.stringify(state)');c.historyInput.purchaseAmount=370001;assert.equal(await run(c,'importCardHistory(historyInput)'),'');assert.equal(run(c,'JSON.stringify(state)'),stable);
+ assert.ok(run(c,"(()=>{const d=clone(state);d.financeSchedules.items[0].cardPlan.historyBaseline.remainingPrincipal++;return !!cardLedgerDataIssue(d)})()"));
+});
+
+test('card history: unpaid-only evidence includes current bill in remaining debt without inventing past cash payments',async()=>{
+ const c=await setupCardV2();const input=historyInput(run(c,'testCard'),{purchaseAmount:360000,purchaseDiscount:60000,months:6,firstPaymentDate:'2026-03-14'});input.historyBaseline={asOf:'2026-02-10',remainingPrincipal:200000,sourceKey:'synthetic-unpaid-only',includeSpending:false,statements:[{month:'2026-03',round:3,principal:50000,interest:0,remainingPrincipal:150000,status:'scheduled',dueDate:'2026-03-14',source:'synthetic-unpaid'}]};c.historyInput=input;
+ const cash=run(c,"integratedReplay().assets['cash-main']");const id=await run(c,'importCardHistory(historyInput)');assert.ok(id);c.historyId=id;
+ assert.equal(run(c,'cardRemaining(financeSchedules()[0])'),200000);assert.equal(run(c,"integratedReplay().assets['cash-main']"),cash);assert.equal(run(c,"integratedSpendingAnalysis('2026').total"),0);assert.equal(run(c,'cardV2(financeSchedules()[0]).payments.length'),0);assert.equal(await run(c,'importCardHistory(historyInput)'),id);
+ await run(c,'state=normalizeState(validateBackupPayload(parseBackupZipBytes(createBackupZipBytes(backupPayload()))))');assert.equal(run(c,'cardLedgerDataIssue(state)'),'');
+ c.historyInput.historyBaseline.remainingPrincipal=150000;assert.equal(await run(c,'importCardHistory(historyInput)'),'');
+ const bill=await run(c,"saveCardBill(historyId,{issuedDate:'2026-02-10',dueDate:'2026-03-14',principal:50000})");assert.ok(bill);c.historyBill=bill;assert.ok(await run(c,"recordCardPayment(historyId,{billId:historyBill,date:'2026-02-11'})"));assert.equal(run(c,'cardRemaining(financeSchedules()[0])'),150000);assert.equal(run(c,"integratedReplay().assets['cash-main']"),cash-50000);
 });

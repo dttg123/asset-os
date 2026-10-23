@@ -15,7 +15,7 @@ test('@core selected months and insurance payment status stay explicit without c
  await expect(page.getByRole('heading',{name:'2026년 2월 소비',exact:true})).toBeVisible();
  await page.getByRole('main').getByRole('button',{name:'일정',exact:true}).click();await expect(page.getByRole('heading',{name:'2026년 2월 남은 납부액',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'다음 달',exact:true}).click();await expect(page.getByRole('heading',{name:'2026년 3월 남은 납부액',exact:true})).toBeVisible();
- await page.getByRole('button',{name:'내 Asset OS 열기',exact:true}).click();await page.locator('[data-profile-action="insurance"]').click();
+ await page.getByRole('button',{name:'내 Asset OS 열기',exact:true}).click();await page.locator('[data-settings-group="finance"]').click();await page.locator('[data-profile-action="insurance"]').click();
  const card=page.locator('[data-insurance-id="paid"]');await expect(card).toContainText('계약 유지');await expect(card).toContainText('납입 종료');await expect(card).toContainText('현재 월 보험료에서 제외');await expect(card).not.toContainText('일정 연결 안 됨');
  await expect(page.locator('#sheetBody .sheetrow.total strong')).toHaveText('10,000원');await expect(page.locator('[data-insurance-id="lump"]')).toContainText('일시납');
  for(const width of [360,412])for(const theme of ['light','dark']){
@@ -55,7 +55,7 @@ test('@core today defaults ignore stale months and thirty schedules stay compact
  }
  await page.locator('.schedule-pending-more summary').click();await expect(page.locator('.schedule-card .schedule-list .schedule-row:visible')).toHaveCount(20);
  await page.locator('.schedule-completed summary').click();await expect(page.locator('.schedule-card .schedule-list .schedule-row:visible')).toHaveCount(30);
- await page.locator('[data-card-hub]').click();await expect(page.locator('#detailSheet.open #integratedCardPlans')).toBeVisible();await expect(page.locator('#detailSheet.open [data-card-plan-new]')).toBeVisible();
+ await page.locator('[data-card-hub]').click();await expect(page.locator('#detailSheet.open #integratedCardPlans')).toBeVisible();await expect(page.locator('#detailSheet.open [data-card-plan-new]')).toHaveCount(0);
  await page.goBack();await expect(page.locator('#detailSheet')).not.toHaveClass(/open/);
  await page.getByRole('button',{name:'이번 달로',exact:true}).click();await expect(page.locator('[data-integrated-month-select]')).toHaveValue('2026-10');
  expect(await page.evaluate(()=>JSON.stringify(state.integrated.ledger))).toBe(ledger);
@@ -90,36 +90,36 @@ test('@core card entry is centralized and partial interest persists with one ful
  await page.evaluate(async()=>{const next=window.__assetOS.getState();next.financeSchedules={items:[]};next.financialProducts={items:[],events:[]};next.integrated.liabilities=[];next.integrated.ledger=[];await window.__assetOS.replaceState(next);nav('integrated','schedule')});
  await expect(page.locator('main #integratedCardPlans')).toHaveCount(0);
  await expect(page.locator('[data-card-hub]')).toHaveCount(1);
- await page.locator('[data-card-hub]').click();await page.locator('[data-card-plan-new]').click();
- await page.locator('#cardInstallmentForm [name="name"]').fill('처음 3회 무이자');
- await page.locator('#cardInstallmentForm [name="purchaseAmount"]').fill('370000');
- await page.locator('#cardInstallmentForm [name="purchaseDate"]').fill('2026-01-01');
- await page.locator('#cardInstallmentForm [name="firstPaymentDate"]').fill('2026-01-31');
- await page.locator('#cardInstallmentForm [name="months"]').selectOption('6');
- await expect(page.locator('[data-card-rate]')).toBeHidden();await expect(page.locator('[data-card-free-months]')).toBeHidden();
- await page.locator('#cardInstallmentForm [name="interestMode"]').selectOption('paid');
- await expect(page.locator('[data-card-rate]')).toBeVisible();await expect(page.locator('[data-card-free-months]')).toBeHidden();
- await page.locator('#cardInstallmentForm [name="interestMode"]').selectOption('partial');
- await expect(page.locator('[data-card-free-months]')).toBeVisible();
- await page.locator('#cardInstallmentForm [name="annualRate"]').fill('12');
+ await page.locator('[data-card-hub]').click();await expect(page.locator('[data-card-plan-new]')).toHaveCount(0);await page.evaluate(async()=>{sheetDirty=false;closeSheets({all:true});cancelSheetBackForNavigation();await saveCardAccount({name:'QA 국민카드',issuer:'국민카드',paymentDay:31});nav('integrated','summary')});await page.locator('[data-card-action="purchase-new"]').click();
+ await page.locator('#cardLedgerForm [name="name"]').fill('처음 3회 무이자');
+ await page.locator('#cardLedgerForm [name="purchaseAmount"]').fill('370000');
+ await page.locator('#cardLedgerForm [name="purchaseDate"]').fill('2026-01-01');
+ await page.locator('#cardLedgerForm [name="firstPaymentDate"]').fill('2026-01-31');
+ await page.locator('#cardLedgerForm [name="months"]').selectOption('6');
+ await expect(page.locator('[data-card-interest]')).toBeHidden();await expect(page.locator('[data-card-rounds]')).toBeHidden();
+ await page.locator('#cardLedgerForm [name="interestMode"]').selectOption('paid');
+ await expect(page.locator('[data-card-interest]')).toBeVisible();await expect(page.locator('[data-card-rounds]')).toBeHidden();
+ await page.locator('#cardLedgerForm [name="interestMode"]').selectOption('partial');
+ await expect(page.locator('[data-card-rounds]')).toBeVisible();
+ await page.locator('#cardLedgerForm [name="annualRate"]').fill('12');
  await page.screenshot({path:`/tmp/asset-partial-form-${info.project.name}.png`,animations:'disabled'});
- await page.locator('#cardInstallmentForm [name="interestFreeMonths"]').fill('6');
- await page.locator('#cardInstallmentForm button[type="submit"]').click();
+ await page.locator('#cardLedgerForm [name="paidRounds"]').fill('7');
+ await page.locator('#cardLedgerForm button[type="submit"]').click();
  expect(await page.evaluate(()=>financeSchedules().length)).toBe(0);
- await page.locator('#cardInstallmentForm [name="interestFreeMonths"]').fill('3');
+ await page.locator('#cardLedgerForm [name="paidRounds"]').fill('4,5,6');
  await page.evaluate(()=>{const commit=assetLocalDatabase.commit;assetLocalDatabase.commit=async(...args)=>{await new Promise(resolve=>{window.__releaseCardCommit=resolve});return commit(...args)}});
- await page.locator('#cardInstallmentForm button[type="submit"]').click();
+ await page.locator('#cardLedgerForm button[type="submit"]').click();
  await page.waitForFunction(()=>typeof window.__releaseCardCommit==='function');
  await expect(page.locator('#formSheet')).toHaveClass(/open/);
- await expect(page.getByText('구매와 할부 일정을 저장했어요.',{exact:true})).toBeHidden();
+ await expect(page.getByText('구매와 카드 원금을 저장했어요.',{exact:true})).toBeHidden();
  await page.evaluate(()=>window.__releaseCardCommit());
- await expect(page.getByText('구매와 할부 일정을 저장했어요.',{exact:true})).toBeVisible();
+ await expect(page.getByText('구매와 카드 원금을 저장했어요.',{exact:true})).toBeVisible();
  await expect(page.locator('#formSheet')).not.toHaveClass(/open/);
  await page.reload();await page.waitForFunction(()=>!!window.__assetOS);
  const result=await page.evaluate(()=>{const s=financeSchedules().find(s=>s.cardPlan);return{count:financeSchedules().length,plan:s.cardPlan,free:cardInstallmentTerms(s,'2026-03-31').interest,paid:cardInstallmentTerms(s,'2026-04-30').interest}});
- expect(result.count).toBe(1);expect(result.plan.interestFreeMonths).toBe(3);expect(result.free).toBe(0);expect(result.paid).toBe(1850);
+ expect(result.count).toBe(1);expect(result.plan.paidInterestRounds).toEqual([4,5,6]);expect(result.free).toBe(0);expect(result.paid).toBe(1850);
  await page.locator('[data-card-hub]').click();await page.locator('[data-card-plan-open]').click();
- await expect(page.locator('.card-detail-summary')).toContainText('처음 3회 무이자 · 이후 이자');
+ await expect(page.locator('#sheetBody')).toContainText('4,5,6회차 이자 부담');
  await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
  await page.evaluate(()=>openBackupHub());
  await expect(page.locator('#sheetBody > .backup-grid > button')).toHaveCount(2);
@@ -133,8 +133,8 @@ test('@core inactive card interest controls never block saving and active contro
  await page.goto('/index.html?qa=1#/home');await page.waitForFunction(()=>!!window.__assetOS);
  await page.evaluate(async()=>{const next=window.__assetOS.getState();next.financeSchedules={items:[]};next.financialProducts={items:[]};next.liabilities={items:[]};next.integrated.ledger=[];await window.__assetOS.replaceState(next);nav('integrated','summary')});
  for(const amount of [360000,370000]){
-  await page.locator('[data-card-hub]').click();await page.locator('[data-card-plan-new]').click();
-  const form=page.locator('#cardInstallmentForm'),free=form.locator('[name=interestFreeMonths]'),rate=form.locator('[name=annualRate]');
+  await page.locator('[data-card-hub]').click();await expect(page.locator('[data-card-plan-new]')).toBeVisible();await page.evaluate(async()=>{sheetDirty=false;closeSheets({all:true});cancelSheetBackForNavigation();await saveCardAccount({name:'QA 국민카드',issuer:'국민카드',paymentDay:31});nav('integrated','summary')});await page.locator('[data-card-action="purchase-new"]').click();
+  const form=page.locator('#cardLedgerForm'),free=form.locator('[name=paidRounds]'),rate=form.locator('[name=annualRate]');
   await form.locator('[name=name]').fill('무이자 저장 '+amount);await form.locator('[name=purchaseAmount]').fill(String(amount));
   await form.locator('[name=purchaseDate]').fill('2026-01-01');await form.locator('[name=firstPaymentDate]').fill('2026-01-31');
   for(const months of ['1','2','3']){
@@ -143,15 +143,15 @@ test('@core inactive card interest controls never block saving and active contro
   }
   await expect(free).toBeDisabled();await expect(rate).toBeDisabled();
   await form.locator('[name=interestMode]').selectOption('partial');await expect(free).toBeEnabled();await expect(rate).toBeEnabled();
-  await free.fill('3');expect(await form.evaluate(el=>el.checkValidity())).toBe(false);
+  await free.fill('4,5,6');expect(await form.evaluate(el=>el.checkValidity())).toBe(false);
   await free.fill('1');await rate.fill('101');expect(await form.evaluate(el=>el.checkValidity())).toBe(false);
   await form.locator('[name=interestMode]').selectOption('paid');await expect(free).toBeDisabled();expect(await form.evaluate(el=>el.checkValidity())).toBe(false);
   await rate.fill('12');expect(await form.evaluate(el=>el.checkValidity())).toBe(true);
   await rate.fill('101');await form.locator('[name=interestMode]').selectOption('free');
   expect(await form.evaluate(el=>el.checkValidity())).toBe(true);
-  expect(await form.evaluate(el=>{const data=new FormData(el);return data.has('interestFreeMonths')||data.has('annualRate')})).toBe(false);
+  expect(await form.evaluate(el=>{const data=new FormData(el);return data.has('paidRounds')||data.has('annualRate')})).toBe(false);
   const before=await page.evaluate(()=>state.financeSchedules.items.length);
-  await form.locator('[type=submit]').click();await expect(page.getByText('구매와 할부 일정을 저장했어요.',{exact:true})).toBeVisible();await expect(page.locator('#formSheet')).not.toHaveClass(/open/);
+  await form.locator('[type=submit]').click();await expect(page.getByText('구매와 카드 원금을 저장했어요.',{exact:true})).toBeVisible();await expect(page.locator('#formSheet')).not.toHaveClass(/open/);
   await page.reload();await page.waitForFunction(()=>!!window.__assetOS);
   const result=await page.evaluate(()=>({count:financeSchedules().length,plans:financeSchedules().map(s=>({amount:s.cardPlan.purchaseAmount,rate:s.cardPlan.annualRate,mode:s.cardPlan.interestMode,principal:['2026-01-31','2026-02-28','2026-03-31'].map(date=>cardInstallmentTerms(s,date).principal)}))}));
   expect(result.count).toBe(before+1);expect(result.plans.map(p=>p.principal)).toEqual(amount===360000?[[120000,120000,120000]]:[[120000,120000,120000],[123333,123333,123334]]);

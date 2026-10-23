@@ -19,7 +19,7 @@ const plain=value=>JSON.parse(JSON.stringify(value));
 (await run('state.pension.accounts.push({id:"ps-main",kind:"pension",name:"연금저축",provider:"한국투자증권",status:"active",openedAt:"2026-01-01",closedAt:"",policyId:state.policies.pension.activePolicyId,policyHistory:[]})'));
 (await run('state.integrated.ledger.push({id:"opening-pension-test",date:"2026-08-01",type:"openingAsset",amount:500000,toAccountId:"pension-link",sequence:1,createdAt:"2026-08-01T00:00:00.001",meta:{}});state.integrated=normalizeIntegrated(state.integrated)'));
 const before=plain((await run('({pension:state.pension,integrated:state.integrated,metrics:integratedFinancialModel()})')));
-assert.equal((await run('SCHEMA_VERSION')),22);
+assert.equal((await run('SCHEMA_VERSION')),23);
 assert.equal((await run('typeof brokerKisClient.sync')),'function');
 assert.equal((await run('state.brokerKis.orders.length')),0);
 const linkedDetail=plain((await run('pensionAssetMetrics("pension")')));
@@ -96,7 +96,7 @@ assert.equal((await run('state.pension.transactions.length')),before.pension.tra
 
 assert.equal((await run("(async()=>{return (await persist(false))})()")),true);
 const saved=JSON.parse(storage.get('asset-os-v1.9.45-live'));
-assert.equal(saved.schemaVersion,22);assert.equal(saved.data.brokerKis.orders.length,1);
+assert.equal(saved.schemaVersion,23);assert.equal(saved.data.brokerKis.orders.length,1);
 assert.equal(saved.data.brokerKis.rights[0].classification,'unclassified_cash_right');
 assert.equal(saved.data.brokerKis.history.pension.status,'complete');
 assert.equal(saved.data.brokerKis.history.pension.orderThrough,'2026-09-03');

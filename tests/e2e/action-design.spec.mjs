@@ -123,8 +123,8 @@ test('@core domestic polish prioritizes accounts and entry, keeps save reachable
  expect(await page.evaluate(()=>JSON.stringify(state.integrated.ledger))).toBe(before);
  await page.addStyleTag({content:'#qaBanner{display:none!important}'});
  await page.screenshot({path:`/tmp/asset-domestic-final-${info.project.name}.png`,animations:'disabled'});
- await page.locator('[data-card-hub]').click();await page.locator('[data-card-plan-new]').click();
+ await page.evaluate(async()=>{await saveCardAccount({name:'QA 국민카드',issuer:'국민카드',paymentDay:14})});await page.locator('[data-card-hub]').click();await page.locator('[data-card-plan-new]').click();
  await page.setViewportSize({width:320,height:600});
- await expect.poll(async()=>{const box=await page.locator('#cardInstallmentForm button[type="submit"]').boundingBox();return box?Math.round(box.y+box.height):Infinity}).toBeLessThanOrEqual(601);
+ await expect.poll(async()=>{const box=await page.locator('#cardLedgerForm button[type="submit"]').boundingBox();return box?Math.round(box.y+box.height):Infinity}).toBeLessThanOrEqual(601);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1)).toBe(true);
 });
