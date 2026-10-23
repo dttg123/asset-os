@@ -10,3 +10,13 @@ test('spending taxonomy: ledger item names never populate picker and explicit ca
  await run("saveSpendingClassifications(['insurance'],'직접 추가 분류','보험 표시 이름')");assert.equal(json("integratedSpendingAnalysis('2026-08')").categories.find(x=>x.key==='직접 추가 분류').amount,50);assert.equal(JSON.stringify(rows),before);
  await run("saveSpendingCategory('직접 추가 분류','새 분류')");assert.ok(json('spendingCategoryNames()').includes('새 분류'));assert.ok(!json('spendingCategoryNames()').includes('직접 추가 분류'));
 });
+
+test('calendar scopes and linked refunds reconcile category, fixed/variable and full-year boundaries without source writes',()=>{
+ const rows=[{id:'jan',type:'expense',date:'2026-01-01',amount:100,category:'식비'},{id:'jul',type:'expense',date:'2026-07-01',amount:200,category:'식비'},{id:'policy',type:'expense',date:'2026-08-01',amount:100,category:'가상 보험',fixed:true},{id:'aug',type:'expense',date:'2026-08-31',amount:300,category:'기타'},{id:'refund',type:'refund',date:'2026-08-31',amount:20,category:'환불',fixed:false,meta:{refundOf:'policy'}},{id:'sep',type:'expense',date:'2026-09-30',amount:50,category:'식비'},{id:'next',type:'expense',date:'2027-01-01',amount:900,category:'식비'}],before=JSON.stringify(rows),c=vm.createContext({console,setting:()=>({}),integratedLedger:()=>rows,integratedMonthKey:x=>String(x).slice(0,7),integratedLatestMonth:()=> '2026-08'});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../src/domain/integrated-spending.js'),'utf8'),c);
+ const run=s=>JSON.parse(vm.runInContext('JSON.stringify('+s+')',c));
+ for(const [mode,total,count] of [['quarter',630,3],['half',630,6],['year',730,12],['years',730,6]]){const result=run(`integratedSpendingView('2026-08','${mode}')`);assert.equal(result.total,total);assert.equal(result.trend.length,count);assert.equal(result.fixed+result.variable,total);assert.equal(result.categories.reduce((n,x)=>n+x.amount,0),total)}
+ const august=run("integratedSpendingAnalysis('2026-08')");assert.equal(august.fixed,80);assert.equal(august.variable,300);assert.equal(august.categories.find(x=>x.key==='보험').amount,80);
+ assert.equal(run("integratedSpendingAnalysis('2026-Q1')").previousMonth,'2025-Q4');assert.equal(run("integratedSpendingAnalysis('2026-H1')").previousMonth,'2025-H2');
+ assert.equal(run("integratedSpendingView('2026-01','year')").trend[11].month,'2026-12');assert.equal(run("integratedSpendingAnalysis('2026')").total,730);assert.equal(JSON.stringify(rows),before);
+});
