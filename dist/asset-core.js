@@ -5,7 +5,7 @@ const BROKER_KIS_PUBLIC_CONFIG = Object.freeze({ projectUrl: 'https://wjrzukoofs
 const QA_MODE = typeof location !== 'undefined' && /(?:^|[?&])qa=1(?:&|$)/.test(String(location.search || ''));
 const QA_STORAGE_KEY = 'asset-os-qa-v0.5', LIVE_STORAGE_KEY = 'asset-os-v1.9.45-live';
 const DEFAULT_FINANCE_DAY = 25;
-const APP_VERSION = 'v0.7.10', APP_ENV = QA_MODE ? 'qa' : 'live', SCHEMA_VERSION = 23, KEY = QA_MODE ? QA_STORAGE_KEY : LIVE_STORAGE_KEY, LEGACY_KEYS = ['asset-os-v1.9.22-central-schedule', 'asset-os-v1.9.20-real-finance', 'asset-os-v1.9.19-finance-linked', 'asset-os-v1.9.18-integrated-ui-refine', 'asset-os-v1.9.17-integrated-complete-stage1', 'asset-os-v1.9.16-integrated-ledger-stage2', 'asset-os-v1.9.9-pension-step2-analysis', 'asset-os-v1.9.7-pension-step2-precision', 'asset-os-v1.9.6-pension-step2-refine', 'asset-os-v1.9.5-pension-step2', 'asset-os-v1.9.4-pension-step1', 'asset-os-v1.9.3-pension-step1', 'asset-os-v1.9.2-isa-review', 'asset-os-v1.9.1-isa-review', 'asset-os-v1.9-isa-review', 'asset-os-v1.8-isa-review', 'asset-os-v1.7-isa-review', 'asset-os-v1.6.1-isa-review', 'asset-os-v1.6-isa-review', 'asset-os-v1.5-isa-review', 'asset-os-v1.4-isa-review', 'asset-os-v1.3-isa-review'];
+const APP_VERSION = 'v0.7.11', APP_ENV = QA_MODE ? 'qa' : 'live', SCHEMA_VERSION = 23, KEY = QA_MODE ? QA_STORAGE_KEY : LIVE_STORAGE_KEY, LEGACY_KEYS = ['asset-os-v1.9.22-central-schedule', 'asset-os-v1.9.20-real-finance', 'asset-os-v1.9.19-finance-linked', 'asset-os-v1.9.18-integrated-ui-refine', 'asset-os-v1.9.17-integrated-complete-stage1', 'asset-os-v1.9.16-integrated-ledger-stage2', 'asset-os-v1.9.9-pension-step2-analysis', 'asset-os-v1.9.7-pension-step2-precision', 'asset-os-v1.9.6-pension-step2-refine', 'asset-os-v1.9.5-pension-step2', 'asset-os-v1.9.4-pension-step1', 'asset-os-v1.9.3-pension-step1', 'asset-os-v1.9.2-isa-review', 'asset-os-v1.9.1-isa-review', 'asset-os-v1.9-isa-review', 'asset-os-v1.8-isa-review', 'asset-os-v1.7-isa-review', 'asset-os-v1.6.1-isa-review', 'asset-os-v1.6-isa-review', 'asset-os-v1.5-isa-review', 'asset-os-v1.4-isa-review', 'asset-os-v1.3-isa-review'];
 const nf = new Intl.NumberFormat('ko-KR');
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const INVESTMENT_ROLES = ['성장', '배당', '현금흐름', '안정', '현금'];
@@ -1267,8 +1267,39 @@ async function saveSpendingClassifications(ids, category, item) {
     return false;
 }
 function integratedSpendingRows(month) {
+    const range = spendingRange(month);
     const source = integratedLedger(), originals = typeof state !== 'undefined' && typeof integratedManualLedger === 'function' ? integratedManualLedger() : source;
-    return source.filter(transaction => !transaction.meta?.cardInterestRefund && (/^\d{4}$/.test(month) ? String(transaction.date || '').startsWith(month + '-') : integratedMonthKey(transaction.date) === month) && ['expense', 'externalExpense', 'refund'].includes(transaction.type)).map(transaction => { const original = transaction.type === 'refund' ? originals.find(x => x.id === transaction.meta?.refundOf) || transaction : transaction, label = spendingClassification(original); return { ...transaction, category: label.category, meta: { ...original.meta, ...transaction.meta, spendingItem: label.item }, amount: transaction.type === 'refund' ? -Number(transaction.amount) : transaction.amount }; });
+    return source.filter(transaction => !transaction.meta?.cardInterestRefund && String(transaction.date || '') >= range.start && String(transaction.date || '') < range.end && ['expense', 'externalExpense', 'refund'].includes(transaction.type)).map(transaction => { const original = transaction.type === 'refund' ? originals.find(x => x.id === transaction.meta?.refundOf) || transaction : transaction, label = spendingClassification(original); return { ...transaction, category: label.category, fixed: !!original.fixed, meta: { ...original.meta, ...transaction.meta, spendingItem: label.item }, amount: transaction.type === 'refund' ? -Number(transaction.amount) : transaction.amount }; });
+}
+function spendingRange(period) {
+    const match = /^(\d{4})(?:-(\d{2})|-([QH])([1-4]))?$/.exec(period);
+    if (!match)
+        throw new Error('지원하지 않는 소비 기간입니다.');
+    const year = Number(match[1]), months = match[3] === 'Q' ? 3 : match[3] === 'H' ? 6 : match[2] ? 1 : 12, index = Number(match[4] || 1), month = match[2] ? Number(match[2]) : (index - 1) * months + 1;
+    if (month < 1 || month > 12)
+        throw new Error('소비 기간을 확인해 주세요.');
+    const start = `${year}-${String(month).padStart(2, '0')}`;
+    return { start: start + '-01', end: integratedSpendingMonthShift(start, months) + '-01', months };
+}
+function spendingRangeKey(anchor, mode) {
+    const year = anchor.slice(0, 4), month = Number(anchor.slice(5, 7));
+    return mode === 'quarter' ? `${year}-Q${Math.ceil(month / 3)}` : mode === 'half' ? `${year}-H${Math.ceil(month / 6)}` : ['year', 'years'].includes(mode) ? year : anchor;
+}
+function spendingRangeLabel(period) {
+    const match = /^(\d{4})-([QH])(\d)$/.exec(period);
+    return match ? `${match[1]}년 ${match[2] === 'Q' ? match[3] + '분기' : match[3] === '1' ? '상반기' : '하반기'}` : period.length === 4 ? period + '년' : `${period.slice(0, 4)}년 ${Number(period.slice(5))}월`;
+}
+function integratedSpendingView(anchor, mode = 'half') {
+    const key = spendingRangeKey(anchor, mode), analysis = integratedSpendingAnalysis(key), range = spendingRange(key), start = range.start.slice(0, 7), trend = [];
+    if (mode === 'month')
+        return analysis;
+    if (mode === 'years')
+        return { ...analysis, trend: analysis.trend };
+    for (let i = 0; i < range.months; i++) {
+        const month = integratedSpendingMonthShift(start, i);
+        trend.push({ month, label: `${Number(month.slice(5))}월`, amount: integratedSpendingAnalysis(month).total });
+    }
+    return { ...analysis, trend };
 }
 function integratedSpendingMonthShift(month, delta) {
     const [year, value] = String(month).split('-').map(Number), date = new Date(year, value - 1 + delta, 1);
@@ -1282,7 +1313,7 @@ function integratedSpendingAnalysis(month = integratedLatestMonth()) {
         entry.count++;
         categories.set(key, entry);
     }
-    const yearly = /^\d{4}$/.test(month), total = amount(rows), previousMonth = yearly ? String(Number(month) - 1) : integratedSpendingMonthShift(month, -1), previousTotal = amount(integratedSpendingRows(previousMonth)), change = total - previousTotal, changeRate = previousTotal ? change / previousTotal * 100 : null, trend = [], items = new Map();
+    const yearly = /^\d{4}$/.test(month), range = spendingRange(month), rangeKind = month.includes('-Q') ? 'quarter' : month.includes('-H') ? 'half' : 'month', total = amount(rows), previousMonth = yearly ? String(Number(month) - 1) : spendingRangeKey(integratedSpendingMonthShift(range.start.slice(0, 7), -range.months), rangeKind), previousTotal = amount(integratedSpendingRows(previousMonth)), change = total - previousTotal, changeRate = previousTotal ? change / previousTotal * 100 : null, trend = [], items = new Map();
     for (const row of rows) {
         const key = String(row.meta?.spendingItem || row.category || '기타'), item = items.get(key) || { key, amount: 0, count: 0, category: row.category || '기타' };
         item.amount += Number(row.amount) || 0;
@@ -1290,8 +1321,8 @@ function integratedSpendingAnalysis(month = integratedLatestMonth()) {
         items.set(key, item);
     }
     for (let offset = -5; offset <= 0; offset++) {
-        const key = yearly ? String(Number(month) + offset) : integratedSpendingMonthShift(month, offset), value = amount(integratedSpendingRows(key));
-        trend.push({ month: key, label: yearly ? `${key}년` : `${Number(key.slice(5))}월`, amount: value });
+        const key = yearly ? String(Number(month) + offset) : spendingRangeKey(integratedSpendingMonthShift(range.start.slice(0, 7), offset * range.months), rangeKind), value = amount(integratedSpendingRows(key));
+        trend.push({ month: key, label: yearly ? `${key}년` : range.months > 1 ? spendingRangeLabel(key) : `${key.slice(2, 4)}.${key.slice(5)}`, amount: value });
     }
     return { month, rows, total, fixed: amount(fixedRows), variable: amount(variableRows), fixedRows, variableRows, categories: [...categories.values()].sort((left, right) => right.amount - left.amount || left.key.localeCompare(right.key, 'ko')), items: [...items.values()].sort((left, right) => right.amount - left.amount || left.key.localeCompare(right.key, 'ko')), previousMonth, previousTotal, change, changeRate, trend };
 }
@@ -3803,7 +3834,7 @@ function viewPreferenceValue(key, value) {
         return typeof value === 'boolean';
     if (typeof value !== 'string' || value.length > 256)
         return false;
-    const choices = { pensionAssetScope: ['all', 'pension', 'irp'], spendingPeriod: ['month', 'year'], spendingView: ['categories', 'items'], policyTab: ['isa', 'pension', 'irp', 'finance'], dividendPeriod: ['month', 'year', 'recent'], integratedLedgerFilter: ['all', 'income', 'expense', 'saving', 'debt'] };
+    const choices = { pensionAssetScope: ['all', 'pension', 'irp'], spendingPeriod: ['month', 'quarter', 'half', 'year', 'years'], spendingView: ['categories', 'items'], policyTab: ['isa', 'pension', 'irp', 'finance'], dividendPeriod: ['month', 'year', 'recent'], integratedLedgerFilter: ['all', 'income', 'expense', 'saving', 'debt'] };
     if (choices[key])
         return choices[key].includes(value);
     if (key === 'integratedMonth')
