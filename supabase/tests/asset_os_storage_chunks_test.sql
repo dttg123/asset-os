@@ -47,6 +47,15 @@ begin
  if n>2 then raise exception 'unfinished uploads accumulated';end if;
  select count(*) into n from public.asset_os_state_chunks where user_id=a and request_id in(r2,r3);
  if n<>2 then raise exception 'staging cleanup deleted current or previous generation';end if;
+ -- Upgrade and then reject a fully staged older schema even with the correct revision.
+ manifest:=jsonb_set(jsonb_set(manifest,'{requestId}',to_jsonb(pending3::text)),'{schemaVersion}','23');
+ select * into outcome_row from public.save_asset_os_state(3,manifest,pending3);
+ if outcome_row.outcome<>'saved' or outcome_row.new_revision<>4 then raise exception 'schema upgrade failed';end if;
+ perform public.stage_asset_os_state_chunk(broken,0,'YWJj');
+ manifest:=jsonb_set(jsonb_set(manifest,'{requestId}',to_jsonb(broken::text)),'{schemaVersion}','22');
+ rejected:=false;begin perform public.save_asset_os_state(4,manifest,broken);exception when sqlstate '22023' then rejected:=true;end;if not rejected then raise exception 'schema22 writer overwrote schema23 financial metadata';end if;
+ select count(*) into n from public.asset_os_state where user_id=a and revision=4 and (payload->>'schemaVersion')::integer=23;
+ if n<>1 then raise exception 'rejected downgrade changed current state';end if;
  perform set_config('request.jwt.claim.sub',b::text,true);
  select count(*) into n from public.read_asset_os_state_chunks(r1,-1,8);
  if n<>0 then raise exception 'other owner read private chunks';end if;

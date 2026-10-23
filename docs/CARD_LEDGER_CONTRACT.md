@@ -1,6 +1,6 @@
 # Card management candidate — steps 1–3
 
-This branch is a review candidate. It is not authorization to merge or deploy.
+Release candidate v0.7.6. The user has authorized validated operating reflection and deployment; status and evidence are recorded separately.
 Operating state is never rewritten by this branch. With explicit user authorization, a private copy and statement-derived records are exercised in isolated local QA. Repository fixtures and CI contain synthetic data only.
 
 ## Preservation boundary
@@ -49,16 +49,8 @@ Card accounts are settings records with a stable ID, issuer, display name, payme
 
 ## Remaining phases
 
-Samsung October records and November/December continuation have been exercised in a private QA copy using this branch. No private records are committed to Git or imported into the operating state. KB November remains a separately reconciled source pending its card/date mapping. Historical opening principal and previously paid installments must be grounded in those original statements when preparing the real-record import; they must not be inferred from a zero outstanding line or a repeated merchant/amount. The requested operating backup is complete and verified; its source and verification evidence are retained privately. Live broker/account checks, physical-device testing, main merge and operating deployment remain unperformed.
+Samsung October records and November/December continuation, plus KB November unpaid statements, have been exercised in a private QA copy using production engine functions. No personal records or identifying amounts are in Git fixtures. Paid history is a balance observation without fabricated cash funding. Unpaid-only history uses current billed principal plus post-bill remaining principal as the opening debt; past reductions are not fabricated payments. Purchase discounts are preserved once. Confirmed due/statement days are stored separately.
 
+The server rejects schema downgrades (including 23→22) before revision publication, while preserving conflict checks, idempotent retries, ownership enforcement and retained previous generations. Database tests exercise the staged downgrade with a correct expected revision.
 
-## Confirmed historical statement import
-
-`importCardHistory` records an explicit `historyBaseline` containing an observation date, confirmed remaining principal, stable source key and ordered statement evidence. It does not reconstruct unknown cash payments, point usage, historical discounts or exact payment dates. The legacy `firstPaymentDate` slot is the first observed billing date for these records, not a claim about unseen earlier installments. No estimate is generated without an actual bill.
-
-- Only confirmed remaining principal is posted as opening card debt at the observation date. Zero balances retain purchase/evidence records without invalid zero-value postings.
-- Historical purchase evidence remains available in card detail. Its `cardHistoricalPurchase` marker excludes it from operational spending, analysis and cash flow. An explicitly verified new purchase can opt into consumption once with `includeSpending`; importing its prior settled statements still does not create another cash withdrawal.
-- Statement statuses and known deposit dates are evidence, separate from `payments`. Unknown funding and dates remain unknown; a statement's scheduled post-payment zero is never an actual settlement. The UI explains the boundary and shows each statement round and remaining balance.
-- Statement balances must form a consistent sequence, the latest paid balance must equal the imported principal, and future planned principal cannot exceed it. Source keys prevent repeated imports from creating extra purchases; distinct positions/approval IDs remain independent.
-- Historical originals cannot be rewritten or removed through ordinary new-purchase controls. Confirmed paid statement months cannot be billed again. New payments cannot predate the observation baseline, and future payments use the existing cash/point ledger contract.
-- Private QA imports a verified operating backup copy into the existing QA storage namespace with external requests blocked. Original financial rows and unrelated modules are compared before/after, actual ZIP restore/reload is checked, and disposable future-payment simulations are reversed. The resulting ZIP is QA-only and must not be restored into live mode.
+Private QA validates exact original financial collections, no cash changes, independent equal purchases, idempotent import, ZIP/reload, failure rollback, mobile/tablet emulation and disposable future payments followed by restoration. Operating reflection requires a fresh source comparison, preserved pre-change snapshot, application validation and an atomic revision/checksum guarded save. Physical-device and bank API certification are not claimed.

@@ -5,7 +5,7 @@ const BROKER_KIS_PUBLIC_CONFIG = Object.freeze({ projectUrl: 'https://wjrzukoofs
 const QA_MODE = typeof location !== 'undefined' && /(?:^|[?&])qa=1(?:&|$)/.test(String(location.search || ''));
 const QA_STORAGE_KEY = 'asset-os-qa-v0.5', LIVE_STORAGE_KEY = 'asset-os-v1.9.45-live';
 const DEFAULT_FINANCE_DAY = 25;
-const APP_VERSION = 'v0.7.5', APP_ENV = QA_MODE ? 'qa' : 'live', SCHEMA_VERSION = 23, KEY = QA_MODE ? QA_STORAGE_KEY : LIVE_STORAGE_KEY, LEGACY_KEYS = ['asset-os-v1.9.22-central-schedule', 'asset-os-v1.9.20-real-finance', 'asset-os-v1.9.19-finance-linked', 'asset-os-v1.9.18-integrated-ui-refine', 'asset-os-v1.9.17-integrated-complete-stage1', 'asset-os-v1.9.16-integrated-ledger-stage2', 'asset-os-v1.9.9-pension-step2-analysis', 'asset-os-v1.9.7-pension-step2-precision', 'asset-os-v1.9.6-pension-step2-refine', 'asset-os-v1.9.5-pension-step2', 'asset-os-v1.9.4-pension-step1', 'asset-os-v1.9.3-pension-step1', 'asset-os-v1.9.2-isa-review', 'asset-os-v1.9.1-isa-review', 'asset-os-v1.9-isa-review', 'asset-os-v1.8-isa-review', 'asset-os-v1.7-isa-review', 'asset-os-v1.6.1-isa-review', 'asset-os-v1.6-isa-review', 'asset-os-v1.5-isa-review', 'asset-os-v1.4-isa-review', 'asset-os-v1.3-isa-review'];
+const APP_VERSION = 'v0.7.6', APP_ENV = QA_MODE ? 'qa' : 'live', SCHEMA_VERSION = 23, KEY = QA_MODE ? QA_STORAGE_KEY : LIVE_STORAGE_KEY, LEGACY_KEYS = ['asset-os-v1.9.22-central-schedule', 'asset-os-v1.9.20-real-finance', 'asset-os-v1.9.19-finance-linked', 'asset-os-v1.9.18-integrated-ui-refine', 'asset-os-v1.9.17-integrated-complete-stage1', 'asset-os-v1.9.16-integrated-ledger-stage2', 'asset-os-v1.9.9-pension-step2-analysis', 'asset-os-v1.9.7-pension-step2-precision', 'asset-os-v1.9.6-pension-step2-refine', 'asset-os-v1.9.5-pension-step2', 'asset-os-v1.9.4-pension-step1', 'asset-os-v1.9.3-pension-step1', 'asset-os-v1.9.2-isa-review', 'asset-os-v1.9.1-isa-review', 'asset-os-v1.9-isa-review', 'asset-os-v1.8-isa-review', 'asset-os-v1.7-isa-review', 'asset-os-v1.6.1-isa-review', 'asset-os-v1.6-isa-review', 'asset-os-v1.5-isa-review', 'asset-os-v1.4-isa-review', 'asset-os-v1.3-isa-review'];
 const nf = new Intl.NumberFormat('ko-KR');
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const INVESTMENT_ROLES = ['성장', '배당', '현금흐름', '안정', '현금'];
@@ -1574,9 +1574,11 @@ async function saveCardAccount(input, id = '') {
         const name = String(input.name || '').trim(), issuer = String(input.issuer || '기타 카드').trim(), day = Number(input.paymentDay), lastFour = String(input.lastFour || '').trim();
         if (!name || name.length > 60 || !issuer || issuer.length > 40 || !Number.isInteger(day) || day < 1 || day > 31 || lastFour && !/^\d{4}$/.test(lastFour))
             throw new Error('카드 이름·결제일·끝 4자리를 확인해 주세요.');
+        if (input.statementDay && (!Number.isInteger(Number(input.statementDay)) || Number(input.statementDay) < 1 || Number(input.statementDay) > 31))
+            throw new Error('결제확정일을 확인해 주세요.');
         if (id && !rows.some(x => x.id === id))
             throw new Error('카드를 찾지 못했습니다.');
-        const key = id || uid('card'), record = { id: key, name, issuer, paymentDay: day, lastFour, archived: input.archived === true };
+        const key = id || uid('card'), record = { id: key, name, issuer, paymentDay: day, lastFour, archived: input.archived === true, ...(input.statementDay ? { statementDay: Number(input.statementDay) } : {}) };
         setting().cardAccounts = [...rows.filter(x => x.id !== key), record];
         if (!(await persist(false))) {
             if (hadCards)
@@ -1681,7 +1683,7 @@ function cardHistoryIssue(value, purchaseAmount, purchaseDate, months) {
         seen.add(row.month);
         previous = row;
     }
-    if (!lastPaid || lastPaid.remainingPrincipal !== b.remainingPrincipal || pending > b.remainingPrincipal)
+    if ((lastPaid ? lastPaid.remainingPrincipal : b.statements[0].principal + b.statements[0].remainingPrincipal) !== b.remainingPrincipal || pending > b.remainingPrincipal)
         return '납부 확인 잔액과 가져오기 기준 원금이 다릅니다.';
     return '';
 }
@@ -1841,7 +1843,7 @@ function cardLedgerDataIssue(data) {
             return '카드 목록은 배열이어야 합니다.';
         for (const raw of cards) {
             const c = record(raw), id = String(c.id || '');
-            if (!id || cardIds.has(id) || typeof c.name !== 'string' || !c.name || !Number.isInteger(c.paymentDay) || Number(c.paymentDay) < 1 || Number(c.paymentDay) > 31 || c.lastFour && !/^\d{4}$/.test(String(c.lastFour)))
+            if (!id || cardIds.has(id) || typeof c.name !== 'string' || !c.name || !Number.isInteger(c.paymentDay) || Number(c.paymentDay) < 1 || Number(c.paymentDay) > 31 || c.lastFour && !/^\d{4}$/.test(String(c.lastFour)) || c.statementDay !== undefined && (!Number.isInteger(c.statementDay) || Number(c.statementDay) < 1 || Number(c.statementDay) > 31))
                 return '카드 이름·ID·결제일 형식이 잘못되었습니다.';
             cardIds.add(id);
         }

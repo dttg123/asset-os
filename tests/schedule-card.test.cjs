@@ -314,3 +314,12 @@ test('card history: inconsistent balances, source collisions, failed persistence
  const stable=run(c,'JSON.stringify(state)');c.historyInput.purchaseAmount=370001;assert.equal(await run(c,'importCardHistory(historyInput)'),'');assert.equal(run(c,'JSON.stringify(state)'),stable);
  assert.ok(run(c,"(()=>{const d=clone(state);d.financeSchedules.items[0].cardPlan.historyBaseline.remainingPrincipal++;return !!cardLedgerDataIssue(d)})()"));
 });
+
+test('card history: unpaid-only evidence includes current bill in remaining debt without inventing past cash payments',async()=>{
+ const c=await setupCardV2();const input=historyInput(run(c,'testCard'),{purchaseAmount:360000,purchaseDiscount:60000,months:6,firstPaymentDate:'2026-03-14'});input.historyBaseline={asOf:'2026-02-10',remainingPrincipal:200000,sourceKey:'synthetic-unpaid-only',includeSpending:false,statements:[{month:'2026-03',round:3,principal:50000,interest:0,remainingPrincipal:150000,status:'scheduled',dueDate:'2026-03-14',source:'synthetic-unpaid'}]};c.historyInput=input;
+ const cash=run(c,"integratedReplay().assets['cash-main']");const id=await run(c,'importCardHistory(historyInput)');assert.ok(id);c.historyId=id;
+ assert.equal(run(c,'cardRemaining(financeSchedules()[0])'),200000);assert.equal(run(c,"integratedReplay().assets['cash-main']"),cash);assert.equal(run(c,"integratedSpendingAnalysis('2026').total"),0);assert.equal(run(c,'cardV2(financeSchedules()[0]).payments.length'),0);assert.equal(await run(c,'importCardHistory(historyInput)'),id);
+ await run(c,'state=normalizeState(validateBackupPayload(parseBackupZipBytes(createBackupZipBytes(backupPayload()))))');assert.equal(run(c,'cardLedgerDataIssue(state)'),'');
+ c.historyInput.historyBaseline.remainingPrincipal=150000;assert.equal(await run(c,'importCardHistory(historyInput)'),'');
+ const bill=await run(c,"saveCardBill(historyId,{issuedDate:'2026-02-10',dueDate:'2026-03-14',principal:50000})");assert.ok(bill);c.historyBill=bill;assert.ok(await run(c,"recordCardPayment(historyId,{billId:historyBill,date:'2026-02-11'})"));assert.equal(run(c,'cardRemaining(financeSchedules()[0])'),150000);assert.equal(run(c,"integratedReplay().assets['cash-main']"),cash-50000);
+});
