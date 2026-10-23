@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 18248)
-Total output lines: 311
-
 # Asset OS QA 상태
 
 - 기준 버전: v0.6.17 / build 20261013-1 / schema 21
@@ -172,7 +169,9 @@ Primary references:
 - `persist()` returns a synchronous boolean; 24 TypeScript files contain 115 references including declarations. Every real call site needs semantic review for an asynchronous completion contract. Returning a Promise without changing `if (!persist())` is unsafe because a Promise is truthy. Serialize mutations as well as commits; avoid restoring an old snapshot over a newer successful save after an async error.
 - Whole-state localStorage writes enforce 4,000,000 bytes. Recovery copies compete for this storage. Startup, remote application, diagnostics, QA reset, import, restore, and cross-tab events bypass or assume this backend in different places; centralize their access.
 - ZIP/JSON/TXT import is capped at 8 MiB. ZIP output currently contains uncompressed JSON. Changing the primary database alone would leave eventual backups unrestorable. Choose documented, bounded export/import sizes and validate produced backups against the same bounds; test actual large backup round trips and malformed/untrusted inputs.
-- QA serialization uses `qaStorageState()` to remove fields, while production preserves them. The existing 35-year snapshot stress repo…248 tokens truncated…balances, past corrections, cross-module links and carryovers affect later totals. Preserve an authoritative ledger and invalidate/rebuild derived summaries for affected periods.
+- QA serialization uses `qaStorageState()` to remove fields, while production preserves them. The existing 35-year snapshot stress reports 2,634,802 bytes in QA form but approximately 3,935,791 bytes with a minimal production-shaped envelope after retention (metadata may add bytes). This is synthetic fixture size, not actual user usage. Future storage acceptance must use the same path and fields as production.
+- `cloudLocalEnvelope()` and `cloudApplyRemoteEnvelope()` directly access localStorage. Server RPC has revision compare-and-set and a last-request identifier, but startup selection uses client timestamps and resets the expected revision to the fetched remote revision before pushing. An isolated policy example with different local/remote records and later local time returns `push`. This demonstrates a design gap for divergent offline edits, not evidence that current user data was lost. Persist the last common revision and unacknowledged write identity across reloads; do not infer causality from device time.
+- Indexed month queries alone cannot replace full historical financial replay: opening positions, balances, past corrections, cross-module links and carryovers affect later totals. Preserve an authoritative ledger and invalidate/rebuild derived summaries for affected periods.
 
 ### Proposed implementation boundary (one reviewed release)
 
