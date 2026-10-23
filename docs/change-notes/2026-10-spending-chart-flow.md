@@ -16,3 +16,7 @@ Synthetic domain tests cover picker pollution, explicit custom categories/rename
 A separate private QA copy of an existing full source snapshot is used for actual record display and preservation checks with external/cloud requests blocked. No operating database write is needed. Private records and screenshots stay outside the repository and CI. Hardware-specific certification is not claimed.
 
 Final visual review also checks that expanding the category picker does not stretch the adjacent date input. Form grid items align at the top.
+
+## Keyboard follow-up (v0.7.9)
+
+A final isolated QA reproduction with all purchase fields valid found that Enter in category search could implicitly submit the purchase form. Prevent this search key's submission and focus the first matching category instead. IME composition events remain with the input. The browser regression fills a valid purchase before pressing Enter and checks exact financial collection equality and that the input sheet stays open. Operating data was never used for the reproduction.
