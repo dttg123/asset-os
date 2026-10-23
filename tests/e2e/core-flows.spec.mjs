@@ -355,7 +355,7 @@ test('@core native integrated summary opens presets and card installments withou
  for(const root of ['home','isa','pension']){await page.evaluate(root=>nav(root,'summary'),root);await expectNoHorizontalOverflow(page);await page.screenshot({path:`/tmp/asset-native-${root}-${test.info().project.name}.png`})}
  await page.setViewportSize({width:320,height:800});await page.evaluate(()=>nav('integrated','summary'));await expectNoHorizontalOverflow(page);
  await page.evaluate(()=>{setting().theme='dark';applyTheme()});await expectNoHorizontalOverflow(page);
- const colors=await page.locator('.integrated-overview-head').evaluate(el=>({foreground:getComputedStyle(el).color,background:getComputedStyle(el.closest('.integrated-overview-hero')).backgroundColor}));expect(colors.foreground).not.toBe(colors.background);
+ await expect(page.locator('.integrated-overview-hero')).toHaveCount(0);const colors=await page.locator('.integrated-month-mini-head').evaluate(el=>({foreground:getComputedStyle(el).color,background:getComputedStyle(el.closest('.integrated-month-mini')).backgroundColor}));expect(colors.foreground).not.toBe(colors.background);
  await page.screenshot({path:`/tmp/asset-native-dark-${test.info().project.name}.png`});
  await page.evaluate(()=>document.fonts.ready);expect(await page.evaluate(()=>document.fonts.check('16px Pretendard'))).toBe(true);
  expect(appErrors).toEqual([]);

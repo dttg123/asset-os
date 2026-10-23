@@ -6,6 +6,7 @@ test('spending taxonomy: ledger item names never populate picker and explicit ca
  const run=s=>vm.runInContext(s,c),json=s=>JSON.parse(run('JSON.stringify('+s+')')),before=JSON.stringify(rows);
  assert.equal(json('spendingCategoryNames()').length,13);assert.ok(!json('spendingCategoryNames()').includes('가상 실손보험'));assert.ok(!json('spendingCategoryNames()').includes('어머니용돈'));
  const analysis=json("integratedSpendingAnalysis('2026-08')");assert.equal(analysis.total,350);assert.equal(analysis.categories.find(x=>x.key==='보험').amount,150);assert.equal(analysis.categories.find(x=>x.key==='용돈·선물').amount,200);assert.equal(analysis.items.find(x=>x.key==='가상 실손보험').count,3);assert.equal(JSON.stringify(rows),before);
+ settings.spendingCategoryAliases={'가상 실손보험':'직접 추가 분류'};assert.equal(json("integratedSpendingAnalysis('2026-08')").categories.find(x=>x.key==='직접 추가 분류').amount,150);delete settings.spendingCategoryAliases;
  await run("saveSpendingClassifications(['insurance'],'직접 추가 분류','보험 표시 이름')");assert.equal(json("integratedSpendingAnalysis('2026-08')").categories.find(x=>x.key==='직접 추가 분류').amount,50);assert.equal(JSON.stringify(rows),before);
  await run("saveSpendingCategory('직접 추가 분류','새 분류')");assert.ok(json('spendingCategoryNames()').includes('새 분류'));assert.ok(!json('spendingCategoryNames()').includes('직접 추가 분류'));
 });

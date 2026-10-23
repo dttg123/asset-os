@@ -30,7 +30,7 @@ function spendingCategoryNamesSafe(name:string):boolean{if(typeof setting!=='fun
 function spendingClassification(row:IntegratedSpendingRow):SpendingClassification{
  const settings=typeof setting==='function'?setting():{},map=settings.spendingClassifications,entry=map&&typeof map==='object'&&!Array.isArray(map)&&Object.hasOwn(map,String(row.id))?(map as Record<string,unknown>)[String(row.id)]:null,label=entry&&typeof entry==='object'?entry as Record<string,unknown>:{};
  const history=typeof financeSchedules==='function'&&financeSchedules().some(x=>x.id===row.meta?.cardPlanId&&x.source==='statement-history'),merchant=String(row.meta?.merchant||'').trim(),fallback=history&&row.category==='기타'?(merchant==='조이시티'?'게임·취미':'미분류'):row.category;
- const schedule=typeof financeSchedules==='function'?financeSchedules().find(x=>x.id===row.meta?.scheduleId):null,raw=String(fallback||''),known=spendingCategoryNamesSafe(raw),derived=schedule?.kind==='insurance'?'보험':raw==='어머니용돈'?'용돈·선물':known?raw:raw.includes('보험')?'보험':raw==='생활비'?'기타':fallback;
+ const schedule=typeof financeSchedules==='function'?financeSchedules().find(x=>x.id===row.meta?.scheduleId):null,raw=String(fallback||''),known=spendingCategoryNamesSafe(raw),derived=known?raw:schedule?.kind==='insurance'?'보험':raw==='어머니용돈'?'용돈·선물':raw.includes('보험')?'보험':raw==='생활비'?'기타':fallback;
  return{category:spendingCategoryLabel(typeof label.category==='string'&&label.category?label.category:derived),item:typeof label.item==='string'&&label.item?label.item:String(history&&merchant?merchant:row.meta?.spendingItem||row.meta?.merchant||row.category||'미분류')};
 }
 async function saveSpendingClassifications(ids:string[],category:string,item:string):Promise<boolean>{
