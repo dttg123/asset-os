@@ -1,5 +1,46 @@
 'use strict';
 function setting() { return state.settings; }
+// Tab-local view preferences never enter the financial save queue or cloud sync.
+const VIEW_PREFERENCE_KEYS = ['selectedAccountId', 'integratedMonth', 'integratedMonthViewedOn', 'integratedLedgerFilter', 'txFilter', 'compositionGroup', 'compositionFocus', 'pensionAssetScope', 'pensionAssetFocus', 'pensionGoalExpanded', 'dividendPeriod', 'dividendKey', 'spendingPeriod', 'spendingView', 'spendingCategoryFilter', 'policyTab'];
+function viewPreferenceValue(key, value) {
+    if (key === 'pensionGoalExpanded')
+        return typeof value === 'boolean';
+    if (typeof value !== 'string' || value.length > 256)
+        return false;
+    const choices = { pensionAssetScope: ['all', 'pension', 'irp'], spendingPeriod: ['month', 'year'], spendingView: ['categories', 'items'], policyTab: ['isa', 'pension', 'irp', 'finance'], dividendPeriod: ['month', 'year', 'recent'], integratedLedgerFilter: ['all', 'income', 'expense', 'saving', 'debt'] };
+    if (choices[key])
+        return choices[key].includes(value);
+    if (key === 'integratedMonth')
+        return /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
+    if (key === 'integratedMonthViewedOn')
+        return /^\d{4}-\d{2}-\d{2}$/.test(value);
+    return key !== 'selectedAccountId' || state.accounts.some(account => account.id === value);
+}
+function rememberViewPreferences() {
+    try {
+        const values = {}, base = {}, saved = typeof lastPersistedState !== 'undefined' && lastPersistedState ? lastPersistedState.settings : state.settings;
+        for (const key of VIEW_PREFERENCE_KEYS)
+            if (viewPreferenceValue(key, setting()[key])) {
+                values[key] = setting()[key];
+                base[key] = saved[key];
+            }
+        sessionStorage.setItem(`${KEY}-view-preferences`, JSON.stringify({ values, base }));
+    }
+    catch { /* Storage restrictions must not block a view action. */ }
+}
+function restoreViewPreferences() {
+    try {
+        const record = JSON.parse(sessionStorage.getItem(`${KEY}-view-preferences`) || 'null');
+        if (!record?.values || !record.base)
+            return;
+        for (const key of VIEW_PREFERENCE_KEYS) {
+            const value = record.values[key];
+            if (viewPreferenceValue(key, value) && JSON.stringify(setting()[key]) === JSON.stringify(record.base[key]))
+                setting()[key] = value;
+        }
+    }
+    catch { /* Ignore malformed view metadata; the financial state stays authoritative. */ }
+}
 function currentAccount() { return state.accounts.find(a => a.id === setting().selectedAccountId) || state.accounts[0]; }
 function policy(kind = 'isa', account = 'current') { const group = state.policies[kind]; if (!group)
     return {}; if (Array.isArray(group.versions)) {

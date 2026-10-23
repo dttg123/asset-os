@@ -1,3 +1,4 @@
+declare function rememberViewPreferences():void;
 'use strict';
 type CardUiRow=Record<string,unknown>&{id:string;name?:string;date?:string;type?:string;amount?:number;category?:string;meta?:Record<string,unknown>;liabilityId?:string};
 type CardUiAccount={id:string;name:string;issuer:string;paymentDay:number;statementDay?:number;lastFour:string;archived:boolean};
@@ -182,9 +183,9 @@ function openSpendingClassification(ids:string[],period:string,cardId=''):void{
  cardUiForm('항목 이름·분류 수정',`${cardUiInput('item','항목 이름',first.item)}${cardUiCategoryField(first.category)}<p class="source-note">선택한 구매 ${rows.length}건의 표시 이름과 분류를 바꿉니다. 구매·청구·납부 원본과 금액은 그대로 유지돼요.</p>`,async data=>{if(await saveSpendingClassifications(rows.map(x=>x.id),String(data.category),String(data.item))){cardUiDone();if(cardId)openCardLedgerDetail(cardId);else openSpendingItemDetail(String(data.item),period);toast('이름과 분류를 저장했어요.')}});
 }
 function bindSpendingReview():void{
- $$('[data-spending-period]').forEach(b=>b.onclick=async()=>{setting().spendingPeriod=b.dataset.spendingPeriod;await persist(false);render()});
- $$('[data-spending-view]').forEach(b=>b.onclick=async()=>{setting().spendingView=b.dataset.spendingView;setting().spendingCategoryFilter='';await persist(false);render()});
- $$('[data-spending-category-filter]').forEach(b=>b.onclick=async()=>{setting().spendingView='items';setting().spendingCategoryFilter=b.dataset.spendingCategoryFilter||'';await persist(false);render()});
+ $$('[data-spending-period]').forEach(b=>b.onclick=async()=>{setting().spendingPeriod=b.dataset.spendingPeriod;rememberViewPreferences();render()});
+ $$('[data-spending-view]').forEach(b=>b.onclick=async()=>{setting().spendingView=b.dataset.spendingView;setting().spendingCategoryFilter='';rememberViewPreferences();render()});
+ $$('[data-spending-category-filter]').forEach(b=>b.onclick=async()=>{setting().spendingView='items';setting().spendingCategoryFilter=b.dataset.spendingCategoryFilter||'';rememberViewPreferences();render()});
  $$('[data-spending-item]').forEach(b=>b.onclick=()=>openSpendingItemDetail(b.dataset.spendingItem||''));
  $$('[data-spending-category-manage]').forEach(b=>b.onclick=()=>openSpendingCategoryManagement());
  $$('[data-spending-transaction]').forEach(b=>b.onclick=()=>openIntegratedTransactionDetail(b.dataset.spendingTransaction||''));

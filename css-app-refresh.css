@@ -171,10 +171,12 @@ html[data-theme="dark"]{--polish-accent:color-mix(in srgb,var(--accent) 65%,whit
 .sheet button.primary:not(:disabled):active,.integrated-record-primary:active,.integrated-form-save:active,.native-isa-entry>.primary:active,.pension-contribution-batch-open:active{background-color:var(--accent2)}
 .nav:active{background:var(--soft)}
 :where(button,summary,input,select,textarea):focus-visible{outline:2px solid var(--accent);outline-offset:3px}
-/* Fade only: page motion never changes containing blocks or moves touch targets. */
-@keyframes pageReveal{from{opacity:.72}to{opacity:1}}
+/* View updates keep full opacity; only the sheet backdrop fades in. */
+@keyframes sheetScrimReveal{from{opacity:0}to{opacity:1}}
+.scrim{background:rgba(5,10,16,.32);backdrop-filter:none}
+:where(button,a,summary,[role="button"],[data-inline-donut],[data-pension-donut]){-webkit-tap-highlight-color:transparent}
 @media(prefers-reduced-motion:no-preference){
- #main>:where(.stack,.module-page-shell){animation:pageReveal var(--motion-enter) ease}
+ .scrim:not([hidden]){animation:sheetScrimReveal .24s var(--motion-ease)}
  .entry-extra[open]>.field,.entry-library[open]>.entry-shortcuts{animation:inlineReveal var(--motion-enter) var(--motion-ease)}
 }
 @media(prefers-reduced-motion:reduce){
