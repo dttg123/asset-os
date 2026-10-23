@@ -14,7 +14,7 @@ declare function toast(message:string):void;
 
 const DEFAULT_SPENDING_CATEGORIES=['식비','게임·취미','가전·전자','용돈·선물','쇼핑','주거·관리','통신','교통·차량','보험','의료·건강','미분류','기타'];
 function spendingCategoryLabel(raw:unknown):string{let name=String(raw||'기타').trim()||'기타';const aliases=typeof setting==='function'?(setting().spendingCategoryAliases||{}) as Record<string,string>:{},seen=new Set<string>();while(Object.hasOwn(aliases,name)&&aliases[name]&&!seen.has(name)){seen.add(name);name=String(aliases[name])}return name}
-function spendingCategoryNames():string[]{const settings=setting(),extra=Array.isArray(settings.spendingCategoryNames)?settings.spendingCategoryNames as string[]:[],hidden=new Set(Array.isArray(settings.spendingCategoryHidden)?settings.spendingCategoryHidden as string[]:[]);return[...new Set([...DEFAULT_SPENDING_CATEGORIES.filter(x=>!hidden.has(x)),...extra,...Object.values((settings.spendingClassifications||{}) as Record<string,SpendingClassification>).map(x=>spendingCategoryLabel(x?.category)),...integratedLedger().filter(x=>['expense','externalExpense','refund'].includes(x.type)).map(x=>spendingCategoryLabel(x.category))])].filter(Boolean)}
+function spendingCategoryNames():string[]{const settings=setting(),extra=Array.isArray(settings.spendingCategoryNames)?settings.spendingCategoryNames as string[]:[],hidden=new Set(Array.isArray(settings.spendingCategoryHidden)?settings.spendingCategoryHidden as string[]:[]);return[...new Set([...DEFAULT_SPENDING_CATEGORIES,...extra].map(spendingCategoryLabel))].filter(x=>!!x&&!hidden.has(x))}
 async function saveSpendingCategory(name:string,replacement:string):Promise<boolean>{
  const from=String(name||'').trim(),to=String(replacement||'').trim(),settings=setting(),keys=['spendingCategoryNames','spendingCategoryHidden','spendingCategoryAliases'],before=keys.map(key=>({key,present:Object.hasOwn(settings,key),value:settings[key]}));
  if(!to||to.length>60||['__proto__','constructor','prototype'].includes(to)||from===to||!from&&spendingCategoryNames().includes(to)||from&&spendingCategoryLabel(to)===from){toast('다른 카테고리 이름을 입력해 주세요.');return false}
@@ -23,13 +23,15 @@ async function saveSpendingCategory(name:string,replacement:string):Promise<bool
 }
 
 declare const state:unknown;
-declare function financeSchedules():Array<{id?:string;source?:string}>;
+declare function financeSchedules():Array<{id?:string;source?:string;kind?:string;name?:string;productId?:string}>;
 declare function integratedManualLedger():IntegratedSpendingRow[];
 type SpendingClassification={category:string;item:string};
+function spendingCategoryNamesSafe(name:string):boolean{if(typeof setting!=='function')return DEFAULT_SPENDING_CATEGORIES.includes(name);return spendingCategoryNames().includes(spendingCategoryLabel(name))}
 function spendingClassification(row:IntegratedSpendingRow):SpendingClassification{
  const settings=typeof setting==='function'?setting():{},map=settings.spendingClassifications,entry=map&&typeof map==='object'&&!Array.isArray(map)&&Object.hasOwn(map,String(row.id))?(map as Record<string,unknown>)[String(row.id)]:null,label=entry&&typeof entry==='object'?entry as Record<string,unknown>:{};
  const history=typeof financeSchedules==='function'&&financeSchedules().some(x=>x.id===row.meta?.cardPlanId&&x.source==='statement-history'),merchant=String(row.meta?.merchant||'').trim(),fallback=history&&row.category==='기타'?(merchant==='조이시티'?'게임·취미':'미분류'):row.category;
- return{category:spendingCategoryLabel(typeof label.category==='string'&&label.category?label.category:fallback),item:typeof label.item==='string'&&label.item?label.item:String(history&&merchant?merchant:row.meta?.spendingItem||row.meta?.merchant||row.category||'미분류')};
+ const schedule=typeof financeSchedules==='function'?financeSchedules().find(x=>x.id===row.meta?.scheduleId):null,raw=String(fallback||''),known=spendingCategoryNamesSafe(raw),derived=known?raw:schedule?.kind==='insurance'?'보험':raw==='어머니용돈'?'용돈·선물':raw.includes('보험')?'보험':raw==='생활비'?'기타':fallback;
+ return{category:spendingCategoryLabel(typeof label.category==='string'&&label.category?label.category:derived),item:typeof label.item==='string'&&label.item?label.item:String(history&&merchant?merchant:row.meta?.spendingItem||row.meta?.merchant||row.category||'미분류')};
 }
 async function saveSpendingClassifications(ids:string[],category:string,item:string):Promise<boolean>{
  const source=typeof state!=='undefined'&&typeof integratedManualLedger==='function'?integratedManualLedger():integratedLedger(),selected=[...new Set(ids)],name=String(item||'').trim(),group=String(category||'').trim(),settings=setting(),had=Object.hasOwn(settings,'spendingClassifications'),before=settings.spendingClassifications;

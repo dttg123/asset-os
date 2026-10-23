@@ -1002,11 +1002,11 @@ function initQaMode() { if (!QA_MODE)
 'use strict';
 if ('serviceWorker' in navigator)
     window.addEventListener('load', async () => { const hadController = !!navigator.serviceWorker.controller; try {
-        const reg = await navigator.serviceWorker.register('./service-worker.js?v=0.7.7&build=20261024-2', { scope: './', updateViaCache: 'none' });
+        const reg = await navigator.serviceWorker.register('./service-worker.js?v=0.7.8&build=20261024-3', { scope: './', updateViaCache: 'none' });
         await reg.update();
         let refreshing = false;
         navigator.serviceWorker.addEventListener('controllerchange', () => { if (!hadController || refreshing)
-            return; refreshing = true; const key = 'asset-os-sw-reload-0.7.7-build20261024-2'; if (sessionStorage.getItem(key))
+            return; refreshing = true; const key = 'asset-os-sw-reload-0.7.8-build20261024-3'; if (sessionStorage.getItem(key))
             return; sessionStorage.setItem(key, '1'); location.reload(); });
     }
     catch { } });

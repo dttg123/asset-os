@@ -5,7 +5,7 @@ const BROKER_KIS_PUBLIC_CONFIG = Object.freeze({ projectUrl: 'https://wjrzukoofs
 const QA_MODE = typeof location !== 'undefined' && /(?:^|[?&])qa=1(?:&|$)/.test(String(location.search || ''));
 const QA_STORAGE_KEY = 'asset-os-qa-v0.5', LIVE_STORAGE_KEY = 'asset-os-v1.9.45-live';
 const DEFAULT_FINANCE_DAY = 25;
-const APP_VERSION = 'v0.7.7', APP_ENV = QA_MODE ? 'qa' : 'live', SCHEMA_VERSION = 23, KEY = QA_MODE ? QA_STORAGE_KEY : LIVE_STORAGE_KEY, LEGACY_KEYS = ['asset-os-v1.9.22-central-schedule', 'asset-os-v1.9.20-real-finance', 'asset-os-v1.9.19-finance-linked', 'asset-os-v1.9.18-integrated-ui-refine', 'asset-os-v1.9.17-integrated-complete-stage1', 'asset-os-v1.9.16-integrated-ledger-stage2', 'asset-os-v1.9.9-pension-step2-analysis', 'asset-os-v1.9.7-pension-step2-precision', 'asset-os-v1.9.6-pension-step2-refine', 'asset-os-v1.9.5-pension-step2', 'asset-os-v1.9.4-pension-step1', 'asset-os-v1.9.3-pension-step1', 'asset-os-v1.9.2-isa-review', 'asset-os-v1.9.1-isa-review', 'asset-os-v1.9-isa-review', 'asset-os-v1.8-isa-review', 'asset-os-v1.7-isa-review', 'asset-os-v1.6.1-isa-review', 'asset-os-v1.6-isa-review', 'asset-os-v1.5-isa-review', 'asset-os-v1.4-isa-review', 'asset-os-v1.3-isa-review'];
+const APP_VERSION = 'v0.7.8', APP_ENV = QA_MODE ? 'qa' : 'live', SCHEMA_VERSION = 23, KEY = QA_MODE ? QA_STORAGE_KEY : LIVE_STORAGE_KEY, LEGACY_KEYS = ['asset-os-v1.9.22-central-schedule', 'asset-os-v1.9.20-real-finance', 'asset-os-v1.9.19-finance-linked', 'asset-os-v1.9.18-integrated-ui-refine', 'asset-os-v1.9.17-integrated-complete-stage1', 'asset-os-v1.9.16-integrated-ledger-stage2', 'asset-os-v1.9.9-pension-step2-analysis', 'asset-os-v1.9.7-pension-step2-precision', 'asset-os-v1.9.6-pension-step2-refine', 'asset-os-v1.9.5-pension-step2', 'asset-os-v1.9.4-pension-step1', 'asset-os-v1.9.3-pension-step1', 'asset-os-v1.9.2-isa-review', 'asset-os-v1.9.1-isa-review', 'asset-os-v1.9-isa-review', 'asset-os-v1.8-isa-review', 'asset-os-v1.7-isa-review', 'asset-os-v1.6.1-isa-review', 'asset-os-v1.6-isa-review', 'asset-os-v1.5-isa-review', 'asset-os-v1.4-isa-review', 'asset-os-v1.3-isa-review'];
 const nf = new Intl.NumberFormat('ko-KR');
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const INVESTMENT_ROLES = ['성장', '배당', '현금흐름', '안정', '현금'];
@@ -1214,7 +1214,7 @@ function spendingCategoryLabel(raw) { let name = String(raw || '기타').trim() 
     seen.add(name);
     name = String(aliases[name]);
 } return name; }
-function spendingCategoryNames() { const settings = setting(), extra = Array.isArray(settings.spendingCategoryNames) ? settings.spendingCategoryNames : [], hidden = new Set(Array.isArray(settings.spendingCategoryHidden) ? settings.spendingCategoryHidden : []); return [...new Set([...DEFAULT_SPENDING_CATEGORIES.filter(x => !hidden.has(x)), ...extra, ...Object.values((settings.spendingClassifications || {})).map(x => spendingCategoryLabel(x?.category)), ...integratedLedger().filter(x => ['expense', 'externalExpense', 'refund'].includes(x.type)).map(x => spendingCategoryLabel(x.category))])].filter(Boolean); }
+function spendingCategoryNames() { const settings = setting(), extra = Array.isArray(settings.spendingCategoryNames) ? settings.spendingCategoryNames : [], hidden = new Set(Array.isArray(settings.spendingCategoryHidden) ? settings.spendingCategoryHidden : []); return [...new Set([...DEFAULT_SPENDING_CATEGORIES, ...extra].map(spendingCategoryLabel))].filter(x => !!x && !hidden.has(x)); }
 async function saveSpendingCategory(name, replacement) {
     const from = String(name || '').trim(), to = String(replacement || '').trim(), settings = setting(), keys = ['spendingCategoryNames', 'spendingCategoryHidden', 'spendingCategoryAliases'], before = keys.map(key => ({ key, present: Object.hasOwn(settings, key), value: settings[key] }));
     if (!to || to.length > 60 || ['__proto__', 'constructor', 'prototype'].includes(to) || from === to || !from && spendingCategoryNames().includes(to) || from && spendingCategoryLabel(to) === from) {
@@ -1236,10 +1236,13 @@ async function saveSpendingCategory(name, replacement) {
     }
     return true;
 }
+function spendingCategoryNamesSafe(name) { if (typeof setting !== 'function')
+    return DEFAULT_SPENDING_CATEGORIES.includes(name); return spendingCategoryNames().includes(spendingCategoryLabel(name)); }
 function spendingClassification(row) {
     const settings = typeof setting === 'function' ? setting() : {}, map = settings.spendingClassifications, entry = map && typeof map === 'object' && !Array.isArray(map) && Object.hasOwn(map, String(row.id)) ? map[String(row.id)] : null, label = entry && typeof entry === 'object' ? entry : {};
     const history = typeof financeSchedules === 'function' && financeSchedules().some(x => x.id === row.meta?.cardPlanId && x.source === 'statement-history'), merchant = String(row.meta?.merchant || '').trim(), fallback = history && row.category === '기타' ? (merchant === '조이시티' ? '게임·취미' : '미분류') : row.category;
-    return { category: spendingCategoryLabel(typeof label.category === 'string' && label.category ? label.category : fallback), item: typeof label.item === 'string' && label.item ? label.item : String(history && merchant ? merchant : row.meta?.spendingItem || row.meta?.merchant || row.category || '미분류') };
+    const schedule = typeof financeSchedules === 'function' ? financeSchedules().find(x => x.id === row.meta?.scheduleId) : null, raw = String(fallback || ''), known = spendingCategoryNamesSafe(raw), derived = known ? raw : schedule?.kind === 'insurance' ? '보험' : raw === '어머니용돈' ? '용돈·선물' : raw.includes('보험') ? '보험' : raw === '생활비' ? '기타' : fallback;
+    return { category: spendingCategoryLabel(typeof label.category === 'string' && label.category ? label.category : derived), item: typeof label.item === 'string' && label.item ? label.item : String(history && merchant ? merchant : row.meta?.spendingItem || row.meta?.merchant || row.category || '미분류') };
 }
 async function saveSpendingClassifications(ids, category, item) {
     const source = typeof state !== 'undefined' && typeof integratedManualLedger === 'function' ? integratedManualLedger() : integratedLedger(), selected = [...new Set(ids)], name = String(item || '').trim(), group = String(category || '').trim(), settings = setting(), had = Object.hasOwn(settings, 'spendingClassifications'), before = settings.spendingClassifications;

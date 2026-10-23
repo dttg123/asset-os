@@ -166,14 +166,14 @@ integratedSummaryPage = function () {
         }
         schedule.insertAdjacentHTML('afterend', integratedConsumptionPreview(month));
     }
-    const overview = template.content.querySelector('.integrated-overview-hero'), guard = template.content.querySelector('[data-integrated-assets-guard]'), source = [...template.content.children].find(e => e.classList.contains('source-note')), cashflow = template.content.querySelector('.integrated-month-mini');
-    if (overview && cashflow) {
-        cashflow.before(overview);
-        if (guard)
-            overview.after(guard);
-        if (source)
-            (guard || overview).after(source);
-    }
+    template.content.querySelector('.integrated-overview-hero')?.remove();
+    template.content.querySelector('[data-integrated-assets-guard]')?.remove();
+    for (const note of template.content.querySelectorAll('.source-note'))
+        if (note.textContent === '입력된 계좌만 합산했습니다. 금액이 없는 계좌는 제외됩니다.')
+            note.remove();
+    const monthly = template.content.querySelector('.integrated-month-mini'), entry = template.content.querySelector('.household-quick');
+    if (monthly && entry)
+        entry.before(monthly);
     const monthHead = template.content.querySelector('.integrated-month-mini-head');
     if (monthHead) {
         const strong = monthHead.querySelector('strong'), small = monthHead.querySelector('small');
@@ -183,7 +183,7 @@ integratedSummaryPage = function () {
     }
     const cashLabel = template.content.querySelector('.integrated-month-mini-item.left span');
     if (cashLabel)
-        cashLabel.textContent = '가용 현금';
+        cashLabel.textContent = '현금 증감';
     const recent = template.content.querySelectorAll('.integrated-recent .integrated-ledger-row');
     [...recent].slice(3).forEach(x => x.remove());
     return template.innerHTML;
