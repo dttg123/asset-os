@@ -65,7 +65,7 @@ function integratedSpendingView(anchor:string,mode='half'){
  const key=spendingRangeKey(anchor,mode),analysis=integratedSpendingAnalysis(key),range=spendingRange(key),start=range.start.slice(0,7),trend=[];
  if(mode==='month')return analysis;
  if(mode==='years')return{...analysis,trend:analysis.trend};
- for(let i=0;i<range.months;i++){const month=integratedSpendingMonthShift(start,i);trend.push({month,label:`${Number(month.slice(5))}월`,amount:integratedSpendingAnalysis(month).total})}
+ for(let i=0;i<range.months;i++){const month=integratedSpendingMonthShift(start,i);trend.push({month,label:`${Number(month.slice(5))}월`,amount:analysis.rows.filter(row=>integratedMonthKey(row.date)===month).reduce((sum,row)=>sum+(Number(row.amount)||0),0)})}
  return{...analysis,trend};
 }
 
