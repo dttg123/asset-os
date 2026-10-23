@@ -288,3 +288,29 @@ for(const type of ['expense','externalExpense'])test(`refund dependency matrix: 
  assert.equal(run(c,"state.integrated.ledger.filter(t=>t.id==='refund-original-b').length"),1);assert.equal(run(c,"state.integrated.ledger.some(t=>t.meta?.refundOf==='refund-original-a')"),false);
  assert.equal(run(c,"integratedReplay().assets['cash-main']"),type==='expense'?9999000:10000000);
 });
+
+function historyInput(cardId,extra={}){return {name:'가상 과거 구매',cardId,purchaseAmount:370000,months:3,purchaseDate:'2026-01-01',firstPaymentDate:'2026-01-14',interestMode:'free',category:'기타',historyBaseline:{asOf:'2026-02-10',remainingPrincipal:123300,sourceKey:'synthetic-history-a',includeSpending:false,statements:[{month:'2026-01',round:1,principal:123400,interest:0,remainingPrincipal:246600,status:'paid',source:'synthetic-a'},{month:'2026-02',round:2,principal:123300,interest:0,remainingPrincipal:123300,status:'paid',source:'synthetic-b'},{month:'2026-03',round:3,principal:123300,interest:0,remainingPrincipal:0,status:'scheduled',source:'synthetic-c'}]},...extra}}
+test('card history: confirmed principal imports without invented cash or duplicate consumption and repeats are idempotent',async()=>{
+ const c=await setupCardV2();c.historyInput=historyInput(run(c,'testCard'));const cash=run(c,"integratedReplay().assets['cash-main']"),isa=run(c,'JSON.stringify(state.accounts)'),pension=run(c,'JSON.stringify(state.pension)');
+ const id=await run(c,'importCardHistory(historyInput)');assert.ok(id);c.historyId=id;
+ assert.equal(run(c,"integratedReplay().assets['cash-main']"),cash);assert.equal(run(c,'integratedReplay().totalDebt'),123300);assert.equal(run(c,"integratedSpendingAnalysis('2026').total"),0);assert.equal(run(c,'cardV2(financeSchedules()[0]).payments.length'),0);assert.equal(run(c,"scheduleOccurrences('2026-02').length"),0);assert.equal(run(c,"scheduleOccurrences('2027-01').length"),0);
+ assert.equal(await run(c,'importCardHistory(historyInput)'),id);assert.equal(run(c,'financeSchedules().length'),1);assert.equal(run(c,'JSON.stringify(state.accounts)'),isa);assert.equal(run(c,'JSON.stringify(state.pension)'),pension);
+ await run(c,'state=normalizeState(validateBackupPayload(parseBackupZipBytes(createBackupZipBytes(backupPayload()))))');assert.equal(run(c,'cardLedgerDataIssue(state)'),'');assert.equal(run(c,'cardRemaining(financeSchedules()[0])'),123300);
+});
+test('card history: paid evidence cannot be charged again, early writes fail and confirmed future bills accept real payment',async()=>{
+ const c=await setupCardV2();c.historyInput=historyInput(run(c,'testCard'));const id=await run(c,'importCardHistory(historyInput)');c.historyId=id;
+ assert.equal(await run(c,"saveCardBill(historyId,{issuedDate:'2026-02-10',dueDate:'2026-02-14',principal:123300})"),'');
+ const bill=await run(c,"saveCardBill(historyId,{issuedDate:'2026-02-10',dueDate:'2026-03-14',principal:123300})");assert.ok(bill);c.historyBill=bill;
+ assert.equal(await run(c,"recordCardPayment(historyId,{billId:historyBill,date:'2026-02-09'})"),'');const cash=run(c,"integratedReplay().assets['cash-main']");assert.ok(await run(c,"recordCardPayment(historyId,{billId:historyBill,date:'2026-02-11',pointsPrincipal:300})"));assert.equal(run(c,'cardRemaining(financeSchedules()[0])'),0);assert.equal(run(c,"integratedReplay().assets['cash-main']"),cash-123000);assert.equal(run(c,"integratedSpendingAnalysis('2026').total"),0);
+});
+test('card history: zero balance is complete while evidence and original amount survive without zero-value financial postings',async()=>{
+ const c=await setupCardV2();const input=historyInput(run(c,'testCard'));input.historyBaseline.remainingPrincipal=0;input.historyBaseline.statements=[{month:'2026-01',round:1,principal:370000,interest:0,remainingPrincipal:0,status:'paid',paidDate:'2026-01-05',source:'synthetic-full-prepay'}];c.historyInput=input;
+ const id=await run(c,'importCardHistory(historyInput)');assert.ok(id);c.historyId=id;assert.equal(run(c,'cardPlanSummary(financeSchedules()[0],"2026-01").completed'),true);assert.equal(run(c,"state.integrated.ledger.filter(x=>x.amount===0).length"),0);assert.equal(await run(c,'removeUnpaidCardInstallment(historyId)'),false);assert.equal(await run(c,'updateCardPurchase(historyId,historyInput)'),false);
+ await run(c,'state=normalizeState(validateBackupPayload(parseBackupZipBytes(createBackupZipBytes(backupPayload()))))');assert.equal(run(c,'cardV2(financeSchedules()[0]).grossAmount'),370000);assert.equal(run(c,'cardV2(financeSchedules()[0]).historyBaseline.statements[0].paidDate'),'2026-01-05');
+});
+test('card history: inconsistent balances, source collisions, failed persistence and malformed backups preserve originals',async()=>{
+ const c=await setupCardV2();const input=historyInput(run(c,'testCard'));c.historyInput=input;const before=run(c,'JSON.stringify(state.integrated)');input.historyBaseline.statements[1].remainingPrincipal=1;assert.equal(await run(c,'importCardHistory(historyInput)'),'');assert.equal(run(c,'JSON.stringify(state.integrated)'),before);
+ c.historyInput=historyInput(run(c,'testCard'));await run(c,'persist=async()=>false');assert.equal(await run(c,'importCardHistory(historyInput)'),'');assert.equal(run(c,'JSON.stringify(state.integrated)'),before);await run(c,'persist=async()=>true');assert.ok(await run(c,'importCardHistory(historyInput)'));
+ const stable=run(c,'JSON.stringify(state)');c.historyInput.purchaseAmount=370001;assert.equal(await run(c,'importCardHistory(historyInput)'),'');assert.equal(run(c,'JSON.stringify(state)'),stable);
+ assert.ok(run(c,"(()=>{const d=clone(state);d.financeSchedules.items[0].cardPlan.historyBaseline.remainingPrincipal++;return !!cardLedgerDataIssue(d)})()"));
+});

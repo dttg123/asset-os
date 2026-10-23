@@ -772,11 +772,11 @@ function nextIntegratedSequence(date) { let max = 0; for (const transaction of i
     if (String(transaction.date || '') === String(date) && Number.isFinite(Number(transaction.sequence)))
         max = Math.max(max, Number(transaction.sequence)); return max + 1; }
 function isQaIntegratedFixture(transaction) { return !!transaction?.meta?.qaFixture; }
-function integratedOperationalLedger() { return [...integratedManualLedger().filter(transaction => !isQaIntegratedFixture(transaction)), ...integratedLinkedLedger().filter(transaction => !isQaIntegratedFixture(transaction))].sort(integratedTxOrder); }
-function integratedAnalysisBalanceLedger() { const start = String(integratedStore().startedAt || ''), manual = integratedManualLedger().filter(transaction => !isQaIntegratedFixture(transaction)), linked = (start ? integratedLinkedLedger().filter(transaction => String(transaction.date) >= start) : []).filter(transaction => !isQaIntegratedFixture(transaction)); return [...manual, ...linked].sort(integratedTxOrder); }
+function integratedOperationalLedger() { return [...integratedManualLedger().filter(transaction => !isQaIntegratedFixture(transaction) && !transaction.meta?.cardHistoricalPurchase), ...integratedLinkedLedger().filter(transaction => !isQaIntegratedFixture(transaction))].sort(integratedTxOrder); }
+function integratedAnalysisBalanceLedger() { const start = String(integratedStore().startedAt || ''), manual = integratedManualLedger().filter(transaction => !isQaIntegratedFixture(transaction) && !transaction.meta?.cardHistoricalPurchase), linked = (start ? integratedLinkedLedger().filter(transaction => String(transaction.date) >= start) : []).filter(transaction => !isQaIntegratedFixture(transaction)); return [...manual, ...linked].sort(integratedTxOrder); }
 function isaCurrentMonthContribution(month = ledgerLocalYmd().slice(0, 7)) { return ledgerCentralIsaRows().filter(transaction => integratedMonthKey(transaction.date) === month).reduce((sum, transaction) => sum + (Number(transaction.amount) || 0), 0); }
 function integratedLedger() { return integratedOperationalLedger(); }
-function integratedBalanceLedger() { const start = String(integratedStore().startedAt || ''), manual = integratedManualLedger().filter(transaction => !isQaIntegratedFixture(transaction)), linked = (start ? integratedLinkedLedger().filter(transaction => String(transaction.date) >= start) : []).filter(transaction => !isQaIntegratedFixture(transaction)); return [...manual, ...linked].sort(integratedTxOrder); }
+function integratedBalanceLedger() { const start = String(integratedStore().startedAt || ''), manual = integratedManualLedger().filter(transaction => !isQaIntegratedFixture(transaction) && !transaction.meta?.cardHistoricalPurchase), linked = (start ? integratedLinkedLedger().filter(transaction => String(transaction.date) >= start) : []).filter(transaction => !isQaIntegratedFixture(transaction)); return [...manual, ...linked].sort(integratedTxOrder); }
 function integratedMonthKey(value) { return String(value || '').slice(0, 7); }
 function integratedLatestMonth() { const rows = integratedLedger().filter(transaction => !['openingAsset', 'openingLiability'].includes(transaction.type || '')); return rows.length ? integratedMonthKey(rows[rows.length - 1].date) : ledgerLocalYmd().slice(0, 7); }
 function integratedReplay(rows = null, store = integratedStore()) {
@@ -1541,6 +1541,10 @@ async function removeUnpaidCardInstallment(id) {
         toast('납부 기록이 있어 구매를 취소할 수 없습니다.');
         return false;
     }
+    if (cardV2(s)?.historyBaseline) {
+        toast('과거 명세서 연결은 일반 구매 취소로 삭제할 수 없습니다.');
+        return false;
+    }
     const before = clone(store), schedules = clone(state.financeSchedules);
     store.ledger = rows.filter(t => t.meta?.cardPlanId !== id);
     store.liabilities = store.liabilities.filter(x => x.id !== s.liabilityId);
@@ -1591,7 +1595,8 @@ async function saveCardAccount(input, id = '') {
 }
 function cardRows(s) { return integratedStore().ledger.filter(x => x.meta?.cardPlanId === s.id || x.liabilityId === s.liabilityId); }
 function cardRemaining(s, date = '9999-12-31') { const plan = cardV2(s); if (!plan)
-    return 0; return plan.purchaseAmount - cardRows(s).filter(x => String(x.date) <= date && ['debtPrincipal', 'externalDebtPrincipal'].includes(x.type || '')).reduce((n, x) => n + Number(x.amount || 0), 0); }
+    return 0; const baseline = plan.historyBaseline; if (baseline && date < baseline.asOf)
+    return 0; return (baseline?.remainingPrincipal ?? plan.purchaseAmount) - cardRows(s).filter(x => String(x.date) <= date && ['debtPrincipal', 'externalDebtPrincipal'].includes(x.type || '')).reduce((n, x) => n + Number(x.amount || 0), 0); }
 function cardOriginal(s) { return cardRows(s).find(x => x.meta?.cardPurchase === true); }
 function cardBillTotal(bill) { return bill.principal + bill.interest - bill.principalDiscount - bill.interestDiscount; }
 function cardBillPaid(plan, bill) { return !!bill.settledBy || plan.payments.some(p => p.billId === bill.id); }
@@ -1602,13 +1607,15 @@ function cardV2Terms(s, date) {
     const index = (Number(date.slice(0, 4)) - Number(p.firstPaymentDate.slice(0, 4))) * 12 + Number(date.slice(5, 7)) - Number(p.firstPaymentDate.slice(5, 7));
     const bill = p.bills.find(b => b.dueDate === date), payment = p.payments.find(x => x.billId === bill?.id);
     if (bill && (!bill.settledBy || payment))
-        return { index: index + 1, principal: bill.principal - bill.principalDiscount, interest: bill.interest - bill.interestDiscount, total: cardBillTotal(bill) };
+        return { index: p.historyBaseline?.statements.find(x => x.month === date.slice(0, 7))?.round ?? index + 1, principal: bill.principal - bill.principalDiscount, interest: bill.interest - bill.interestDiscount, total: cardBillTotal(bill) };
+    if (p.historyBaseline)
+        return null; // Historical imports expose confirmed bills only, never invented past dates or estimates.
     if (index < 0 || index >= p.months || cardRemaining(s, date) <= 0)
         return null;
     const base = Math.floor(p.purchaseAmount / p.months), principal = Math.min(cardRemaining(s, date), index === p.months - 1 ? p.purchaseAmount - base * (p.months - 1) : base), interest = p.interestMode === 'free' || p.interestMode === 'partial' && !p.paidInterestRounds.includes(index + 1) ? 0 : Math.round(Math.max(0, Math.min(p.purchaseAmount - base * index, cardRemaining(s, date))) * p.annualRate / 1200);
     return { index: index + 1, principal, interest, total: principal + interest };
 }
-function cardV2Summary(s, month) { const p = cardV2(s); const date = scheduleDateForMonth({ ...s, active: true }, month), terms = date ? cardV2Terms(s, date) : null, bill = p.bills.find(b => b.dueDate.slice(0, 7) === month), payment = bill ? p.payments.find(x => x.billId === bill.id) : undefined, remainingPrincipal = Math.max(0, cardRemaining(s)); return { purchaseAmount: p.purchaseAmount, remainingPrincipal, plannedAmount: terms?.total || 0, estimatedInterest: terms?.interest || 0, actualAmount: payment ? payment.cash + payment.pointsPrincipal + payment.pointsInterest : null, paidInstallments: p.bills.filter(b => cardBillPaid(p, b)).length, totalInstallments: p.months, completed: remainingPrincipal === 0 && p.bills.every(b => cardBillPaid(p, b)) }; }
+function cardV2Summary(s, month) { const p = cardV2(s); const history = p.historyBaseline?.statements.find(x => x.month === month), lastPaid = p.historyBaseline?.statements.filter(x => x.status === 'paid').at(-1); const date = scheduleDateForMonth({ ...s, active: true }, month), terms = date ? cardV2Terms(s, date) : null, bill = p.bills.find(b => b.dueDate.slice(0, 7) === month), payment = bill ? p.payments.find(x => x.billId === bill.id) : undefined, remainingPrincipal = Math.max(0, cardRemaining(s)); return { purchaseAmount: p.purchaseAmount, remainingPrincipal, plannedAmount: terms?.total ?? (history ? history.principal + history.interest : 0), estimatedInterest: terms?.interest || 0, actualAmount: payment ? payment.cash + payment.pointsPrincipal + payment.pointsInterest : history?.status === 'paid' ? history.principal + history.interest : null, paidInstallments: Math.min(p.months, (lastPaid?.round || 0) + p.bills.filter(b => cardBillPaid(p, b)).length), totalInstallments: p.months, completed: remainingPrincipal === 0 && p.bills.every(b => cardBillPaid(p, b)) }; }
 function cardPosting(s, date, type, amount, eventId, meta = {}, cashAccount = '') {
     return { id: uid('igl'), date, type, amount, liabilityId: s.liabilityId, category: String(cardV2(s)?.category || s.name), note: '카드 원장 연결', ...(cashAccount ? (type === 'refund' ? { toAccountId: cashAccount } : { fromAccountId: cashAccount }) : {}), meta: { cardPlanId: s.id, cardEventId: eventId, ...meta } };
 }
@@ -1651,9 +1658,66 @@ function cardPurchaseInput(input, existingCardId = '') {
 }
 async function createCardPurchase(input) { let key = ''; const ok = await cardCommit(() => { const { name, plan } = cardPurchaseInput(input), id = uid('card-plan'), liabilityId = uid('card-debt'), store = integratedStore(), s = { id, name, kind: 'loan', amount: 0, amountMode: 'estimate', day: Number(plan.firstPaymentDate.slice(8)), startDate: plan.firstPaymentDate, active: true, liabilityId, source: 'user', cardPlan: plan }; store.liabilities.push({ id: liabilityId, kind: 'other', name, cardPlanId: id }); store.ledger.push({ id: uid('igl'), date: plan.purchaseDate, type: 'openingLiability', amount: plan.purchaseAmount, liabilityId, category: plan.category, meta: { cardPlanId: id } }, { id: uid('igl'), date: plan.purchaseDate, type: 'externalExpense', amount: plan.purchaseAmount, category: plan.category, note: merchantLabel(plan, name), meta: { cardPlanId: id, cardPurchase: true, spendingItem: name, merchant: plan.merchant, cardId: plan.cardId } }); if (!state.financeSchedules)
     state.financeSchedules = { items: [] }; state.financeSchedules.items.push(normalizeFinanceSchedules({ items: [s] }).items[0]); key = id; }); return ok ? key : ''; }
+// Import is a confirmed balance observation, not a fabricated historical cash payment.
+function cardHistoryIssue(value, purchaseAmount, purchaseDate, months) {
+    const b = value, validDate = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && Number.isFinite(Date.parse(v + 'T00:00:00Z')) && new Date(v + 'T00:00:00Z').toISOString().slice(0, 10) === v, money = (v) => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0;
+    if (!b || !validDate(b.asOf) || b.asOf < purchaseDate || !money(b.remainingPrincipal) || b.remainingPrincipal > purchaseAmount || typeof b.sourceKey !== 'string' || !b.sourceKey || b.sourceKey.length > 160 || typeof b.includeSpending !== 'boolean' || !Array.isArray(b.statements) || !b.statements.length)
+        return '과거 카드 기준일·원금·출처를 확인해 주세요.';
+    let previous;
+    const seen = new Set();
+    let lastPaid, pending = 0;
+    for (const row of b.statements) {
+        if (!row || !/^\d{4}-(0[1-9]|1[0-2])$/.test(row.month) || seen.has(row.month) || previous && row.month <= previous.month || !Number.isInteger(row.round) || row.round < 1 || row.round > months || !money(row.principal) || row.principal > purchaseAmount || !money(row.interest) || !Number.isSafeInteger(row.principal + row.interest) || !money(row.remainingPrincipal) || row.remainingPrincipal > purchaseAmount || !['paid', 'scheduled'].includes(row.status) || typeof row.source !== 'string' || !row.source || row.source.length > 500 || row.paidDate && (!validDate(row.paidDate) || row.paidDate < purchaseDate || row.paidDate > b.asOf || row.status !== 'paid') || row.dueDate && (!validDate(row.dueDate) || row.dueDate.slice(0, 7) !== row.month || row.dueDate < purchaseDate))
+            return '과거 명세서 회차·금액·출처가 잘못되었습니다.';
+        if (previous && (previous.remainingPrincipal - row.principal !== row.remainingPrincipal || row.round <= previous.round))
+            return '과거 명세서의 원금과 다음 잔액이 일치하지 않습니다.';
+        if (row.status === 'paid') {
+            if (pending)
+                return '납부 확인 순서를 확인해 주세요.';
+            lastPaid = row;
+        }
+        else
+            pending += row.principal;
+        seen.add(row.month);
+        previous = row;
+    }
+    if (!lastPaid || lastPaid.remainingPrincipal !== b.remainingPrincipal || pending > b.remainingPrincipal)
+        return '납부 확인 잔액과 가져오기 기준 원금이 다릅니다.';
+    return '';
+}
+async function importCardHistory(input) {
+    let key = '';
+    const ok = await cardCommit(() => {
+        const { name, plan } = cardPurchaseInput(input), baseline = clone(input.historyBaseline), issue = cardHistoryIssue(baseline, plan.purchaseAmount, plan.purchaseDate, plan.months);
+        if (issue)
+            throw new Error(issue);
+        cardDate(baseline.asOf, true);
+        const existing = financeSchedules().find(x => cardV2(x)?.historyBaseline?.sourceKey === baseline.sourceKey);
+        if (existing) {
+            const old = cardV2(existing);
+            if (existing.name !== name || old.cardId !== plan.cardId || old.grossAmount !== plan.grossAmount || old.purchaseDiscount !== plan.purchaseDiscount || old.purchaseDate !== plan.purchaseDate || old.months !== plan.months || JSON.stringify(old.historyBaseline) !== JSON.stringify(baseline))
+                throw new Error('같은 출처의 가져오기 내용이 달라 자동으로 덮어쓰지 않았습니다.');
+            key = existing.id;
+            return;
+        }
+        plan.historyBaseline = baseline;
+        const id = uid('card-history'), liabilityId = uid('card-debt'), store = integratedStore(), schedule = { id, name, kind: 'loan', amount: 0, amountMode: 'estimate', day: Number(plan.firstPaymentDate.slice(8)), startDate: baseline.asOf, active: true, liabilityId, source: 'statement-history', cardPlan: plan };
+        store.liabilities.push({ id: liabilityId, kind: 'other', name, cardPlanId: id });
+        const rows = store.ledger;
+        if (baseline.remainingPrincipal)
+            rows.push({ id: uid('igl'), date: baseline.asOf, type: 'openingLiability', amount: baseline.remainingPrincipal, liabilityId, category: plan.category, note: '명세서로 확인한 과거 카드 잔여 원금', meta: { cardPlanId: id, cardHistoryBaseline: true } });
+        rows.push({ id: uid('igl'), date: plan.purchaseDate, type: 'externalExpense', amount: plan.purchaseAmount, category: plan.category, note: merchantLabel(plan, name), meta: { cardPlanId: id, cardPurchase: true, cardHistoricalPurchase: !baseline.includeSpending, spendingItem: name, merchant: plan.merchant, cardId: plan.cardId } });
+        if (!state.financeSchedules)
+            state.financeSchedules = { items: [] };
+        state.financeSchedules.items.push(normalizeFinanceSchedules({ items: [schedule] }).items[0]);
+        key = id;
+    });
+    return ok ? key : '';
+}
 function merchantLabel(plan, name) { return plan.merchant ? `${name} · ${plan.merchant}` : name; }
 async function updateCardPurchase(id, input) { return cardCommit(() => { const s = financeSchedules().find(x => x.id === id), old = s && cardV2(s); if (!s || !old)
-    throw new Error('구매 기록을 찾지 못했습니다.'); if (old.bills.length || old.payments.length || cardRows(s).some(x => x.meta?.cardEventId))
+    throw new Error('구매 기록을 찾지 못했습니다.'); if (old.historyBaseline)
+    throw new Error('과거 명세서 연결은 원본 대조를 거쳐 수정해 주세요.'); if (old.bills.length || old.payments.length || cardRows(s).some(x => x.meta?.cardEventId))
     throw new Error('청구·납부·환불 기록을 먼저 되돌린 뒤 구매를 수정해 주세요.'); const { name, plan } = cardPurchaseInput(input, old.cardId); s.name = name; s.cardPlan = plan; s.day = Number(plan.firstPaymentDate.slice(8)); s.startDate = plan.firstPaymentDate; for (const row of cardRows(s)) {
     row.date = plan.purchaseDate;
     row.amount = plan.purchaseAmount;
@@ -1670,6 +1734,8 @@ async function saveCardBill(id, input, billId = '') {
     let key = '';
     const ok = await cardCommit(() => {
         const { s, p } = requireCard(id), old = p.bills.find(b => b.id === billId);
+        if (p.historyBaseline?.statements.some(x => x.status === 'paid' && x.month === String(input.dueDate || '').slice(0, 7)))
+            throw new Error('이미 납부 확인된 과거 명세서는 다시 청구할 수 없습니다.');
         if (billId && !old)
             throw new Error('청구 기록을 찾지 못했습니다.');
         if (old && cardBillPaid(p, old))
@@ -1715,7 +1781,7 @@ async function recordCardPayment(id, input) {
     let key = '';
     const ok = await cardCommit(() => {
         const { s, p } = requireCard(id), date = cardDate(input.date, true), payoff = input.kind === 'payoff', bill = payoff ? null : p.bills.find(b => b.id === String(input.billId || ''));
-        if (date < p.purchaseDate || !payoff && !bill)
+        if (date < p.purchaseDate || p.historyBaseline && date < p.historyBaseline.asOf || !payoff && !bill)
             throw new Error('납부일과 청구 기록을 확인해 주세요.');
         if (bill && (cardBillPaid(p, bill) || date < bill.issuedDate))
             throw new Error('이미 납부했거나 명세서 확인일보다 이른 납부입니다.');
@@ -1790,8 +1856,17 @@ function cardLedgerDataIssue(data) {
             continue;
         if (!cardIds.has(String(p.cardId)) || !date(p.purchaseDate) || !date(p.firstPaymentDate) || String(p.firstPaymentDate) < String(p.purchaseDate) || !money(p.purchaseAmount) || !p.purchaseAmount || !money(p.grossAmount) || !money(p.purchaseDiscount) || Number(p.grossAmount) - Number(p.purchaseDiscount) !== p.purchaseAmount || !Number.isInteger(p.months) || Number(p.months) < 1 || Number(p.months) > 60 || !['free', 'paid', 'partial'].includes(String(p.interestMode)) || !Number.isFinite(p.annualRate) || Number(p.annualRate) < 0 || Number(p.annualRate) > 100 || !Array.isArray(p.paidInterestRounds) || p.paidInterestRounds.some(n => !Number.isInteger(n) || Number(n) < 1 || Number(n) > Number(p.months)) || !Array.isArray(p.bills) || !Array.isArray(p.payments))
             return '카드 구매 조건 또는 청구·납부 원장 형식이 잘못되었습니다.';
-        const linked = rows.filter(x => record(x.meta).cardPlanId === s.id), original = linked.filter(x => record(x.meta).cardPurchase === true), opening = linked.filter(x => x.type === 'openingLiability');
-        if (original.length !== 1 || opening.length !== 1 || original[0].amount !== p.purchaseAmount || opening[0].amount !== p.purchaseAmount || opening[0].liabilityId !== s.liabilityId)
+        const linked = rows.filter(x => record(x.meta).cardPlanId === s.id), original = linked.filter(x => record(x.meta).cardPurchase === true), opening = linked.filter(x => x.type === 'openingLiability'), baseline = p.historyBaseline;
+        if (baseline) {
+            const issue = cardHistoryIssue(baseline, Number(p.purchaseAmount), String(p.purchaseDate), Number(p.months));
+            if (issue)
+                return issue;
+            if (ids.has('history:' + baseline.sourceKey))
+                return '과거 카드 출처가 중복되었습니다.';
+            ids.add('history:' + baseline.sourceKey);
+        }
+        const openingAmount = baseline?.remainingPrincipal ?? p.purchaseAmount;
+        if (original.length !== 1 || original[0].amount !== p.purchaseAmount || opening.length !== (openingAmount ? 1 : 0) || openingAmount && (opening[0].amount !== openingAmount || opening[0].liabilityId !== s.liabilityId || baseline && opening[0].date !== baseline.asOf) || baseline && record(original[0].meta).cardHistoricalPurchase !== !baseline.includeSpending)
             return '카드 구매·원금 연결이 일치하지 않습니다.';
         const bills = p.bills.map(record), billIds = new Set(), months = new Set();
         let billedPrincipal = 0;
@@ -1812,7 +1887,7 @@ function cardLedgerDataIssue(data) {
         const paidBills = new Set(), paymentIds = new Set();
         for (const rawPayment of p.payments) {
             const pay = record(rawPayment), key = String(pay.id || ''), billId = String(pay.billId || '');
-            if (!key || ids.has(key) || !date(pay.date) || String(pay.date) < String(p.purchaseDate) || !['bill', 'payoff'].includes(String(pay.kind)) || ['principal', 'interest', 'pointsPrincipal', 'pointsInterest', 'cash'].some(k => !money(pay[k])) || Number(pay.pointsPrincipal) > Number(pay.principal) || Number(pay.pointsInterest) > Number(pay.interest) || pay.cash !== Number(pay.principal) + Number(pay.interest) - Number(pay.pointsPrincipal) - Number(pay.pointsInterest) || !Array.isArray(pay.rowIds) || !Number.isSafeInteger(Number(pay.principal) + Number(pay.interest)))
+            if (!key || ids.has(key) || !date(pay.date) || String(pay.date) < String(p.purchaseDate) || baseline && String(pay.date) < baseline.asOf || !['bill', 'payoff'].includes(String(pay.kind)) || ['principal', 'interest', 'pointsPrincipal', 'pointsInterest', 'cash'].some(k => !money(pay[k])) || Number(pay.pointsPrincipal) > Number(pay.principal) || Number(pay.pointsInterest) > Number(pay.interest) || pay.cash !== Number(pay.principal) + Number(pay.interest) - Number(pay.pointsPrincipal) - Number(pay.pointsInterest) || !Array.isArray(pay.rowIds) || !Number.isSafeInteger(Number(pay.principal) + Number(pay.interest)))
                 return '카드 납부 금액·날짜·ID가 잘못되었습니다.';
             ids.add(key);
             paymentIds.add(key);
