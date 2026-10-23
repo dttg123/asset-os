@@ -404,7 +404,7 @@ test('@core @release money balances survive settlement, malformed refresh, save 
  await page.reload();await expect(page.locator('.pension-asset-value')).toHaveText('500,000원');
  await page.evaluate(async ()=>{const at=new Date(Date.parse(brokerKisLatestBalance(state.brokerKis,'pension','money-flow').fetchedAt)+3000).toISOString(),result=(await window.__assetOS.brokerKis.importBalance({cash:0,cashDetail:{depositCash:0,settledCash:0,availableCash:0},securitiesValue:0,totalValue:0,holdings:[]},'pension','money-flow',at));if(!result.ok)throw Error('explicit zero rejected');nav('pension','assets')});
  expect(await page.evaluate(()=>({value:pensionAssetMetrics('pension').value,home:integratedFinancialModel().pension,history:state.pension.assetSnapshots.at(-1).pension.value,exposure:pensionAccountExposure('money-flow').hasAssets}))).toEqual({value:0,home:0,history:0,exposure:false});
- await page.reload();expect(await page.evaluate(()=>pensionAssetMetrics('pension').value)).toBe(0);expect(await page.evaluate(()=>state.pension.assetSnapshots.at(-1).pension.value)).toBe(0);
+ await page.reload();await page.waitForFunction(()=>!!window.__assetOS);expect(await page.evaluate(()=>pensionAssetMetrics('pension').value)).toBe(0);expect(await page.evaluate(()=>state.pension.assetSnapshots.at(-1).pension.value)).toBe(0);
  await expectNoHorizontalOverflow(page);expect(appErrors).toEqual([]);
 });
 
