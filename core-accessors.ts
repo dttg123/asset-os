@@ -17,7 +17,7 @@ const VIEW_PREFERENCE_KEYS=['selectedAccountId','integratedMonth','integratedMon
 function viewPreferenceValue(key:string,value:unknown):boolean{
  if(key==='pensionGoalExpanded')return typeof value==='boolean';
  if(typeof value!=='string'||value.length>256)return false;
- const choices:Record<string,string[]>={pensionAssetScope:['all','pension','irp'],spendingPeriod:['month','year'],spendingView:['categories','items'],policyTab:['isa','pension','irp','finance'],dividendPeriod:['month','year','recent'],integratedLedgerFilter:['all','income','expense','saving','debt']};
+ const choices:Record<string,string[]>={pensionAssetScope:['all','pension','irp'],spendingPeriod:['month','quarter','half','year','years'],spendingView:['categories','items'],policyTab:['isa','pension','irp','finance'],dividendPeriod:['month','year','recent'],integratedLedgerFilter:['all','income','expense','saving','debt']};
  if(choices[key])return choices[key].includes(value);
  if(key==='integratedMonth')return /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
  if(key==='integratedMonthViewedOn')return /^\d{4}-\d{2}-\d{2}$/.test(value);
