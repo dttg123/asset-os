@@ -39,7 +39,7 @@ test('integrated tabs and month selector are owned only by the page shell',()=>{
   const start=source.indexOf(`function ${child}`),end=source.indexOf('\nfunction ',start+10),body=source.slice(start,end<0?source.length:end);
   assert.doesNotMatch(body,/integratedTabs\(|integratedMonthBar\(/,`${child} must not duplicate shell controls`);
  }
- assert.match(source,/function integratedPage[\s\S]*tabs=integratedTabs\(safe\)[\s\S]*month=integratedMonthBar\(\)/);
+ assert.match(source,/function integratedPage[\s\S]*tabs=integratedTabs\(safe\)[\s\S]*month=integratedMonthBar\(safe==='spending'\)/);
 });
 
 test('spending adds one quick expense action and one optional monthly living budget',()=>{

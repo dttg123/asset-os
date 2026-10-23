@@ -51,7 +51,7 @@ assert.match(pensionForms,/previousCurrentPrice=h\?\.currentPrice/,'pension trad
 assert.match(pensionForms,/else if\(h\)h\.currentPrice=previousCurrentPrice/,'rejected pension trades must restore the prior quote');
 assert.match(pensionPages,/전체 완료 \$\{formatDateTime\(last\)\}/,'KIS completion time must be rendered in Asia\/Seoul');
 assert.doesNotMatch(pensionPages,/last\.slice\(11,16\)/,'UTC timestamps must not be sliced as Korean local time');
-assert.match(integratedPages,/month=integratedMonthBar\(\)/,'all integrated tabs must reserve the same month-control row');
+assert.match(integratedPages,/month=integratedMonthBar\(safe==='spending'\)/,'all integrated tabs must reserve the common month-control row, with period tools enabled for spending');
 assert.match(sharedCss,/\.integrated-overview-hero\{[^}]*min-height:166px/,'home and integrated overview heroes must share the same collapsed height');
 assert.match(sharedCss,/\.integrated-overview-hero:not\(\.open\)\{[^}]*justify-content:center/,'collapsed integrated overview content must be vertically centered');
 assert.match(sharedCss,/\.spending-hero\{[^}]*height:166px[^}]*min-height:166px/,'integrated spending hero must align with the overview hero');

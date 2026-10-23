@@ -5,7 +5,7 @@ const BROKER_KIS_PUBLIC_CONFIG = Object.freeze({ projectUrl: 'https://wjrzukoofs
 const QA_MODE = typeof location !== 'undefined' && /(?:^|[?&])qa=1(?:&|$)/.test(String(location.search || ''));
 const QA_STORAGE_KEY = 'asset-os-qa-v0.5', LIVE_STORAGE_KEY = 'asset-os-v1.9.45-live';
 const DEFAULT_FINANCE_DAY = 25;
-const APP_VERSION = 'v0.7.6', APP_ENV = QA_MODE ? 'qa' : 'live', SCHEMA_VERSION = 23, KEY = QA_MODE ? QA_STORAGE_KEY : LIVE_STORAGE_KEY, LEGACY_KEYS = ['asset-os-v1.9.22-central-schedule', 'asset-os-v1.9.20-real-finance', 'asset-os-v1.9.19-finance-linked', 'asset-os-v1.9.18-integrated-ui-refine', 'asset-os-v1.9.17-integrated-complete-stage1', 'asset-os-v1.9.16-integrated-ledger-stage2', 'asset-os-v1.9.9-pension-step2-analysis', 'asset-os-v1.9.7-pension-step2-precision', 'asset-os-v1.9.6-pension-step2-refine', 'asset-os-v1.9.5-pension-step2', 'asset-os-v1.9.4-pension-step1', 'asset-os-v1.9.3-pension-step1', 'asset-os-v1.9.2-isa-review', 'asset-os-v1.9.1-isa-review', 'asset-os-v1.9-isa-review', 'asset-os-v1.8-isa-review', 'asset-os-v1.7-isa-review', 'asset-os-v1.6.1-isa-review', 'asset-os-v1.6-isa-review', 'asset-os-v1.5-isa-review', 'asset-os-v1.4-isa-review', 'asset-os-v1.3-isa-review'];
+const APP_VERSION = 'v0.7.7', APP_ENV = QA_MODE ? 'qa' : 'live', SCHEMA_VERSION = 23, KEY = QA_MODE ? QA_STORAGE_KEY : LIVE_STORAGE_KEY, LEGACY_KEYS = ['asset-os-v1.9.22-central-schedule', 'asset-os-v1.9.20-real-finance', 'asset-os-v1.9.19-finance-linked', 'asset-os-v1.9.18-integrated-ui-refine', 'asset-os-v1.9.17-integrated-complete-stage1', 'asset-os-v1.9.16-integrated-ledger-stage2', 'asset-os-v1.9.9-pension-step2-analysis', 'asset-os-v1.9.7-pension-step2-precision', 'asset-os-v1.9.6-pension-step2-refine', 'asset-os-v1.9.5-pension-step2', 'asset-os-v1.9.4-pension-step1', 'asset-os-v1.9.3-pension-step1', 'asset-os-v1.9.2-isa-review', 'asset-os-v1.9.1-isa-review', 'asset-os-v1.9-isa-review', 'asset-os-v1.8-isa-review', 'asset-os-v1.7-isa-review', 'asset-os-v1.6.1-isa-review', 'asset-os-v1.6-isa-review', 'asset-os-v1.5-isa-review', 'asset-os-v1.4-isa-review', 'asset-os-v1.3-isa-review'];
 const nf = new Intl.NumberFormat('ko-KR');
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const INVESTMENT_ROLES = ['성장', '배당', '현금흐름', '안정', '현금'];
@@ -740,7 +740,7 @@ function normalizeIntegrated(input) {
     out.ledger = out.ledger.map((t, i) => { const date = String(t.date || ymd()); perDate[date] = (perDate[date] || 0) + 1; const sequence = Number.isFinite(Number(t.sequence)) ? Number(t.sequence) : perDate[date], createdAt = String(t.createdAt || `${date}T00:00:00.${String(Math.min(999, perDate[date])).padStart(3, '0')}`); return { ...t, id: String(t.id || `integrated-ledger-${i + 1}`), date, type: String(t.type || ''), amount: Number(t.amount) || 0, fixed: !!t.fixed, category: String(t.category || ''), note: String(t.note || ''), sourceModule: String(t.sourceModule || ''), sourceId: String(t.sourceId || ''), productId: String(t.productId || ''), sequence, createdAt, meta: t.meta && typeof t.meta === 'object' ? clone(t.meta) : {} }; });
     for (const link of base.accounts.filter(a => ['cash', 'isa', 'pension', 'irp'].includes(a.kind)))
         if (!out.accounts.some(a => a.id === link.id))
-            out.accounts.push(clone(link));
+            out.accounts.push({ ...clone(link), productId: String(link.productId || '') });
     return out;
 }
 ;
@@ -1209,12 +1209,12 @@ function financialGrowthSeries(period = '6m') {
 ;
 /* asset-os source: src/domain/integrated-spending.js */
 'use strict';
-const DEFAULT_SPENDING_CATEGORIES = ['식비', '게임·취미', '가전·전자', '용돈·선물', '쇼핑', '주거·관리', '통신', '교통·차량', '보험', '의료·건강', '기타'];
+const DEFAULT_SPENDING_CATEGORIES = ['식비', '게임·취미', '가전·전자', '용돈·선물', '쇼핑', '주거·관리', '통신', '교통·차량', '보험', '의료·건강', '미분류', '기타'];
 function spendingCategoryLabel(raw) { let name = String(raw || '기타').trim() || '기타'; const aliases = typeof setting === 'function' ? (setting().spendingCategoryAliases || {}) : {}, seen = new Set(); while (Object.hasOwn(aliases, name) && aliases[name] && !seen.has(name)) {
     seen.add(name);
     name = String(aliases[name]);
 } return name; }
-function spendingCategoryNames() { const settings = setting(), extra = Array.isArray(settings.spendingCategoryNames) ? settings.spendingCategoryNames : [], hidden = new Set(Array.isArray(settings.spendingCategoryHidden) ? settings.spendingCategoryHidden : []); return [...new Set([...DEFAULT_SPENDING_CATEGORIES.filter(x => !hidden.has(x)), ...extra, ...integratedLedger().filter(x => ['expense', 'externalExpense', 'refund'].includes(x.type)).map(x => spendingCategoryLabel(x.category))])].filter(Boolean); }
+function spendingCategoryNames() { const settings = setting(), extra = Array.isArray(settings.spendingCategoryNames) ? settings.spendingCategoryNames : [], hidden = new Set(Array.isArray(settings.spendingCategoryHidden) ? settings.spendingCategoryHidden : []); return [...new Set([...DEFAULT_SPENDING_CATEGORIES.filter(x => !hidden.has(x)), ...extra, ...Object.values((settings.spendingClassifications || {})).map(x => spendingCategoryLabel(x?.category)), ...integratedLedger().filter(x => ['expense', 'externalExpense', 'refund'].includes(x.type)).map(x => spendingCategoryLabel(x.category))])].filter(Boolean); }
 async function saveSpendingCategory(name, replacement) {
     const from = String(name || '').trim(), to = String(replacement || '').trim(), settings = setting(), keys = ['spendingCategoryNames', 'spendingCategoryHidden', 'spendingCategoryAliases'], before = keys.map(key => ({ key, present: Object.hasOwn(settings, key), value: settings[key] }));
     if (!to || to.length > 60 || ['__proto__', 'constructor', 'prototype'].includes(to) || from === to || !from && spendingCategoryNames().includes(to) || from && spendingCategoryLabel(to) === from) {
@@ -1236,9 +1236,36 @@ async function saveSpendingCategory(name, replacement) {
     }
     return true;
 }
+function spendingClassification(row) {
+    const settings = typeof setting === 'function' ? setting() : {}, map = settings.spendingClassifications, entry = map && typeof map === 'object' && !Array.isArray(map) && Object.hasOwn(map, String(row.id)) ? map[String(row.id)] : null, label = entry && typeof entry === 'object' ? entry : {};
+    const history = typeof financeSchedules === 'function' && financeSchedules().some(x => x.id === row.meta?.cardPlanId && x.source === 'statement-history'), merchant = String(row.meta?.merchant || '').trim(), fallback = history && row.category === '기타' ? (merchant === '조이시티' ? '게임·취미' : '미분류') : row.category;
+    return { category: spendingCategoryLabel(typeof label.category === 'string' && label.category ? label.category : fallback), item: typeof label.item === 'string' && label.item ? label.item : String(history && merchant ? merchant : row.meta?.spendingItem || row.meta?.merchant || row.category || '미분류') };
+}
+async function saveSpendingClassifications(ids, category, item) {
+    const source = typeof state !== 'undefined' && typeof integratedManualLedger === 'function' ? integratedManualLedger() : integratedLedger(), selected = [...new Set(ids)], name = String(item || '').trim(), group = String(category || '').trim(), settings = setting(), had = Object.hasOwn(settings, 'spendingClassifications'), before = settings.spendingClassifications;
+    if (!selected.length || !name || name.length > 100 || !group || group.length > 60 || selected.some(id => !source.some(row => row.id === id && ['expense', 'externalExpense'].includes(row.type)))) {
+        toast('분류할 구매 기록과 항목 이름을 확인해 주세요.');
+        return false;
+    }
+    const next = { ...(before && typeof before === 'object' && !Array.isArray(before) ? before : {}) };
+    for (const id of selected)
+        Object.defineProperty(next, id, { value: { category: group, item: name }, enumerable: true, configurable: true, writable: true });
+    settings.spendingClassifications = next;
+    try {
+        if (await persist(false))
+            return true;
+    }
+    catch { }
+    if (had)
+        settings.spendingClassifications = before;
+    else
+        delete settings.spendingClassifications;
+    toast('분류를 저장하지 못해 되돌렸어요.');
+    return false;
+}
 function integratedSpendingRows(month) {
-    const source = integratedLedger();
-    return source.filter(transaction => !transaction.meta?.cardInterestRefund && (/^\d{4}$/.test(month) ? String(transaction.date || '').startsWith(month + '-') : integratedMonthKey(transaction.date) === month) && ['expense', 'externalExpense', 'refund'].includes(transaction.type)).map(transaction => { const original = transaction.type === 'refund' ? source.find(x => x.id === transaction.meta?.refundOf) : transaction; return { ...transaction, category: spendingCategoryLabel(original?.category || transaction.category), meta: { ...original?.meta, ...transaction.meta, spendingItem: original?.meta?.spendingItem || original?.meta?.merchant || original?.category || transaction.category || '기타' }, amount: transaction.type === 'refund' ? -Number(transaction.amount) : transaction.amount }; });
+    const source = integratedLedger(), originals = typeof state !== 'undefined' && typeof integratedManualLedger === 'function' ? integratedManualLedger() : source;
+    return source.filter(transaction => !transaction.meta?.cardInterestRefund && (/^\d{4}$/.test(month) ? String(transaction.date || '').startsWith(month + '-') : integratedMonthKey(transaction.date) === month) && ['expense', 'externalExpense', 'refund'].includes(transaction.type)).map(transaction => { const original = transaction.type === 'refund' ? originals.find(x => x.id === transaction.meta?.refundOf) || transaction : transaction, label = spendingClassification(original); return { ...transaction, category: label.category, meta: { ...original.meta, ...transaction.meta, spendingItem: label.item }, amount: transaction.type === 'refund' ? -Number(transaction.amount) : transaction.amount }; });
 }
 function integratedSpendingMonthShift(month, delta) {
     const [year, value] = String(month).split('-').map(Number), date = new Date(year, value - 1 + delta, 1);
@@ -1658,7 +1685,7 @@ function cardPurchaseInput(input, existingCardId = '') {
         throw new Error('부분무이자의 이자 부담 회차를 확인해 주세요.');
     return { name, plan: { ledgerVersion: 2, purchaseDate, firstPaymentDate: first, purchaseAmount: gross - discount, grossAmount: gross, purchaseDiscount: discount, months, annualRate: mode === 'free' ? 0 : rate, interestMode: mode, cardId, category, merchant, paidInterestRounds, bills: [], payments: [] } };
 }
-async function createCardPurchase(input) { let key = ''; const ok = await cardCommit(() => { const { name, plan } = cardPurchaseInput(input), id = uid('card-plan'), liabilityId = uid('card-debt'), store = integratedStore(), s = { id, name, kind: 'loan', amount: 0, amountMode: 'estimate', day: Number(plan.firstPaymentDate.slice(8)), startDate: plan.firstPaymentDate, active: true, liabilityId, source: 'user', cardPlan: plan }; store.liabilities.push({ id: liabilityId, kind: 'other', name, cardPlanId: id }); store.ledger.push({ id: uid('igl'), date: plan.purchaseDate, type: 'openingLiability', amount: plan.purchaseAmount, liabilityId, category: plan.category, meta: { cardPlanId: id } }, { id: uid('igl'), date: plan.purchaseDate, type: 'externalExpense', amount: plan.purchaseAmount, category: plan.category, note: merchantLabel(plan, name), meta: { cardPlanId: id, cardPurchase: true, spendingItem: name, merchant: plan.merchant, cardId: plan.cardId } }); if (!state.financeSchedules)
+async function createCardPurchase(input) { let key = ''; const ok = await cardCommit(() => { const { name, plan } = cardPurchaseInput(input), id = uid('card-plan'), liabilityId = uid('card-debt'), store = integratedStore(), s = { id, name, kind: 'loan', amount: 0, amountMode: 'estimate', day: Number(plan.firstPaymentDate.slice(8)), startDate: plan.firstPaymentDate, active: true, liabilityId, source: 'user', cardPlan: plan }; store.liabilities.push({ id: liabilityId, kind: 'other', name, cardPlanId: id, productId: '' }); store.ledger.push({ id: uid('igl'), date: plan.purchaseDate, type: 'openingLiability', amount: plan.purchaseAmount, liabilityId, category: plan.category, meta: { cardPlanId: id } }, { id: uid('igl'), date: plan.purchaseDate, type: 'externalExpense', amount: plan.purchaseAmount, category: plan.category, note: merchantLabel(plan, name), meta: { cardPlanId: id, cardPurchase: true, spendingItem: name, merchant: plan.merchant, cardId: plan.cardId } }); if (!state.financeSchedules)
     state.financeSchedules = { items: [] }; state.financeSchedules.items.push(normalizeFinanceSchedules({ items: [s] }).items[0]); key = id; }); return ok ? key : ''; }
 // Import is a confirmed balance observation, not a fabricated historical cash payment.
 function cardHistoryIssue(value, purchaseAmount, purchaseDate, months) {
@@ -1704,7 +1731,7 @@ async function importCardHistory(input) {
         }
         plan.historyBaseline = baseline;
         const id = uid('card-history'), liabilityId = uid('card-debt'), store = integratedStore(), schedule = { id, name, kind: 'loan', amount: 0, amountMode: 'estimate', day: Number(plan.firstPaymentDate.slice(8)), startDate: baseline.asOf, active: true, liabilityId, source: 'statement-history', cardPlan: plan };
-        store.liabilities.push({ id: liabilityId, kind: 'other', name, cardPlanId: id });
+        store.liabilities.push({ id: liabilityId, kind: 'other', name, cardPlanId: id, productId: '' });
         const rows = store.ledger;
         if (baseline.remainingPrincipal)
             rows.push({ id: uid('igl'), date: baseline.asOf, type: 'openingLiability', amount: baseline.remainingPrincipal, liabilityId, category: plan.category, note: '명세서로 확인한 과거 카드 잔여 원금', meta: { cardPlanId: id, cardHistoryBaseline: true } });

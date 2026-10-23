@@ -32,6 +32,6 @@ function normalizeIntegrated(input:unknown):IntegratedStoreShape{
  out.accounts=out.accounts.map((a,i)=>({...a,id:String(a.id||`integrated-account-${i+1}`),kind:allowedKinds.has(a.kind)?a.kind:'other',name:String(a.name||`자산 ${i+1}`),productId:String(a.productId||'')}));
  out.liabilities=out.liabilities.map((x,i)=>({...x,id:String(x.id||`integrated-liability-${i+1}`),kind:x.kind==='loan'?'loan':'other',name:String(x.name||`부채 ${i+1}`),productId:String(x.productId||'')}));
  const perDate:Record<string,number>={};out.ledger=out.ledger.map((t,i)=>{const date=String(t.date||ymd());perDate[date]=(perDate[date]||0)+1;const sequence=Number.isFinite(Number(t.sequence))?Number(t.sequence):perDate[date],createdAt=String(t.createdAt||`${date}T00:00:00.${String(Math.min(999,perDate[date])).padStart(3,'0')}`);return{...t,id:String(t.id||`integrated-ledger-${i+1}`),date,type:String(t.type||''),amount:Number(t.amount)||0,fixed:!!t.fixed,category:String(t.category||''),note:String(t.note||''),sourceModule:String(t.sourceModule||''),sourceId:String(t.sourceId||''),productId:String(t.productId||''),sequence,createdAt,meta:t.meta&&typeof t.meta==='object'?clone(t.meta):{}}});
- for(const link of base.accounts.filter(a=>['cash','isa','pension','irp'].includes(a.kind)))if(!out.accounts.some(a=>a.id===link.id))out.accounts.push(clone(link));
+ for(const link of base.accounts.filter(a=>['cash','isa','pension','irp'].includes(a.kind)))if(!out.accounts.some(a=>a.id===link.id))out.accounts.push({...clone(link),productId:String(link.productId||'')});
  return out
 }
