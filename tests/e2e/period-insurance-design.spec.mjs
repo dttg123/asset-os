@@ -4,7 +4,7 @@ test.beforeEach(async({page})=>{if(process.env.ASSET_OS_QA_SDK_PATH){const body=
 test('@core selected months and insurance payment status stay explicit without changing money',async({page},info)=>{
  await page.goto('/index.html?qa=1#/home');await page.waitForFunction(()=>!!window.__assetOS);
  await page.evaluate(async ()=>{
-  const next=window.__assetOS.getState();next.settings.integratedMonth='2026-02';
+  const next=window.__assetOS.getState();next.settings.integratedMonth='2026-02';next.settings.spendingPeriod='month';
   next.insurance={policies:[
    {id:'paid',name:'납입을 마친 긴 이름의 테스트 보험 계약',company:'테스트',status:'active',paymentStyle:'monthly',premium:13124,contractDate:'2025-01-01',paymentEndDate:'2025-12-31',coverages:[]},
    {id:'paying',name:'현재 월납 보험',status:'active',paymentStyle:'monthly',premium:10000,contractDate:'2025-01-01',paymentEndDate:'2099-12-31',coverages:[]},
