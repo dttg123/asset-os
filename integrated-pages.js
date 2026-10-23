@@ -161,8 +161,8 @@ function openCardPlanDetail(id) {
     $$('#sheetBody [data-fixed-cost-item]').forEach(b => b.onclick = async () => (await openScheduleDay(b.dataset.fixedCostDate || '', b.dataset.fixedCostItem || '')));
 }
 function integratedConsumptionPreview(month) {
-    const x = integratedSpendingAnalysis(month), max = Math.max(1, ...x.trend.map(row => row.amount));
-    return `<section class="card integrated-consumption-preview"><div class="integrated-consumption-head"><h2>${escapeHtml(integratedMonthLabel(month))} 소비</h2><button data-integrated-tab-go="spending">자세히 ›</button></div><div class="integrated-consumption-value">${won(x.total)}</div><div class="spending-trend">${x.trend.map(row => `<button data-spending-month="${escapeHtml(row.month)}" data-spending-detail="month"><span class="spending-bar"><i style="height:${row.amount ? Math.max(8, row.amount / max * 100) : 2}%"></i></span><strong>${escapeHtml(row.label)}</strong><small>${row.amount ? displayWon(row.amount) : '0원'}</small></button>`).join('')}</div><small>카드 원금 납부는 소비에 다시 더하지 않아요.</small></section>`;
+    const x = integratedSpendingAnalysis(month);
+    return `<section class="card integrated-consumption-preview"><div class="integrated-consumption-head"><h2>${escapeHtml(integratedMonthLabel(month))} 소비</h2><button data-integrated-tab-go="spending">자세히 ›</button></div><div class="integrated-consumption-value">${won(x.total)}</div>${spendingTrendMarkup(x)}<small>카드 원금 납부는 소비에 다시 더하지 않아요.</small></section>`;
 }
 function openScheduleAmountForm(id, date, actual = false) {
     const s = financeSchedules().find(x => x.id === id), o = scheduleOccurrences(date.slice(0, 7)).find(x => x.schedule.id === id && x.date === date);

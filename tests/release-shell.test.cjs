@@ -14,7 +14,7 @@ test('current release views and export assets are shipped in the PWA shell',()=>
  assert.ok(bundles.scripts['asset-core.js'].includes('export-csv.js'));
  assert.ok(bundles.scripts['asset-ui.js'].includes('release-v069.js'));
  assert.ok(bundles.styles['asset-os.css'].includes('css-release-v069.css'));
- for(const text of ['이번 달 자금 계획','순금융자산','현금성 자산','투자자산','대출·부채','대출·이자','생활 고정비','가용 현금','월별 납입 내역 정리','분석파일 만들기'])assert.match(release,new RegExp(text));
+ for(const text of ['이번 달 자금 계획','순금융자산','현금성 자산','투자자산','대출·부채','대출·이자','생활 고정비','현금 증감','월별 납입 내역 정리','분석파일 만들기'])assert.match(release,new RegExp(text));
  assert.match(release,/Math\.min\(20,Number\(remaining\)/);
  const releaseCss=read('css-release-v069.css');
  assert.match(releaseCss,/pension-future-chart\{height:192px!important\}/);

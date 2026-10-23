@@ -138,10 +138,11 @@ integratedSummaryPage=function(){
   if(body){body.innerHTML=pending.length?v069ScheduleGroups(pending,'summary'):'<div class="integrated-empty">선택한 달의 금융 일정은 모두 처리했습니다.</div>';body.insertAdjacentHTML('beforebegin',`<div class="fixed-cost-preview">${pending.slice(0,3).map(o=>`<button class="schedule-row" data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"><span class="schedule-copy"><strong>${escapeHtml(o.schedule.name)}</strong><small>${escapeHtml(o.date)}</small></span><strong class="schedule-amount">${won(scheduleOccurrenceDisplayAmount(o))}</strong></button>`).join('')}<button class="diagnostic-action" data-integrated-tab-go="schedule">일정 전체 보기 ›</button></div>`)}
   schedule.insertAdjacentHTML('afterend',integratedConsumptionPreview(month));
  }
- const overview=template.content.querySelector('.integrated-overview-hero'),guard=template.content.querySelector('[data-integrated-assets-guard]'),source=[...template.content.children].find(e=>e.classList.contains('source-note')),cashflow=template.content.querySelector('.integrated-month-mini');
- if(overview&&cashflow){cashflow.before(overview);if(guard)overview.after(guard);if(source)(guard||overview).after(source)}
+ template.content.querySelector('.integrated-overview-hero')?.remove();template.content.querySelector('[data-integrated-assets-guard]')?.remove();
+ for(const note of template.content.querySelectorAll('.source-note'))if(note.textContent==='입력된 계좌만 합산했습니다. 금액이 없는 계좌는 제외됩니다.')note.remove();
+ const monthly=template.content.querySelector('.integrated-month-mini'),entry=template.content.querySelector('.household-quick');if(monthly&&entry)entry.before(monthly);
  const monthHead=template.content.querySelector('.integrated-month-mini-head');if(monthHead){const strong=monthHead.querySelector('strong'),small=monthHead.querySelector('small');if(strong)strong.textContent=`${integratedMonthLabel(month)} 현금흐름`;small?.remove()}
- const cashLabel=template.content.querySelector('.integrated-month-mini-item.left span');if(cashLabel)cashLabel.textContent='가용 현금';const recent=template.content.querySelectorAll('.integrated-recent .integrated-ledger-row');[...recent].slice(3).forEach(x=>x.remove());return template.innerHTML;
+ const cashLabel=template.content.querySelector('.integrated-month-mini-item.left span');if(cashLabel)cashLabel.textContent='현금 증감';const recent=template.content.querySelectorAll('.integrated-recent .integrated-ledger-row');[...recent].slice(3).forEach(x=>x.remove());return template.innerHTML;
 };
 const v069MonthDetail=openIntegratedMonthDetail;
 openIntegratedMonthDetail=function(month){v069MonthDetail(month);if($('#sheetEyebrow'))$('#sheetEyebrow').textContent='통합 · 현금흐름';if($('#sheetTitle'))$('#sheetTitle').textContent=`${integratedMonthLabel(month||integratedSelectedMonth())} 현금흐름`;const label=$('#sheetBody .integrated-month-cash span');if(label)label.textContent='가용 현금'};
