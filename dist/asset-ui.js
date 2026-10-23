@@ -3882,14 +3882,14 @@ function bindSpendingReview() {
     $$('[data-spending-select]').forEach(b => b.onclick = () => { const chart = b.closest('.spending-chart'); if (!chart)
         return; if (chart.hasAttribute('data-spending-linked')) {
         spendingFocus = { context: spendingViewContext(), period: b.dataset.spendingSelect || spendingPeriodKey() };
-        render();
+        renderKeepingScroll();
         return;
     } chart.querySelectorAll('[data-spending-select]').forEach(x => { const active = x === b; x.setAttribute('aria-pressed', String(active)); x.querySelector('i')?.classList.toggle('current', active); }); chart.querySelector('[data-spending-selected-label]').textContent = spendingPeriodLabel(b.dataset.spendingSelect || '') + ' 순소비'; chart.querySelector('[data-spending-selected-amount]').textContent = won(Number(b.dataset.spendingAmount)); chart.querySelector('[data-spending-selected-detail]').dataset.spendingSelectedDetail = b.dataset.spendingSelect; });
     $$('[data-spending-selected-detail]').forEach(b => b.onclick = () => { const period = b.dataset.spendingSelectedDetail || spendingPeriodKey(), item = b.dataset.spendingSelectedItem; if (item)
         openSpendingItemDetail(item, period, 'transactions');
     else
         openIntegratedSpendingDetail('all', '', period); });
-    $$('[data-spending-range-reset]').forEach(b => b.onclick = () => { spendingFocus = null; render(); });
+    $$('[data-spending-range-reset]').forEach(b => b.onclick = () => { spendingFocus = null; renderKeepingScroll(); });
     $$('[data-spending-group]').forEach(b => b.onclick = () => { const period = b.dataset.spendingGroupPeriod || spendingFocusedPeriod(), key = b.dataset.spendingGroup || '', scope = b.dataset.spendingGroupScope, rows = integratedSpendingAnalysis(period).rows.filter(row => row.category === key && (scope === 'fixed' ? row.fixed : scope === 'variable' ? !row.fixed : true)); $('#sheetTitle').textContent = spendingPeriodLabel(period) + ' ' + key; $('#sheetBody').innerHTML = `<div class="spending-group-total"><span>${rows.length}건 · 순소비</span><strong>${won(rows.reduce((n, r) => n + Number(r.amount || 0), 0))}</strong></div>` + spendingTransactionRows(rows); bindSpendingReview(); });
     $$('[data-spending-more]').forEach(b => b.onclick = () => { const list = b.closest('.spending-transactions'); if (list) {
         list.outerHTML = spendingTransactionRows(spendingListRows, Number(b.dataset.spendingMore));
