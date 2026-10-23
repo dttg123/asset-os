@@ -41,7 +41,32 @@ async function saveSpendingClassifications(ids:string[],category:string,item:str
 }
 
 function integratedSpendingRows(month:string):IntegratedSpendingRow[]{
- const source=integratedLedger(),originals=typeof state!=='undefined'&&typeof integratedManualLedger==='function'?integratedManualLedger():source;return source.filter(transaction=>!transaction.meta?.cardInterestRefund&&(/^\d{4}$/.test(month)?String(transaction.date||'').startsWith(month+'-'):integratedMonthKey(transaction.date)===month)&&['expense','externalExpense','refund'].includes(transaction.type)).map(transaction=>{const original=transaction.type==='refund'?originals.find(x=>x.id===transaction.meta?.refundOf)||transaction:transaction,label=spendingClassification(original);return{...transaction,category:label.category,meta:{...original.meta,...transaction.meta,spendingItem:label.item},amount:transaction.type==='refund'?-Number(transaction.amount):transaction.amount}})
+ const range=spendingRange(month);
+ const source=integratedLedger(),originals=typeof state!=='undefined'&&typeof integratedManualLedger==='function'?integratedManualLedger():source;return source.filter(transaction=>!transaction.meta?.cardInterestRefund&&String(transaction.date||'')>=range.start&&String(transaction.date||'')<range.end&&['expense','externalExpense','refund'].includes(transaction.type)).map(transaction=>{const original=transaction.type==='refund'?originals.find(x=>x.id===transaction.meta?.refundOf)||transaction:transaction,label=spendingClassification(original);return{...transaction,category:label.category,fixed:!!original.fixed,meta:{...original.meta,...transaction.meta,spendingItem:label.item},amount:transaction.type==='refund'?-Number(transaction.amount):transaction.amount}})
+}
+
+function spendingRange(period:string):{start:string;end:string;months:number}{
+ const match=/^(\d{4})(?:-(\d{2})|-([QH])([1-4]))?$/.exec(period);
+ if(!match)throw new Error('지원하지 않는 소비 기간입니다.');
+ const year=Number(match[1]),months=match[3]==='Q'?3:match[3]==='H'?6:match[2]?1:12,index=Number(match[4]||1),month=match[2]?Number(match[2]):(index-1)*months+1;
+ if(month<1||month>12)throw new Error('소비 기간을 확인해 주세요.');
+ const start=`${year}-${String(month).padStart(2,'0')}`;
+ return{start:start+'-01',end:integratedSpendingMonthShift(start,months)+'-01',months};
+}
+function spendingRangeKey(anchor:string,mode:string):string{
+ const year=anchor.slice(0,4),month=Number(anchor.slice(5,7));
+ return mode==='quarter'?`${year}-Q${Math.ceil(month/3)}`:mode==='half'?`${year}-H${Math.ceil(month/6)}`:['year','years'].includes(mode)?year:anchor;
+}
+function spendingRangeLabel(period:string):string{
+ const match=/^(\d{4})-([QH])(\d)$/.exec(period);
+ return match?`${match[1]}년 ${match[2]==='Q'?match[3]+'분기':match[3]==='1'?'상반기':'하반기'}`:period.length===4?period+'년':`${period.slice(0,4)}년 ${Number(period.slice(5))}월`;
+}
+function integratedSpendingView(anchor:string,mode='half'){
+ const key=spendingRangeKey(anchor,mode),analysis=integratedSpendingAnalysis(key),range=spendingRange(key),start=range.start.slice(0,7),trend=[];
+ if(mode==='month')return analysis;
+ if(mode==='years')return{...analysis,trend:analysis.trend};
+ for(let i=0;i<range.months;i++){const month=integratedSpendingMonthShift(start,i);trend.push({month,label:`${Number(month.slice(5))}월`,amount:integratedSpendingAnalysis(month).total})}
+ return{...analysis,trend};
 }
 
 function integratedSpendingMonthShift(month:string,delta:number):string{
@@ -52,8 +77,8 @@ function integratedSpendingMonthShift(month:string,delta:number):string{
 function integratedSpendingAnalysis(month:string=integratedLatestMonth()){
  const rows=integratedSpendingRows(month),amount=(list:IntegratedSpendingRow[])=>list.reduce((sum,row)=>sum+(Number(row.amount)||0),0),fixedRows=rows.filter(row=>row.fixed),variableRows=rows.filter(row=>!row.fixed),categories=new Map<string,IntegratedSpendingCategory>();
  for(const row of rows){const key=String(row.category||'기타').trim()||'기타',entry=categories.get(key)||{key,amount:0,count:0};entry.amount+=Number(row.amount)||0;entry.count++;categories.set(key,entry)}
- const yearly=/^\d{4}$/.test(month),total=amount(rows),previousMonth=yearly?String(Number(month)-1):integratedSpendingMonthShift(month,-1),previousTotal=amount(integratedSpendingRows(previousMonth)),change=total-previousTotal,changeRate=previousTotal?change/previousTotal*100:null,trend=[],items=new Map<string,{key:string;amount:number;count:number;category:string}>();
+ const yearly=/^\d{4}$/.test(month),range=spendingRange(month),rangeKind=month.includes('-Q')?'quarter':month.includes('-H')?'half':'month',total=amount(rows),previousMonth=yearly?String(Number(month)-1):spendingRangeKey(integratedSpendingMonthShift(range.start.slice(0,7),-range.months),rangeKind),previousTotal=amount(integratedSpendingRows(previousMonth)),change=total-previousTotal,changeRate=previousTotal?change/previousTotal*100:null,trend=[],items=new Map<string,{key:string;amount:number;count:number;category:string}>();
  for(const row of rows){const key=String(row.meta?.spendingItem||row.category||'기타'),item=items.get(key)||{key,amount:0,count:0,category:row.category||'기타'};item.amount+=Number(row.amount)||0;item.count++;items.set(key,item)}
- for(let offset=-5;offset<=0;offset++){const key=yearly?String(Number(month)+offset):integratedSpendingMonthShift(month,offset),value=amount(integratedSpendingRows(key));trend.push({month:key,label:yearly?`${key}년`:`${Number(key.slice(5))}월`,amount:value})}
+ for(let offset=-5;offset<=0;offset++){const key=yearly?String(Number(month)+offset):spendingRangeKey(integratedSpendingMonthShift(range.start.slice(0,7),offset*range.months),rangeKind),value=amount(integratedSpendingRows(key));trend.push({month:key,label:yearly?`${key}년`:range.months>1?spendingRangeLabel(key):`${key.slice(2,4)}.${key.slice(5)}`,amount:value})}
  return{month,rows,total,fixed:amount(fixedRows),variable:amount(variableRows),fixedRows,variableRows,categories:[...categories.values()].sort((left,right)=>right.amount-left.amount||left.key.localeCompare(right.key,'ko')),items:[...items.values()].sort((left,right)=>right.amount-left.amount||left.key.localeCompare(right.key,'ko')),previousMonth,previousTotal,change,changeRate,trend}
 }
