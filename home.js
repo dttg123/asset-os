@@ -1,3 +1,4 @@
+"use strict";
 'use strict';
 function route() { const p = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean); return { root: p[0] || 'home', tab: p[1] || 'summary' }; }
 function resetTransientPanels() { pensionMonthsExpanded = false; integratedAssetsExpanded = false; integratedFixedCostsExpanded = false; dividendAnalysisExpanded = false; pensionIncomeAnalysisExpanded = false; pensionAssetAnalysisExpanded = false; dividendDisplayLimit = 50; pensionIncomeAnalysisMode = 'month'; pensionIncomeSelectedPoint = ''; pensionAnalysisMode = 'trend'; pensionAnalysisPeriod = '1y'; pensionAnalysisSelectedKey = ''; }
@@ -81,9 +82,9 @@ function bindIntegrityActions() {
     } if (account && isPastAccount(account)) {
         openArchivedAccountDetail(accountId);
         return;
-    } setting().selectedAccountId = accountId; (await persist()); closeSheets(); nav('isa', 'transactions'); });
+    } setting().selectedAccountId = accountId; rememberViewPreferences(); closeSheets(); nav('isa', 'transactions'); });
     $$('[data-maturity-alert]').forEach(b => b.onclick = async () => { const accountId = b.dataset.maturityAlert; if (!accountId)
-        return; setting().selectedAccountId = accountId; (await persist()); closeSheets(); nav('isa', 'tax'); });
+        return; setting().selectedAccountId = accountId; rememberViewPreferences(); closeSheets(); nav('isa', 'tax'); });
     $$('[data-finance-alert]').forEach(b => b.onclick = () => { const id = b.dataset.financeAlert; if (id)
         openFinancialProductDetail(id); });
     $$('[data-system-alert]').forEach(b => b.onclick = () => { closeSheets(); nav('integrated', 'summary'); });

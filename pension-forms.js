@@ -1,3 +1,4 @@
+"use strict";
 'use strict';
 function pensionTransactionSearchText(t) { const h = t.holdingId ? (pensionStore().holdings.find(x => x.id === t.holdingId) || pensionHoldingById(t.holdingId)) : null, a = t.accountId ? pensionAccount(t.accountId) : null, accountKind = t.accountKind === 'irp' ? 'IRP' : t.accountKind === 'pension' ? '연금저축' : t.accountKind; return transactionSearchKey([t.date, t.baseDate, t.time, t.type, t.incomeCategory, t.incomeType, pensionTradeLabel(t.type), t.productCode, t.productName, t.label, t.note, accountKind, a?.name, h?.name, t.amount, t.grossAmount, t.tax, t.qty, t.price]); }
 function pensionTransactionRowMarkup(t) {
@@ -68,7 +69,7 @@ function openPensionAccountManager() {
     openSheet('#detailSheet');
     $$('[data-new-pension-account]').forEach(b => b.onclick = () => openPensionAccountForm(b.dataset.newPensionAccount));
     $$('[data-pension-account-trade]').forEach(b => b.onclick = async () => { const a = pensionAccount(b.dataset.pensionAccountTrade); if (!a || a.status !== 'active')
-        return toast('운영 중인 계좌에서만 거래를 입력할 수 있습니다.'); setting().pensionAssetScope = a.kind; (await persist(false)); openPensionTradeForm('', 'assets', a.id || ''); });
+        return toast('운영 중인 계좌에서만 거래를 입력할 수 있습니다.'); setting().pensionAssetScope = a.kind; rememberViewPreferences(); openPensionTradeForm('', 'assets', a.id || ''); });
     $$('[data-pension-account-archive]').forEach(b => b.onclick = () => showDialog({ title: '이 계좌를 보관할까요?', message: '계좌는 삭제되지 않고 과거 기록으로 남습니다. 보유종목과 계좌 현금이 0이어야 합니다.', confirmText: '보관', cancelText: '취소' }, async () => { const r = archivePensionAccount(b.dataset.pensionAccountArchive || ''); if (!r.ok)
         return toast(r.error); if (!(await persist()))
         return; closeSheets(); render(); setTimeout(openPensionAccountManager, 70); toast('계좌를 보관으로 전환했습니다.'); }));

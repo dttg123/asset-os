@@ -1,3 +1,4 @@
+"use strict";
 'use strict';
 const CARD_ISSUER_TEMPLATES = ['국민카드', '삼성카드', '현대카드', '신한카드', '하나카드', '롯데카드', '우리카드', 'NH농협카드', '기타 카드'];
 const SETTINGS_GROUPS = [{ key: 'assets', title: '자산·연동', icon: '☁', hint: 'Google·클라우드 · 한국투자 연결', actions: ['cloud-auth', 'kis'] }, { key: 'finance', title: '금융 관리', icon: '▣', hint: '카드·할부 · 보험 · 납부 일정', actions: ['cards', 'card-ledger', 'insurance', 'schedule', 'categories', 'products'] }, { key: 'invest', title: '투자·연금', icon: '↗', hint: 'ISA · 연금저축 · IRP · AI 전략', actions: ['policies', 'pension-settings', 'ai-strategy'] }, { key: 'data', title: '앱 설정·데이터 관리', icon: '⚙', hint: '화면·테마 · 백업·복원 · 시스템 진단', actions: ['appearance', 'backup', 'advanced'] }];
@@ -286,9 +287,9 @@ function openSpendingClassification(ids, period, cardId = '') {
     } });
 }
 function bindSpendingReview() {
-    $$('[data-spending-period]').forEach(b => b.onclick = async () => { setting().spendingPeriod = b.dataset.spendingPeriod; await persist(false); render(); });
-    $$('[data-spending-view]').forEach(b => b.onclick = async () => { setting().spendingView = b.dataset.spendingView; setting().spendingCategoryFilter = ''; await persist(false); render(); });
-    $$('[data-spending-category-filter]').forEach(b => b.onclick = async () => { setting().spendingView = 'items'; setting().spendingCategoryFilter = b.dataset.spendingCategoryFilter || ''; await persist(false); render(); });
+    $$('[data-spending-period]').forEach(b => b.onclick = async () => { setting().spendingPeriod = b.dataset.spendingPeriod; rememberViewPreferences(); render(); });
+    $$('[data-spending-view]').forEach(b => b.onclick = async () => { setting().spendingView = b.dataset.spendingView; setting().spendingCategoryFilter = ''; rememberViewPreferences(); render(); });
+    $$('[data-spending-category-filter]').forEach(b => b.onclick = async () => { setting().spendingView = 'items'; setting().spendingCategoryFilter = b.dataset.spendingCategoryFilter || ''; rememberViewPreferences(); render(); });
     $$('[data-spending-item]').forEach(b => b.onclick = () => openSpendingItemDetail(b.dataset.spendingItem || ''));
     $$('[data-spending-category-manage]').forEach(b => b.onclick = () => openSpendingCategoryManagement());
     $$('[data-spending-transaction]').forEach(b => b.onclick = () => openIntegratedTransactionDetail(b.dataset.spendingTransaction || ''));

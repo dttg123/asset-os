@@ -76,7 +76,8 @@ test('@core visual polish preserves navigation and money with motion enabled or 
  await page.emulateMedia({reducedMotion:'no-preference'});
  await page.getByRole('navigation',{name:'주요 메뉴'}).getByRole('button',{name:'ISA',exact:true}).click();
  await expect(page.locator('header h1')).toHaveText('ISA');
- await expect(page.locator('#main>.stack,#main>.module-page-shell').first()).toHaveCSS('animation-name','pageReveal');
+ // Re-rendering a page must not replay a fade after every selection.
+ await expect(page.locator('#main>.stack,#main>.module-page-shell').first()).toHaveCSS('animation-name','none');
  expect(await page.evaluate(()=>({ledger:JSON.stringify(state.integrated.ledger),net:integratedFinancialModel().netAssets}))).toEqual(before);
  expect(errors).toEqual([]);
 });
