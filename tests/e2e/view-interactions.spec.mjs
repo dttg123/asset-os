@@ -54,6 +54,8 @@ test('@core navigation and analysis keep stable content and accessible focus wit
 
 test('@core repeated chart touches and sheet back preserve the ledger in both themes',async({page},info)=>{
  await page.locator('.nav[data-root="isa"]').click();
+ // Let the app's hashchange render finish before the test injects a theme render.
+ await expect(page.locator('header h1')).toHaveText('ISA');
  for(const theme of ['light','dark']){
   await page.evaluate(theme=>{setting().theme=theme;setting().compositionFocus='';applyTheme();render()},theme);
   for(let i=0;i<6;i++){
