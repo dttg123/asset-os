@@ -150,6 +150,11 @@ function openIntegratedTransactionForm(id = '', preset = {}) {
     openSheet('#formSheet', { mode: 'input' });
     syncIntegratedFormFields();
     const form = $('#integratedTxForm');
+    const itemField = form.querySelector('[data-spending-item-field]');
+    const syncItem = () => { if (itemField)
+        itemField.hidden = form.elements.uiType?.value !== 'lifeExpense'; };
+    form.elements.uiType?.addEventListener('change', syncItem);
+    syncItem();
     if (form.elements.category)
         form.elements.category.dataset.auto = tx || formPreset.category ? '0' : '1';
     const syncTypes = () => { form.querySelectorAll('[data-entry-type]').forEach(b => { const selected = b.dataset.entryType === form.elements.uiType?.value; b.classList.toggle('active', selected); b.setAttribute('aria-pressed', String(selected)); }); if (!tx) {
@@ -242,7 +247,7 @@ function integratedCandidatesFromForm(form) {
     if (type === 'externalIncome')
         return [{ ...base, id: editingId || uid('igl'), type: 'externalIncome', amount, toAccountId: existing?.type === 'externalIncome' ? existing.toAccountId : 'cash-main', category, ...(existing?.type === 'externalIncome' ? { productId: existing.productId, meta: clone(existing.meta || {}) } : {}) }];
     if (type === 'lifeExpense')
-        return [{ ...base, id: editingId || uid('igl'), type: existing?.type === 'externalExpense' ? 'externalExpense' : 'expense', fixed: !!existing?.fixed, amount, fromAccountId: existing?.type === 'externalExpense' ? undefined : existing?.fromAccountId || 'cash-main', category, ...(existing?.productId ? { productId: existing.productId, meta: clone(existing.meta || {}) } : {}) }];
+        return [{ ...base, id: editingId || uid('igl'), type: existing?.type === 'externalExpense' ? 'externalExpense' : 'expense', fixed: !!existing?.fixed, amount, fromAccountId: existing?.type === 'externalExpense' ? undefined : existing?.fromAccountId || 'cash-main', category, ...(existing?.productId ? { productId: existing.productId } : {}), meta: { ...clone(existing?.meta || {}), ...(data.get('spendingItem') !== null ? { spendingItem: String(data.get('spendingItem') || '').trim().slice(0, 80) } : {}) } }];
     if (type === 'savingInvestment') {
         const toAccountId = String(data.get('toAccountId') || ''), targetKind = integratedStore().accounts.find(a => a.id === toAccountId)?.kind || '', requested = String(data.get('targetPensionAccountId') || '');
         const candidates = ['pension', 'irp'].includes(targetKind) ? pensionAccountsForKind(targetKind, date) : [], resolved = requested && candidates.some(a => a.id === requested) ? requested : (candidates.length === 1 ? candidates[0].id : '');

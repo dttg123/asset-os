@@ -14,7 +14,7 @@ const boot=read('boot.ts');
 
 assert.doesNotMatch(html,/data-profile-action="(?:source-archive|install)"/,'removed profile rows must stay removed');
 assert.doesNotMatch(html,/data-profile-action="accounts"/,'ISA account management must stay in policy management, not profile');
-assert.match(html,/data-profile-action="ai-strategy"/,'unified AI strategy must be placed in profile');
+assert.match(read('card-management-ui.ts'),/'ai-strategy'/,'unified AI strategy must be placed in profile');
 assert.match(boot,/x==='ai-strategy'\)openAiStrategy\(\)/,'profile AI strategy row must open the unified analysis sheet');
 assert.doesNotMatch(pages,/data-ai-strategy/,'AI strategy must not be duplicated inside pension scopes');
 assert.match(sheets,/previous==='#profileSheet'/,'opening a profile child must retain the profile parent');

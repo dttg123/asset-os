@@ -200,7 +200,7 @@ test('@core secure mobile backup downloads a restorable ZIP when file pickers ar
   const payload=parseBackupZipBytes(new Uint8Array(bytes));
   return{format:payload.format,schema:payload.schemaVersion,environment:payload.environment,haptics:payload.data.settings.haptics};
  },bytes);
- expect(restored).toEqual({format:'asset-os-backup-v1',schema:22,environment:'qa',haptics:false});
+ expect(restored).toEqual({format:'asset-os-backup-v1',schema:23,environment:'qa',haptics:false});
  expect(appErrors).toEqual([]);
 });
 
@@ -361,11 +361,10 @@ test('@core native integrated summary opens presets and card installments withou
  expect(appErrors).toEqual([]);
 });
 
-test('@core @release schedule and card sheets connect purchase, payment correction and recurrence scope',async({page})=>{
+test('@core @release legacy card plans retain payment correction and recurrence scope',async({page})=>{
  await preparePage(page);await page.goto(app);await page.waitForFunction(()=>!!window.__assetOS);
  await page.evaluate(async ()=>{const next=window.__assetOS.getState();next.financialProducts={items:[],events:[]};next.financeSchedules={items:[]};next.integrated.liabilities=[];next.integrated.ledger=[{id:'card-cash',date:'2026-01-01',type:'openingAsset',toAccountId:'cash-main',amount:10000000}];next.settings.integratedMonth='2026-02';(await window.__assetOS.replaceState(next));nav('integrated','schedule')});
- await page.locator('[data-card-hub]').click();await page.getByRole('button',{name:'＋ 구매 기록',exact:true}).click();
- const card=page.locator('#cardInstallmentForm');await card.locator('[name="name"]').fill('TV · 국민카드');await card.locator('[name="purchaseAmount"]').fill('1200000');await card.locator('[name="purchaseDate"]').fill('2026-01-10');await card.locator('[name="firstPaymentDate"]').fill('2026-02-25');await card.locator('[name="months"]').selectOption('12');await card.locator('[name="interestMode"]').selectOption('paid');await card.locator('[name="annualRate"]').fill('12');await card.getByRole('button',{name:'구매 기록 저장'}).click();
+ await page.evaluate(async()=>{await createCardInstallment({name:'TV · 국민카드',purchaseAmount:1200000,months:12,purchaseDate:'2026-01-10',firstPaymentDate:'2026-02-25',interestMode:'paid',annualRate:12});render()});
  await page.locator('[data-card-hub]').click();
  await expect(page.locator('.card-plan-values')).toContainText('1,200,000원');await expect(page.locator('.card-plan-values')).toContainText('112,000원');
  await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
@@ -442,7 +441,7 @@ test('@core settings preserve preferences and haptic opt-out across reload',asyn
  await page.addInitScript(()=>{window.__qaVibrations=[];Object.defineProperty(navigator,'vibrate',{configurable:true,value:pattern=>{window.__qaVibrations.push(pattern);return true}})});
  await page.goto(app);await page.waitForFunction(()=>!!window.__assetOS);
  await page.getByRole('button',{name:'내 Asset OS 열기'}).click();
- await page.locator('[data-profile-action="appearance"]').click();
+ await page.locator('[data-settings-group="data"]').click();await page.locator('[data-profile-action="appearance"]').click();
  await expect(page.locator('#appearanceSheet')).toHaveAttribute('aria-hidden','false');
  await page.getByRole('checkbox',{name:'터치 진동',exact:true}).check();
  await page.waitForTimeout(100);
@@ -458,7 +457,7 @@ test('@core settings preserve preferences and haptic opt-out across reload',asyn
  await page.waitForFunction(()=>!storageSavePending&&!storageCommandPending);
  await page.reload();
  await page.getByRole('button',{name:'내 Asset OS 열기'}).click();
- await page.locator('[data-profile-action="appearance"]').click();
+ await page.locator('[data-settings-group="data"]').click();await page.locator('[data-profile-action="appearance"]').click();
  await expect(page.getByRole('checkbox',{name:'터치 진동',exact:true})).not.toBeChecked();
  await expect(page.getByRole('checkbox',{name:'다크모드',exact:true})).toBeChecked();
  await expect(page.getByRole('button',{name:'퍼플',exact:true})).toHaveClass(/active/);

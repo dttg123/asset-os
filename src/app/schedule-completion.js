@@ -3,6 +3,8 @@ function validateScheduleCompletionRequest(scheduleId, date) {
     const schedule = financeSchedules().find(item => item.id === scheduleId);
     if (!schedule)
         return { ok: false, error: '일정을 찾지 못했습니다.' };
+    if (typeof cardV2 === 'function' && cardV2(schedule))
+        return { ok: false, error: '카드 청구·납부 화면에서 실제 청구액과 포인트를 확인해 주세요.' };
     const expectedDate = scheduleDateForMonth(schedule, integratedMonthKey(date));
     if (expectedDate !== String(date))
         return { ok: false, error: '해당 일정의 예정일과 일치하지 않습니다.' };
@@ -20,6 +22,8 @@ function scheduleCompletionCashError(amount) {
     return cash + 1e-8 < amount ? '생활현금이 부족합니다. 월급 또는 현금 유입을 먼저 완료로 기록해 주세요.' : '';
 }
 function calculateLoanScheduleCompletion(schedule, date, principalOverride, interestOverride) {
+    if (typeof cardV2 === 'function' && cardV2(schedule))
+        return { ok: false, error: '카드 청구·납부에서 실제 납부를 기록해 주세요.' };
     if ([principalOverride, interestOverride].some(x => !financialNumberInRange(x) || !Number.isInteger(Number(x)) || Number(x) < 0))
         return { ok: false, error: '실제 원금과 이자를 정확한 금액으로 입력해 주세요.' };
     const principal = Math.max(0, Number(principalOverride) || 0), interest = Math.max(0, Number(interestOverride) || 0), amount = principal + interest;

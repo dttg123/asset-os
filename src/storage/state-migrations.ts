@@ -6,6 +6,7 @@ type StateMigration=(data:StateRecord)=>StateRecord;
 type MigrationStep={from:number;to:number;name:string;migrate:StateMigration};
 
 declare const SCHEMA_VERSION:number;
+declare function cardLedgerDataIssue(data:Record<string,unknown>):string;
 
 function migrationRecord(value:unknown):StateRecord{return value&&typeof value==='object'&&!Array.isArray(value)?value as StateRecord:{}}
 function migrationRows(value:unknown):StateRecord[]{return Array.isArray(value)?value.map(migrationRecord):[]}
@@ -47,7 +48,7 @@ function stateDataShapeIssue(value:unknown):string{
  // Reject prototype keys recursively while preserving unknown future fields.
  const pending:unknown[]=[value];const seen=new Set<object>();
  while(pending.length){const item=pending.pop();if(!item||typeof item!=='object')continue;if(seen.has(item))continue;seen.add(item);for(const [key,child] of Object.entries(item)){if(key==='__proto__'||key==='constructor'||key==='prototype')return'지원하지 않는 데이터 속성입니다.';if(child&&typeof child==='object')pending.push(child)}}
- return''
+ return typeof cardLedgerDataIssue==='function'?cardLedgerDataIssue(value):''
 }
 function assertStateDataShape(value:unknown):asserts value is StateRecord{const issue=stateDataShapeIssue(value);if(issue)throw new Error(`저장 데이터 형식 오류: ${issue}`)}
 
@@ -69,7 +70,8 @@ const STATE_MIGRATIONS:readonly MigrationStep[]=[
  {from:18,to:19,name:'initialize integrated ledger metadata',migrate:data=>migrationMutate(data,next=>{for(const row of migrationRows(migrationRecord(next.integrated).ledger))row.meta=migrationRecord(row.meta)})},
  {from:19,to:20,name:'initialize integrated ledger filter',migrate:data=>migrationMutate(data,next=>{const settings=migrationRecord(next.settings);next.settings=settings;if(typeof settings.integratedLedgerFilter!=='string')settings.integratedLedgerFilter='all'})},
  {from:20,to:21,name:'initialize storage diagnostics',migrate:data=>migrationMutate(data,next=>{const system=migrationRecord(next.system);next.system=system;if(typeof system.loadWarning!=='string')system.loadWarning='';if(typeof system.saveError!=='string')system.saveError=''})},
- {from:21,to:22,name:'activate verified database storage without changing ledger records',migrate:data=>data}
+ {from:21,to:22,name:'activate verified database storage without changing ledger records',migrate:data=>data},
+ {from:22,to:23,name:'preserve separate card purchase, bill and payment records',migrate:data=>data}
 ];
 const STATE_MIGRATION_BY_VERSION=new Map(STATE_MIGRATIONS.map(step=>[step.from,step]));
 

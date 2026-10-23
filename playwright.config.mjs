@@ -9,6 +9,7 @@ export default defineConfig({
  retries:process.env.CI?1:0,
  reporter:process.env.CI?[['line'],['html',{outputFolder:'test-results/html',open:'never'}]]:'line',
  use:{
+  ...(process.env.ASSET_OS_QA_BROWSER_EXECUTABLE?{launchOptions:{executablePath:process.env.ASSET_OS_QA_BROWSER_EXECUTABLE,args:['--no-sandbox','--disable-gpu','--disable-dev-shm-usage']}}:{}),
   baseURL:'http://127.0.0.1:4173',
   trace:'on-first-retry',
   screenshot:'only-on-failure',

@@ -1,5 +1,5 @@
 'use strict';
-const BACKUP_FORMAT = 'asset-os-backup-v1', SUPPORTED_SCHEMAS = new Set([4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]);
+const BACKUP_FORMAT = 'asset-os-backup-v1', SUPPORTED_SCHEMAS = new Set([4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]);
 const MAX_IMPORT_FILE_BYTES = 64 * 1024 * 1024;
 function backupErrorName(error) { return error && typeof error === 'object' && 'name' in error ? String(error.name) : ''; }
 function backupErrorMessage(error) { return error instanceof Error ? error.message : String(error || ''); }

@@ -60,7 +60,8 @@
       "integrated-finance-ui.js",
       "ui-settings.js",
       "policy-review-ui.js",
-      "release-v069.js"
+      "release-v069.js",
+      "card-management-ui.js"
     ],
     "asset-runtime.js": [
       "src/storage/cloud-save-contract.js",

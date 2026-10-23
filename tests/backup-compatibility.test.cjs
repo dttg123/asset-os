@@ -62,17 +62,17 @@ assert.throws(()=>JSON.parse(fs.readFileSync(path.join(root,'tests/fixtures/lega
 for(const schema of [4,8,12,16,20,21]){
  const payload=JSON.parse(fs.readFileSync(path.join(root,`tests/fixtures/legacy/schema-v${schema}.json`),'utf8'));
  const {first,second,currentPayload}=(await restoreRebackupRestore(payload)),before=ledgerContract(first),after=ledgerContract(second);
- assert.equal(currentPayload.schemaVersion,22,`schema v${schema} 재백업은 현재 schema를 사용해야 한다`);
+ assert.equal(currentPayload.schemaVersion,23,`schema v${schema} 재백업은 현재 schema를 사용해야 한다`);
  assert.deepEqual(after,before,`schema v${schema} 복원→재백업→재복원에서 원장 ID·금액이 같아야 한다`);
  assert.equal(ledgerHash(after),ledgerHash(before),`schema v${schema} 원장 ID·금액 SHA-256 hash가 같아야 한다`);
 }
 
-for(let schema=4;schema<=22;schema++){
+for(let schema=4;schema<=23;schema++){
  context.__payload={format:'asset-os-backup-v1',schemaVersion:schema,appVersion:schema===4?'v0.1':'v0.6.4',environment:'live',exportedAt:'2026-09-02T00:00:00.000Z',data:legacyData()};
  const normalized=plain((await run('validateBackupPayload(__payload)')));
  const migration=plain((await run(`migrateStateData(__payload.data,${schema})`)));
  const plan=plain((await run(`stateMigrationPlan(${schema})`)));
- assert.deepEqual(migration.applied,Array.from({length:22-schema},(_,index)=>schema+index+1),`schema ${schema} 순차 마이그레이션`);
+ assert.deepEqual(migration.applied,Array.from({length:23-schema},(_,index)=>schema+index+1),`schema ${schema} 순차 마이그레이션`);
  assert.deepEqual(plan.map(step=>step.to),migration.applied,`schema ${schema} 명시적 마이그레이션 계획`);
  assert.ok(plan.every(step=>step.name&&step.to===step.from+1),`schema ${schema} 마이그레이션 단계 이름과 연속성`);
  assert.equal(normalized.accounts[0].transactions[0].id,'legacy-deposit',`schema ${schema} ISA 원장 보존`);
@@ -83,7 +83,7 @@ for(let schema=4;schema<=22;schema++){
  assert.equal(roundTrip.appVersion,context.__payload.appVersion);
  assert.equal(roundTrip.data.pension.contributions[0].amount,500000);
 }
-for(const schema of [3,23]){context.__payload={format:'asset-os-backup-v1',schemaVersion:schema,data:{}};await assert.rejects(async ()=>(await run('validateBackupPayload(__payload)')),/지원하지 않는 데이터 구조/)}
+for(const schema of [3,24]){context.__payload={format:'asset-os-backup-v1',schemaVersion:schema,data:{}};await assert.rejects(async ()=>(await run('validateBackupPayload(__payload)')),/지원하지 않는 데이터 구조/)}
 context.__payload={format:'asset-os-backup-v1',schemaVersion:20,appVersion:'v0.6.4',environment:'qa',data:{accounts:[],pension:{},integrated:{ledger:[]}}};
 await assert.rejects(async ()=>(await run('validateBackupPayload(__payload)')),/QA 백업은 운영 화면에 복원할 수 없습니다/);
 context.assetBackupSettings=()=>({phoneEnabled:false,lastPhoneBackupAt:''});
@@ -94,6 +94,6 @@ context.assetBackupSettings=()=>({phoneEnabled:true,lastPhoneBackupAt:'2026-09-2
 assert.equal((await run('backupHealth(new Date("2026-10-01T00:00:00Z")).level')),'warn');
 context.assetBackupSettings=()=>({phoneEnabled:true,lastPhoneBackupAt:'2026-09-01T00:00:00Z'});
 assert.equal((await run('backupHealth(new Date("2026-10-01T00:00:00Z")).level')),'danger');
-console.log('backup schema 4-22 real-normalization compatibility tests: PASS');
+console.log('backup schema 4-23 real-normalization compatibility tests: PASS');
 
 })().catch(error=>{console.error(error);process.exitCode=1});

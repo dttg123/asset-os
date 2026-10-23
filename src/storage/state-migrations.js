@@ -93,7 +93,7 @@ function stateDataShapeIssue(value) {
                 pending.push(child);
         }
     }
-    return '';
+    return typeof cardLedgerDataIssue === 'function' ? cardLedgerDataIssue(value) : '';
 }
 function assertStateDataShape(value) { const issue = stateDataShapeIssue(value); if (issue)
     throw new Error(`저장 데이터 형식 오류: ${issue}`); }
@@ -132,7 +132,8 @@ const STATE_MIGRATIONS = [
     { from: 20, to: 21, name: 'initialize storage diagnostics', migrate: data => migrationMutate(data, next => { const system = migrationRecord(next.system); next.system = system; if (typeof system.loadWarning !== 'string')
             system.loadWarning = ''; if (typeof system.saveError !== 'string')
             system.saveError = ''; }) },
-    { from: 21, to: 22, name: 'activate verified database storage without changing ledger records', migrate: data => data }
+    { from: 21, to: 22, name: 'activate verified database storage without changing ledger records', migrate: data => data },
+    { from: 22, to: 23, name: 'preserve separate card purchase, bill and payment records', migrate: data => data }
 ];
 const STATE_MIGRATION_BY_VERSION = new Map(STATE_MIGRATIONS.map(step => [step.from, step]));
 function stateMigrationPlan(fromVersion, toVersion = SCHEMA_VERSION) {

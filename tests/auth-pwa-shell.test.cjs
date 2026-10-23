@@ -61,7 +61,7 @@ assert.doesNotMatch(html,/data-profile-action="accounts"/);
 assert.equal(fs.existsSync(path.join(root,'store-migrations.js')),false,'empty migration stub must stay removed');
 assert.doesNotMatch(html,/store-migrations\.js/);
 assert.doesNotMatch(worker,/store-migrations\.js/);
-assert.match(html,/data-profile-action="ai-strategy"/);
+assert.match(fs.readFileSync(path.join(root,'card-management-ui.ts'),'utf8'),/'ai-strategy'/);
 assert.doesNotMatch(pensionPages,/data-ai-strategy/);
 const productionCorpus=fs.readdirSync(root).filter(name=>name.endsWith('.js')).map(name=>fs.readFileSync(path.join(root,name),'utf8')).join('\n');
 for(const obsolete of ['verifyOtp','scheduleTargetText','stripInvestmentQaFixtures','applyRealFinanceBootstrap','pensionHeroWon','pensionCentralCash','installAssetOs','openSourceArchiveHub','openAccountManager','assetInstallPrompt'])assert.doesNotMatch(productionCorpus,new RegExp(`\\b${obsolete}\\b`),`obsolete function remained: ${obsolete}`);

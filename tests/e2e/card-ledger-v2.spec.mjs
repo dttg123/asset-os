@@ -1,0 +1,42 @@
+import {test,expect} from '@playwright/test';
+import {readFile} from 'node:fs/promises';
+
+test.beforeEach(async({page})=>{
+ if(process.env.ASSET_OS_QA_SDK_PATH){const body=await readFile(process.env.ASSET_OS_QA_SDK_PATH);await page.route('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4',route=>route.fulfill({body,contentType:'text/javascript'}))}
+ await page.addInitScript(()=>localStorage.setItem('asset-os-v1.9.45-live','operating-data-guard-do-not-change'));
+ await page.goto('/index.html?qa=1#/home');await page.waitForFunction(()=>!!window.__assetOS);
+ await page.evaluate(async()=>{const next=window.__assetOS.getState();next.integrated.accounts=[{id:'cash-main',kind:'cash',name:'가상 생활현금'}];next.integrated.liabilities=[];next.integrated.ledger=[{id:'cash-v2',date:'2026-01-01',type:'openingAsset',amount:10000000,toAccountId:'cash-main'}];next.financialProducts={items:[],events:[]};next.financeSchedules={items:[]};next.settings.cardAccounts=[];next.settings.integratedMonth='2026-01';next.settings.integratedMonthViewedOn=localYmd();await window.__assetOS.replaceState(next);nav('integrated','summary')});
+});
+const submit=page=>page.locator('#cardLedgerForm button[type="submit"]').click();
+const close=page=>page.evaluate(()=>{sheetDirty=false;closeSheets({all:true});cancelSheetBackForNavigation()});
+
+test('@core card ledger v2: mobile form writes separate purchase, bill and cash-point payment and restores exact ZIP',async({page})=>{
+ const nonCard=await page.evaluate(()=>JSON.stringify({accounts:state.accounts,pension:state.pension}));
+ await page.locator('#profile').click();await expect(page.locator('[data-settings-group]')).toHaveCount(4);await page.locator('[data-settings-group="finance"]').click();await page.locator('[data-profile-action="cards"]').click();await page.locator('[data-card-action="add-card"]').click();
+ await page.locator('#cardLedgerForm [name="name"]').fill('가상 국민카드');await page.locator('#cardLedgerForm [name="paymentDay"]').selectOption('14');await submit(page);
+ await expect(page.locator('#sheetBody')).toContainText('가상 국민카드');await close(page);
+ await page.locator('main [data-card-action="purchase-new"]').click();await page.locator('#cardLedgerForm [name="name"]').fill('가상 TV');await page.locator('[name="purchaseAmount"]').fill('1200000');await page.locator('[name="purchaseDate"]').fill('2026-01-01');await page.locator('[name="firstPaymentDate"]').fill('2026-01-14');await page.locator('[name="months"]').selectOption('12');await page.locator('[name="category"]').selectOption('가전·전자');await submit(page);
+ await expect(page.locator('#sheetTitle')).toHaveText('가상 TV');await expect(page.locator('#sheetBody')).toContainText('남은 원금 1,200,000원');
+ await page.locator('[data-card-action="bill-new"]').click();await page.locator('[name="issuedDate"]').fill('2026-01-05');await page.locator('[name="dueDate"]').fill('2026-01-14');await page.locator('[name="principal"]').fill('100000');await page.locator('[name="interest"]').fill('3000');await page.locator('#cardLedgerForm details summary').click();await page.locator('[name="principalDiscount"]').fill('5000');await submit(page);
+ await expect(page.locator('#sheetBody')).toContainText('실제 청구 98,000원');await page.locator('[data-card-action="bill-prepay"]').click();await page.locator('[name="date"]').fill('2026-01-10');await page.locator('#cardLedgerForm details summary').click();await page.locator('[name="pointsPrincipal"]').fill('2000');await expect(page.locator('[data-card-cash-preview]')).toContainText('현금 납부 96,000원');await submit(page);
+ await expect(page.locator('#sheetBody')).toContainText('남은 원금 1,100,000원');await expect(page.locator('#sheetBody')).toContainText('현금 96,000원 · 포인트 2,000원');
+ const before=await page.evaluate(()=>({debt:integratedReplay().totalDebt,cash:integratedReplay().assets['cash-main'],spending:integratedSpendingAnalysis('2026-01').total,ledger:JSON.stringify(state.integrated.ledger),cards:JSON.stringify(state.financeSchedules),nonCard:JSON.stringify({accounts:state.accounts,pension:state.pension})}));
+ expect(before.debt).toBe(1100000);expect(before.cash).toBe(9904000);expect(before.spending).toBe(1195000);expect(before.nonCard).toBe(nonCard);
+ await page.evaluate(async()=>{const bytes=createBackupZipBytes(backupPayload());const next=validateBackupPayload(parseBackupZipBytes(bytes));await window.__assetOS.replaceState(next)});await page.reload();await page.waitForFunction(()=>!!window.__assetOS);
+ const after=await page.evaluate(()=>({debt:integratedReplay().totalDebt,cash:integratedReplay().assets['cash-main'],spending:integratedSpendingAnalysis('2026-01').total,ledger:JSON.stringify(state.integrated.ledger),cards:JSON.stringify(state.financeSchedules),nonCard:JSON.stringify({accounts:state.accounts,pension:state.pension})}));expect(after).toEqual(before);
+ expect(await page.evaluate(()=>localStorage.getItem('asset-os-v1.9.45-live'))).toBe('operating-data-guard-do-not-change');
+});
+
+test('@core spending v2: category, item detail, annual totals and category rename preserve original financial rows',async({page})=>{
+ await page.evaluate(async()=>{state.integrated.ledger.push({id:'spend-a',date:'2026-01-02',type:'expense',amount:84200,fromAccountId:'cash-main',category:'식비',meta:{spendingItem:'배달음식'}},{id:'spend-b',date:'2026-02-02',type:'expense',amount:36230,fromAccountId:'cash-main',category:'식비',meta:{spendingItem:'카페'}});await persist(false);nav('integrated','spending')});
+ await expect(page.locator('.spending-hero')).toContainText('84,200원');await page.locator('[data-spending-category-filter="식비"]').click();await page.locator('[data-spending-item="배달음식"]').click();await expect(page.locator('#sheetTitle')).toHaveText('배달음식');await expect(page.locator('#sheetBody')).toContainText('84,200원');await page.locator('[data-spending-item-period="year"]').click();await expect(page.locator('#sheetBody')).toContainText('2026 소비');await close(page);
+ await page.locator('[data-spending-period="year"]').click();await expect(page.locator('.spending-hero')).toContainText('120,430원');
+ const ledger=await page.evaluate(()=>JSON.stringify(state.integrated.ledger));await page.locator('[data-spending-view="categories"]').click();await page.locator('[data-spending-category-manage]').click();await page.locator('[data-card-action="category-edit"][data-category="식비"]').click();await page.locator('[name="replacement"]').fill('식비·카페');await submit(page);
+ await expect(page.locator('#sheetBody')).toContainText('식비·카페');expect(await page.evaluate(()=>JSON.stringify(state.integrated.ledger))).toBe(ledger);await close(page);await page.evaluate(()=>nav('integrated','spending'));await expect(page.locator('[data-spending-category-filter="식비·카페"]')).toContainText('120,430원');
+});
+
+test('@core card v2: narrow phone and tablet layouts retain readable amounts and controls in both themes',async({page})=>{
+ const failures=[];page.on('pageerror',error=>failures.push(error.message));await page.evaluate(async()=>{const card=await saveCardAccount({name:'아주 긴 이름의 가상 국민카드',issuer:'국민카드',paymentDay:31});await createCardPurchase({name:'아주 긴 이름의 가상 가전제품 구매 기록',cardId:card,purchaseAmount:370000,months:3,purchaseDate:'2026-01-01',firstPaymentDate:'2026-01-31',interestMode:'free',category:'가전·전자'});nav('integrated','spending')});
+ for(const width of [320,412,768])for(const theme of ['light','dark']){await page.setViewportSize({width,height:915});await page.evaluate(theme=>{setting().theme=theme;applyTheme();nav('integrated','spending')},theme);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.evaluate(()=>openCardPurchaseForm());await expect(page.locator('#cardLedgerForm')).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);const escaped=await page.locator('#cardLedgerForm').evaluate(form=>{const b=form.getBoundingClientRect();return [...form.querySelectorAll('input,select,button')].filter(x=>x.getBoundingClientRect().width>0).filter(x=>{const r=x.getBoundingClientRect();return r.left<b.left-1||r.right>b.right+1}).length});expect(escaped).toBe(0);await close(page)}
+ expect(failures).toEqual([]);
+});

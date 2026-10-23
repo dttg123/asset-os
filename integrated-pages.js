@@ -14,7 +14,18 @@ async function integratedShiftMonth(delta) { const [y, m] = integratedSelectedMo
 function integratedMonthBar() { const month = integratedSelectedMonth(), current = localYmd().slice(0, 7); return `<div class="integrated-monthbar"><button type="button" data-integrated-month-shift="-1" aria-label="이전 달">‹</button><input type="month" aria-label="조회 연월" data-integrated-month-select value="${escapeHtml(month)}" style="min-width:0;max-width:180px;border:0;background:transparent;color:inherit;font:inherit"><button type="button" data-integrated-month-shift="1" aria-label="다음 달">›</button></div><div class="integrated-view-tools"><button type="button" data-integrated-current-month ${month === current ? 'disabled' : ''}>${month === current ? '이번 달 조회 중' : '이번 달로'}</button><button type="button" data-card-hub>카드·할부 <span aria-hidden="true">›</span></button></div>`; }
 function integratedTabs(tab) { return `<div class="integrated-tabs four"><button class="${escapeHtml(tab === 'summary' ? 'active' : '')}" data-integrated-tab="summary">전체</button><button class="${escapeHtml(tab === 'ledger' ? 'active' : '')}" data-integrated-tab="ledger">거래</button><button class="${escapeHtml(tab === 'spending' ? 'active' : '')}" data-integrated-tab="spending">소비</button><button class="${escapeHtml(tab === 'schedule' ? 'active' : '')}" data-integrated-tab="schedule">일정</button></div>`; }
 function integratedAccountName(id) { return integratedStore().accounts.find(a => a.id === id)?.name || integratedStore().liabilities.find(x => x.id === id)?.name || id || '-'; }
-function integratedTxLabel(t) { return { refund: '환불', openingAsset: '기초자산', openingLiability: '기초부채', externalIncome: '수입', externalAssetIn: '저축·투자', externalAssetOut: '상품 출금', expense: '생활지출', externalExpense: '외부 결제 과거지출', debtInterest: '대출 납부', debtInterestExternal: '대출 납부', debtPrincipal: '대출 납부', externalDebtPrincipal: '대출 납부', internalTransfer: '저축·투자', externalWithdrawal: '기타 지출', adjustment: '잔액보정' }[t.type || ''] || t.type; }
+function integratedTxLabel(t) { if (t.meta?.cardPlanId) {
+    if (t.type === 'externalExpense')
+        return '카드 구매';
+    if (t.meta.cardCredit === 'discount')
+        return '카드 청구할인';
+    if (t.type === 'refund')
+        return '카드 환불';
+    if (t.meta.cardPoints)
+        return '포인트 납부';
+    if (['debtPrincipal', 'debtInterest', 'externalDebtPrincipal', 'debtInterestExternal'].includes(t.type || ''))
+        return '카드 납부';
+} return { refund: '환불', openingAsset: '기초자산', openingLiability: '기초부채', externalIncome: '수입', externalAssetIn: '저축·투자', externalAssetOut: '상품 출금', expense: '생활지출', externalExpense: '외부 결제 과거지출', debtInterest: '대출 납부', debtInterestExternal: '대출 납부', debtPrincipal: '대출 납부', externalDebtPrincipal: '대출 납부', internalTransfer: '저축·투자', externalWithdrawal: '기타 지출', adjustment: '잔액보정' }[t.type || ''] || t.type; }
 function integratedTxFilterKey(t) { const account = integratedStore().accounts.find(a => a.id === t.toAccountId); if (t.type === 'externalIncome')
     return 'income'; if (['refund', 'expense', 'externalExpense', 'externalWithdrawal', 'externalAssetOut'].includes(t.type || ''))
     return 'expense'; if (['internalTransfer', 'externalAssetIn'].includes(t.type || '') && ['isa', 'pension', 'irp', 'deposit', 'savings'].includes(account?.kind || ''))
@@ -26,7 +37,9 @@ function integratedTxAmountMarkup(t) { if (t.type === 'refund')
     return `<span class="integrated-ledger-amount plus">+${won(t.amount)}</span>`; if (t.type === 'openingLiability')
     return `<span class="integrated-ledger-amount">${won(t.amount)}</span>`; if (t.type === 'adjustment')
     return `<span class="integrated-ledger-amount ${Number(t.delta) >= 0 ? 'plus' : 'minus'}">${Number(t.delta) >= 0 ? '+' : '-'}${won(Math.abs(Number(t.delta) || 0))}</span>`; return `<span class="integrated-ledger-amount minus">-${won(t.amount)}</span>`; }
-function integratedTxAccountsText(t) { if (t.type === 'internalTransfer')
+function integratedTxAccountsText(t) { if (t.meta?.cardPoints)
+    return '카드 포인트 사용'; if (t.meta?.cardCredit && t.type !== 'refund')
+    return '카드 원금 차감'; if (t.type === 'internalTransfer')
     return `${integratedAccountName(t.fromAccountId)} → ${integratedAccountName(t.toAccountId)}`; if (t.type === 'externalAssetIn')
     return `앱 밖 계좌 → ${integratedAccountName(t.toAccountId)}`; if (t.type === 'externalAssetOut')
     return `${integratedAccountName(t.fromAccountId)} → 앱 밖 계좌`; if (t.type === 'externalDebtPrincipal' || t.type === 'debtInterestExternal')

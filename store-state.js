@@ -200,7 +200,7 @@ async function loadLegacyState() {
             if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
                 throw new Error('지원하지 않는 저장 형식');
             const envelope = parsed;
-            if (!envelope.data || ![4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22].includes(Number(envelope.schemaVersion)))
+            if (!envelope.data || ![4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23].includes(Number(envelope.schemaVersion)))
                 throw new Error('지원하지 않는 저장 형식');
             const migrated = migrateStateData(envelope.data, Number(envelope.schemaVersion)), loaded = normalizeState(migrated.data);
             if (key !== KEY || migrated.applied.length) {

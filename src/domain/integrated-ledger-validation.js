@@ -87,7 +87,9 @@ function integratedIssues(store = validationIntegratedStore()) {
     for (const transaction of store.ledger || [])
         if (transaction.type === 'refund') {
             const original = (store.ledger || []).find(candidate => candidate.id === transaction.meta?.refundOf);
-            if (!original || !['expense', 'externalExpense'].includes(original.type || '') || String(transaction.date || '') < String(original.date || '') || transaction.toAccountId !== (original.type === 'expense' ? original.fromAccountId : ''))
+            const cardInterest = !!transaction.meta?.cardInterestRefund && !!original?.meta?.cardPlanId && transaction.meta?.cardPlanId === original.meta.cardPlanId && ['debtInterest', 'debtInterestExternal'].includes(original.type || '');
+            const cardCash = !!original?.meta?.cardPlanId && transaction.meta?.cardPlanId === original.meta.cardPlanId && transaction.meta?.cardCashRefund === true;
+            if (!original || !['expense', 'externalExpense'].includes(original.type || '') && !cardInterest || String(transaction.date || '') < String(original.date || '') || transaction.toAccountId !== (cardCash ? 'cash-main' : original.type === 'expense' ? original.fromAccountId : ''))
                 issues.push(`환불 원거래 또는 날짜 오류: ${transaction.id}`);
             else {
                 const originalId = String(original.id), total = (refunds.get(originalId) || 0) + Number(transaction.amount);
