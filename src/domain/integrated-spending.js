@@ -87,7 +87,7 @@ function integratedSpendingView(anchor, mode = 'half') {
         return { ...analysis, trend: analysis.trend };
     for (let i = 0; i < range.months; i++) {
         const month = integratedSpendingMonthShift(start, i);
-        trend.push({ month, label: `${Number(month.slice(5))}월`, amount: integratedSpendingAnalysis(month).total });
+        trend.push({ month, label: `${Number(month.slice(5))}월`, amount: analysis.rows.filter(row => integratedMonthKey(row.date) === month).reduce((sum, row) => sum + (Number(row.amount) || 0), 0) });
     }
     return { ...analysis, trend };
 }
