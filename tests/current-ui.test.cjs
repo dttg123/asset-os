@@ -26,10 +26,10 @@ test('integrated summary uses one blue asset and debt accordion without the old 
  assert.doesNotMatch(source,/통합 · 전체 재무/);
 });
 
-test('integrated summary consolidates every unfinished monthly schedule into one card',()=>{
+test('integrated summary consolidates payment obligations without adding planned income',()=>{
  const source=read('integrated-pages.ts');
  assert.match(source,/function remainingScheduleCard/);
- assert.match(source,/scheduleOccurrences\(month\)\.filter\(o=>o\.status!==['"]done['"]\)/);
+ assert.ok(source.includes("scheduleOccurrences(month).filter(o=>o.status!=='done'&&o.schedule.kind!=='income')"));
  assert.doesNotMatch(source,/function nextFinanceOccurrences|function fixedCostCard/);
 });
 

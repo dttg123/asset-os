@@ -5,7 +5,7 @@ const BROKER_KIS_PUBLIC_CONFIG = Object.freeze({ projectUrl: 'https://wjrzukoofs
 const QA_MODE = typeof location !== 'undefined' && /(?:^|[?&])qa=1(?:&|$)/.test(String(location.search || ''));
 const QA_STORAGE_KEY = 'asset-os-qa-v0.5', LIVE_STORAGE_KEY = 'asset-os-v1.9.45-live';
 const DEFAULT_FINANCE_DAY = 25;
-const APP_VERSION = 'v0.7.11', APP_ENV = QA_MODE ? 'qa' : 'live', SCHEMA_VERSION = 23, KEY = QA_MODE ? QA_STORAGE_KEY : LIVE_STORAGE_KEY, LEGACY_KEYS = ['asset-os-v1.9.22-central-schedule', 'asset-os-v1.9.20-real-finance', 'asset-os-v1.9.19-finance-linked', 'asset-os-v1.9.18-integrated-ui-refine', 'asset-os-v1.9.17-integrated-complete-stage1', 'asset-os-v1.9.16-integrated-ledger-stage2', 'asset-os-v1.9.9-pension-step2-analysis', 'asset-os-v1.9.7-pension-step2-precision', 'asset-os-v1.9.6-pension-step2-refine', 'asset-os-v1.9.5-pension-step2', 'asset-os-v1.9.4-pension-step1', 'asset-os-v1.9.3-pension-step1', 'asset-os-v1.9.2-isa-review', 'asset-os-v1.9.1-isa-review', 'asset-os-v1.9-isa-review', 'asset-os-v1.8-isa-review', 'asset-os-v1.7-isa-review', 'asset-os-v1.6.1-isa-review', 'asset-os-v1.6-isa-review', 'asset-os-v1.5-isa-review', 'asset-os-v1.4-isa-review', 'asset-os-v1.3-isa-review'];
+const APP_VERSION = 'v0.7.12', APP_ENV = QA_MODE ? 'qa' : 'live', SCHEMA_VERSION = 23, KEY = QA_MODE ? QA_STORAGE_KEY : LIVE_STORAGE_KEY, LEGACY_KEYS = ['asset-os-v1.9.22-central-schedule', 'asset-os-v1.9.20-real-finance', 'asset-os-v1.9.19-finance-linked', 'asset-os-v1.9.18-integrated-ui-refine', 'asset-os-v1.9.17-integrated-complete-stage1', 'asset-os-v1.9.16-integrated-ledger-stage2', 'asset-os-v1.9.9-pension-step2-analysis', 'asset-os-v1.9.7-pension-step2-precision', 'asset-os-v1.9.6-pension-step2-refine', 'asset-os-v1.9.5-pension-step2', 'asset-os-v1.9.4-pension-step1', 'asset-os-v1.9.3-pension-step1', 'asset-os-v1.9.2-isa-review', 'asset-os-v1.9.1-isa-review', 'asset-os-v1.9-isa-review', 'asset-os-v1.8-isa-review', 'asset-os-v1.7-isa-review', 'asset-os-v1.6.1-isa-review', 'asset-os-v1.6-isa-review', 'asset-os-v1.5-isa-review', 'asset-os-v1.4-isa-review', 'asset-os-v1.3-isa-review'];
 const nf = new Intl.NumberFormat('ko-KR');
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const INVESTMENT_ROLES = ['성장', '배당', '현금흐름', '안정', '현금'];
@@ -1272,6 +1272,13 @@ function integratedSpendingRows(month) {
     return source.filter(transaction => !transaction.meta?.cardInterestRefund && String(transaction.date || '') >= range.start && String(transaction.date || '') < range.end && ['expense', 'externalExpense', 'refund'].includes(transaction.type)).map(transaction => { const original = transaction.type === 'refund' ? originals.find(x => x.id === transaction.meta?.refundOf) || transaction : transaction, label = spendingClassification(original); return { ...transaction, category: label.category, fixed: !!original.fixed, meta: { ...original.meta, ...transaction.meta, spendingItem: label.item }, amount: transaction.type === 'refund' ? -Number(transaction.amount) : transaction.amount }; });
 }
 function spendingRange(period) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(period)) {
+        const date = new Date(period + 'T00:00:00Z');
+        if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== period)
+            throw new Error('소비 날짜를 확인해 주세요.');
+        date.setUTCDate(date.getUTCDate() + 1);
+        return { start: period, end: date.toISOString().slice(0, 10), months: 0 };
+    }
     const match = /^(\d{4})(?:-(\d{2})|-([QH])([1-4]))?$/.exec(period);
     if (!match)
         throw new Error('지원하지 않는 소비 기간입니다.');
@@ -1286,13 +1293,21 @@ function spendingRangeKey(anchor, mode) {
     return mode === 'quarter' ? `${year}-Q${Math.ceil(month / 3)}` : mode === 'half' ? `${year}-H${Math.ceil(month / 6)}` : ['year', 'years'].includes(mode) ? year : anchor;
 }
 function spendingRangeLabel(period) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(period))
+        return `${period.slice(0, 4)}년 ${Number(period.slice(5, 7))}월 ${Number(period.slice(8))}일`;
     const match = /^(\d{4})-([QH])(\d)$/.exec(period);
     return match ? `${match[1]}년 ${match[2] === 'Q' ? match[3] + '분기' : match[3] === '1' ? '상반기' : '하반기'}` : period.length === 4 ? period + '년' : `${period.slice(0, 4)}년 ${Number(period.slice(5))}월`;
 }
 function integratedSpendingView(anchor, mode = 'half') {
     const key = spendingRangeKey(anchor, mode), analysis = integratedSpendingAnalysis(key), range = spendingRange(key), start = range.start.slice(0, 7), trend = [];
-    if (mode === 'month')
-        return analysis;
+    if (mode === 'month') {
+        const days = new Date(Number(anchor.slice(0, 4)), Number(anchor.slice(5, 7)), 0).getDate();
+        for (let d = 1; d <= days; d++) {
+            const day = anchor + '-' + String(d).padStart(2, '0');
+            trend.push({ month: day, label: d === 1 || d % 10 === 0 && days - d >= 3 || d === days ? `${d}일` : '', amount: analysis.rows.filter(row => row.date === day).reduce((sum, row) => sum + Number(row.amount || 0), 0) });
+        }
+        return { ...analysis, trend };
+    }
     if (mode === 'years')
         return { ...analysis, trend: analysis.trend };
     for (let i = 0; i < range.months; i++) {
@@ -1313,13 +1328,15 @@ function integratedSpendingAnalysis(month = integratedLatestMonth()) {
         entry.count++;
         categories.set(key, entry);
     }
-    const yearly = /^\d{4}$/.test(month), range = spendingRange(month), rangeKind = month.includes('-Q') ? 'quarter' : month.includes('-H') ? 'half' : 'month', total = amount(rows), previousMonth = yearly ? String(Number(month) - 1) : spendingRangeKey(integratedSpendingMonthShift(range.start.slice(0, 7), -range.months), rangeKind), previousTotal = amount(integratedSpendingRows(previousMonth)), change = total - previousTotal, changeRate = previousTotal ? change / previousTotal * 100 : null, trend = [], items = new Map();
+    const yearly = /^\d{4}$/.test(month), range = spendingRange(month), rangeKind = month.includes('-Q') ? 'quarter' : month.includes('-H') ? 'half' : 'month', total = amount(rows), previousMonth = range.months === 0 ? new Date(new Date(month + 'T00:00:00Z').getTime() - 86400000).toISOString().slice(0, 10) : yearly ? String(Number(month) - 1) : spendingRangeKey(integratedSpendingMonthShift(range.start.slice(0, 7), -range.months), rangeKind), previousTotal = amount(integratedSpendingRows(previousMonth)), change = total - previousTotal, changeRate = previousTotal ? change / previousTotal * 100 : null, trend = [], items = new Map();
     for (const row of rows) {
-        const key = String(row.meta?.spendingItem || row.category || '기타'), item = items.get(key) || { key, amount: 0, count: 0, category: row.category || '기타' };
+        const key = String(row.meta?.spendingItem || row.category || '기타'), identity = JSON.stringify([row.category, key]), item = items.get(identity) || { key, amount: 0, count: 0, category: row.category || '기타' };
         item.amount += Number(row.amount) || 0;
         item.count++;
-        items.set(key, item);
+        items.set(identity, item);
     }
+    if (range.months === 0)
+        return { month, rows, total, fixed: amount(fixedRows), variable: amount(variableRows), fixedRows, variableRows, categories: [...categories.values()], items: [...items.values()], previousMonth, previousTotal, change, changeRate, trend };
     for (let offset = -5; offset <= 0; offset++) {
         const key = yearly ? String(Number(month) + offset) : spendingRangeKey(integratedSpendingMonthShift(range.start.slice(0, 7), offset * range.months), rangeKind), value = amount(integratedSpendingRows(key));
         trend.push({ month: key, label: yearly ? `${key}년` : range.months > 1 ? spendingRangeLabel(key) : `${key.slice(2, 4)}.${key.slice(5)}`, amount: value });
@@ -1392,6 +1409,9 @@ function scheduleCompletionTx(scheduleId, date, sourceRows = null) {
     const plan = schedule && cardV2(schedule), bill = plan?.bills.find(b => b.dueDate === date), payment = plan?.payments.find(p => p.billId === bill?.id);
     if (payment)
         return { id: payment.id, date: payment.date, type: 'debtPrincipal', amount: payment.principal, meta: { scheduleId, scheduleDate: date, cardPlanId: scheduleId, cardBillId: bill?.id, loanPrincipal: payment.principal, loanInterest: payment.interest, actualAmount: payment.cash + payment.pointsPrincipal + payment.pointsInterest } };
+    const insurance = schedule?.kind === 'insurance' && schedule.productId ? rows.find(t => ['expense', 'externalExpense'].includes(t.type || '') && t.status !== 'cancelled' && t.productId === schedule.productId && t.meta?.insurancePayment && String(t.meta?.scheduleDate || t.date).slice(0, 7) === date.slice(0, 7)) : null;
+    if (insurance)
+        return insurance;
     const linked = rows.filter(t => t.meta?.scheduleId === scheduleId && t.meta?.scheduleDate === date), explicit = linked[0];
     if (explicit) {
         if (schedule?.kind === 'loan') {
@@ -1412,7 +1432,7 @@ function scheduleOccurrenceStatus(s, date, knownTx) { const tx = arguments.lengt
 function scheduleStatusLabel(st) { return { done: '완료', overdue: '미완료', today: '오늘', soon: '임박', planned: '예정' }[st] || '예정'; }
 function scheduleOccurrences(month = integratedSelectedMonth()) { const rows = integratedOperationalLedger(); return financeSchedules().map(s => { const date = scheduleDateForMonth(s.active ? s : { ...s, active: true }, month); if (!date)
     return null; const tx = scheduleCompletionTx(s.id, date, rows); if (!s.active && !tx)
-    return null; return { schedule: s, date, status: scheduleOccurrenceStatus(s, date, tx), tx }; }).filter((o) => !!o && (o.schedule.kind !== 'income' || o.status === 'done')).sort((a, b) => a.date.localeCompare(b.date) || String(a.schedule.name).localeCompare(String(b.schedule.name), 'ko')); }
+    return null; return { schedule: s, date, status: scheduleOccurrenceStatus(s, date, tx), tx }; }).filter((o) => !!o).sort((a, b) => a.date.localeCompare(b.date) || String(a.schedule.name).localeCompare(String(b.schedule.name), 'ko')); }
 function scheduleUrgentOccurrences() { const today = localYmd(), months = new Set([today.slice(0, 7)]); const d = new Date(today + 'T00:00:00'); d.setDate(d.getDate() + 4); months.add(localYmd(d).slice(0, 7)); const dated = [...months].flatMap(m => scheduleOccurrences(m)).filter(x => x.schedule.kind !== 'income' && ['overdue', 'today', 'soon'].includes(x.status)), undated = financeSchedules().filter(x => x.active && x.needsDate && x.attention === 'overdue').map(s => ({ schedule: s, date: '날짜 미설정', status: 'overdue', tx: null, undated: true })); return [...undated, ...dated].sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.schedule.name).localeCompare(String(b.schedule.name), 'ko')); }
 function scheduleTargetAccount(s) { if (s.targetAccountId)
     return s.targetAccountId; if (s.targetKind === 'pension')
@@ -1679,6 +1699,24 @@ function cardV2Terms(s, date) {
     return { index: index + 1, principal, interest, total: principal + interest };
 }
 function cardV2Summary(s, month) { const p = cardV2(s); const history = p.historyBaseline?.statements.find(x => x.month === month), lastPaid = p.historyBaseline?.statements.filter(x => x.status === 'paid').at(-1); const date = scheduleDateForMonth({ ...s, active: true }, month), terms = date ? cardV2Terms(s, date) : null, bill = p.bills.find(b => b.dueDate.slice(0, 7) === month), payment = bill ? p.payments.find(x => x.billId === bill.id) : undefined, remainingPrincipal = Math.max(0, cardRemaining(s)); return { purchaseAmount: p.purchaseAmount, remainingPrincipal, plannedAmount: terms?.total ?? (history ? history.principal + history.interest : 0), estimatedInterest: terms?.interest || 0, actualAmount: payment ? payment.cash + payment.pointsPrincipal + payment.pointsInterest : history?.status === 'paid' ? history.principal + history.interest : null, paidInstallments: Math.min(p.months, (lastPaid?.round || 0) + p.bills.filter(b => cardBillPaid(p, b)).length), totalInstallments: p.months, completed: remainingPrincipal === 0 && p.bills.every(b => cardBillPaid(p, b)) }; }
+function cardMonthlyAmounts(s, month) {
+    const p = cardV2(s);
+    if (!p) {
+        const x = cardPlanSummary(s, month), actual = x.actualAmount;
+        return { confirmed: actual ?? 0, paid: actual ?? 0, unpaid: 0, estimated: actual === null ? x.plannedAmount : 0, hasBill: actual !== null };
+    }
+    const bills = p.bills.filter(b => b.dueDate.slice(0, 7) === month && (!b.settledBy || p.payments.some(x => x.billId === b.id))), history = p.historyBaseline?.statements.find(x => x.month === month);
+    if (bills.length) {
+        const confirmed = bills.reduce((n, b) => n + cardBillTotal(b), 0), paid = bills.filter(b => cardBillPaid(p, b)).reduce((n, b) => n + cardBillTotal(b), 0);
+        return { confirmed, paid, unpaid: Math.max(0, confirmed - paid), estimated: 0, hasBill: true };
+    }
+    if (history) {
+        const amount = history.principal + history.interest, paid = history.status === 'paid' ? amount : 0;
+        return { confirmed: amount, paid, unpaid: amount - paid, estimated: 0, hasBill: true };
+    }
+    const date = scheduleDateForMonth({ ...s, active: true }, month), terms = date ? cardV2Terms(s, date) : null;
+    return { confirmed: 0, paid: 0, unpaid: 0, estimated: terms?.total || 0, hasBill: false };
+}
 function cardPosting(s, date, type, amount, eventId, meta = {}, cashAccount = '') {
     return { id: uid('igl'), date, type, amount, liabilityId: s.liabilityId, category: String(cardV2(s)?.category || s.name), note: '카드 원장 연결', ...(cashAccount ? (type === 'refund' ? { toAccountId: cashAccount } : { fromAccountId: cashAccount }) : {}), meta: { cardPlanId: s.id, cardEventId: eventId, ...meta } };
 }
@@ -2046,13 +2084,13 @@ function calculateStandardScheduleCompletion(schedule, date, amountOverride, tar
         const cashError = scheduleCompletionCashError(amount);
         if (cashError)
             return { ok: false, error: cashError };
-        transaction = { id: uid('igl'), date, type: 'internalTransfer', amount, fromAccountId: 'cash-main', toAccountId: to, category: schedule.name, note: '금융 일정에서 완료 기록', meta };
+        transaction = { id: uid('igl'), date, type: 'internalTransfer', amount, fromAccountId: 'cash-main', toAccountId: to, category: schedule.name, note: '금융 일정에서 완료 기록', ...(schedule.kind === 'insurance' ? { productId: schedule.productId } : {}), meta: { ...meta, ...(schedule.kind === 'insurance' ? { insurancePayment: true } : {}) } };
     }
     else if (['insurance', 'expense'].includes(schedule.kind)) {
         const cashError = scheduleCompletionCashError(amount);
         if (cashError)
             return { ok: false, error: cashError };
-        transaction = { id: uid('igl'), date, type: 'expense', fixed: true, amount, fromAccountId: 'cash-main', category: schedule.name, note: '금융 일정에서 완료 기록', meta };
+        transaction = { id: uid('igl'), date, type: 'expense', fixed: true, amount, fromAccountId: 'cash-main', category: schedule.name, note: '금융 일정에서 완료 기록', ...(schedule.kind === 'insurance' ? { productId: schedule.productId } : {}), meta: { ...meta, ...(schedule.kind === 'insurance' ? { insurancePayment: true } : {}) } };
     }
     if (!transaction)
         return { ok: false, error: '아직 자동 기록을 지원하지 않는 일정입니다.' };
@@ -2084,7 +2122,9 @@ async function commitScheduleCompletion(schedule, date, draft) {
 function renderScheduleCompletion(date, message) {
     closeSheets();
     render();
-    setTimeout(async () => (await openScheduleDay(date)), 60);
+    const token = typeof sheetInteractionToken === 'function' ? sheetInteractionToken() : 0, hash = location.hash;
+    setTimeout(async () => { if (location.hash !== hash || typeof sheetInteractionToken === 'function' && sheetInteractionToken() !== token || document.querySelector('.sheet.open'))
+        return; await openScheduleDay(date); }, 60);
     toast(message);
     haptic('light');
 }
@@ -3738,7 +3778,9 @@ function openInsuranceForm(id = '') { const p = insurancePolicies().find(x => x.
 async function saveInsurancePolicy(form) { const d = new FormData(form), id = form.dataset.insuranceId || uid('insurance'), old = insurancePolicies().find(x => x.id === id), name = String(d.get('name') || '').trim(), premium = Math.max(0, Math.round(Number(d.get('premium')) || 0)), paymentDay = Math.min(31, Math.max(0, Math.round(Number(d.get('paymentDay')) || 0))); if (!name)
     return toast('보험명을 입력해 주세요.'); if (!premium)
     return toast('보험료를 입력해 주세요.'); const p = { ...(old || {}), id, name, company: String(d.get('company') || '').trim(), category: String(d.get('category') || '').trim(), premium, paymentDay, paymentStyle: String(d.get('paymentStyle')) === 'lump' ? 'lump' : 'monthly', contractDate: String(d.get('contractDate') || ''), coverageEndDate: String(d.get('coverageEndDate') || ''), paymentEndDate: String(d.get('paymentEndDate') || ''), status: old?.status || 'active', coverages: parseInsuranceCoverages(d.get('coverages')), note: String(d.get('note') || '').trim() }; if (p.contractDate && p.paymentEndDate && p.paymentEndDate < p.contractDate)
-    return toast('납입 종료일은 계약일보다 빠를 수 없습니다.'); if (old)
+    return toast('납입 종료일은 계약일보다 빠를 수 없습니다.'); if (p.contractDate && p.coverageEndDate && p.coverageEndDate < p.contractDate)
+    return toast('보장 만기는 계약일보다 빠를 수 없습니다.'); if (p.paymentEndDate && p.coverageEndDate && p.paymentEndDate > p.coverageEndDate)
+    return toast('납입 종료일은 보장 만기보다 늦을 수 없습니다.'); if (old)
     Object.assign(old, p);
 else
     insurancePolicies().push(p); syncInsuranceSchedule(p, d.get('linkSchedule') === 'on'); if (!(await persist()))
@@ -3749,6 +3791,10 @@ function endInsurancePolicy(id) { const p = insurancePolicies().find(x => x.id =
     schedule.endDate = p.endedAt;
 } if (!(await persist()))
     return; closeSheets(); render(); setTimeout(openInsuranceHub, 60); toast('보험 계약을 종료 보관했습니다.'); }); }
+function insuranceExistingPayment(p, date) {
+    const ids = new Set(financeSchedules().filter(s => s.kind === 'insurance' && s.productId === p.id).map(s => s.id));
+    return integratedOperationalLedger().find(t => ['expense', 'externalExpense'].includes(t.type || '') && t.status !== 'cancelled' && (t.productId === p.id && t.meta?.insurancePayment || ids.has(t.meta?.scheduleId)) && (p.paymentStyle === 'lump' || String(t.meta?.scheduleDate || t.date).slice(0, 7) === date.slice(0, 7)));
+}
 function recordInsurancePayment(id, { date, amount, source = 'tracked', paymentId = '' }) {
     const p = insurancePolicies().find(x => x.id === id);
     if (!p)
@@ -3762,10 +3808,14 @@ function recordInsurancePayment(id, { date, amount, source = 'tracked', paymentI
         return { ok: false, error: '납입 종료일 이후입니다. 계약 기간을 확인해 주세요.' };
     if (!Number.isFinite(Number(amount)) || Number(amount) <= 0)
         return { ok: false, error: '납부 금액을 1원 이상 입력해 주세요.' };
+    const existing = insuranceExistingPayment(p, date);
+    if (existing)
+        return { ok: false, error: '이 납부 기간에 이미 기록된 보험료가 있습니다. 기존 납부 기록을 확인해 주세요.' };
     const ledger = integratedStore().ledger;
     if (paymentId && ledger.some(t => t.id === paymentId))
         return { ok: false, error: '이미 저장한 납부 기록입니다.' };
-    const tx = { id: paymentId || uid('insurance-payment'), date, type: source === 'outside' ? 'externalExpense' : 'expense', amount: Number(amount), fromAccountId: source === 'outside' ? undefined : 'cash-main', category: p.name + ' 보험료', productId: id, fixed: true, meta: { insurancePayment: true } };
+    const schedule = insuranceSchedule(p), scheduleDate = schedule ? scheduleDateForMonth({ ...schedule, active: true }, date.slice(0, 7)) : '';
+    const tx = { id: paymentId || uid('insurance-payment'), date, type: source === 'outside' ? 'externalExpense' : 'expense', amount: Number(amount), fromAccountId: source === 'outside' ? undefined : 'cash-main', category: p.name + ' 보험료', productId: id, fixed: true, meta: { insurancePayment: true, ...(scheduleDate ? { scheduleId: schedule.id, scheduleDate, scheduledAmount: Number(p.premium), actualAmount: Number(amount) } : {}) } };
     const err = integratedValidateCandidate(tx, '');
     if (err)
         return { ok: false, error: err };
@@ -3778,7 +3828,7 @@ function openInsurancePaymentForm(id) {
         return;
     $('#formEyebrow').textContent = '보험 · 실제 납부';
     $('#formTitle').textContent = '보험료 납부 기록';
-    $('#formBody').innerHTML = `<form id="insurancePaymentForm" class="form"><div class="form-grid"><div class="field"><label>납부일</label><input name="date" type="date" value="${escapeHtml(ymd())}" required></div><div class="field"><label>실제 납부액</label><input name="amount" type="number" min="1" step="1" value="${escapeHtml(Number(p.premium) || '')}" required></div></div><div class="field"><label>지급 계좌</label><select name="source"><option value="tracked">현금·입출금</option><option value="outside">앱 밖 계좌</option></select></div><div class="source-note">일정에서 이미 완료한 납부는 다시 입력하지 않습니다.</div><button class="integrated-form-save">납부 저장</button></form>`;
+    $('#formBody').innerHTML = `<form id="insurancePaymentForm" class="form"><div class="form-grid"><div class="field"><label>납부일</label><input name="date" type="date" value="${escapeHtml(ymd())}" required></div><div class="field"><label>실제 납부액</label><input name="amount" type="number" min="1" step="1" value="${escapeHtml(Number(p.premium) || '')}" required></div></div><div class="field"><label>지급 계좌</label><select name="source"><option value="tracked">현금·입출금</option><option value="outside">앱 밖 계좌</option></select></div><div class="source-note">이 기간의 보험료는 일정과 함께 연결됩니다. 이미 납부한 기간은 중복 저장하지 않아요.</div><button class="integrated-form-save">납부 저장</button></form>`;
     openSheet('#formSheet', { mode: 'input' });
     const paymentId = uid('insurance-payment');
     $('#insurancePaymentForm').onsubmit = async (e) => { e.preventDefault(); const d = new FormData(e.currentTarget), r = recordInsurancePayment(id, { date: String(d.get('date') || ''), amount: Number(d.get('amount')), source: String(d.get('source') || 'tracked'), paymentId }); if (!r.ok)
@@ -3828,7 +3878,7 @@ function openPensionArchiveRecord(id) { const r = sourceArchiveRecords().find(x 
 'use strict';
 function setting() { return state.settings; }
 // Tab-local view preferences never enter the financial save queue or cloud sync.
-const VIEW_PREFERENCE_KEYS = ['selectedAccountId', 'integratedMonth', 'integratedMonthViewedOn', 'integratedLedgerFilter', 'txFilter', 'compositionGroup', 'compositionFocus', 'pensionAssetScope', 'pensionAssetFocus', 'pensionGoalExpanded', 'dividendPeriod', 'dividendKey', 'spendingPeriod', 'spendingView', 'spendingCategoryFilter', 'policyTab'];
+const VIEW_PREFERENCE_KEYS = ['selectedAccountId', 'integratedMonth', 'integratedMonthViewedOn', 'integratedLedgerFilter', 'txFilter', 'compositionGroup', 'compositionFocus', 'pensionAssetScope', 'pensionAssetFocus', 'pensionGoalExpanded', 'dividendPeriod', 'dividendKey', 'spendingPeriod', 'spendingView', 'spendingCategoryFilter', 'spendingChartContext', 'spendingChartPeriod', 'integratedLedgerCategory', 'policyTab'];
 function viewPreferenceValue(key, value) {
     if (key === 'pensionGoalExpanded')
         return typeof value === 'boolean';

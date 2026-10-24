@@ -1,7 +1,7 @@
 'use strict';
 function setting() { return state.settings; }
 // Tab-local view preferences never enter the financial save queue or cloud sync.
-const VIEW_PREFERENCE_KEYS = ['selectedAccountId', 'integratedMonth', 'integratedMonthViewedOn', 'integratedLedgerFilter', 'txFilter', 'compositionGroup', 'compositionFocus', 'pensionAssetScope', 'pensionAssetFocus', 'pensionGoalExpanded', 'dividendPeriod', 'dividendKey', 'spendingPeriod', 'spendingView', 'spendingCategoryFilter', 'policyTab'];
+const VIEW_PREFERENCE_KEYS = ['selectedAccountId', 'integratedMonth', 'integratedMonthViewedOn', 'integratedLedgerFilter', 'txFilter', 'compositionGroup', 'compositionFocus', 'pensionAssetScope', 'pensionAssetFocus', 'pensionGoalExpanded', 'dividendPeriod', 'dividendKey', 'spendingPeriod', 'spendingView', 'spendingCategoryFilter', 'spendingChartContext', 'spendingChartPeriod', 'integratedLedgerCategory', 'policyTab'];
 function viewPreferenceValue(key, value) {
     if (key === 'pensionGoalExpanded')
         return typeof value === 'boolean';

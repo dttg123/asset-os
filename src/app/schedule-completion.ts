@@ -30,6 +30,7 @@ declare function render():void;
 declare function openScheduleDay(date:string):Promise<void>;
 declare function toast(message:string):void;
 declare function haptic(kind:string):void;
+declare function sheetInteractionToken():number;
 
 declare function cardV2(schedule:Schedule):unknown;
 function validateScheduleCompletionRequest(scheduleId:string,date:string){
@@ -79,11 +80,11 @@ function calculateStandardScheduleCompletion(schedule:Schedule,date:string,amoun
   if(!to)return{ok:false,error:'연결 대상이 없습니다.'};
   const cashError=scheduleCompletionCashError(amount);
   if(cashError)return{ok:false,error:cashError};
-  transaction={id:uid('igl'),date,type:'internalTransfer',amount,fromAccountId:'cash-main',toAccountId:to,category:schedule.name,note:'금융 일정에서 완료 기록',meta}
+  transaction={id:uid('igl'),date,type:'internalTransfer',amount,fromAccountId:'cash-main',toAccountId:to,category:schedule.name,note:'금융 일정에서 완료 기록',...(schedule.kind==='insurance'?{productId:schedule.productId}:{}),meta:{...meta,...(schedule.kind==='insurance'?{insurancePayment:true}:{})}}
  }else if(['insurance','expense'].includes(schedule.kind)){
   const cashError=scheduleCompletionCashError(amount);
   if(cashError)return{ok:false,error:cashError};
-  transaction={id:uid('igl'),date,type:'expense',fixed:true,amount,fromAccountId:'cash-main',category:schedule.name,note:'금융 일정에서 완료 기록',meta}
+  transaction={id:uid('igl'),date,type:'expense',fixed:true,amount,fromAccountId:'cash-main',category:schedule.name,note:'금융 일정에서 완료 기록',...(schedule.kind==='insurance'?{productId:schedule.productId}:{}),meta:{...meta,...(schedule.kind==='insurance'?{insurancePayment:true}:{})}}
  }
  if(!transaction)return{ok:false,error:'아직 자동 기록을 지원하지 않는 일정입니다.'};
  return{ok:true,rows:[transaction],checkAggregate:false,targetPensionAccountId:resolvedPension,targetIsaAccountId:resolvedIsa,successMessage:'완료로 기록했습니다.'}
@@ -110,7 +111,7 @@ async function commitScheduleCompletion(schedule:Schedule,date:string,draft:Comp
 }
 
 function renderScheduleCompletion(date:string,message:string):void{
- closeSheets();render();setTimeout(async ()=>(await openScheduleDay(date)),60);toast(message);haptic('light')
+ closeSheets();render();const token=typeof sheetInteractionToken==='function'?sheetInteractionToken():0,hash=location.hash;setTimeout(async ()=>{if(location.hash!==hash||typeof sheetInteractionToken==='function'&&sheetInteractionToken()!==token||document.querySelector('.sheet.open'))return;await openScheduleDay(date)},60);toast(message);haptic('light')
 }
 
 async function updateScheduleActualPayment(scheduleId:string,date:string,amount:number,principal=0,interest=0):Promise<boolean>{

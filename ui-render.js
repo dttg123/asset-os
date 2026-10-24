@@ -101,6 +101,7 @@ function bind() {
         return; setting().integratedMonth = month; rememberViewPreferences(); render(); });
     $('[data-integrated-current-month]')?.addEventListener('click', async () => { setting().integratedMonth = localYmd().slice(0, 7); rememberViewPreferences(); render(); });
     $$('[data-integrated-month-shift]').forEach(b => b.onclick = async () => (await integratedShiftMonth(Number(b.dataset.integratedMonthShift) || 0)));
+    $$('[data-integrated-category]').forEach(b => b.onclick = () => { setting().integratedLedgerCategory = b.dataset.integratedCategory || ''; rememberViewPreferences(); render(); });
     $$('[data-integrated-filter]').forEach(b => b.onclick = async () => { setting().integratedLedgerFilter = b.dataset.integratedFilter || ''; rememberViewPreferences(); render(); });
     $$('[data-integrated-new]').forEach(b => b.onclick = () => openIntegratedTransactionForm());
     $$('[data-integrated-tx]').forEach(b => b.onclick = () => openIntegratedTransactionDetail(b.dataset.integratedTx));

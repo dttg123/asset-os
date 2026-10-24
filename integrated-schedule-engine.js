@@ -62,6 +62,9 @@ function scheduleCompletionTx(scheduleId, date, sourceRows = null) {
     const plan = schedule && cardV2(schedule), bill = plan?.bills.find(b => b.dueDate === date), payment = plan?.payments.find(p => p.billId === bill?.id);
     if (payment)
         return { id: payment.id, date: payment.date, type: 'debtPrincipal', amount: payment.principal, meta: { scheduleId, scheduleDate: date, cardPlanId: scheduleId, cardBillId: bill?.id, loanPrincipal: payment.principal, loanInterest: payment.interest, actualAmount: payment.cash + payment.pointsPrincipal + payment.pointsInterest } };
+    const insurance = schedule?.kind === 'insurance' && schedule.productId ? rows.find(t => ['expense', 'externalExpense'].includes(t.type || '') && t.status !== 'cancelled' && t.productId === schedule.productId && t.meta?.insurancePayment && String(t.meta?.scheduleDate || t.date).slice(0, 7) === date.slice(0, 7)) : null;
+    if (insurance)
+        return insurance;
     const linked = rows.filter(t => t.meta?.scheduleId === scheduleId && t.meta?.scheduleDate === date), explicit = linked[0];
     if (explicit) {
         if (schedule?.kind === 'loan') {
@@ -82,7 +85,7 @@ function scheduleOccurrenceStatus(s, date, knownTx) { const tx = arguments.lengt
 function scheduleStatusLabel(st) { return { done: '완료', overdue: '미완료', today: '오늘', soon: '임박', planned: '예정' }[st] || '예정'; }
 function scheduleOccurrences(month = integratedSelectedMonth()) { const rows = integratedOperationalLedger(); return financeSchedules().map(s => { const date = scheduleDateForMonth(s.active ? s : { ...s, active: true }, month); if (!date)
     return null; const tx = scheduleCompletionTx(s.id, date, rows); if (!s.active && !tx)
-    return null; return { schedule: s, date, status: scheduleOccurrenceStatus(s, date, tx), tx }; }).filter((o) => !!o && (o.schedule.kind !== 'income' || o.status === 'done')).sort((a, b) => a.date.localeCompare(b.date) || String(a.schedule.name).localeCompare(String(b.schedule.name), 'ko')); }
+    return null; return { schedule: s, date, status: scheduleOccurrenceStatus(s, date, tx), tx }; }).filter((o) => !!o).sort((a, b) => a.date.localeCompare(b.date) || String(a.schedule.name).localeCompare(String(b.schedule.name), 'ko')); }
 function scheduleUrgentOccurrences() { const today = localYmd(), months = new Set([today.slice(0, 7)]); const d = new Date(today + 'T00:00:00'); d.setDate(d.getDate() + 4); months.add(localYmd(d).slice(0, 7)); const dated = [...months].flatMap(m => scheduleOccurrences(m)).filter(x => x.schedule.kind !== 'income' && ['overdue', 'today', 'soon'].includes(x.status)), undated = financeSchedules().filter(x => x.active && x.needsDate && x.attention === 'overdue').map(s => ({ schedule: s, date: '날짜 미설정', status: 'overdue', tx: null, undated: true })); return [...undated, ...dated].sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.schedule.name).localeCompare(String(b.schedule.name), 'ko')); }
 function scheduleTargetAccount(s) { if (s.targetAccountId)
     return s.targetAccountId; if (s.targetKind === 'pension')
@@ -349,6 +352,24 @@ function cardV2Terms(s, date) {
     return { index: index + 1, principal, interest, total: principal + interest };
 }
 function cardV2Summary(s, month) { const p = cardV2(s); const history = p.historyBaseline?.statements.find(x => x.month === month), lastPaid = p.historyBaseline?.statements.filter(x => x.status === 'paid').at(-1); const date = scheduleDateForMonth({ ...s, active: true }, month), terms = date ? cardV2Terms(s, date) : null, bill = p.bills.find(b => b.dueDate.slice(0, 7) === month), payment = bill ? p.payments.find(x => x.billId === bill.id) : undefined, remainingPrincipal = Math.max(0, cardRemaining(s)); return { purchaseAmount: p.purchaseAmount, remainingPrincipal, plannedAmount: terms?.total ?? (history ? history.principal + history.interest : 0), estimatedInterest: terms?.interest || 0, actualAmount: payment ? payment.cash + payment.pointsPrincipal + payment.pointsInterest : history?.status === 'paid' ? history.principal + history.interest : null, paidInstallments: Math.min(p.months, (lastPaid?.round || 0) + p.bills.filter(b => cardBillPaid(p, b)).length), totalInstallments: p.months, completed: remainingPrincipal === 0 && p.bills.every(b => cardBillPaid(p, b)) }; }
+function cardMonthlyAmounts(s, month) {
+    const p = cardV2(s);
+    if (!p) {
+        const x = cardPlanSummary(s, month), actual = x.actualAmount;
+        return { confirmed: actual ?? 0, paid: actual ?? 0, unpaid: 0, estimated: actual === null ? x.plannedAmount : 0, hasBill: actual !== null };
+    }
+    const bills = p.bills.filter(b => b.dueDate.slice(0, 7) === month && (!b.settledBy || p.payments.some(x => x.billId === b.id))), history = p.historyBaseline?.statements.find(x => x.month === month);
+    if (bills.length) {
+        const confirmed = bills.reduce((n, b) => n + cardBillTotal(b), 0), paid = bills.filter(b => cardBillPaid(p, b)).reduce((n, b) => n + cardBillTotal(b), 0);
+        return { confirmed, paid, unpaid: Math.max(0, confirmed - paid), estimated: 0, hasBill: true };
+    }
+    if (history) {
+        const amount = history.principal + history.interest, paid = history.status === 'paid' ? amount : 0;
+        return { confirmed: amount, paid, unpaid: amount - paid, estimated: 0, hasBill: true };
+    }
+    const date = scheduleDateForMonth({ ...s, active: true }, month), terms = date ? cardV2Terms(s, date) : null;
+    return { confirmed: 0, paid: 0, unpaid: 0, estimated: terms?.total || 0, hasBill: false };
+}
 function cardPosting(s, date, type, amount, eventId, meta = {}, cashAccount = '') {
     return { id: uid('igl'), date, type, amount, liabilityId: s.liabilityId, category: String(cardV2(s)?.category || s.name), note: '카드 원장 연결', ...(cashAccount ? (type === 'refund' ? { toAccountId: cashAccount } : { fromAccountId: cashAccount }) : {}), meta: { cardPlanId: s.id, cardEventId: eventId, ...meta } };
 }

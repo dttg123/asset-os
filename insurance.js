@@ -59,7 +59,9 @@ function openInsuranceForm(id = '') { const p = insurancePolicies().find(x => x.
 async function saveInsurancePolicy(form) { const d = new FormData(form), id = form.dataset.insuranceId || uid('insurance'), old = insurancePolicies().find(x => x.id === id), name = String(d.get('name') || '').trim(), premium = Math.max(0, Math.round(Number(d.get('premium')) || 0)), paymentDay = Math.min(31, Math.max(0, Math.round(Number(d.get('paymentDay')) || 0))); if (!name)
     return toast('보험명을 입력해 주세요.'); if (!premium)
     return toast('보험료를 입력해 주세요.'); const p = { ...(old || {}), id, name, company: String(d.get('company') || '').trim(), category: String(d.get('category') || '').trim(), premium, paymentDay, paymentStyle: String(d.get('paymentStyle')) === 'lump' ? 'lump' : 'monthly', contractDate: String(d.get('contractDate') || ''), coverageEndDate: String(d.get('coverageEndDate') || ''), paymentEndDate: String(d.get('paymentEndDate') || ''), status: old?.status || 'active', coverages: parseInsuranceCoverages(d.get('coverages')), note: String(d.get('note') || '').trim() }; if (p.contractDate && p.paymentEndDate && p.paymentEndDate < p.contractDate)
-    return toast('납입 종료일은 계약일보다 빠를 수 없습니다.'); if (old)
+    return toast('납입 종료일은 계약일보다 빠를 수 없습니다.'); if (p.contractDate && p.coverageEndDate && p.coverageEndDate < p.contractDate)
+    return toast('보장 만기는 계약일보다 빠를 수 없습니다.'); if (p.paymentEndDate && p.coverageEndDate && p.paymentEndDate > p.coverageEndDate)
+    return toast('납입 종료일은 보장 만기보다 늦을 수 없습니다.'); if (old)
     Object.assign(old, p);
 else
     insurancePolicies().push(p); syncInsuranceSchedule(p, d.get('linkSchedule') === 'on'); if (!(await persist()))
@@ -70,6 +72,10 @@ function endInsurancePolicy(id) { const p = insurancePolicies().find(x => x.id =
     schedule.endDate = p.endedAt;
 } if (!(await persist()))
     return; closeSheets(); render(); setTimeout(openInsuranceHub, 60); toast('보험 계약을 종료 보관했습니다.'); }); }
+function insuranceExistingPayment(p, date) {
+    const ids = new Set(financeSchedules().filter(s => s.kind === 'insurance' && s.productId === p.id).map(s => s.id));
+    return integratedOperationalLedger().find(t => ['expense', 'externalExpense'].includes(t.type || '') && t.status !== 'cancelled' && (t.productId === p.id && t.meta?.insurancePayment || ids.has(t.meta?.scheduleId)) && (p.paymentStyle === 'lump' || String(t.meta?.scheduleDate || t.date).slice(0, 7) === date.slice(0, 7)));
+}
 function recordInsurancePayment(id, { date, amount, source = 'tracked', paymentId = '' }) {
     const p = insurancePolicies().find(x => x.id === id);
     if (!p)
@@ -83,10 +89,14 @@ function recordInsurancePayment(id, { date, amount, source = 'tracked', paymentI
         return { ok: false, error: '납입 종료일 이후입니다. 계약 기간을 확인해 주세요.' };
     if (!Number.isFinite(Number(amount)) || Number(amount) <= 0)
         return { ok: false, error: '납부 금액을 1원 이상 입력해 주세요.' };
+    const existing = insuranceExistingPayment(p, date);
+    if (existing)
+        return { ok: false, error: '이 납부 기간에 이미 기록된 보험료가 있습니다. 기존 납부 기록을 확인해 주세요.' };
     const ledger = integratedStore().ledger;
     if (paymentId && ledger.some(t => t.id === paymentId))
         return { ok: false, error: '이미 저장한 납부 기록입니다.' };
-    const tx = { id: paymentId || uid('insurance-payment'), date, type: source === 'outside' ? 'externalExpense' : 'expense', amount: Number(amount), fromAccountId: source === 'outside' ? undefined : 'cash-main', category: p.name + ' 보험료', productId: id, fixed: true, meta: { insurancePayment: true } };
+    const schedule = insuranceSchedule(p), scheduleDate = schedule ? scheduleDateForMonth({ ...schedule, active: true }, date.slice(0, 7)) : '';
+    const tx = { id: paymentId || uid('insurance-payment'), date, type: source === 'outside' ? 'externalExpense' : 'expense', amount: Number(amount), fromAccountId: source === 'outside' ? undefined : 'cash-main', category: p.name + ' 보험료', productId: id, fixed: true, meta: { insurancePayment: true, ...(scheduleDate ? { scheduleId: schedule.id, scheduleDate, scheduledAmount: Number(p.premium), actualAmount: Number(amount) } : {}) } };
     const err = integratedValidateCandidate(tx, '');
     if (err)
         return { ok: false, error: err };
@@ -99,7 +109,7 @@ function openInsurancePaymentForm(id) {
         return;
     $('#formEyebrow').textContent = '보험 · 실제 납부';
     $('#formTitle').textContent = '보험료 납부 기록';
-    $('#formBody').innerHTML = `<form id="insurancePaymentForm" class="form"><div class="form-grid"><div class="field"><label>납부일</label><input name="date" type="date" value="${escapeHtml(ymd())}" required></div><div class="field"><label>실제 납부액</label><input name="amount" type="number" min="1" step="1" value="${escapeHtml(Number(p.premium) || '')}" required></div></div><div class="field"><label>지급 계좌</label><select name="source"><option value="tracked">현금·입출금</option><option value="outside">앱 밖 계좌</option></select></div><div class="source-note">일정에서 이미 완료한 납부는 다시 입력하지 않습니다.</div><button class="integrated-form-save">납부 저장</button></form>`;
+    $('#formBody').innerHTML = `<form id="insurancePaymentForm" class="form"><div class="form-grid"><div class="field"><label>납부일</label><input name="date" type="date" value="${escapeHtml(ymd())}" required></div><div class="field"><label>실제 납부액</label><input name="amount" type="number" min="1" step="1" value="${escapeHtml(Number(p.premium) || '')}" required></div></div><div class="field"><label>지급 계좌</label><select name="source"><option value="tracked">현금·입출금</option><option value="outside">앱 밖 계좌</option></select></div><div class="source-note">이 기간의 보험료는 일정과 함께 연결됩니다. 이미 납부한 기간은 중복 저장하지 않아요.</div><button class="integrated-form-save">납부 저장</button></form>`;
     openSheet('#formSheet', { mode: 'input' });
     const paymentId = uid('insurance-payment');
     $('#insurancePaymentForm').onsubmit = async (e) => { e.preventDefault(); const d = new FormData(e.currentTarget), r = recordInsurancePayment(id, { date: String(d.get('date') || ''), amount: Number(d.get('amount')), source: String(d.get('source') || 'tracked'), paymentId }); if (!r.ok)

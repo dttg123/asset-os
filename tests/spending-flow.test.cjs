@@ -20,3 +20,8 @@ test('calendar scopes and linked refunds reconcile category, fixed/variable and 
  assert.equal(run("integratedSpendingAnalysis('2026-Q1')").previousMonth,'2025-Q4');assert.equal(run("integratedSpendingAnalysis('2026-H1')").previousMonth,'2025-H2');
  assert.equal(run("integratedSpendingView('2026-01','year')").trend[11].month,'2026-12');assert.equal(run("integratedSpendingAnalysis('2026')").total,730);assert.equal(JSON.stringify(rows),before);
 });
+
+test('same names in different categories stay separate and daily charts reconcile leap-year boundaries',()=>{
+ const rows=[{id:'a',type:'expense',date:'2024-02-01',amount:100,category:'식비',meta:{spendingItem:'같은 이름'}},{id:'b',type:'expense',date:'2024-02-29',amount:200,category:'쇼핑',meta:{spendingItem:'같은 이름'}}],c=vm.createContext({setting:()=>({}),integratedLedger:()=>rows,integratedMonthKey:x=>String(x).slice(0,7),integratedLatestMonth:()=> '2024-02'});vm.runInContext(fs.readFileSync(path.join(__dirname,'../src/domain/integrated-spending.js'),'utf8'),c);
+ const run=s=>JSON.parse(vm.runInContext('JSON.stringify('+s+')',c)),view=run("integratedSpendingView('2024-02','month')");assert.equal(view.items.length,2);assert.equal(view.trend.length,29);assert.deepEqual(view.trend.filter(x=>x.label).map(x=>x.label),['1일','10일','20일','29일']);assert.equal(view.trend.reduce((n,x)=>n+x.amount,0),300);assert.equal(run("spendingRange('2024-02-29')").end,'2024-03-01');assert.equal(run("integratedSpendingAnalysis('2024-03-01')").previousMonth,'2024-02-29');
+});

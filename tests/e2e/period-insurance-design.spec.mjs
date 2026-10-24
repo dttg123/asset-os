@@ -1,5 +1,6 @@
 import {test,expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
+async function openCardScheduleGroup(page,scope='schedule'){const group=page.locator(`[data-schedule-category="card"][data-schedule-scope="${scope}"]`);if(await group.getAttribute('aria-expanded')!=='true')await group.click()}
 test.beforeEach(async({page})=>{if(process.env.ASSET_OS_QA_SDK_PATH){const body=await readFile(process.env.ASSET_OS_QA_SDK_PATH);await page.route('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4',route=>route.fulfill({body,contentType:'text/javascript'}))}});
 test('@core selected months and insurance payment status stay explicit without changing money',async({page},info)=>{
  await page.goto('/index.html?qa=1#/home');await page.waitForFunction(()=>!!window.__assetOS);
@@ -27,7 +28,7 @@ test('@core selected months and insurance payment status stay explicit without c
  expect(await page.evaluate(()=>({ledger:JSON.stringify(state.integrated.ledger),insurance:JSON.stringify(state.insurance),net:integratedFinancialModel().netAssets}))).toEqual(before);
 });
 
-test('@core today defaults ignore stale months and thirty schedules stay compact with direct card access',async({page},info)=>{
+test('@core today defaults ignore stale months and thirty schedules stay grouped with direct card access',async({page},info)=>{
  await page.clock.setFixedTime(new Date('2026-10-17T03:00:00Z'));
  await page.goto('/index.html?qa=1#/home');await page.waitForFunction(()=>!!window.__assetOS);
  await page.evaluate(async ()=>{
@@ -43,9 +44,9 @@ test('@core today defaults ignore stale months and thirty schedules stay compact
  await page.locator('[data-summary-entry]').first().click();await expect(page.locator('#entryDate')).toHaveValue('2026-10-17');
  await page.getByRole('button',{name:'입력창 닫기',exact:true}).click();
  await page.getByRole('main').getByRole('button',{name:'일정',exact:true}).click();
- await expect(page.locator('.schedule-pending-list .schedule-row')).toHaveCount(5);
- await expect(page.locator('.schedule-card .schedule-list .schedule-row:visible')).toHaveCount(5);
- await expect(page.locator('.schedule-pending-more summary')).toHaveText('미완료 15건 더 보기');
+ await expect(page.locator('.schedule-pending-list .schedule-row')).toHaveCount(20);
+ await expect(page.locator('.schedule-card .schedule-list .schedule-row:visible')).toHaveCount(0);
+ await expect(page.locator('[data-schedule-category="living"][data-schedule-scope="schedule"]')).toContainText('20건');
  await expect(page.locator('.schedule-completed summary')).toHaveText('완료 10건 보기');
  const ledger=await page.evaluate(()=>JSON.stringify(state.integrated.ledger));
  for(const width of [360,412])for(const theme of ['light','dark']){
@@ -53,8 +54,8 @@ test('@core today defaults ignore stale months and thirty schedules stay compact
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1)).toBe(true);
   await page.screenshot({path:`/tmp/asset-schedule-${info.project.name}-${width}-${theme}.png`,animations:'disabled'});
  }
- await page.locator('.schedule-pending-more summary').click();await expect(page.locator('.schedule-card .schedule-list .schedule-row:visible')).toHaveCount(20);
- await page.locator('.schedule-completed summary').click();await expect(page.locator('.schedule-card .schedule-list .schedule-row:visible')).toHaveCount(30);
+ await page.locator('[data-schedule-category="living"][data-schedule-scope="schedule"]').click();await expect(page.locator('.schedule-card .schedule-list .schedule-row:visible')).toHaveCount(20);
+ await page.locator('.schedule-completed summary').click();await page.locator('[data-schedule-category="living"][data-schedule-scope="completed"]').click();await expect(page.locator('.schedule-card .schedule-list .schedule-row:visible')).toHaveCount(30);
  await page.locator('[data-card-hub]').click();await expect(page.locator('#detailSheet.open #integratedCardPlans')).toBeVisible();await expect(page.locator('#detailSheet.open [data-card-plan-new]')).toHaveCount(0);
  await page.goBack();await expect(page.locator('#detailSheet')).not.toHaveClass(/open/);
  await page.getByRole('button',{name:'이번 달로',exact:true}).click();await expect(page.locator('[data-integrated-month-select]')).toHaveValue('2026-10');
@@ -72,7 +73,7 @@ test('@core final card installment remains saved and completed history survives 
   const id=(await createCardInstallment({name:'완료 검증 TV',purchaseAmount:10001,months:2,purchaseDate:'2026-08-01',firstPaymentDate:'2026-08-31',interestMode:'free'}));
   const finish=renderScheduleCompletion;renderScheduleCompletion=()=>{};(await completeScheduleOccurrence(id,'2026-08-31',0,'','',5000,0));renderScheduleCompletion=finish;closeSheets({all:true});setting().integratedMonth='2026-09';(await persist(false));nav('integrated','schedule');return id;
  });
- await page.locator(`.schedule-list [data-fixed-cost-item="${id}"]`).click();
+ await openCardScheduleGroup(page);await page.locator(`.schedule-list [data-fixed-cost-item="${id}"]`).click();
  await page.locator('[data-schedule-loan-principal]').fill('5001');await page.locator('[data-schedule-loan-interest]').fill('0');await page.locator('[data-schedule-complete]').click();
  await expect(page.locator('[data-schedule-actual-edit]')).toBeVisible();
  await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);await page.reload();
@@ -118,7 +119,7 @@ test('@core card entry is centralized and partial interest persists with one ful
  await page.reload();await page.waitForFunction(()=>!!window.__assetOS);
  const result=await page.evaluate(()=>{const s=financeSchedules().find(s=>s.cardPlan);return{count:financeSchedules().length,plan:s.cardPlan,free:cardInstallmentTerms(s,'2026-03-31').interest,paid:cardInstallmentTerms(s,'2026-04-30').interest}});
  expect(result.count).toBe(1);expect(result.plan.paidInterestRounds).toEqual([4,5,6]);expect(result.free).toBe(0);expect(result.paid).toBe(1850);
- await page.locator('[data-card-hub]').click();await page.locator('[data-card-plan-open]').click();
+ await page.locator('[data-card-hub]').click();await page.locator('.card-purchases summary').click();await page.locator('[data-card-plan-open]').click();
  await expect(page.locator('#sheetBody')).toContainText('4,5,6회차 이자 부담');
  await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
  await page.evaluate(()=>openBackupHub());
@@ -167,7 +168,7 @@ test('@core equal card installments remain independent and deleting one payment 
   const ids=[];for(const name of ['TV 검사','냉장고 검사'])ids.push(await createCardInstallment({name,purchaseAmount:360000,months:3,annualRate:12,purchaseDate:'2026-01-01',firstPaymentDate:'2026-01-31',interestMode:'paid'}));nav('integrated','schedule');return ids;
  });
  for(let index=0;index<ids.length;index++){
-  await page.locator(`.schedule-list [data-fixed-cost-item="${ids[index]}"]`).click();
+  await openCardScheduleGroup(page);await page.locator(`.schedule-list [data-fixed-cost-item="${ids[index]}"]`).click();
   await page.locator(`[data-schedule-loan-principal="${ids[index]}"]`).fill('120000');await page.locator(`[data-schedule-loan-interest="${ids[index]}"]`).fill('3600');await page.locator(`[data-schedule-complete="${ids[index]}"]`).click();
   await expect(page.locator(`[data-schedule-actual-edit="${ids[index]}"]`)).toBeVisible();
   if(index===0)expect(await page.evaluate(id=>scheduleCompletionTx(id,'2026-01-31'),ids[1])).toBeNull();
@@ -175,12 +176,12 @@ test('@core equal card installments remain independent and deleting one payment 
  }
  await page.reload();await page.waitForFunction(()=>!!window.__assetOS);await page.evaluate(()=>nav('integrated','schedule'));
  const other=await page.evaluate(id=>JSON.stringify(state.integrated.ledger.filter(t=>t.meta?.scheduleId===id)),ids[1]);
- await page.locator('.schedule-completed summary').click();await page.locator(`.schedule-list [data-fixed-cost-item="${ids[0]}"]`).click();const principalId=await page.evaluate(id=>state.integrated.ledger.find(t=>t.meta?.scheduleId===id&&t.type==='debtPrincipal').id,ids[0]);await page.locator(`[data-schedule-record="${principalId}"]`).click();await page.locator('[data-integrated-delete-detail]').click();
+ await page.locator('.schedule-completed summary').click();await openCardScheduleGroup(page,'completed');await page.locator(`.schedule-list [data-fixed-cost-item="${ids[0]}"]`).click();const principalId=await page.evaluate(id=>state.integrated.ledger.find(t=>t.meta?.scheduleId===id&&t.type==='debtPrincipal').id,ids[0]);await page.locator(`[data-schedule-record="${principalId}"]`).click();await page.locator('[data-integrated-delete-detail]').click();
  await expect(page.getByText('이번 납부 기록을 삭제할까요?',{exact:true})).toBeVisible();await page.getByRole('button',{name:'삭제',exact:true}).last().click();
  await expect(page.getByText('거래를 삭제했습니다.',{exact:true})).toBeVisible();await page.reload();await page.waitForFunction(()=>!!window.__assetOS);
  const result=await page.evaluate(ids=>({first:scheduleCompletionTx(ids[0],'2026-01-31'),left:state.integrated.ledger.filter(t=>t.meta?.scheduleId===ids[0]).length,other:JSON.stringify(state.integrated.ledger.filter(t=>t.meta?.scheduleId===ids[1])),debt:integratedReplay().totalDebt,cash:integratedReplay().assets['cash-main']}),ids);
  expect(result).toEqual({first:null,left:0,other,debt:600000,cash:9876400});
- await page.evaluate(()=>nav('integrated','schedule'));await page.locator(`.schedule-list [data-fixed-cost-item="${ids[0]}"]`).click();await expect(page.locator(`[data-schedule-complete="${ids[0]}"]`)).toBeVisible();
+ await page.evaluate(()=>nav('integrated','schedule'));await openCardScheduleGroup(page);await page.locator(`.schedule-list [data-fixed-cost-item="${ids[0]}"]`).click();await expect(page.locator(`[data-schedule-complete="${ids[0]}"]`)).toBeVisible();
 });
 
 test('@core editing deposit interest keeps its account and observation aligned after reload and deletion',async({page})=>{

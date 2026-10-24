@@ -97,7 +97,10 @@ function resetSheetScroll(sheet) {
     top();
     requestAnimationFrame(() => { top(); requestAnimationFrame(top); });
 }
+let sheetInteractionVersion = 0;
+function sheetInteractionToken() { return sheetInteractionVersion; }
 function openSheet(id, options = {}) {
+    sheetInteractionVersion++;
     const previous = activeSheetId, wasOpen = $$('.sheet.open').length > 0;
     if (previous === '#profileSheet' && id !== '#profileSheet') {
         parentSheetId = '#profileSheet';
@@ -124,6 +127,7 @@ function openSheet(id, options = {}) {
     }
 }
 function closeSheets(options = {}) {
+    sheetInteractionVersion++;
     const had = $$('.sheet.open').length > 0, restoreY = lockedScrollY;
     if (parentSheetId && activeSheetId !== parentSheetId && !options.all) {
         $$('.sheet.open').forEach((sheet) => {

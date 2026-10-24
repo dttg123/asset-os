@@ -67,13 +67,13 @@ function calculateStandardScheduleCompletion(schedule, date, amountOverride, tar
         const cashError = scheduleCompletionCashError(amount);
         if (cashError)
             return { ok: false, error: cashError };
-        transaction = { id: uid('igl'), date, type: 'internalTransfer', amount, fromAccountId: 'cash-main', toAccountId: to, category: schedule.name, note: '금융 일정에서 완료 기록', meta };
+        transaction = { id: uid('igl'), date, type: 'internalTransfer', amount, fromAccountId: 'cash-main', toAccountId: to, category: schedule.name, note: '금융 일정에서 완료 기록', ...(schedule.kind === 'insurance' ? { productId: schedule.productId } : {}), meta: { ...meta, ...(schedule.kind === 'insurance' ? { insurancePayment: true } : {}) } };
     }
     else if (['insurance', 'expense'].includes(schedule.kind)) {
         const cashError = scheduleCompletionCashError(amount);
         if (cashError)
             return { ok: false, error: cashError };
-        transaction = { id: uid('igl'), date, type: 'expense', fixed: true, amount, fromAccountId: 'cash-main', category: schedule.name, note: '금융 일정에서 완료 기록', meta };
+        transaction = { id: uid('igl'), date, type: 'expense', fixed: true, amount, fromAccountId: 'cash-main', category: schedule.name, note: '금융 일정에서 완료 기록', ...(schedule.kind === 'insurance' ? { productId: schedule.productId } : {}), meta: { ...meta, ...(schedule.kind === 'insurance' ? { insurancePayment: true } : {}) } };
     }
     if (!transaction)
         return { ok: false, error: '아직 자동 기록을 지원하지 않는 일정입니다.' };
@@ -105,7 +105,9 @@ async function commitScheduleCompletion(schedule, date, draft) {
 function renderScheduleCompletion(date, message) {
     closeSheets();
     render();
-    setTimeout(async () => (await openScheduleDay(date)), 60);
+    const token = typeof sheetInteractionToken === 'function' ? sheetInteractionToken() : 0, hash = location.hash;
+    setTimeout(async () => { if (location.hash !== hash || typeof sheetInteractionToken === 'function' && sheetInteractionToken() !== token || document.querySelector('.sheet.open'))
+        return; await openScheduleDay(date); }, 60);
     toast(message);
     haptic('light');
 }

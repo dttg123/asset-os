@@ -131,11 +131,11 @@ function v069ScheduleMeta(kind) { if (kind === 'income')
     return ['insurance', '보험']; if (kind === 'loan')
     return ['loan', '대출·이자']; if (['investment', 'saving'].includes(kind))
     return ['saving', '저축·연금']; return ['living', '생활 고정비']; }
-function v069ScheduleGroups(list, scope) { const order = ['income', 'insurance', 'loan', 'saving', 'living'], map = new Map(order.map(k => [k, []])); for (const row of list) {
-    const [key] = v069ScheduleMeta(row.schedule.kind);
+function v069ScheduleGroups(list, scope) { const order = ['income', 'card', 'insurance', 'loan', 'saving', 'living'], map = new Map(order.map(k => [k, []])); for (const row of list) {
+    const [key] = row.schedule.cardPlan ? ['card', '카드'] : v069ScheduleMeta(row.schedule.kind);
     map.get(key).push(row);
 } return order.flatMap(key => { const rows = map.get(key); if (!rows.length)
-    return []; const label = v069ScheduleMeta(rows[0].schedule.kind)[1], amount = rows.reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0), open = v069ScheduleGroup[scope] === key, details = rows.map(o => `<button class="schedule-row" ${scope === 'summary' ? `data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"` : `data-schedule-day="${escapeHtml(o.date)}"`}><span class="schedule-copy"><strong>${escapeHtml(o.schedule.name)}</strong><small>${escapeHtml(o.date)} · ${escapeHtml(scheduleKindLabel(o.schedule.kind))}</small></span><strong class="schedule-amount">${won(scheduleOccurrenceDisplayAmount(o))}</strong><span class="schedule-status ${o.status}">${scheduleStatusLabel(o.status)}</span></button>`).join(''); return [`<div class="schedule-category ${open ? 'open' : ''}"><button class="schedule-category-head" data-schedule-category="${escapeHtml(key)}" data-schedule-scope="${escapeHtml(scope)}" aria-expanded="${escapeHtml(open ? 'true' : 'false')}"><span><strong>${label}</strong><small>${rows.length}건</small></span><b>${won(amount)}</b><i>⌄</i></button><div class="schedule-category-body" ${open ? '' : 'hidden'}>${details}</div></div>`]; }).join(''); }
+    return []; const label = rows[0].schedule.cardPlan ? '카드' : v069ScheduleMeta(rows[0].schedule.kind)[1], amount = rows.reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0), open = v069ScheduleGroup[scope] === key, details = rows.map(o => `<button class="schedule-row" ${scope === 'summary' ? `data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"` : `data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"`}><span class="schedule-copy"><strong>${escapeHtml(o.schedule.name)}</strong><small>${escapeHtml(o.date)} · ${escapeHtml(scheduleKindLabel(o.schedule.kind))}</small></span><strong class="schedule-amount">${won(scheduleOccurrenceDisplayAmount(o))}</strong><span class="schedule-status ${o.status}">${scheduleOccurrenceUiLabel(o)}</span></button>`).join(''); return [`<div class="schedule-category ${open ? 'open' : ''}"><button class="schedule-category-head" data-schedule-category="${escapeHtml(key)}" data-schedule-scope="${escapeHtml(scope)}" aria-expanded="${escapeHtml(open ? 'true' : 'false')}"><span><strong>${label}</strong><small>${rows.length}건</small></span><b>${won(amount)}</b><i>⌄</i></button><div class="schedule-category-body" ${open ? '' : 'hidden'}>${details}</div></div>`]; }).join(''); }
 const v069IntegratedSummary = integratedSummaryPage;
 integratedSummaryPage = function () {
     const month = integratedSelectedMonth(), f = integratedFinancialModel(), pending = scheduleOccurrences(month).filter(o => o.status !== 'done' && o.schedule.kind !== 'income').sort((a, b) => a.date.localeCompare(b.date)), template = document.createElement('template');
@@ -195,19 +195,19 @@ openIntegratedMonthDetail = function (month) { v069MonthDetail(month); if ($('#s
     label.textContent = '가용 현금'; };
 const v069SchedulePage = integratedSchedulePage;
 integratedSchedulePage = function () {
-    const month = integratedScheduleMonth(), occ = scheduleOccurrences(month).sort((a, b) => a.date.localeCompare(b.date)), pending = occ.filter(o => o.status !== 'done' && o.schedule.kind !== 'income'), done = occ.filter(o => o.status === 'done').length, template = document.createElement('template');
+    const month = integratedScheduleMonth(), occ = scheduleOccurrences(month).sort((a, b) => a.date.localeCompare(b.date)), pending = occ.filter(o => o.status !== 'done'), done = occ.filter(o => o.status === 'done').length, template = document.createElement('template');
     template.innerHTML = v069SchedulePage();
     const title = template.content.querySelector('.schedule-head h2'), small = template.content.querySelector('.schedule-head small'), pill = template.content.querySelector('.schedule-head .count-pill'), list = template.content.querySelector('.schedule-card .schedule-list');
     if (title)
         title.textContent = `${integratedMonthLabel(month)} 남은 납부액`;
     if (small)
-        small.textContent = `${won(pending.reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0))} · 미완료 ${pending.length}건`;
+        small.textContent = `${won(pending.filter(o => o.schedule.kind !== 'income').reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0))} · 미완료 ${pending.length}건${pending.some(o => o.schedule.kind === 'income') ? ' · 수입 예정 별도' : ''}`;
     if (pill)
         pill.textContent = `완료 ${done}건`;
-    const row = (o) => `<button class="schedule-row" data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"><span class="schedule-copy"><strong>${escapeHtml(o.schedule.name)}</strong><small>${escapeHtml(o.date)} · 예정 ${won(schedulePlannedAmount(o.schedule, o.date))}${o.status === 'done' ? ` · 실제 ${won(scheduleOccurrenceDisplayAmount(o))}` : ''}</small></span><strong class="schedule-amount">${won(scheduleOccurrenceDisplayAmount(o))}</strong><span class="schedule-status ${o.status}">${scheduleOccurrenceUiLabel(o)}</span></button>`;
     const finished = occ.filter(o => o.status === 'done');
     if (list)
-        list.innerHTML = `<div class="schedule-pending-list">${pending.slice(0, 5).map(row).join('') || '<div class="integrated-empty">선택한 달의 미완료 일정이 없어요.</div>'}</div>${pending.length > 5 ? `<details class="schedule-fold schedule-pending-more"><summary>미완료 ${pending.length - 5}건 더 보기</summary>${pending.slice(5).map(row).join('')}</details>` : ''}${finished.length ? `<details class="schedule-fold schedule-completed"><summary>완료 ${finished.length}건 보기</summary>${finished.map(row).join('')}</details>` : ''}`;
+        list.innerHTML = `<div class="schedule-pending-list">${v069ScheduleGroups(pending, 'schedule') || '<div class="integrated-empty">선택한 달의 미완료 일정이 없어요.</div>'}</div>${finished.length ? `<details class="schedule-fold schedule-completed"><summary>완료 ${finished.length}건 보기</summary>${v069ScheduleGroups(finished, 'completed')}</details>` : ''}`;
+    template.content.querySelector('.schedule-monthbar')?.remove();
     const week = template.content.querySelector('.schedule-week'), grid = template.content.querySelector('.schedule-grid');
     if (week && grid) {
         const details = document.createElement('details'), summary = document.createElement('summary');
@@ -269,7 +269,8 @@ openFinancialProductDetail = function (id) { v069FinanceDetail(id); for (const s
 } };
 const v069Bind = bind;
 bind = function () { v069Bind(); bindScheduleTools(); bindIntegratedSummaryEntries(); $$('[data-card-hub]').forEach(button => button.onclick = () => openCardPlansHub()); $$('[data-integrated-asset-group]').forEach(button => button.onclick = () => { v069AssetGroup = v069AssetGroup === button.dataset.integratedAssetGroup ? '' : button.dataset.integratedAssetGroup || ''; renderKeepingScroll(); }); $$('[data-schedule-category]').forEach(button => button.onclick = () => { const scope = button.dataset.scheduleScope, key = button.dataset.scheduleCategory; if (!scope || !key)
-    return; v069ScheduleGroup[scope] = v069ScheduleGroup[scope] === key ? '' : key; renderKeepingScroll(); }); const more = $('[data-tx-more]'); if (more)
+    return; v069ScheduleGroup[scope] = v069ScheduleGroup[scope] === key ? '' : key; $$('[data-schedule-category]').filter(x => x.dataset.scheduleScope === scope).forEach(x => { const open = x.dataset.scheduleCategory === v069ScheduleGroup[scope], group = x.closest('.schedule-category'), body = group?.querySelector('.schedule-category-body'); x.setAttribute('aria-expanded', String(open)); group?.classList.toggle('open', open); if (body)
+    body.hidden = !open; }); }); const more = $('[data-tx-more]'); if (more)
     more.onclick = () => { transactionDisplayLimit += 20; renderKeepingScroll(); }; };
 const appearanceMenu = document.querySelector('[data-profile-action="appearance"] small');
 if (appearanceMenu)
