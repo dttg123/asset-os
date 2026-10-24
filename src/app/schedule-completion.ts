@@ -30,6 +30,7 @@ declare function render():void;
 declare function openScheduleDay(date:string):Promise<void>;
 declare function toast(message:string):void;
 declare function haptic(kind:string):void;
+declare function sheetInteractionToken():number;
 
 declare function cardV2(schedule:Schedule):unknown;
 function validateScheduleCompletionRequest(scheduleId:string,date:string){
@@ -110,7 +111,7 @@ async function commitScheduleCompletion(schedule:Schedule,date:string,draft:Comp
 }
 
 function renderScheduleCompletion(date:string,message:string):void{
- closeSheets();render();setTimeout(async ()=>(await openScheduleDay(date)),60);toast(message);haptic('light')
+ closeSheets();render();const token=typeof sheetInteractionToken==='function'?sheetInteractionToken():0,hash=location.hash;setTimeout(async ()=>{if(location.hash!==hash||typeof sheetInteractionToken==='function'&&sheetInteractionToken()!==token||document.querySelector('.sheet.open'))return;await openScheduleDay(date)},60);toast(message);haptic('light')
 }
 
 async function updateScheduleActualPayment(scheduleId:string,date:string,amount:number,principal=0,interest=0):Promise<boolean>{

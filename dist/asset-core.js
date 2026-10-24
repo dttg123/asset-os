@@ -2122,7 +2122,9 @@ async function commitScheduleCompletion(schedule, date, draft) {
 function renderScheduleCompletion(date, message) {
     closeSheets();
     render();
-    setTimeout(async () => (await openScheduleDay(date)), 60);
+    const token = typeof sheetInteractionToken === 'function' ? sheetInteractionToken() : 0, hash = location.hash;
+    setTimeout(async () => { if (location.hash !== hash || typeof sheetInteractionToken === 'function' && sheetInteractionToken() !== token || document.querySelector('.sheet.open'))
+        return; await openScheduleDay(date); }, 60);
     toast(message);
     haptic('light');
 }

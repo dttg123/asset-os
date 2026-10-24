@@ -236,7 +236,7 @@ function spendingCategoryIcon(category) {
     return `<span class="spending-icon spending-icon-${key}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${key === 'unknown' ? '<circle cx="12" cy="12" r="10"/>' : ''}<path d="${escapeHtml(paths[key])}"/></svg></span>`;
 }
 function spendingTrendMarkup(analysis, item = '', linked = false) {
-    const saved = linked && setting().spendingChartContext === spendingViewContext() ? String(setting().spendingChartPeriod || '') : '', selected = analysis.trend.find(x => x.month === (saved || analysis.month)) || analysis.trend.at(-1);
+    const saved = linked && setting().spendingChartContext === spendingViewContext() ? String(setting().spendingChartPeriod || '') : '', selected = analysis.trend.find(x => x.month === (saved || analysis.month)) || (linked ? analysis.trend.find(x => x.month === integratedSelectedMonth()) : null) || analysis.trend.findLast(x => x.amount !== 0) || analysis.trend.at(-1);
     if (!selected)
         return '';
     const max = Math.max(1, ...analysis.trend.map(x => Math.abs(x.amount))), period = selected.month, daily = period.length === 10;

@@ -114,7 +114,10 @@ function resetSheetScroll(sheet:HTMLElement){
  requestAnimationFrame(()=>{top();requestAnimationFrame(top)})
 }
 
+let sheetInteractionVersion=0;
+function sheetInteractionToken():number{return sheetInteractionVersion}
 function openSheet(id:string,options:SheetOptions={}){
+ sheetInteractionVersion++;
  const previous=activeSheetId,wasOpen=$$('.sheet.open').length>0;
  if(previous==='#profileSheet'&&id!=='#profileSheet'){
   parentSheetId='#profileSheet';
@@ -142,6 +145,7 @@ function openSheet(id:string,options:SheetOptions={}){
 }
 
 function closeSheets(options:SheetOptions={}){
+ sheetInteractionVersion++;
  const had=$$('.sheet.open').length>0,restoreY=lockedScrollY;
  if(parentSheetId&&activeSheetId!==parentSheetId&&!options.all){
   $$('.sheet.open').forEach((sheet:HTMLElement)=>{

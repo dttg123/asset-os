@@ -13,3 +13,5 @@ The card hub shows selected-month confirmed bills, paid amounts, unpaid amounts 
 QA adds browser regressions for both insurance entry orders and ZIP/reload, cross-category same-name edits, renamed search, stale filters, period axes, chart geometry and selection reload, issuer bill/payment/complete states, schedule income grouping, and invalid insurance dates. Existing financial source-preservation, refund-dependency and lifecycle checks remain enabled.
 
 The defects escaped because tests covered isolated paths and horizontal overflow while encoding the old overview chart as expected behavior. The regression expectations now follow the overview/analysis split and cross-path identities.
+
+A delayed post-save schedule sheet now cancels if the user opens/closes another sheet or changes route. This prevents the delayed callback from replacing newly opened input. Initial chart selection prefers an in-range anchor or recent non-zero activity, and daily axes fit the phone width.
