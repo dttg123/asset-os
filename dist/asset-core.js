@@ -1304,7 +1304,7 @@ function integratedSpendingView(anchor, mode = 'half') {
         const days = new Date(Number(anchor.slice(0, 4)), Number(anchor.slice(5, 7)), 0).getDate();
         for (let d = 1; d <= days; d++) {
             const day = anchor + '-' + String(d).padStart(2, '0');
-            trend.push({ month: day, label: d === 1 || d % 5 === 0 || d === days ? `${d}일` : '', amount: analysis.rows.filter(row => row.date === day).reduce((sum, row) => sum + Number(row.amount || 0), 0) });
+            trend.push({ month: day, label: d === 1 || d % 10 === 0 && days - d >= 3 || d === days ? `${d}일` : '', amount: analysis.rows.filter(row => row.date === day).reduce((sum, row) => sum + Number(row.amount || 0), 0) });
         }
         return { ...analysis, trend };
     }
