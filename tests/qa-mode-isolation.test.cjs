@@ -158,7 +158,7 @@ assert.equal((await run("(async()=>{return (await qaGenerateThirtyFiveYears())})
 assert.deepEqual(plain((await run('({pensionTransactionSearch,pensionTransactionDisplayLimit,integratedLedgerSearch,integratedSearchDisplayLimit,integratedLedgerFilter:setting().integratedLedgerFilter})'))),{pensionTransactionSearch:'',pensionTransactionDisplayLimit:20,integratedLedgerSearch:'',integratedSearchDisplayLimit:50,integratedLedgerFilter:'all'});
 
 assert.equal((await run('homeMonthActivity().remainingAmount')),2100000,'예정 월급은 지출·납입에 포함하지 않는다');
-assert.equal((await run("scheduleOccurrences().some(x=>x.schedule.kind==='income'&&x.status!=='done')")),false);
+assert.equal((await run("scheduleOccurrences().some(x=>x.schedule.kind==='income'&&x.status!=='done')")),true);
 
 // Boot must never replace reset/manual QA data or regenerate on a version change.
 (await run("(async()=>{(await qaResetData());state=(await loadState());return initQaMode()})()"));

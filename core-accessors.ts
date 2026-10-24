@@ -13,7 +13,7 @@ declare function isCurrentAccount(account:AccessAccount):boolean;
 
 function setting(){return state.settings}
 // Tab-local view preferences never enter the financial save queue or cloud sync.
-const VIEW_PREFERENCE_KEYS=['selectedAccountId','integratedMonth','integratedMonthViewedOn','integratedLedgerFilter','txFilter','compositionGroup','compositionFocus','pensionAssetScope','pensionAssetFocus','pensionGoalExpanded','dividendPeriod','dividendKey','spendingPeriod','spendingView','spendingCategoryFilter','policyTab'] as const;
+const VIEW_PREFERENCE_KEYS=['selectedAccountId','integratedMonth','integratedMonthViewedOn','integratedLedgerFilter','txFilter','compositionGroup','compositionFocus','pensionAssetScope','pensionAssetFocus','pensionGoalExpanded','dividendPeriod','dividendKey','spendingPeriod','spendingView','spendingCategoryFilter','spendingChartContext','spendingChartPeriod','integratedLedgerCategory','policyTab'] as const;
 function viewPreferenceValue(key:string,value:unknown):boolean{
  if(key==='pensionGoalExpanded')return typeof value==='boolean';
  if(typeof value!=='string'||value.length>256)return false;
