@@ -15,3 +15,5 @@ QA adds browser regressions for both insurance entry orders and ZIP/reload, cros
 The defects escaped because tests covered isolated paths and horizontal overflow while encoding the old overview chart as expected behavior. The regression expectations now follow the overview/analysis split and cross-path identities.
 
 A delayed post-save schedule sheet now cancels if the user opens/closes another sheet or changes route. This prevents the delayed callback from replacing newly opened input. Initial chart selection prefers an in-range anchor or recent non-zero activity, and daily axes fit the phone width.
+
+Build 20261024-8 corrects annual-chart touch panning: bar buttons permit native horizontal/vertical gestures and zoom instead of restricting them to vertical panning. A native mobile swipe regression checks movement at 320/412px and verifies that swipes do not select a bar or commit financial data.

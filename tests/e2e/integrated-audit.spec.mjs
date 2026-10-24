@@ -56,3 +56,20 @@ test('@core fully paid cards keep issuer monthly totals while completed purchase
  await page.evaluate(async()=>{const card=await saveCardAccount({name:'QA 완납 카드',paymentDay:14});const id=await createCardPurchase({name:'QA 일시불',cardId:card,purchaseAmount:100000,months:1,purchaseDate:'2026-10-01',firstPaymentDate:'2026-10-14',interestMode:'free'});const bill=await saveCardBill(id,{issuedDate:'2026-10-02',dueDate:'2026-10-14',principal:100000});await recordCardPayment(id,{billId:bill,date:'2026-10-14',pointsPrincipal:0,pointsInterest:0});openCardPlansHub()});
  await expect(page.locator('.card-issuer-group h3')).toContainText('QA 완납 카드');await expect(page.locator('[data-card-monthly="confirmed"]')).toHaveText('100,000원');await expect(page.locator('[data-card-monthly="paid"]')).toHaveText('100,000원');await expect(page.locator('[data-card-monthly="unpaid"]')).toHaveText('0원');await expect(page.locator('.card-purchases')).toHaveCount(0);await page.locator('.card-completed summary').click();await expect(page.locator('.card-completed [data-card-plan-open]')).toHaveCount(1);
 });
+
+test('@core annual chart accepts native horizontal swipes without changing selection or money',async({page},info)=>{
+ test.skip(!info.project.use.hasTouch,'Native touch is checked in the mobile project');
+ const cdp=await page.context().newCDPSession(page);
+ for(const width of [320,412]){
+  await page.setViewportSize({width,height:915});await page.evaluate(()=>{setting().spendingPeriod='year';nav('integrated','spending')});
+  const chart=page.locator('main .spending-trend');await chart.scrollIntoViewIfNeeded();
+  const before=await page.evaluate(()=>({ledger:JSON.stringify(state.integrated.ledger),revision:assetLocalDatabase.revision,selected:document.querySelector('.spending-trend [aria-pressed="true"]').getAttribute('data-spending-select')}));
+  const rect=await chart.boundingBox(),x=rect.x+rect.width-20,y=rect.y+55;
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});
+  for(let i=1;i<=6;i++){await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x-i*25,y}]});await page.waitForTimeout(40)}
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await page.waitForTimeout(200);
+  expect(await chart.evaluate(e=>e.scrollLeft)).toBeGreaterThan(20);
+  expect(await page.evaluate(()=>({ledger:JSON.stringify(state.integrated.ledger),revision:assetLocalDatabase.revision,selected:document.querySelector('.spending-trend [aria-pressed="true"]').getAttribute('data-spending-select')}))).toEqual(before);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+ }
+});
