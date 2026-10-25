@@ -39,3 +39,10 @@ test('@core payment reversal ZIP restore and period navigation preserve principa
  for(const mode of ['half','year','years','quarter','month']){await page.locator(`[data-spending-period="${mode}"]`).click();await page.evaluate(()=>nav('integrated','summary'));await page.locator('[data-card-hub]').click();await expect(page.locator('[data-card-principal-total]')).toHaveText('200,000원');await close(page);await page.evaluate(()=>nav('integrated','spending'));await expect(page.locator('.spending-hero')).toBeVisible()}
  const restored=await finances(page);await page.reload();await page.waitForFunction(()=>!!window.__assetOS);expect(await finances(page)).toEqual(restored);await page.evaluate(()=>nav('integrated','summary'));await page.locator('[data-card-hub]').click();await expect(page.locator('[data-card-principal-total]')).toHaveText('200,000원');
 });
+
+test('@core a card overview already open follows a payment saved from another tab',async({page,context})=>{
+ const id=await page.evaluate(()=>window.__interactionPurchase);await page.evaluate(()=>nav('integrated','summary'));await page.locator('[data-card-hub]').click();await expect(page.locator('[data-card-principal-total]')).toHaveText('300,000원');
+ const second=await context.newPage();await second.goto('/index.html?qa=1#/home');await second.waitForFunction(()=>!!window.__assetOS);
+ await second.evaluate(async id=>{const bill=await saveCardBill(id,{issuedDate:'2026-10-06',dueDate:'2026-10-14',principal:100000});if(!bill||!await recordCardPayment(id,{billId:bill,date:'2026-10-14'}))throw Error('cross-tab payment failed')},id);
+ await page.waitForFunction(id=>cardPlanSummary(financeSchedules().find(s=>s.id===id),integratedSelectedMonth()).remainingPrincipal===200000,id);await expect(page.locator('[data-card-principal-total]')).toHaveText('200,000원');await expect(page.locator('[data-card-monthly="paid"]')).toHaveText('100,000원');await second.close();
+});
