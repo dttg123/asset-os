@@ -1,2 +1,22 @@
 'use strict';
-if('serviceWorker'in navigator)window.addEventListener('load',async()=>{const hadController=!!navigator.serviceWorker.controller;try{const reg=await navigator.serviceWorker.register('./service-worker.js?v=0.7.12&build=20261024-9',{scope:'./',updateViaCache:'none'});await reg.update();let refreshing=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!hadController||refreshing)return;refreshing=true;const key='asset-os-sw-reload-0.7.12-build20261024-9';if(sessionStorage.getItem(key))return;sessionStorage.setItem(key,'1');location.reload()})}catch{}});
+if('serviceWorker'in navigator)window.addEventListener('load',async()=>{
+ let controller=navigator.serviceWorker.controller,refreshing=false,pending=false,timer:ReturnType<typeof setInterval>|undefined;
+ const applyUpdate=()=>{
+  if(!pending||refreshing||document.visibilityState==='hidden'||document.querySelector('.sheet.open,dialog[open],[data-storage-saving]'))return;
+  refreshing=true;if(timer)clearInterval(timer);location.reload();
+ };
+ // Listen before registration/update: a fast worker may activate before update() resolves.
+ navigator.serviceWorker.addEventListener('controllerchange',()=>{
+  const next=navigator.serviceWorker.controller;if(next===controller)return;
+  const hadController=!!controller;controller=next;if(!hadController)return;
+  pending=true;applyUpdate();if(!refreshing&&!timer)timer=setInterval(applyUpdate,1000);
+ });
+ try{
+  const reg=await navigator.serviceWorker.register('./service-worker.js?v=0.7.13&build=20261025-1',{scope:'./',updateViaCache:'none'});
+  let checking=false;
+  const check=async()=>{if(checking||document.visibilityState==='hidden')return;checking=true;try{await reg.update()}catch{}finally{checking=false;applyUpdate()}};
+  window.addEventListener('focus',()=>{void check()});
+  document.addEventListener('visibilitychange',()=>{void check()});
+  await check();
+ }catch{}
+});

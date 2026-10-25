@@ -51,7 +51,6 @@ function synchronizedFiles(){
 
  let pwa=read('pwa.ts');
  pwa=replaceRequired(pwa,/v=\d+\.\d+\.\d+&build=[\w.-]+/g,query,'PWA worker query');
- pwa=replaceRequired(pwa,/asset-os-sw-reload-\d+\.\d+\.\d+-build[\w.-]+/g,`asset-os-sw-reload-${version}-build${meta.build}`,'PWA reload key');
  files.set('pwa.ts',pwa);
 
  let manual=read('qa-manual.html');
