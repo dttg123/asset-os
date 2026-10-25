@@ -73,7 +73,8 @@ function render() { integratedSelectedMonth(); const r = route(); document.body.
     badge.hidden = count === 0;
     badge.textContent = count > 99 ? '99+' : String(count);
     bell.setAttribute('aria-label', count ? `검토·중요 알림 ${count}건` : '검토·중요 알림 없음');
-} applyTheme(); bind(); bindTransactionSearch(); updateDiagnostics(); }
+} applyTheme(); bind(); bindTransactionSearch(); if (typeof refreshOpenCardOverview === 'function')
+    refreshOpenCardOverview(); updateDiagnostics(); }
 function bindTransactionSearch() { const integratedForm = $('[data-integrated-search-form]'); if (integratedForm)
     integratedForm.onsubmit = e => { e.preventDefault(); integratedLedgerSearch = String(new FormData(e.currentTarget).get('query') || '').trim(); integratedSearchDisplayLimit = 50; render(); }; $('[data-integrated-search-clear]')?.addEventListener('click', () => { integratedLedgerSearch = ''; integratedSearchDisplayLimit = 50; render(); }); $('[data-integrated-search-more]')?.addEventListener('click', () => { integratedSearchDisplayLimit += 50; renderKeepingScroll(); }); const pensionForm = $('[data-pension-search-form]'); if (pensionForm)
     pensionForm.onsubmit = e => { e.preventDefault(); pensionTransactionSearch = String(new FormData(e.currentTarget).get('query') || '').trim(); pensionTransactionDisplayLimit = 20; render(); }; $('[data-pension-search-clear]')?.addEventListener('click', () => { pensionTransactionSearch = ''; pensionTransactionDisplayLimit = 20; render(); }); }

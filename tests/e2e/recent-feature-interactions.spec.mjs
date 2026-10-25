@@ -41,8 +41,8 @@ test('@core payment reversal ZIP restore and period navigation preserve principa
 });
 
 test('@core a card overview already open follows a payment saved from another tab',async({page,context})=>{
- const id=await page.evaluate(()=>window.__interactionPurchase);await page.evaluate(()=>nav('integrated','summary'));await page.locator('[data-card-hub]').click();await expect(page.locator('[data-card-principal-total]')).toHaveText('300,000원');
+ const id=await page.evaluate(()=>window.__interactionPurchase);await page.evaluate(()=>nav('integrated','summary'));await page.locator('[data-card-hub]').click();await expect(page.locator('[data-card-principal-total]')).toHaveText('300,000원');await page.locator('.card-purchases summary').click();const historyLength=await page.evaluate(()=>history.length);
  const second=await context.newPage();await second.goto('/index.html?qa=1#/home');await second.waitForFunction(()=>!!window.__assetOS);
  await second.evaluate(async id=>{const bill=await saveCardBill(id,{issuedDate:'2026-10-06',dueDate:'2026-10-14',principal:100000});if(!bill||!await recordCardPayment(id,{billId:bill,date:'2026-10-14'}))throw Error('cross-tab payment failed')},id);
- await page.waitForFunction(id=>cardPlanSummary(financeSchedules().find(s=>s.id===id),integratedSelectedMonth()).remainingPrincipal===200000,id);await expect(page.locator('[data-card-principal-total]')).toHaveText('200,000원');await expect(page.locator('[data-card-monthly="paid"]')).toHaveText('100,000원');await second.close();
+ await page.waitForFunction(id=>cardPlanSummary(financeSchedules().find(s=>s.id===id),integratedSelectedMonth()).remainingPrincipal===200000,id);await expect(page.locator('[data-card-principal-total]')).toHaveText('200,000원');await expect(page.locator('[data-card-monthly="paid"]')).toHaveText('100,000원');await expect(page.locator('.card-purchases')).toHaveAttribute('open','');expect(await page.evaluate(()=>history.length)).toBe(historyLength);await expect(page.locator('#integratedCardPlans h2')).toHaveText('2026년 10월 카드값');await second.close();
 });
