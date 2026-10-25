@@ -42,3 +42,16 @@ test('@core overview roles ledger filter reset card due priority and separate sc
  for(const theme of ['light','dark']){await page.evaluate(theme=>{setting().theme=theme;applyTheme()},theme);await page.waitForTimeout(350);const contrast=await page.locator('.card-monthly-primary strong').evaluate(e=>{const canvas=document.createElement('canvas');canvas.width=canvas.height=1;const c=canvas.getContext('2d',{willReadFrequently:true}),luminance=color=>{c.fillStyle='#fff';c.fillRect(0,0,1,1);c.fillStyle=color;c.fillRect(0,0,1,1);const d=c.getImageData(0,0,1,1).data;const v=[...d].slice(0,3).map(x=>{x/=255;return x<=.04045?x/12.92:((x+.055)/1.055)**2.4});return v[0]*.2126+v[1]*.7152+v[2]*.0722};const text=luminance(getComputedStyle(e).color),bg=luminance(getComputedStyle(e.parentElement).backgroundColor);return(Math.max(text,bg)+.05)/(Math.min(text,bg)+.05)});expect(contrast).toBeGreaterThanOrEqual(4.5)}
 
 });
+
+
+test('@core delayed classification saves cannot reopen an old detail over navigation or a new input',async({page})=>{
+ for(const next of ['ledger','input']){
+  await page.evaluate(()=>{nav('integrated','spending');window.__classificationOriginal=saveSpendingClassifications;saveSpendingClassifications=async(...args)=>{await new Promise(resolve=>window.__finishClassification=resolve);return window.__classificationOriginal(...args)};openSpendingClassification(['month-9'],'2026-10')});
+  await page.locator('#cardLedgerForm [name="item"]').fill('지연 저장 '+next);await page.locator('#cardLedgerForm button[type="submit"]').click();await page.waitForFunction(()=>!!window.__finishClassification);await close(page);await page.evaluate(()=>nav('integrated','ledger'));
+  if(next==='input'){await page.locator('[data-integrated-new]').click();await page.locator('#entryAmount').fill('12345')}
+  await page.evaluate(async()=>{window.__finishClassification();await new Promise(resolve=>setTimeout(resolve,400))});
+  expect(await page.evaluate(()=>route().tab)).toBe('ledger');await expect(page.locator('#detailSheet')).not.toHaveClass(/open/);
+  if(next==='input'){await expect(page.locator('#formSheet')).toHaveClass(/open/);await expect(page.locator('#entryAmount')).toHaveValue('12345');await close(page)}
+  expect(await page.evaluate(()=>setting().spendingClassifications['month-9'].item)).toBe('지연 저장 '+next);await page.evaluate(()=>{saveSpendingClassifications=window.__classificationOriginal;delete window.__finishClassification});
+ }
+});

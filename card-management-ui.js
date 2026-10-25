@@ -304,7 +304,11 @@ function openSpendingClassification(ids, period, cardId = '') {
         return;
     }
     const first = spendingClassification(rows[0]);
-    cardUiForm('항목 이름·분류 수정', `${cardUiInput('item', '항목 이름', first.item)}${cardUiCategoryField(first.category)}<p class="source-note">선택한 구매 ${rows.length}건의 표시 이름과 분류를 바꿉니다. 구매·청구·납부 원본과 금액은 그대로 유지돼요.</p>`, async (data) => { if (await saveSpendingClassifications(rows.map(x => x.id), String(data.category), String(data.item))) {
+    const form = cardUiForm('항목 이름·분류 수정', `${cardUiInput('item', '항목 이름', first.item)}${cardUiCategoryField(first.category)}<p class="source-note">선택한 구매 ${rows.length}건의 표시 이름과 분류를 바꿉니다. 구매·청구·납부 원본과 금액은 그대로 유지돼요.</p>`, async (data) => { if (await saveSpendingClassifications(rows.map(x => x.id), String(data.category), String(data.item))) {
+        if (sheetInteractionToken() !== token || !form.isConnected || !$('#formSheet').classList.contains('open')) {
+            renderKeepingScroll();
+            return;
+        }
         cardUiDone();
         if (cardId)
             openCardLedgerDetail(cardId);
@@ -312,6 +316,7 @@ function openSpendingClassification(ids, period, cardId = '') {
             openSpendingItemDetail(String(data.item), period, 'summary', String(data.category));
         toast('이름과 분류를 저장했어요.');
     } });
+    const token = sheetInteractionToken();
 }
 function bindSpendingReview() {
     $$('[data-integrated-filter-reset]').forEach(b => b.onclick = () => { setting().integratedLedgerFilter = 'all'; setting().integratedLedgerCategory = ''; rememberViewPreferences(); render(); });
