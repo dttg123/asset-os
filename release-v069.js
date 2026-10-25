@@ -129,13 +129,13 @@ function v069AssetGroups(f) { const cash = (Number(f.cash) || 0) + (Number(f.dep
 function v069ScheduleMeta(kind) { if (kind === 'income')
     return ['income', '수입']; if (kind === 'insurance')
     return ['insurance', '보험']; if (kind === 'loan')
-    return ['loan', '대출·이자']; if (['investment', 'saving'].includes(kind))
-    return ['saving', '저축·연금']; return ['living', '생활 고정비']; }
+    return ['loan', '대출']; if (['investment', 'saving'].includes(kind))
+    return ['saving', '저축·투자']; return ['living', '생활지출']; }
 function v069ScheduleGroups(list, scope) { const order = ['income', 'card', 'insurance', 'loan', 'saving', 'living'], map = new Map(order.map(k => [k, []])); for (const row of list) {
     const [key] = row.schedule.cardPlan ? ['card', '카드'] : v069ScheduleMeta(row.schedule.kind);
     map.get(key).push(row);
 } return order.flatMap(key => { const rows = map.get(key); if (!rows.length)
-    return []; const label = rows[0].schedule.cardPlan ? '카드' : v069ScheduleMeta(rows[0].schedule.kind)[1], amount = rows.reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0), open = v069ScheduleGroup[scope] === key, details = rows.map(o => `<button class="schedule-row" ${scope === 'summary' ? `data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"` : `data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"`}><span class="schedule-copy"><strong>${escapeHtml(o.schedule.name)}</strong><small>${escapeHtml(o.date)} · ${escapeHtml(scheduleKindLabel(o.schedule.kind))}</small></span><strong class="schedule-amount">${won(scheduleOccurrenceDisplayAmount(o))}</strong><span class="schedule-status ${o.status}">${scheduleOccurrenceUiLabel(o)}</span></button>`).join(''); return [`<div class="schedule-category ${open ? 'open' : ''}"><button class="schedule-category-head" data-schedule-category="${escapeHtml(key)}" data-schedule-scope="${escapeHtml(scope)}" aria-expanded="${escapeHtml(open ? 'true' : 'false')}"><span><strong>${label}</strong><small>${rows.length}건</small></span><b>${won(amount)}</b><i>⌄</i></button><div class="schedule-category-body" ${open ? '' : 'hidden'}>${details}</div></div>`]; }).join(''); }
+    return []; const label = rows[0].schedule.cardPlan ? '카드' : v069ScheduleMeta(rows[0].schedule.kind)[1], amount = rows.reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0), open = v069ScheduleGroup[scope] === key, details = rows.map(o => `<button class="schedule-row" ${scope === 'summary' ? `data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"` : `data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"`}><span class="schedule-copy"><strong>${escapeHtml(integratedScheduleName(o.schedule))}</strong><small>${escapeHtml(o.date)} · ${escapeHtml(o.schedule.cardPlan ? '카드' : scheduleKindLabel(o.schedule.kind))}</small></span><strong class="schedule-amount">${won(scheduleOccurrenceDisplayAmount(o))}</strong><span class="schedule-status ${o.status}">${scheduleOccurrenceUiLabel(o)}</span></button>`).join(''); return [`<div class="schedule-category ${open ? 'open' : ''}"><button class="schedule-category-head" data-schedule-category="${escapeHtml(key)}" data-schedule-scope="${escapeHtml(scope)}" aria-expanded="${escapeHtml(open ? 'true' : 'false')}"><span><strong>${label}</strong><small>${rows.length}건</small></span><b>${won(amount)}</b><i>⌄</i></button><div class="schedule-category-body" ${open ? '' : 'hidden'}>${details}</div></div>`]; }).join(''); }
 const v069IntegratedSummary = integratedSummaryPage;
 integratedSummaryPage = function () {
     const month = integratedSelectedMonth(), f = integratedFinancialModel(), pending = scheduleOccurrences(month).filter(o => o.status !== 'done' && o.schedule.kind !== 'income').sort((a, b) => a.date.localeCompare(b.date)), template = document.createElement('template');
@@ -162,7 +162,7 @@ integratedSummaryPage = function () {
             amount.textContent = won(total);
         if (body) {
             body.innerHTML = pending.length ? v069ScheduleGroups(pending, 'summary') : '<div class="integrated-empty">선택한 달의 금융 일정은 모두 처리했습니다.</div>';
-            body.insertAdjacentHTML('beforebegin', `<div class="fixed-cost-preview">${pending.slice(0, 3).map(o => `<button class="schedule-row" data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"><span class="schedule-copy"><strong>${escapeHtml(o.schedule.name)}</strong><small>${escapeHtml(o.date)}</small></span><strong class="schedule-amount">${won(scheduleOccurrenceDisplayAmount(o))}</strong></button>`).join('')}<button class="diagnostic-action" data-integrated-tab-go="schedule">일정 전체 보기 ›</button></div>`);
+            body.insertAdjacentHTML('beforebegin', `<div class="fixed-cost-preview">${pending.slice(0, 3).map(o => `<button class="schedule-row" data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"><span class="schedule-copy"><strong>${escapeHtml(integratedScheduleName(o.schedule))}</strong><small>${escapeHtml(o.date)}</small></span><strong class="schedule-amount">${won(scheduleOccurrenceDisplayAmount(o))}</strong></button>`).join('')}<button class="diagnostic-action" data-integrated-tab-go="schedule">일정 전체 보기 ›</button></div>`);
         }
         schedule.insertAdjacentHTML('afterend', integratedConsumptionPreview(month));
     }
@@ -192,7 +192,7 @@ const v069MonthDetail = openIntegratedMonthDetail;
 openIntegratedMonthDetail = function (month) { v069MonthDetail(month); if ($('#sheetEyebrow'))
     $('#sheetEyebrow').textContent = '통합 · 현금흐름'; if ($('#sheetTitle'))
     $('#sheetTitle').textContent = `${integratedMonthLabel(month || integratedSelectedMonth())} 현금흐름`; const label = $('#sheetBody .integrated-month-cash span'); if (label)
-    label.textContent = '가용 현금'; };
+    label.textContent = '현금 증감'; };
 const v069SchedulePage = integratedSchedulePage;
 integratedSchedulePage = function () {
     const month = integratedScheduleMonth(), occ = scheduleOccurrences(month).sort((a, b) => a.date.localeCompare(b.date)), pending = occ.filter(o => o.status !== 'done'), done = occ.filter(o => o.status === 'done').length, template = document.createElement('template');

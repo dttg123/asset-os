@@ -1,6 +1,6 @@
 'use strict';
 const DEFAULT_SPENDING_CATEGORIES = ['식비', '게임·취미', '가전·전자', '용돈·선물', '쇼핑', '주거·관리', '통신', '교통·차량', '보험', '의료·건강', '미분류', '기타'];
-function spendingCategoryLabel(raw) { let name = String(raw || '기타').trim() || '기타'; const aliases = typeof setting === 'function' ? (setting().spendingCategoryAliases || {}) : {}, seen = new Set(); while (Object.hasOwn(aliases, name) && aliases[name] && !seen.has(name)) {
+function spendingCategoryLabel(raw) { let name = String(raw || '미분류').trim() || '미분류'; const aliases = typeof setting === 'function' ? (setting().spendingCategoryAliases || {}) : {}, seen = new Set(); while (Object.hasOwn(aliases, name) && aliases[name] && !seen.has(name)) {
     seen.add(name);
     name = String(aliases[name]);
 } return name; }
@@ -31,8 +31,8 @@ function spendingCategoryNamesSafe(name) { if (typeof setting !== 'function')
 function spendingClassification(row) {
     const settings = typeof setting === 'function' ? setting() : {}, map = settings.spendingClassifications, entry = map && typeof map === 'object' && !Array.isArray(map) && Object.hasOwn(map, String(row.id)) ? map[String(row.id)] : null, label = entry && typeof entry === 'object' ? entry : {};
     const history = typeof financeSchedules === 'function' && financeSchedules().some(x => x.id === row.meta?.cardPlanId && x.source === 'statement-history'), merchant = String(row.meta?.merchant || '').trim(), fallback = history && row.category === '기타' ? (merchant === '조이시티' ? '게임·취미' : '미분류') : row.category;
-    const schedule = typeof financeSchedules === 'function' ? financeSchedules().find(x => x.id === row.meta?.scheduleId) : null, raw = String(fallback || ''), known = spendingCategoryNamesSafe(raw), derived = known ? raw : schedule?.kind === 'insurance' ? '보험' : raw === '어머니용돈' ? '용돈·선물' : raw.includes('보험') ? '보험' : raw === '생활비' ? '기타' : fallback;
-    return { category: spendingCategoryLabel(typeof label.category === 'string' && label.category ? label.category : derived), item: typeof label.item === 'string' && label.item ? label.item : String(history && merchant ? merchant : row.meta?.spendingItem || row.meta?.merchant || row.category || '미분류') };
+    const schedule = typeof financeSchedules === 'function' ? financeSchedules().find(x => x.id === row.meta?.scheduleId) : null, raw = String(fallback || '').trim(), known = spendingCategoryNamesSafe(raw), derived = schedule?.kind === 'insurance' && ['', '기타', '미분류'].includes(raw) ? '보험' : known ? raw : schedule?.kind === 'insurance' ? '보험' : raw === '어머니용돈' ? '용돈·선물' : raw.includes('보험') ? '보험' : raw === '생활비' ? '기타' : fallback;
+    return { category: spendingCategoryLabel(typeof label.category === 'string' && label.category ? label.category : derived), item: typeof label.item === 'string' && label.item ? label.item : String(history && merchant ? merchant : row.meta?.spendingItem || row.meta?.merchant || schedule?.name || (row.category === '기타' ? '기타 지출' : row.category) || '이름 없는 지출') };
 }
 async function saveSpendingClassifications(ids, category, item) {
     const source = typeof state !== 'undefined' && typeof integratedManualLedger === 'function' ? integratedManualLedger() : integratedLedger(), selected = [...new Set(ids)], name = String(item || '').trim(), group = String(category || '').trim(), settings = setting(), had = Object.hasOwn(settings, 'spendingClassifications'), before = settings.spendingClassifications;

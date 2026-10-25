@@ -25,3 +25,13 @@ test('same names in different categories stay separate and daily charts reconcil
  const rows=[{id:'a',type:'expense',date:'2024-02-01',amount:100,category:'식비',meta:{spendingItem:'같은 이름'}},{id:'b',type:'expense',date:'2024-02-29',amount:200,category:'쇼핑',meta:{spendingItem:'같은 이름'}}],c=vm.createContext({setting:()=>({}),integratedLedger:()=>rows,integratedMonthKey:x=>String(x).slice(0,7),integratedLatestMonth:()=> '2024-02'});vm.runInContext(fs.readFileSync(path.join(__dirname,'../src/domain/integrated-spending.js'),'utf8'),c);
  const run=s=>JSON.parse(vm.runInContext('JSON.stringify('+s+')',c)),view=run("integratedSpendingView('2024-02','month')");assert.equal(view.items.length,2);assert.equal(view.trend.length,29);assert.deepEqual(view.trend.filter(x=>x.label).map(x=>x.label),['1일','10일','20일','29일']);assert.equal(view.trend.reduce((n,x)=>n+x.amount,0),300);assert.equal(run("spendingRange('2024-02-29')").end,'2024-03-01');assert.equal(run("integratedSpendingAnalysis('2024-03-01')").previousMonth,'2024-02-29');
 });
+
+test('unclassified imports and explicit other stay distinct; reliable schedule metadata supplies insurance',()=>{
+ const settings={spendingClassifications:{explicit:{category:'기타',item:'직접 분류'}}},schedules=[{id:'history',source:'statement-history'},{id:'policy',kind:'insurance'}];
+ const c=vm.createContext({setting:()=>settings,financeSchedules:()=>schedules});vm.runInContext(fs.readFileSync(path.join(__dirname,'../src/domain/integrated-spending.js'),'utf8'),c);
+ const classify=row=>JSON.parse(vm.runInContext('JSON.stringify(spendingClassification('+JSON.stringify(row)+'))',c));
+ assert.deepEqual(classify({id:'joy',category:'기타',meta:{cardPlanId:'history',merchant:'조이시티'}}),{category:'게임·취미',item:'조이시티'});
+ assert.deepEqual(classify({id:'unknown',category:'기타',meta:{cardPlanId:'history',merchant:'모르는 상점'}}),{category:'미분류',item:'모르는 상점'});
+ assert.equal(classify({id:'explicit',category:'기타',meta:{cardPlanId:'history',merchant:'조이시티'}}).category,'기타');
+ assert.equal(classify({category:'기타',meta:{scheduleId:'policy'}}).category,'보험');assert.equal(classify({category:''}).category,'미분류');assert.equal(classify({category:'기타'}).category,'기타');
+});
