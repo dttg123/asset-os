@@ -1054,3 +1054,5 @@ body[data-root="integrated"] .integrated-monthbar .spending-period-label{width:1
 .spending-future .spending-line-point{display:none}
 
 .spending-chart [aria-pressed=true]>strong,.spending-chart-selection>button,.spending-year-views [aria-pressed=true],.card-issuer-primary b{color:var(--polish-accent,var(--accent2))}.spending-year-views [aria-pressed=true]{background:color-mix(in srgb,var(--accent2) 12%,var(--surface))}
+
+.card-principal-context{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:12px 0;color:var(--muted);font-size:13px;line-height:1.5}.card-principal-context strong{color:var(--text);font-size:15px;font-weight:600;max-width:100%;overflow-wrap:anywhere;text-align:right}.card-issuer-group>.card-principal-context{padding:10px 0 0;border-top:1px solid var(--line);margin-top:12px}
