@@ -1,4 +1,5 @@
 declare function rememberViewPreferences():void;
+declare function sheetInteractionToken():number;
 'use strict';
 type CardUiRow=Record<string,unknown>&{id:string;name?:string;date?:string;type?:string;amount?:number;category?:string;meta?:Record<string,unknown>;liabilityId?:string};
 type CardUiAccount={id:string;name:string;issuer:string;paymentDay:number;statementDay?:number;lastFour:string;archived:boolean};
@@ -203,7 +204,7 @@ function openSpendingItemDetail(key:string,period=spendingFocusedPeriod(),tab='s
 declare function integratedSpendingMonthShift(month:string,delta:number):string;
 function openSpendingClassification(ids:string[],period:string,cardId=''):void{
  const source=integratedManualLedger(),rows=source.filter(x=>ids.includes(x.id)&&['expense','externalExpense'].includes(String(x.type)));if(!rows.length){toast('분류할 구매 원본을 찾지 못했어요.');return}const first=spendingClassification(rows[0]);
- cardUiForm('항목 이름·분류 수정',`${cardUiInput('item','항목 이름',first.item)}${cardUiCategoryField(first.category)}<p class="source-note">선택한 구매 ${rows.length}건의 표시 이름과 분류를 바꿉니다. 구매·청구·납부 원본과 금액은 그대로 유지돼요.</p>`,async data=>{if(await saveSpendingClassifications(rows.map(x=>x.id),String(data.category),String(data.item))){cardUiDone();if(cardId)openCardLedgerDetail(cardId);else openSpendingItemDetail(String(data.item),period,'summary',String(data.category));toast('이름과 분류를 저장했어요.')}});
+ const form=cardUiForm('항목 이름·분류 수정',`${cardUiInput('item','항목 이름',first.item)}${cardUiCategoryField(first.category)}<p class="source-note">선택한 구매 ${rows.length}건의 표시 이름과 분류를 바꿉니다. 구매·청구·납부 원본과 금액은 그대로 유지돼요.</p>`,async data=>{if(await saveSpendingClassifications(rows.map(x=>x.id),String(data.category),String(data.item))){if(sheetInteractionToken()!==token||!form.isConnected||!$('#formSheet').classList.contains('open')){renderKeepingScroll();return}cardUiDone();if(cardId)openCardLedgerDetail(cardId);else openSpendingItemDetail(String(data.item),period,'summary',String(data.category));toast('이름과 분류를 저장했어요.')}});const token=sheetInteractionToken();
 }
 function bindSpendingReview():void{
  $$('[data-integrated-filter-reset]').forEach(b=>b.onclick=()=>{setting().integratedLedgerFilter='all';setting().integratedLedgerCategory='';rememberViewPreferences();render()});
