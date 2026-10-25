@@ -276,7 +276,7 @@ async function saveIntegratedTransaction(form:HTMLFormElement,continueEntry=fals
  const before=clone(integratedStore()),previousEvents=state.financialProducts?clone(state.financialProducts.events):null;
  if(editingId)integratedStore().ledger=integratedStore().ledger.filter(t=>t.id!==editingId);
  if(editingId&&state.financialProducts)for(const event of state.financialProducts.events){if(event.meta?.ledgerId!==editingId)continue;const row=rows[0];event.date=row.date;event.amount=row.amount;event.note=row.note}
- integratedStore().ledger.push(...rows);integratedStore().mode='live';integratedStore().label='내 통합 거래기록';setting().integratedMonth=integratedMonthKey(rows[0].date||'');integratedLedgerSearch='';integratedSearchDisplayLimit=50;setting().integratedLedgerFilter='all';
+ integratedStore().ledger.push(...rows);integratedStore().mode='live';integratedStore().label='내 통합 거래기록';setting().integratedMonth=integratedMonthKey(rows[0].date||'');integratedLedgerSearch='';integratedSearchDisplayLimit=50;setting().integratedLedgerFilter='all';setting().integratedLedgerCategory='';
  const entry=integratedFormEntryPreset(form),favorite=integratedFormEntryPreset(form,true);
  if(!editingId&&!form.dataset.systemType&&entry){setting().integratedEntryLast=entry;if(new FormData(form).get('saveFavorite')&&favorite){const entries=integratedEntryFavorites().filter(item=>JSON.stringify(item)!==JSON.stringify(favorite));setting().integratedEntryFavorites=[favorite,...entries].slice(0,8)}}
  if(!(await persist())){state.integrated=before;if(state.financialProducts&&previousEvents)state.financialProducts.events=previousEvents;return}sheetDirty=false;closeSheets({all:true});nav('integrated','ledger');toast('저장했어요.');haptic('light');
@@ -298,7 +298,7 @@ async function saveCashReconcile(form:HTMLFormElement):Promise<void>{
  if(Math.abs(delta)<.5){formShowError(form,'이미 실제 잔액과 일치합니다.','actualBalance');return}
  const candidate={id:uid('igl'),date,type:'adjustment',accountId:'cash-main',delta,category:'현금 잔액 맞춤',note,meta:{reconciliation:true,previousBalance:current,recordedBalance:actual}};
  const error=integratedValidateCandidate(candidate,'');if(error){formShowError(form,error,'actualBalance');return}
- store.ledger.push(candidate);store.mode='live';store.label='내 통합 거래기록';setting().integratedMonth=integratedMonthKey(date);integratedLedgerSearch='';integratedSearchDisplayLimit=50;setting().integratedLedgerFilter='all';
+ store.ledger.push(candidate);store.mode='live';store.label='내 통합 거래기록';setting().integratedMonth=integratedMonthKey(date);integratedLedgerSearch='';integratedSearchDisplayLimit=50;setting().integratedLedgerFilter='all';setting().integratedLedgerCategory='';
  if(!(await persist()))return;sheetDirty=false;closeSheets({all:true});nav('integrated','summary');toast(`현금 잔액을 ${won(actual)}으로 맞췄습니다.`);haptic('light')
 }
 
@@ -353,7 +353,7 @@ function openIntegratedRefundForm(id:string):void{
  ($('#refundForm') as HTMLFormElement).onsubmit=async (event:SubmitEvent)=>{
   event.preventDefault();const form=event.currentTarget as HTMLFormElement,data=new FormData(form),before=clone(state),result=recordIntegratedRefund(id,String(data.get('date')),Number(data.get('amount')));
   if(!result.ok){toast(result.error);return}
-  setting().integratedMonth=integratedMonthKey(String(data.get('date')));setting().integratedLedgerFilter='all';integratedLedgerSearch='';
+  setting().integratedMonth=integratedMonthKey(String(data.get('date')));setting().integratedLedgerFilter='all';setting().integratedLedgerCategory='';integratedLedgerSearch='';integratedSearchDisplayLimit=50;
   if(!(await persist())){state=before;return}sheetDirty=false;closeSheets({all:true});nav('integrated','ledger');toast('환불을 기록했습니다.');
  };
 }

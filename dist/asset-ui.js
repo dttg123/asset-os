@@ -1677,6 +1677,7 @@ async function saveIntegratedTransaction(form, continueEntry = false) {
     integratedLedgerSearch = '';
     integratedSearchDisplayLimit = 50;
     setting().integratedLedgerFilter = 'all';
+    setting().integratedLedgerCategory = '';
     const entry = integratedFormEntryPreset(form), favorite = integratedFormEntryPreset(form, true);
     if (!editingId && !form.dataset.systemType && entry) {
         setting().integratedEntryLast = entry;
@@ -1736,6 +1737,7 @@ async function saveCashReconcile(form) {
     integratedLedgerSearch = '';
     integratedSearchDisplayLimit = 50;
     setting().integratedLedgerFilter = 'all';
+    setting().integratedLedgerCategory = '';
     if (!(await persist()))
         return;
     sheetDirty = false;
@@ -1845,7 +1847,9 @@ function openIntegratedRefundForm(id) {
         }
         setting().integratedMonth = integratedMonthKey(String(data.get('date')));
         setting().integratedLedgerFilter = 'all';
+        setting().integratedLedgerCategory = '';
         integratedLedgerSearch = '';
+        integratedSearchDisplayLimit = 50;
         if (!(await persist())) {
             state = before;
             return;
