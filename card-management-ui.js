@@ -212,8 +212,7 @@ openCardPlanDetail = function (id) { const s = financeSchedules().find(x => x.id
 else
     cardPreviousDetail(id); };
 const cardPreviousHub = openCardPlansHub;
-openCardPlansHub = function () { cardPreviousHub(); $('#sheetBody').insertAdjacentHTML('afterbegin', cardUiButton('카드 관리', 'manage-cards')); if (route().root === 'integrated' && route().tab === 'schedule')
-    $$('#sheetBody [data-card-plan-new]').forEach(b => b.remove()); bindCardManagement(); };
+openCardPlansHub = function () { cardPreviousHub(); $('#sheetBody').insertAdjacentHTML('afterbegin', cardUiButton('카드 관리', 'manage-cards')); bindCardManagement(); };
 const cardPreviousSummary = integratedSummaryPage;
 integratedSummaryPage = function () { return cardPreviousSummary() + `<section class="card cardv2-entry"><div><h2>카드 구매 기록</h2><small>일시불·할부와 납부 일정을 연결해요.</small></div>${cardUiButton('＋ 구매 기록', 'purchase-new')}</section>`; };
 const cardPreviousScheduleDay = openScheduleDay;
@@ -233,7 +232,7 @@ function openSpendingPeriodPicker() {
     const mode = spendingPeriodMode(), anchor = integratedSelectedMonth(), year = anchor.slice(0, 4), size = mode === 'quarter' ? 3 : mode === 'half' ? 6 : 12, count = 12 / size, current = Math.ceil(Number(anchor.slice(5)) / size);
     $('#sheetEyebrow').textContent = '통합 · 소비';
     $('#sheetTitle').textContent = '조회 기간 선택';
-    $('#sheetBody').innerHTML = `<form data-spending-period-form class="form"><div class="field"><label>연도<input name="year" type="number" inputmode="numeric" min="1900" max="9998" step="1" value="${escapeHtml(year)}" required></label></div>${count > 1 ? `<div class="field"><label>${mode === 'quarter' ? '분기' : '반기'}<select name="part">${Array.from({ length: count }, (_, i) => `<option value="${escapeHtml(i + 1)}" ${current === i + 1 ? 'selected' : ''}>${mode === 'quarter' ? (i + 1) + '분기' : i === 0 ? '상반기' : '하반기'}</option>`).join('')}</select></label></div>` : ''}<button type="submit" class="integrated-form-save">조회</button></form>`;
+    $('#sheetBody').innerHTML = `<form data-spending-period-form class="form"><div class="field"><label for="spending-picker-year">연도</label><input id="spending-picker-year" name="year" type="number" inputmode="numeric" min="1900" max="9998" step="1" value="${escapeHtml(year)}" required></div>${count > 1 ? `<div class="field"><label for="spending-picker-part">${mode === 'quarter' ? '분기' : '반기'}</label><select id="spending-picker-part" name="part">${Array.from({ length: count }, (_, i) => `<option value="${escapeHtml(i + 1)}" ${current === i + 1 ? 'selected' : ''}>${mode === 'quarter' ? (i + 1) + '분기' : i === 0 ? '상반기' : '하반기'}</option>`).join('')}</select></div>` : ''}<button type="submit" class="integrated-form-save">조회</button></form>`;
     openSheet('#detailSheet');
     const form = $('[data-spending-period-form]');
     form.onsubmit = e => { e.preventDefault(); if (!form.reportValidity())
