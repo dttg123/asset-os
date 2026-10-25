@@ -134,7 +134,7 @@ test('@core inactive card interest controls never block saving and active contro
  await page.goto('/index.html?qa=1#/home');await page.waitForFunction(()=>!!window.__assetOS);
  await page.evaluate(async()=>{const next=window.__assetOS.getState();next.financeSchedules={items:[]};next.financialProducts={items:[]};next.liabilities={items:[]};next.integrated.ledger=[];await window.__assetOS.replaceState(next);nav('integrated','summary')});
  for(const amount of [360000,370000]){
-  await page.locator('[data-card-hub]').click();await expect(page.locator('[data-card-plan-new]')).toBeVisible();await page.evaluate(async()=>{sheetDirty=false;closeSheets({all:true});cancelSheetBackForNavigation();await saveCardAccount({name:'QA 국민카드',issuer:'국민카드',paymentDay:31});nav('integrated','summary')});await page.locator('[data-card-action="purchase-new"]').click();
+  await page.locator('[data-card-hub]').click();await expect(page.locator('[data-card-plan-new]')).toHaveCount(0);await page.evaluate(async()=>{sheetDirty=false;closeSheets({all:true});cancelSheetBackForNavigation();await saveCardAccount({name:'QA 국민카드',issuer:'국민카드',paymentDay:31});nav('integrated','summary')});await page.locator('[data-card-action="purchase-new"]').click();
   const form=page.locator('#cardLedgerForm'),free=form.locator('[name=paidRounds]'),rate=form.locator('[name=annualRate]');
   await form.locator('[name=name]').fill('무이자 저장 '+amount);await form.locator('[name=purchaseAmount]').fill(String(amount));
   await form.locator('[name=purchaseDate]').fill('2026-01-01');await form.locator('[name=firstPaymentDate]').fill('2026-01-31');
