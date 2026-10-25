@@ -1029,6 +1029,9 @@ html[data-theme="dark"] .tabs .tab.active,html[data-theme="dark"] .integrated-ta
 .spending-chart-lines{position:absolute;top:8px;left:0;width:100%;height:100px;overflow:visible;pointer-events:none;fill:none;stroke:var(--line);stroke-width:1}.spending-chart-lines line{vector-effect:non-scaling-stroke;stroke-dasharray:3 3}.spending-chart-lines polyline{stroke:var(--accent2);stroke-width:2;vector-effect:non-scaling-stroke;stroke-linejoin:round}
 .spending-chart .spending-trend button{position:relative;display:grid;grid-template-rows:110px 18px 18px;gap:2px;min-width:0;min-height:0;height:152px;padding:0;border:0;background:transparent;touch-action:manipulation;border-radius:4px;color:var(--text)}
 .spending-chart .spending-trend button:focus-visible{outline:2px solid var(--accent2);outline-offset:2px}
+.spending-chart .spending-trend,.spending-chart .spending-trend button{touch-action:pan-y;user-select:none;-webkit-user-select:none}
+body[data-root="integrated"] .integrated-monthbar .spending-period-label{width:100%;min-width:0;height:auto;min-height:48px;border:0;background:transparent;font:inherit;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 0;overflow-wrap:anywhere}
+.spending-period-label span{font-size:14px;color:var(--muted)}
 .spending-chart .spending-bar{position:relative;display:block;width:100%;height:100px;margin-top:8px}
 .spending-chart .spending-bar i{position:absolute;left:50%;transform:translateX(-50%);width:min(26px,60%);min-height:0;background:var(--soft);border-radius:4px;transition:none}
 .spending-chart .spending-bar i.current{background:var(--accent2)}

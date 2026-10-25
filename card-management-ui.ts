@@ -151,6 +151,35 @@ function spendingPeriodKey():string{return spendingRangeKey(integratedSelectedMo
 function spendingViewContext():string{return integratedSelectedMonth()+':'+spendingPeriodMode()}
 function spendingFocusedPeriod():string{return spendingPeriodKey()}
 function clearSpendingSelection():void{delete setting().spendingChartContext;delete setting().spendingChartPeriod;setting().spendingCategoryFilter=''}
+function openSpendingPeriodPicker():void{
+ const mode=spendingPeriodMode(),anchor=integratedSelectedMonth(),year=anchor.slice(0,4),size=mode==='quarter'?3:mode==='half'?6:12,count=12/size,current=Math.ceil(Number(anchor.slice(5))/size);
+ $('#sheetEyebrow').textContent='통합 · 소비';$('#sheetTitle').textContent='조회 기간 선택';
+ $('#sheetBody').innerHTML=`<form data-spending-period-form class="form"><div class="field"><label>연도<input name="year" type="number" inputmode="numeric" min="1900" max="9998" step="1" value="${escapeHtml(year)}" required></label></div>${count>1?`<div class="field"><label>${mode==='quarter'?'분기':'반기'}<select name="part">${Array.from({length:count},(_,i)=>`<option value="${escapeHtml(i+1)}" ${current===i+1?'selected':''}>${mode==='quarter'?(i+1)+'분기':i===0?'상반기':'하반기'}</option>`).join('')}</select></label></div>`:''}<button type="submit" class="integrated-form-save">조회</button></form>`;
+ openSheet('#detailSheet');
+ const form=$('[data-spending-period-form]') as HTMLFormElement;
+ form.onsubmit=e=>{e.preventDefault();if(!form.reportValidity())return;const data=new FormData(form),nextYear=Number(data.get('year')),part=Number(data.get('part')||1);if(!Number.isInteger(nextYear)||nextYear<1900||nextYear>9998||!Number.isInteger(part)||part<1||part>count)return;setting().integratedMonth=`${nextYear}-${String((part-1)*size+1).padStart(2,'0')}`;clearSpendingSelection();rememberViewPreferences();closeSheets({all:true});render()};
+}
+
+function selectSpendingChartPoint(chart:HTMLElement,button:HTMLElement):void{
+ if(button.getAttribute('aria-pressed')==='true')return;
+ if(chart.hasAttribute('data-spending-linked')){setting().spendingChartContext=spendingViewContext();setting().spendingChartPeriod=button.dataset.spendingSelect;rememberViewPreferences()}
+ chart.querySelectorAll<HTMLElement>('[data-spending-select]').forEach(x=>{const active=x===button;x.setAttribute('aria-pressed',String(active));x.querySelector('i')?.classList.toggle('current',active)});
+ const label=chart.querySelector<HTMLElement>('[data-spending-selected-label]'),amount=chart.querySelector<HTMLElement>('[data-spending-selected-amount]'),detail=chart.querySelector<HTMLElement>('[data-spending-selected-detail]'),picker=chart.querySelector<HTMLSelectElement>('[data-spending-day-picker]');
+ if(label)label.textContent=spendingPeriodLabel(button.dataset.spendingSelect||'');if(amount)amount.textContent=won(Number(button.dataset.spendingAmount));if(detail)detail.dataset.spendingSelectedDetail=button.dataset.spendingSelect;if(picker)picker.value=button.dataset.spendingSelect||'';
+}
+function bindSpendingChartDrag(chart:HTMLElement):void{
+ const track=chart.querySelector<HTMLElement>('.spending-trend');if(!track)return;
+ const points=Array.from(track.querySelectorAll<HTMLElement>('[data-spending-select]'));let pointer:number|null=null,startX=0,startY=0,dragging=false;
+ const pick=(x:number)=>{let nearest=points[0],distance=Infinity;for(const point of points){const rect=point.getBoundingClientRect(),d=Math.abs(x-(rect.left+rect.width/2));if(d<distance){nearest=point;distance=d}}if(nearest)selectSpendingChartPoint(chart,nearest)};
+ // Vertical gestures remain native page scrolling; horizontal gestures keep the same DOM and pointer capture.
+ track.style.touchAction='pan-y';
+ track.onpointerdown=e=>{if(pointer!==null||!e.isPrimary||e.pointerType==='mouse'&&e.button!==0)return;pointer=e.pointerId;startX=e.clientX;startY=e.clientY;dragging=false;try{track.setPointerCapture(pointer)}catch{}};
+ track.onpointermove=e=>{if(e.pointerId!==pointer)return;const dx=Math.abs(e.clientX-startX),dy=Math.abs(e.clientY-startY);if(!dragging){if(dy>dx&&dy>6){pointer=null;try{track.releasePointerCapture(e.pointerId)}catch{}return}if(dx<6)return;dragging=true}e.preventDefault();pick(e.clientX)};
+ track.onpointerup=e=>{if(e.pointerId!==pointer)return;if(dragging){e.preventDefault();pick(e.clientX)}else pick(e.clientX);pointer=null;try{track.releasePointerCapture(e.pointerId)}catch{}};
+ track.onpointercancel=()=>{pointer=null;dragging=false};track.onlostpointercapture=()=>{pointer=null};
+ // A drag can end over another button; do not let its compatibility click override the selected point.
+ track.onclick=e=>{if(dragging){e.preventDefault();e.stopPropagation();dragging=false}},track.onkeydown=e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;const active=Math.max(0,points.findIndex(x=>x.getAttribute('aria-pressed')==='true')),index=e.key==='Home'?0:e.key==='End'?points.length-1:Math.max(0,Math.min(points.length-1,active+(e.key==='ArrowRight'?1:-1)));if(points[index]){e.preventDefault();selectSpendingChartPoint(chart,points[index]);points[index].focus()}};
+}
 
 function spendingName(row:CardUiRow):string{return String(row.meta?.spendingItem||row.category||'미분류')}
 function spendingCategoryIcon(category:string):string{
@@ -207,6 +236,7 @@ function openSpendingClassification(ids:string[],period:string,cardId=''):void{
  const form=cardUiForm('항목 이름·분류 수정',`${cardUiInput('item','항목 이름',first.item)}${cardUiCategoryField(first.category)}<p class="source-note">선택한 구매 ${rows.length}건의 표시 이름과 분류를 바꿉니다. 구매·청구·납부 원본과 금액은 그대로 유지돼요.</p>`,async data=>{if(await saveSpendingClassifications(rows.map(x=>x.id),String(data.category),String(data.item))){if(sheetInteractionToken()!==token||!form.isConnected||!$('#formSheet').classList.contains('open')){renderKeepingScroll();return}cardUiDone();if(cardId)openCardLedgerDetail(cardId);else openSpendingItemDetail(String(data.item),period,'summary',String(data.category));toast('이름과 분류를 저장했어요.')}});const token=sheetInteractionToken();
 }
 function bindSpendingReview():void{
+ $$('[data-spending-period-picker]').forEach(b=>b.onclick=openSpendingPeriodPicker);
  $$('[data-integrated-filter-reset]').forEach(b=>b.onclick=()=>{setting().integratedLedgerFilter='all';setting().integratedLedgerCategory='';rememberViewPreferences();render()});
  if(route().root==='integrated'&&route().tab==='spending')$$('[data-integrated-month-shift]').forEach(b=>b.onclick=()=>{const step=spendingPeriodMode()==='quarter'?3:spendingPeriodMode()==='half'?6:['year','years'].includes(spendingPeriodMode())?12:1;setting().integratedMonth=integratedSpendingMonthShift(integratedSelectedMonth(),step*Number(b.dataset.integratedMonthShift));clearSpendingSelection();rememberViewPreferences();render()});
  $$('[data-spending-period],[data-spending-year-view]').forEach(b=>b.onclick=async()=>{setting().spendingPeriod=b.dataset.spendingPeriod||b.dataset.spendingYearView;clearSpendingSelection();rememberViewPreferences();render()});
@@ -219,7 +249,8 @@ function bindSpendingReview():void{
  $$('[data-spending-item-period]').forEach(b=>b.onclick=()=>openSpendingItemDetail(b.dataset.itemKey||'',b.dataset.spendingItemPeriod==='year'?String(b.dataset.itemPeriod||integratedSelectedMonth()).slice(0,4):(/^\d{4}-\d{2}$/.test(String(b.dataset.itemPeriod||''))?b.dataset.itemPeriod:String(b.dataset.itemPeriod||integratedSelectedMonth()).slice(0,4)+'-'+integratedSelectedMonth().slice(5,7)),b.dataset.itemTab,b.closest<HTMLElement>('[data-item-category]')?.dataset.itemCategory));
  $$('[data-spending-classify]').forEach(b=>b.onclick=()=>openSpendingClassification([b.dataset.spendingClassify||''],spendingPeriodKey(),b.dataset.classifyCard));
  $$('[data-spending-classify-item]').forEach(b=>b.onclick=()=>{const period=b.dataset.classifyPeriod||spendingPeriodKey(),rows=integratedSpendingAnalysis(period).rows.filter(x=>spendingName(x)===b.dataset.spendingClassifyItem&&x.category===b.closest<HTMLElement>('[data-item-category]')?.dataset.itemCategory);openSpendingClassification([...new Set(rows.map(x=>String(x.type==='refund'?x.meta?.refundOf:x.id)))],period)});
- $$('[data-spending-select]').forEach(b=>b.onclick=()=>{const chart=b.closest<HTMLElement>('.spending-chart');if(!chart)return;if(chart.hasAttribute('data-spending-linked')){setting().spendingChartContext=spendingViewContext();setting().spendingChartPeriod=b.dataset.spendingSelect;rememberViewPreferences()}chart.querySelectorAll<HTMLElement>('[data-spending-select]').forEach(x=>{const active=x===b;x.setAttribute('aria-pressed',String(active));x.querySelector('i')?.classList.toggle('current',active)});chart.querySelector<HTMLElement>('[data-spending-selected-label]')!.textContent=spendingPeriodLabel(b.dataset.spendingSelect||'');chart.querySelector<HTMLElement>('[data-spending-selected-amount]')!.textContent=won(Number(b.dataset.spendingAmount));chart.querySelector<HTMLElement>('[data-spending-selected-detail]')!.dataset.spendingSelectedDetail=b.dataset.spendingSelect;const picker=chart.querySelector<HTMLSelectElement>('[data-spending-day-picker]');if(picker)picker.value=b.dataset.spendingSelect||''});
+ $$('[data-spending-select]').forEach(b=>b.onclick=()=>{const chart=b.closest<HTMLElement>('.spending-chart');if(chart)selectSpendingChartPoint(chart,b)});
+ $$('.spending-chart').forEach(bindSpendingChartDrag);
  $$('[data-spending-day-picker]').forEach(p=>p.onchange=()=>{const chart=p.closest('.spending-chart');chart?.querySelectorAll<HTMLElement>('[data-spending-select]').forEach(b=>{if(b.dataset.spendingSelect===(p as HTMLSelectElement).value)b.click()})});
  $$('[data-spending-selected-detail]').forEach(b=>b.onclick=()=>{const period=b.dataset.spendingSelectedDetail||spendingPeriodKey(),item=b.dataset.spendingSelectedItem;if(item)openSpendingItemDetail(item,period,'transactions',b.closest<HTMLElement>('[data-item-category]')?.dataset.itemCategory);else openIntegratedSpendingDetail('all','',period)});
  $$('[data-spending-group]').forEach(b=>b.onclick=()=>{const period=b.dataset.spendingGroupPeriod||spendingFocusedPeriod(),key=b.dataset.spendingGroup||'',scope=b.dataset.spendingGroupScope,rows=integratedSpendingAnalysis(period).rows.filter(row=>row.category===key&&(scope==='fixed'?row.fixed:scope==='variable'?!row.fixed:true));$('#sheetTitle').textContent=spendingPeriodLabel(period)+' '+key;$('#sheetBody').innerHTML=`<div class="spending-group-total"><span>${rows.length}건 · 순소비</span><strong>${won(rows.reduce((n,r)=>n+Number(r.amount||0),0))}</strong></div>`+spendingTransactionRows(rows);bindSpendingReview()});
