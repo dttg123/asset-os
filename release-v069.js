@@ -131,7 +131,7 @@ function v069ScheduleMeta(kind) { if (kind === 'income')
     return ['insurance', '보험']; if (kind === 'loan')
     return ['loan', '대출']; if (['investment', 'saving'].includes(kind))
     return ['saving', '저축·투자']; return ['living', '생활지출']; }
-function v069ScheduleGroups(list, scope) { const order = ['income', 'card', 'insurance', 'loan', 'saving', 'living'], map = new Map(order.map(k => [k, []])); for (const row of list) {
+function v069ScheduleGroups(list, scope) { const order = ['card', 'insurance', 'loan', 'saving', 'living', 'income'], map = new Map(order.map(k => [k, []])); for (const row of list) {
     const [key] = row.schedule.cardPlan ? ['card', '카드'] : v069ScheduleMeta(row.schedule.kind);
     map.get(key).push(row);
 } return order.flatMap(key => { const rows = map.get(key); if (!rows.length)
@@ -181,6 +181,9 @@ integratedSummaryPage = function () {
             strong.textContent = `${integratedMonthLabel(month)} 현금흐름`;
         small?.remove();
     }
+    const presets = template.content.querySelector('.integrated-quick-presets'), recentCard = template.content.querySelector('.integrated-recent');
+    if (presets && recentCard)
+        recentCard.before(presets);
     const cashLabel = template.content.querySelector('.integrated-month-mini-item.left span');
     if (cashLabel)
         cashLabel.textContent = '현금 증감';
@@ -201,7 +204,7 @@ integratedSchedulePage = function () {
     if (title)
         title.textContent = `${integratedMonthLabel(month)} 남은 납부액`;
     if (small)
-        small.textContent = `${won(pending.filter(o => o.schedule.kind !== 'income').reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0))} · 미완료 ${pending.length}건${pending.some(o => o.schedule.kind === 'income') ? ' · 수입 예정 별도' : ''}`;
+        small.innerHTML = `<span class="schedule-payment-summary"><b>${won(pending.filter(o => o.schedule.kind !== 'income').reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0))}</b> · 납부 ${pending.filter(o => o.schedule.kind !== 'income').length}건</span>${pending.some(o => o.schedule.kind === 'income') ? '<span class="schedule-income-summary">수입 예정 ' + won(pending.filter(o => o.schedule.kind === 'income').reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0)) + ' 별도</span>' : ''}`;
     if (pill)
         pill.textContent = `완료 ${done}건`;
     const finished = occ.filter(o => o.status === 'done');

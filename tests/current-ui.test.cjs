@@ -51,9 +51,11 @@ test('spending adds one quick expense action and one optional monthly living bud
  assert.match(store,/monthlyLivingBudget\s*=\s*Math\.max\(\s*0\s*,\s*Math\.round/);
 });
 
-test('household summary exposes quick income, expense and non-destructive balance reconciliation',()=>{
+test('household summary keeps one record entry with income choice and non-destructive balance reconciliation',()=>{
  const pages=read('integrated-pages.ts'),forms=read('integrated-forms.ts'),render=read('ui-render.ts'),css=read('css-integrated.css');
- for(const marker of ['data-household-income','data-household-expense','data-cash-reconcile'])assert.match(pages,new RegExp(marker));
+ for(const marker of ['data-household-expense','data-cash-reconcile'])assert.match(pages,new RegExp(marker));
+ assert.match(render,/\['externalIncome','수입'\]/);
+ assert.doesNotMatch(pages,/<button data-household-income>/);
  assert.match(forms,/function openCashReconcileForm/);
  assert.match(forms,/type:'adjustment'/);
  assert.match(forms,/meta:\{reconciliation:true,previousBalance:current,recordedBalance:actual\}/);

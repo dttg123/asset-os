@@ -1,0 +1,44 @@
+import {test,expect} from '@playwright/test';
+import {readFile} from 'node:fs/promises';
+
+test.beforeEach(async({page})=>{
+ if(process.env.ASSET_OS_QA_SDK_PATH){const body=await readFile(process.env.ASSET_OS_QA_SDK_PATH);await page.route('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4',r=>r.fulfill({body,contentType:'text/javascript'}))}
+ await page.goto('/index.html?qa=1#/home');await page.waitForFunction(()=>!!window.__assetOS);
+ await page.evaluate(async()=>{localYmd=()=> '2026-10-26';const s=window.__assetOS.getState();s.integrated.accounts=[{id:'cash-main',kind:'cash',name:'QA 현금'}];s.integrated.liabilities=[];s.integrated.ledger=[{id:'opening',type:'openingAsset',date:'2025-01-01',amount:10000000,toAccountId:'cash-main'},...Array.from({length:10},(_,i)=>({id:'month-'+i,type:'expense',date:`2026-${String(i+1).padStart(2,'0')}-01`,amount:(i+1)*100000,fromAccountId:'cash-main',category:i%2?'보험':'식비',meta:{spendingItem:'QA '+i}})),{id:'oct-mid',type:'expense',date:'2026-10-14',amount:346200,fromAccountId:'cash-main',category:'가전·전자',meta:{spendingItem:'QA 가전'}},{id:'oct-refund',type:'refund',date:'2026-10-20',amount:50000,toAccountId:'cash-main',meta:{refundOf:'month-9'}}];s.financeSchedules={items:[]};s.financialProducts={items:[],events:[]};s.insurance={policies:[]};s.settings.cardAccounts=[];s.settings.integratedMonth='2026-10';s.settings.integratedMonthViewedOn=localYmd();s.settings.spendingPeriod='month';await window.__assetOS.replaceState(s);nav('integrated','spending')});
+});
+async function close(page){await page.evaluate(()=>{sheetDirty=false;closeSheets({all:true});cancelSheetBackForNavigation()});await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop)}
+async function assertWidth(page,width){expect(await page.evaluate(()=>({inner:innerWidth,scroll:document.documentElement.scrollWidth}))).toEqual({inner:width,scroll:width})}
+
+test('@core period charts remain legible in narrow light dark and tablet layouts and preserve financial totals',async({page},info)=>{
+ const before=await page.evaluate(()=>({finance:JSON.stringify(state.integrated),revision:assetLocalDatabase.revision}));
+ for(const width of [320,412,768])for(const theme of ['light','dark']){
+  await page.setViewportSize({width,height:915});await page.evaluate(theme=>{setting().theme=theme;applyTheme()},theme);
+  for(const [mode,count] of [['month',31],['quarter',3],['half',6],['year',12]]){
+   await page.locator(`.spending-period [data-spending-period="${mode}"]`).click();await expect(page.locator('.spending-period button')).toHaveCount(4);const chart=page.locator('main .spending-trend');await expect(chart.locator('button')).toHaveCount(count);await assertWidth(page,width);expect(await chart.evaluate(e=>e.scrollWidth<=e.clientWidth+1)).toBe(true);
+   const plot=await chart.boundingBox();const labels=page.locator(mode==='month'?'.spending-day-axis span':'.spending-trend button>strong');for(const label of await labels.all()){const r=await label.boundingBox();expect(r.x).toBeGreaterThanOrEqual(plot.x-1);expect(r.x+r.width).toBeLessThanOrEqual(plot.x+plot.width+1)}
+   if(width===412&&theme==='light'){await page.waitForTimeout(350);await page.locator('.spending-hero').screenshot({path:`test-results/layout-${mode}-${info.project.name}.png`})}
+   const total=await page.evaluate(()=>integratedSpendingView(integratedSelectedMonth(),spendingPeriodMode()).trend.reduce((n,x)=>n+x.amount,0));expect(await page.locator('.spending-hero>strong').textContent()).toBe(total.toLocaleString('ko-KR')+'원');
+  }
+ }
+ expect(await page.evaluate(()=>({finance:JSON.stringify(state.integrated),revision:assetLocalDatabase.revision}))).toEqual(before);
+ await page.setViewportSize({width:412,height:915});await page.evaluate(()=>{setting().theme='light';applyTheme();setting().spendingPeriod='month';render()});await page.locator('.spending-chart-window').scrollIntoViewIfNeeded();await page.waitForTimeout(350);await page.screenshot({path:`test-results/layout-month-${info.project.name}.png`});
+});
+
+test('@core daily positive zero and refund selections link to matching details without saving finance',async({page})=>{
+ const before=await page.evaluate(()=>({finance:JSON.stringify(state.integrated),revision:assetLocalDatabase.revision}));
+ for(const [day,amount] of [['01','1,000,000원'],['14','346,200원'],['20','-50,000원'],['31','0원']]){
+  await page.locator('[data-spending-day-picker]').selectOption('2026-10-'+day);await expect(page.locator(`[data-spending-select="2026-10-${day}"]`)).toHaveAttribute('aria-pressed','true');await expect(page.locator('[data-spending-selected-amount]')).toHaveText(amount);await page.locator('[data-spending-selected-detail]').click();await expect(page.locator('.spending-group-total strong')).toHaveText(amount);await close(page);
+ }
+ const point=page.locator('[data-spending-select="2026-10-20"] .spending-line-point');expect(await point.evaluate(e=>Number.parseFloat(e.style.top))).toBe(100);
+ await page.locator('.spending-period [data-spending-period="year"]').click();await expect(page.locator('[data-spending-select="2026-11"]')).toHaveClass(/spending-future/);await expect(page.locator('[data-spending-select="2026-09"]')).not.toHaveClass(/spending-future/);await page.locator('[data-spending-period="years"]').click();await expect(page.locator('.spending-period [data-spending-period="year"]')).toHaveClass(/active/);await expect(page.locator('.spending-trend button')).toHaveCount(6);await page.locator('[data-spending-year-view="year"]').click();await expect(page.locator('.spending-trend button')).toHaveCount(12);
+ expect(await page.evaluate(()=>({finance:JSON.stringify(state.integrated),revision:assetLocalDatabase.revision}))).toEqual(before);
+});
+
+test('@core overview roles ledger filter reset card due priority and separate schedule income stay consistent',async({page})=>{
+ await page.evaluate(()=>nav('integrated','summary'));await expect(page.locator('main .integrated-overview-hero,main .spending-chart')).toHaveCount(0);await expect(page.locator('.integrated-month-mini')).toContainText('2026년 10월');await page.locator('[data-integrated-tab-go="ledger"]').click();await page.locator('[data-integrated-category="보험"]').click();await expect(page.locator('.ledger-active-filters')).toContainText('보험');await page.locator('[data-integrated-filter-reset]').click();await expect(page.locator('.ledger-active-filters')).toContainText('모든 분류');
+ await page.locator('[data-integrated-new]').click();const form=page.locator('#integratedTxForm');const order=await form.locator('#entryAmount,#entryDate,#entrySpendingItem,#entryCategory').evaluateAll(es=>es.map(e=>e.id));expect(order).toEqual(['entryAmount','entryDate','entrySpendingItem','entryCategory']);await close(page);
+ await page.evaluate(async()=>{state.financeSchedules.items=[{id:'salary',name:'QA 급여',kind:'income',amount:3000000,day:25,startDate:'2026-01-01',active:true},{id:'insurance',name:'QA 보험',kind:'insurance',amount:10000,day:25,startDate:'2026-01-01',active:true}];const card=await saveCardAccount({name:'QA 국민카드',paymentDay:14});const id=await createCardPurchase({name:'QA TV',cardId:card,purchaseAmount:300000,months:3,purchaseDate:'2026-09-01',firstPaymentDate:'2026-10-14',interestMode:'free'});await saveCardBill(id,{issuedDate:'2026-10-01',dueDate:'2026-10-16',principal:100000});nav('integrated','schedule')});
+ await expect(page.locator('.schedule-head small')).toContainText('수입 예정 3,000,000원 별도');expect(await page.locator('.schedule-pending-list [data-schedule-category]').last().getAttribute('data-schedule-category')).toBe('income');await page.locator('[data-card-hub]').click();await expect(page.locator('.card-monthly-primary [data-card-monthly="unpaid"]')).toHaveText('100,000원');await expect(page.locator('.card-issuer-due')).toContainText('2026-10-16');await expect(page.locator('.card-purchases')).not.toHaveAttribute('open');
+ for(const theme of ['light','dark']){await page.evaluate(theme=>{setting().theme=theme;applyTheme()},theme);await page.waitForTimeout(350);const contrast=await page.locator('.card-monthly-primary strong').evaluate(e=>{const canvas=document.createElement('canvas');canvas.width=canvas.height=1;const c=canvas.getContext('2d',{willReadFrequently:true}),luminance=color=>{c.fillStyle='#fff';c.fillRect(0,0,1,1);c.fillStyle=color;c.fillRect(0,0,1,1);const d=c.getImageData(0,0,1,1).data;const v=[...d].slice(0,3).map(x=>{x/=255;return x<=.04045?x/12.92:((x+.055)/1.055)**2.4});return v[0]*.2126+v[1]*.7152+v[2]*.0722};const text=luminance(getComputedStyle(e).color),bg=luminance(getComputedStyle(e.parentElement).backgroundColor);return(Math.max(text,bg)+.05)/(Math.min(text,bg)+.05)});expect(contrast).toBeGreaterThanOrEqual(4.5)}
+
+});
