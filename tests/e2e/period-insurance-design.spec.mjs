@@ -174,14 +174,14 @@ test('@core equal card installments remain independent and deleting one payment 
   if(index===0)expect(await page.evaluate(id=>scheduleCompletionTx(id,'2026-01-31'),ids[1])).toBeNull();
   await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
  }
- await page.reload();await page.waitForFunction(()=>!!window.__assetOS);await page.evaluate(()=>nav('integrated','schedule'));
+ await page.reload();await page.waitForFunction(()=>!!window.__assetOS);await page.evaluate(()=>nav('integrated','schedule'));await page.locator('[data-integrated-month-select]').fill('2026-01');
  const other=await page.evaluate(id=>JSON.stringify(state.integrated.ledger.filter(t=>t.meta?.scheduleId===id)),ids[1]);
  await page.locator('.schedule-completed summary').click();await openCardScheduleGroup(page,'completed');await page.locator(`.schedule-list [data-fixed-cost-item="${ids[0]}"]`).click();const principalId=await page.evaluate(id=>state.integrated.ledger.find(t=>t.meta?.scheduleId===id&&t.type==='debtPrincipal').id,ids[0]);await page.locator(`[data-schedule-record="${principalId}"]`).click();await page.locator('[data-integrated-delete-detail]').click();
  await expect(page.getByText('이번 납부 기록을 삭제할까요?',{exact:true})).toBeVisible();await page.getByRole('button',{name:'삭제',exact:true}).last().click();
  await expect(page.getByText('거래를 삭제했습니다.',{exact:true})).toBeVisible();await page.reload();await page.waitForFunction(()=>!!window.__assetOS);
  const result=await page.evaluate(ids=>({first:scheduleCompletionTx(ids[0],'2026-01-31'),left:state.integrated.ledger.filter(t=>t.meta?.scheduleId===ids[0]).length,other:JSON.stringify(state.integrated.ledger.filter(t=>t.meta?.scheduleId===ids[1])),debt:integratedReplay().totalDebt,cash:integratedReplay().assets['cash-main']}),ids);
  expect(result).toEqual({first:null,left:0,other,debt:600000,cash:9876400});
- await page.evaluate(()=>nav('integrated','schedule'));await openCardScheduleGroup(page);await page.locator(`.schedule-list [data-fixed-cost-item="${ids[0]}"]`).click();await expect(page.locator(`[data-schedule-complete="${ids[0]}"]`)).toBeVisible();
+ await page.evaluate(()=>nav('integrated','schedule'));await page.locator('[data-integrated-month-select]').fill('2026-01');await openCardScheduleGroup(page);await page.locator(`.schedule-list [data-fixed-cost-item="${ids[0]}"]`).click();await expect(page.locator(`[data-schedule-complete="${ids[0]}"]`)).toBeVisible();
 });
 
 test('@core editing deposit interest keeps its account and observation aligned after reload and deletion',async({page})=>{
