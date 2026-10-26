@@ -96,7 +96,14 @@ function bind() {
     $$('[data-route]').forEach(b => b.onclick = e => { e.stopPropagation(); if (b.dataset.tab === 'transactions')
         transactionDisplayLimit = 50; nav(b.dataset.route, b.dataset.tab || 'summary'); });
     $$('[data-integrated-tab]').forEach(b => b.onclick = () => nav('integrated', b.dataset.integratedTab));
-    $$('[data-integrated-tab-go]').forEach(b => b.onclick = () => nav('integrated', b.dataset.integratedTabGo));
+    $$('[data-integrated-tab-go]').forEach(b => b.onclick = () => { if (b.dataset.spendingOpenMonth) {
+        setting().integratedMonth = b.dataset.spendingOpenMonth;
+        setting().spendingPeriod = 'month';
+        setting().spendingView = 'categories';
+        setting().spendingCategoryFilter = '';
+        clearSpendingSelection();
+        rememberViewPreferences();
+    } nav('integrated', b.dataset.integratedTabGo); });
     $('[data-integrated-month-select]')?.addEventListener('change', async (e) => { const target = e.target; if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement))
         return; const month = target.value; if (!/^\d{4}-\d{2}$/.test(month))
         return; setting().integratedMonth = month; if (route().root === 'integrated' && route().tab === 'spending')

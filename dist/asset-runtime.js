@@ -579,8 +579,11 @@ async function cloudApplyRemoteEnvelopeNow(payload, revision) {
         await assetLocalDatabase.commit(savedEnvelope);
     else
         localStorage.setItem(KEY, JSON.stringify(savedEnvelope));
+    const query = typeof captureIntegratedQuery === 'function' ? captureIntegratedQuery() : null;
     state = normalized;
     lastPersistedState = clone(normalized);
+    if (query && typeof restoreIntegratedQuery === 'function')
+        restoreIntegratedQuery(query);
     cloudBaseFingerprint = cloudEnvelopeFingerprint(payload);
     cloudBaseRevision = Number(revision) || 0;
     cloudPendingWrite = null;
@@ -1026,7 +1029,7 @@ if ('serviceWorker' in navigator)
                 timer = setInterval(applyUpdate, 1000);
         });
         try {
-            const reg = await navigator.serviceWorker.register('./service-worker.js?v=0.7.19&build=20261026-7', { scope: './', updateViaCache: 'none' });
+            const reg = await navigator.serviceWorker.register('./service-worker.js?v=0.7.20&build=20261026-8', { scope: './', updateViaCache: 'none' });
             let checking = false;
             const check = async () => { if (checking || document.visibilityState === 'hidden')
                 return; checking = true; try {
@@ -1050,14 +1053,17 @@ async function bootAssetOs() {
     state = (await loadState());
     lastPersistedState = clone(state);
     restoreViewPreferences();
+    resetIntegratedViewOnLaunch();
     function applyExternalSavedState(saved) {
         const interruptedInput = sheetMode === 'input' && sheetDirty;
         if (interruptedInput) {
             showNotice('다른 화면에서 변경됨', '작성 중인 내용은 유지했습니다. 다른 화면의 변경을 먼저 확인한 뒤 저장해 주세요.');
             return true;
         }
+        const query = captureIntegratedQuery();
         state = normalizeState(saved.data);
         lastPersistedState = clone(state);
+        restoreIntegratedQuery(query);
         render();
         if (typeof qaRenderStats === 'function')
             qaRenderStats();

@@ -185,15 +185,21 @@ declare function runStoredCommand<T>(command:()=>Promise<T>):Promise<T>;
 declare function waitForStorageSave():Promise<void>;
 declare const assetLocalDatabase:{read():Promise<{data:unknown}|null>;envelope:unknown;probe():Promise<boolean>};
 declare function restoreViewPreferences():void;
+declare function resetIntegratedViewOnLaunch():void;
+declare function captureIntegratedQuery():Record<string,unknown>;
+declare function restoreIntegratedQuery(query:Record<string,unknown>):void;
 async function bootAssetOs():Promise<void>{
 state=(await loadState());
 lastPersistedState=clone(state);
 restoreViewPreferences();
+resetIntegratedViewOnLaunch();
 function applyExternalSavedState(saved:{data:unknown}){
  const interruptedInput=sheetMode==='input'&&sheetDirty;
  if(interruptedInput){showNotice('다른 화면에서 변경됨','작성 중인 내용은 유지했습니다. 다른 화면의 변경을 먼저 확인한 뒤 저장해 주세요.');return true}
+ const query=captureIntegratedQuery();
  state=normalizeState(saved.data);
  lastPersistedState=clone(state);
+ restoreIntegratedQuery(query);
  render();
  if(typeof qaRenderStats==='function')qaRenderStats();
  toast('다른 화면의 최신 변경사항을 반영했습니다.');

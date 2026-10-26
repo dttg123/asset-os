@@ -61,3 +61,12 @@ jobs:
           path: test-results/
           if-no-files-found: ignore
           retention-days: 14
+
+      - name: Save monthly layout QA evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: monthly-layout-${{ github.run_id }}
+          path: test-results/monthly-clarity-*.png
+          if-no-files-found: ignore
+          retention-days: 7

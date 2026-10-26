@@ -3,14 +3,17 @@ async function bootAssetOs() {
     state = (await loadState());
     lastPersistedState = clone(state);
     restoreViewPreferences();
+    resetIntegratedViewOnLaunch();
     function applyExternalSavedState(saved) {
         const interruptedInput = sheetMode === 'input' && sheetDirty;
         if (interruptedInput) {
             showNotice('다른 화면에서 변경됨', '작성 중인 내용은 유지했습니다. 다른 화면의 변경을 먼저 확인한 뒤 저장해 주세요.');
             return true;
         }
+        const query = captureIntegratedQuery();
         state = normalizeState(saved.data);
         lastPersistedState = clone(state);
+        restoreIntegratedQuery(query);
         render();
         if (typeof qaRenderStats === 'function')
             qaRenderStats();
