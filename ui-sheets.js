@@ -1,6 +1,7 @@
 'use strict';
 let lockedScrollY = 0;
 let activeSheetId = '';
+let sheetReturnTo = null;
 let parentSheetId = '';
 let parentSheetScrollTop = 0;
 let sheetMode = 'view';
@@ -101,6 +102,7 @@ let sheetInteractionVersion = 0;
 function sheetInteractionToken() { return sheetInteractionVersion; }
 function openSheet(id, options = {}) {
     sheetInteractionVersion++;
+    sheetReturnTo = options.returnTo || null;
     const previous = activeSheetId, wasOpen = $$('.sheet.open').length > 0;
     if (previous === '#profileSheet' && id !== '#profileSheet') {
         parentSheetId = '#profileSheet';
@@ -128,6 +130,17 @@ function openSheet(id, options = {}) {
 }
 function closeSheets(options = {}) {
     sheetInteractionVersion++;
+    const returnTo = sheetReturnTo;
+    sheetReturnTo = null;
+    if (returnTo && !options.all) {
+        if (options.fromPop) {
+            history.pushState({ assetOsSheet: true }, '', location.href);
+            sheetHistoryActive = true;
+        }
+        sheetDirty = false;
+        returnTo();
+        return;
+    }
     const had = $$('.sheet.open').length > 0, restoreY = lockedScrollY;
     if (parentSheetId && activeSheetId !== parentSheetId && !options.all) {
         $$('.sheet.open').forEach((sheet) => {

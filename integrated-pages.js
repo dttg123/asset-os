@@ -60,7 +60,7 @@ function integratedTxAccountsText(t) { if (t.meta?.cardPoints)
 function integratedRowsForMonth(month = integratedSelectedMonth()) { return integratedLedger().filter(t => integratedMonthKey(t.date) === month); }
 function transactionSearchKey(parts) { return parts.map(v => String(v ?? '')).join(' ').normalize('NFKC').toLowerCase().replace(/[,\s./-]/g, ''); }
 function integratedCardIdentity(id) {
-    const schedule = financeSchedules().find(x => x.id === id), purchase = integratedLedger().find(x => x.meta?.cardPlanId === id && x.meta?.cardPurchase);
+    const schedule = financeSchedules().find(x => x.id === id), purchase = integratedStore().ledger.find(x => x.meta?.cardPlanId === id && x.meta?.cardPurchase);
     return purchase ? spendingClassification(purchase) : spendingClassification({ category: String(schedule?.cardPlan?.category || '미분류'), meta: { spendingItem: String(schedule?.name || '카드 구매') } });
 }
 function integratedScheduleName(schedule) { return schedule.cardPlan ? integratedCardIdentity(String(schedule.id)).item : String(schedule.name || '금융 일정'); }

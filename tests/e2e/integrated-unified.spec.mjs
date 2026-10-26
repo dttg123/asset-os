@@ -10,13 +10,13 @@ test.beforeEach(async({page})=>{
 test.afterEach(async({page})=>{expect(await page.evaluate(()=>window.__edgeErrors)).toEqual([])});
 async function close(page){await page.evaluate(()=>{sheetDirty=false;closeSheets({all:true});cancelSheetBackForNavigation()});await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop)}
 
-async function history(page){return page.evaluate(async()=>{
+async function history(page,includeSpending=true){return page.evaluate(async includeSpending=>{
  if(!state.integrated.accounts.some(x=>x.id==='cash-main'))state.integrated.accounts.push({id:'cash-main',kind:'cash',name:'QA 현금 납부'});state.integrated.ledger.push({id:'opening',type:'openingAsset',date:'2026-01-01',amount:1000000,toAccountId:'cash-main'});await persist(false);const cardId=await saveCardAccount({name:'QA 분류 카드',issuer:'국민카드',paymentDay:14});const ids=[];
  for(const [index,name,merchant,category,amount] of [[0,'조이시티 · 01','조이시티','기타',128250],[1,'QA TV','삼성전자','가전·전자',346200],[2,'확인 필요 구매','확인필요상점','기타',493050]]){
-  const date='2026-10-'+String(24-index).padStart(2,'0'),id=await importCardHistory({cardId,name,merchant,category,purchaseAmount:amount,months:1,purchaseDate:date,firstPaymentDate:'2026-11-14',interestMode:'free',historyBaseline:{asOf:'2026-10-25',remainingPrincipal:amount,sourceKey:'unified-'+index,includeSpending:true,statements:[{month:'2026-11',round:1,principal:amount,interest:0,remainingPrincipal:0,status:'scheduled',source:'unified-'+index}]}});if(!id)throw Error('historical fixture failed');ids.push(id)
+  const date='2026-10-'+String(24-index).padStart(2,'0'),id=await importCardHistory({cardId,name,merchant,category,purchaseAmount:amount,months:1,purchaseDate:date,firstPaymentDate:'2026-11-14',interestMode:'free',historyBaseline:{asOf:'2026-10-25',remainingPrincipal:amount,sourceKey:'unified-'+index,includeSpending,statements:[{month:'2026-11',round:1,principal:amount,interest:0,remainingPrincipal:0,status:'scheduled',source:'unified-'+index}]}});if(!id)throw Error('historical fixture failed');ids.push(id)
  }
  setting().integratedMonth='2026-10';nav('integrated','summary');return ids;
-})}
+},includeSpending)}
 
 test('@core unified historical classifications agree in overview ledger transaction detail and spending',async({page})=>{
  const ids=await history(page),before=await page.evaluate(()=>JSON.stringify({integrated:state.integrated,schedules:state.financeSchedules}));
@@ -50,4 +50,33 @@ test('@core unified non-card transaction types keep their names and distinguish 
  const labels=await page.evaluate(()=>Object.fromEntries(integratedLedger().map(t=>[t.id,integratedTransactionDisplay(t)])));expect(labels.gift.category).toBe('용돈·선물');expect(labels.policy.category).toBe('보험');expect(labels.unknown.category).toBe('미분류');expect(labels.principal.category).toBe('대출 원금 상환');expect(labels.interest.category).toBe('대출 이자 납부');
  for(const filter of ['income','saving','debt','expense']){await page.locator(`[data-integrated-filter="${filter}"]`).click();for(const button of await page.locator('main [data-integrated-tx]').all()){const id=await button.getAttribute('data-integrated-tx');await button.click();await expect(page.locator('#sheetTitle')).toHaveText(labels[id].item);await expect(page.locator('[data-transaction-category]')).toHaveText(labels[id].category);await close(page)}}
  const before=await page.evaluate(()=>({ledger:JSON.stringify(state.integrated),revision:assetLocalDatabase.revision}));await page.evaluate(()=>nav('integrated','summary'));await page.evaluate(()=>openIntegratedMonthDetail());await expect(page.locator('#sheetBody')).toContainText('현금 증감');await expect(page.locator('#sheetBody')).toContainText('용돈·선물');await expect(page.locator('#sheetBody')).toContainText('보험');await close(page);expect(await page.evaluate(()=>({ledger:JSON.stringify(state.integrated),revision:assetLocalDatabase.revision}))).toEqual(before);
+});
+
+for(const includeSpending of [false,true])test('@core card classification persists and returns to purchase detail, spending='+includeSpending,async({page})=>{
+ const ids=await history(page,includeSpending),id=ids[0];
+ const before=await page.evaluate(()=>JSON.stringify({integrated:state.integrated,schedules:state.financeSchedules}));
+ await page.evaluate(id=>openCardLedgerDetail(id),id);
+ await page.locator('[data-spending-classify]').click();
+ await page.locator('#closeFormSheet').click();
+ await expect(page.locator('#detailSheet')).toHaveClass(/open/);
+ await expect(page.locator('[data-spending-classify]')).toBeVisible();
+ await page.locator('[data-spending-classify]').click();
+ await page.locator('#cardLedgerForm [name="item"]').fill('QA 변경된 구매');
+ await page.locator('.spending-category-picker summary').click();
+ await page.locator('[data-category-choice="가전·전자"]').click();
+ await page.locator('#cardLedgerForm button[type="submit"]').click();
+ await expect(page.locator('#sheetTitle')).toHaveText('QA 변경된 구매');
+ await expect(page.locator('.cardv2-estimate')).toContainText('가전·전자');
+ await page.waitForTimeout(200);
+ await expect(page.locator('#detailSheet')).toHaveClass(/open/);
+ await page.locator('[data-spending-classify]').click();
+ await expect(page.locator('#cardLedgerForm [name="item"]')).toHaveValue('QA 변경된 구매');
+ await page.goBack();
+ await expect(page.locator('#detailSheet')).toHaveClass(/open/);
+ await expect(page.locator('#sheetTitle')).toHaveText('QA 변경된 구매');
+ expect(await page.evaluate(()=>JSON.stringify({integrated:state.integrated,schedules:state.financeSchedules}))).toBe(before);
+ await page.reload();await page.waitForFunction(()=>!!window.__assetOS);
+ await page.evaluate(id=>openCardLedgerDetail(id),id);
+ await expect(page.locator('#sheetTitle')).toHaveText('QA 변경된 구매');
+ await expect(page.locator('.cardv2-estimate')).toContainText('가전·전자');
 });

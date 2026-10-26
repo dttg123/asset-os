@@ -930,7 +930,7 @@ function integratedTxAccountsText(t) { if (t.meta?.cardPoints)
 function integratedRowsForMonth(month = integratedSelectedMonth()) { return integratedLedger().filter(t => integratedMonthKey(t.date) === month); }
 function transactionSearchKey(parts) { return parts.map(v => String(v ?? '')).join(' ').normalize('NFKC').toLowerCase().replace(/[,\s./-]/g, ''); }
 function integratedCardIdentity(id) {
-    const schedule = financeSchedules().find(x => x.id === id), purchase = integratedLedger().find(x => x.meta?.cardPlanId === id && x.meta?.cardPurchase);
+    const schedule = financeSchedules().find(x => x.id === id), purchase = integratedStore().ledger.find(x => x.meta?.cardPlanId === id && x.meta?.cardPurchase);
     return purchase ? spendingClassification(purchase) : spendingClassification({ category: String(schedule?.cardPlan?.category || '미분류'), meta: { spendingItem: String(schedule?.name || '카드 구매') } });
 }
 function integratedScheduleName(schedule) { return schedule.cardPlan ? integratedCardIdentity(String(schedule.id)).item : String(schedule.name || '금융 일정'); }
@@ -1891,6 +1891,7 @@ function openIntegratedRefundForm(id) {
 'use strict';
 let lockedScrollY = 0;
 let activeSheetId = '';
+let sheetReturnTo = null;
 let parentSheetId = '';
 let parentSheetScrollTop = 0;
 let sheetMode = 'view';
@@ -1991,6 +1992,7 @@ let sheetInteractionVersion = 0;
 function sheetInteractionToken() { return sheetInteractionVersion; }
 function openSheet(id, options = {}) {
     sheetInteractionVersion++;
+    sheetReturnTo = options.returnTo || null;
     const previous = activeSheetId, wasOpen = $$('.sheet.open').length > 0;
     if (previous === '#profileSheet' && id !== '#profileSheet') {
         parentSheetId = '#profileSheet';
@@ -2018,6 +2020,17 @@ function openSheet(id, options = {}) {
 }
 function closeSheets(options = {}) {
     sheetInteractionVersion++;
+    const returnTo = sheetReturnTo;
+    sheetReturnTo = null;
+    if (returnTo && !options.all) {
+        if (options.fromPop) {
+            history.pushState({ assetOsSheet: true }, '', location.href);
+            sheetHistoryActive = true;
+        }
+        sheetDirty = false;
+        returnTo();
+        return;
+    }
     const had = $$('.sheet.open').length > 0, restoreY = lockedScrollY;
     if (parentSheetId && activeSheetId !== parentSheetId && !options.all) {
         $$('.sheet.open').forEach((sheet) => {
@@ -3659,11 +3672,11 @@ function bindSpendingCategoryPicker(form) { const picker = form.querySelector('.
     picker.querySelector('[data-category-choice]:not([hidden])')?.focus();
 } }; picker.querySelector('[data-category-search]').oninput = e => { const query = e.currentTarget.value.trim().toLocaleLowerCase(); let count = 0; picker.querySelectorAll('[data-category-choice]').forEach(b => { b.hidden = !String(b.dataset.categoryChoice).toLocaleLowerCase().includes(query); if (!b.hidden)
     count++; }); picker.querySelector('[data-category-empty]').hidden = count > 0; }; picker.querySelectorAll('[data-category-choice]').forEach(b => b.onclick = () => { const input = form.querySelector('[name="category"]'); input.value = b.dataset.categoryChoice || '미분류'; picker.querySelector('[data-category-current]').textContent = input.value; picker.querySelectorAll('[data-category-choice]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); picker.open = false; sheetDirty = true; input.dispatchEvent(new Event('input', { bubbles: true })); }); }
-function cardUiForm(title, body, save) {
+function cardUiForm(title, body, save, returnTo) {
     $('#formEyebrow').textContent = '통합 · 카드';
     $('#formTitle').textContent = title;
     $('#formBody').innerHTML = `<form id="cardLedgerForm" class="form">${body}<div class="warningbox" data-card-form-error hidden role="alert"></div><button type="submit" class="integrated-form-save">저장</button></form>`;
-    openSheet('#formSheet', { mode: 'input' });
+    openSheet('#formSheet', { mode: 'input', returnTo });
     const form = $('#cardLedgerForm');
     bindSpendingCategoryPicker(form);
     let saving = false;
@@ -4040,13 +4053,17 @@ function openSpendingClassification(ids, period, cardId = '') {
             renderKeepingScroll();
             return;
         }
-        cardUiDone();
+        sheetDirty = false;
+        renderKeepingScroll();
         if (cardId)
             openCardLedgerDetail(cardId);
         else
             openSpendingItemDetail(String(data.item), period, 'summary', String(data.category));
         toast('이름과 분류를 저장했어요.');
-    } });
+    } }, () => { if (cardId)
+        openCardLedgerDetail(cardId);
+    else
+        openSpendingItemDetail(first.item, period, 'summary', first.category); });
     const token = sheetInteractionToken();
 }
 function bindSpendingReview() {

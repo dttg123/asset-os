@@ -16,11 +16,11 @@ function bindSpendingCategoryPicker(form) { const picker = form.querySelector('.
     picker.querySelector('[data-category-choice]:not([hidden])')?.focus();
 } }; picker.querySelector('[data-category-search]').oninput = e => { const query = e.currentTarget.value.trim().toLocaleLowerCase(); let count = 0; picker.querySelectorAll('[data-category-choice]').forEach(b => { b.hidden = !String(b.dataset.categoryChoice).toLocaleLowerCase().includes(query); if (!b.hidden)
     count++; }); picker.querySelector('[data-category-empty]').hidden = count > 0; }; picker.querySelectorAll('[data-category-choice]').forEach(b => b.onclick = () => { const input = form.querySelector('[name="category"]'); input.value = b.dataset.categoryChoice || '미분류'; picker.querySelector('[data-category-current]').textContent = input.value; picker.querySelectorAll('[data-category-choice]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); picker.open = false; sheetDirty = true; input.dispatchEvent(new Event('input', { bubbles: true })); }); }
-function cardUiForm(title, body, save) {
+function cardUiForm(title, body, save, returnTo) {
     $('#formEyebrow').textContent = '통합 · 카드';
     $('#formTitle').textContent = title;
     $('#formBody').innerHTML = `<form id="cardLedgerForm" class="form">${body}<div class="warningbox" data-card-form-error hidden role="alert"></div><button type="submit" class="integrated-form-save">저장</button></form>`;
-    openSheet('#formSheet', { mode: 'input' });
+    openSheet('#formSheet', { mode: 'input', returnTo });
     const form = $('#cardLedgerForm');
     bindSpendingCategoryPicker(form);
     let saving = false;
@@ -397,13 +397,17 @@ function openSpendingClassification(ids, period, cardId = '') {
             renderKeepingScroll();
             return;
         }
-        cardUiDone();
+        sheetDirty = false;
+        renderKeepingScroll();
         if (cardId)
             openCardLedgerDetail(cardId);
         else
             openSpendingItemDetail(String(data.item), period, 'summary', String(data.category));
         toast('이름과 분류를 저장했어요.');
-    } });
+    } }, () => { if (cardId)
+        openCardLedgerDetail(cardId);
+    else
+        openSpendingItemDetail(first.item, period, 'summary', first.category); });
     const token = sheetInteractionToken();
 }
 function bindSpendingReview() {
