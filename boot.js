@@ -3,6 +3,7 @@ async function bootAssetOs() {
     state = (await loadState());
     lastPersistedState = clone(state);
     restoreViewPreferences();
+    resetIntegratedViewOnLaunch();
     function applyExternalSavedState(saved) {
         const interruptedInput = sheetMode === 'input' && sheetDirty;
         if (interruptedInput) {

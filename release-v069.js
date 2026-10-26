@@ -138,7 +138,7 @@ function v069ScheduleGroups(list, scope) { const order = ['card', 'insurance', '
     return []; const label = rows[0].schedule.cardPlan ? '카드' : v069ScheduleMeta(rows[0].schedule.kind)[1], amount = rows.reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0), open = v069ScheduleGroup[scope] === key, details = rows.map(o => `<button class="schedule-row" ${scope === 'summary' ? `data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"` : `data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"`}><span class="schedule-copy"><strong>${escapeHtml(integratedScheduleName(o.schedule))}</strong><small>${escapeHtml(o.date)} · ${escapeHtml(o.schedule.cardPlan ? '카드' : scheduleKindLabel(o.schedule.kind))}</small></span><strong class="schedule-amount">${won(scheduleOccurrenceDisplayAmount(o))}</strong><span class="schedule-status ${o.status}">${scheduleOccurrenceUiLabel(o)}</span></button>`).join(''); return [`<div class="schedule-category ${open ? 'open' : ''}"><button class="schedule-category-head" data-schedule-category="${escapeHtml(key)}" data-schedule-scope="${escapeHtml(scope)}" aria-expanded="${escapeHtml(open ? 'true' : 'false')}"><span><strong>${label}</strong><small>${rows.length}건</small></span><b>${won(amount)}</b><i>⌄</i></button><div class="schedule-category-body" ${open ? '' : 'hidden'}>${details}</div></div>`]; }).join(''); }
 const v069IntegratedSummary = integratedSummaryPage;
 integratedSummaryPage = function () {
-    const month = integratedSelectedMonth(), f = integratedFinancialModel(), pending = scheduleOccurrences(month).filter(o => o.status !== 'done' && o.schedule.kind !== 'income').sort((a, b) => a.date.localeCompare(b.date)), template = document.createElement('template');
+    const month = integratedSelectedMonth(), f = integratedFinancialModel(), commitments = scheduleOccurrences(month).filter(o => o.schedule.kind !== 'income').sort((a, b) => a.date.localeCompare(b.date)), pending = commitments.filter(o => o.status !== 'done'), template = document.createElement('template');
     template.innerHTML = v069IntegratedSummary();
     const label = template.content.querySelector('.integrated-overview-label');
     if (label)
@@ -155,14 +155,14 @@ integratedSummaryPage = function () {
     if (schedule) {
         const title = schedule.querySelector('.fixed-cost-head strong'), small = schedule.querySelector('.fixed-cost-head small'), amount = schedule.querySelector('.fixed-cost-head-right b'), body = schedule.querySelector('[data-fixed-cost-body]');
         if (title)
-            title.textContent = `${integratedMonthLabel(month)} 남은 납부액`;
+            title.textContent = `${integratedMonthLabel(month)} 매달 나가는 돈`;
         if (small)
-            small.textContent = pending.length ? `미완료 ${pending.length}건` : '선택한 달의 미완료 일정 없음';
+            small.textContent = `남은 납부액 · 미완료 ${pending.length}건 / 전체 ${commitments.length}건`;
         if (amount)
             amount.textContent = won(total);
         if (body) {
-            body.innerHTML = pending.length ? v069ScheduleGroups(pending, 'summary') : '<div class="integrated-empty">선택한 달의 금융 일정은 모두 처리했습니다.</div>';
-            body.insertAdjacentHTML('beforebegin', `<div class="fixed-cost-preview">${pending.slice(0, 3).map(o => `<button class="schedule-row" data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"><span class="schedule-copy"><strong>${escapeHtml(integratedScheduleName(o.schedule))}</strong><small>${escapeHtml(o.date)}</small></span><strong class="schedule-amount">${won(scheduleOccurrenceDisplayAmount(o))}</strong></button>`).join('')}<button class="diagnostic-action" data-integrated-tab-go="schedule">일정 전체 보기 ›</button></div>`);
+            body.innerHTML = commitments.length ? `<p class="source-note">고정지출·저축·투자·상환 일정이에요. 완료된 일정도 함께 표시하며, 소비 합계에는 저축과 원금 상환을 더하지 않아요.</p>` + v069ScheduleGroups(commitments, 'summary') : '<div class="integrated-empty">선택한 달에 등록된 정기 일정이 없습니다.</div>';
+            body.insertAdjacentHTML('beforebegin', `<div class="fixed-cost-preview">${pending.slice(0, 3).map(o => `<button class="schedule-row" data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"><span class="schedule-copy"><strong>${escapeHtml(integratedScheduleName(o.schedule))}</strong><small>${escapeHtml(o.date)}</small></span><strong class="schedule-amount">${won(scheduleOccurrenceDisplayAmount(o))}</strong></button>`).join('')}<button class="diagnostic-action" data-integrated-tab-go="schedule">납입·납부 일정 전체 보기 ›</button></div>`);
         }
         schedule.insertAdjacentHTML('afterend', integratedConsumptionPreview(month));
     }

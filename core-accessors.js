@@ -41,6 +41,13 @@ function restoreViewPreferences() {
     }
     catch { /* Ignore malformed view metadata; the financial state stays authoritative. */ }
 }
+function resetIntegratedViewOnLaunch() {
+    const today = localYmd();
+    setting().integratedMonth = today.slice(0, 7);
+    setting().integratedMonthViewedOn = today;
+    setting().spendingChartContext = '';
+    setting().spendingChartPeriod = '';
+}
 function currentAccount() { return state.accounts.find(a => a.id === setting().selectedAccountId) || state.accounts[0]; }
 function policy(kind = 'isa', account = 'current') { const group = state.policies[kind]; if (!group)
     return {}; if (Array.isArray(group.versions)) {

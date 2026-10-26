@@ -37,6 +37,11 @@ function restoreViewPreferences():void{
   for(const key of VIEW_PREFERENCE_KEYS){const value=record.values[key];if(viewPreferenceValue(key,value)&&JSON.stringify(setting()[key])===JSON.stringify(record.base[key]))setting()[key]=value}
  }catch{/* Ignore malformed view metadata; the financial state stays authoritative. */}
 }
+declare function localYmd():string;
+function resetIntegratedViewOnLaunch():void{
+ const today=localYmd();setting().integratedMonth=today.slice(0,7);setting().integratedMonthViewedOn=today;
+ setting().spendingChartContext='';setting().spendingChartPeriod='';
+}
 function currentAccount(){return state.accounts.find(a=>a.id===setting().selectedAccountId)||state.accounts[0]}
 function policy(kind='isa',account:AccessAccount|'current'|null='current'):AccessPolicy|AccessPolicyGroup{const group=state.policies[kind];if(!group)return{};if(Array.isArray(group.versions)){let targetId=group.activePolicyId;if(kind==='isa'){if(account===null)targetId=group.activePolicyId;else if(account==='current')targetId=currentAccount()?.policyId||group.activePolicyId;else targetId=account?.policyId||group.activePolicyId}else if(account&&typeof account==='object')targetId=account.policyId||group.activePolicyId;return group.versions.find(v=>v.id===targetId)||group.versions.find(v=>v.id===group.activePolicyId)||group.versions[0]||{}}return group}
 function policyForYear(kind:string,year:string|number){

@@ -1026,7 +1026,7 @@ if ('serviceWorker' in navigator)
                 timer = setInterval(applyUpdate, 1000);
         });
         try {
-            const reg = await navigator.serviceWorker.register('./service-worker.js?v=0.7.19&build=20261026-7', { scope: './', updateViaCache: 'none' });
+            const reg = await navigator.serviceWorker.register('./service-worker.js?v=0.7.20&build=20261026-8', { scope: './', updateViaCache: 'none' });
             let checking = false;
             const check = async () => { if (checking || document.visibilityState === 'hidden')
                 return; checking = true; try {
@@ -1050,6 +1050,7 @@ async function bootAssetOs() {
     state = (await loadState());
     lastPersistedState = clone(state);
     restoreViewPreferences();
+    resetIntegratedViewOnLaunch();
     function applyExternalSavedState(saved) {
         const interruptedInput = sheetMode === 'input' && sheetDirty;
         if (interruptedInput) {
