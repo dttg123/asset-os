@@ -75,7 +75,7 @@ function integratedRowsForMonth(month=integratedSelectedMonth()){return integrat
 function transactionSearchKey(parts:unknown[]){return parts.map(v=>String(v??'')).join(' ').normalize('NFKC').toLowerCase().replace(/[,\s./-]/g,'')}
 declare function spendingClassification(row:IntegratedPageRecord):{category:string;item:string};
 function integratedCardIdentity(id:string):{category:string;item:string}{
- const schedule=financeSchedules().find(x=>x.id===id),purchase=integratedLedger().find(x=>x.meta?.cardPlanId===id&&x.meta?.cardPurchase);
+ const schedule=financeSchedules().find(x=>x.id===id),purchase=(integratedStore().ledger as IntegratedPageRecord[]).find(x=>x.meta?.cardPlanId===id&&x.meta?.cardPurchase);
  return purchase?spendingClassification(purchase):spendingClassification({category:String((schedule?.cardPlan as {category?:string}|undefined)?.category||'미분류'),meta:{spendingItem:String(schedule?.name||'카드 구매')}});
 }
 function integratedScheduleName(schedule:IntegratedPageRecord):string{return schedule.cardPlan?integratedCardIdentity(String(schedule.id)).item:String(schedule.name||'금융 일정')}

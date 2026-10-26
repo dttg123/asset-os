@@ -1,7 +1,7 @@
 'use strict';
 
 type SheetCallback=(()=>void)|null;
-type SheetOptions={variant?:string;mode?:string;dirty?:boolean;all?:boolean;fromPop?:boolean};
+type SheetOptions={variant?:string;mode?:string;dirty?:boolean;all?:boolean;fromPop?:boolean;returnTo?:()=>void};
 type DialogOptions={title?:string;message?:string;confirmText?:string;cancelText?:string;danger?:boolean;oneButton?:boolean};
 
 declare function $(selector:string):HTMLElement;
@@ -10,6 +10,7 @@ declare let holdingRegistrationDraft:unknown;
 
 let lockedScrollY=0;
 let activeSheetId='';
+let sheetReturnTo:(()=>void)|null=null;
 let parentSheetId='';
 let parentSheetScrollTop=0;
 let sheetMode='view';
@@ -118,6 +119,7 @@ let sheetInteractionVersion=0;
 function sheetInteractionToken():number{return sheetInteractionVersion}
 function openSheet(id:string,options:SheetOptions={}){
  sheetInteractionVersion++;
+ sheetReturnTo=options.returnTo||null;
  const previous=activeSheetId,wasOpen=$$('.sheet.open').length>0;
  if(previous==='#profileSheet'&&id!=='#profileSheet'){
   parentSheetId='#profileSheet';
@@ -146,6 +148,11 @@ function openSheet(id:string,options:SheetOptions={}){
 
 function closeSheets(options:SheetOptions={}){
  sheetInteractionVersion++;
+ const returnTo=sheetReturnTo;sheetReturnTo=null;
+ if(returnTo&&!options.all){
+  if(options.fromPop){history.pushState({assetOsSheet:true},'',location.href);sheetHistoryActive=true}
+  sheetDirty=false;returnTo();return
+ }
  const had=$$('.sheet.open').length>0,restoreY=lockedScrollY;
  if(parentSheetId&&activeSheetId!==parentSheetId&&!options.all){
   $$('.sheet.open').forEach((sheet:HTMLElement)=>{
