@@ -346,7 +346,7 @@ test('@core native integrated summary opens presets and card installments withou
  await form.locator('.integrated-form-save').click();
  expect(await page.evaluate(()=>window.__assetOS.getState().integrated.ledger.length)).toBe(before+1);
  await page.reload();await expect(page.locator('.nav.active')).toHaveText('통합');await page.locator('[data-integrated-tab="summary"]').click();
- await page.locator('[data-card-hub]').click();await page.locator('.card-purchases summary').click();await page.locator('[data-card-plan-open]').click();
+ await page.locator('[data-card-hub]').click();await page.locator('[data-card-all-purchases]').click();await page.locator('[data-card-plan-open]').click();
  await expect(page.locator('.card-detail-summary')).toContainText('3,100,000원');
  await expect(page.locator('.card-detail-list')).toContainText('24회 보기');
  await page.screenshot({path:`/tmp/asset-native-card-${test.info().project.name}.png`});
@@ -366,7 +366,7 @@ test('@core @release legacy card plans retain payment correction and recurrence 
  await page.evaluate(async ()=>{const next=window.__assetOS.getState();next.financialProducts={items:[],events:[]};next.financeSchedules={items:[]};next.integrated.liabilities=[];next.integrated.ledger=[{id:'card-cash',date:'2026-01-01',type:'openingAsset',toAccountId:'cash-main',amount:10000000}];next.settings.integratedMonth='2026-02';(await window.__assetOS.replaceState(next));nav('integrated','schedule')});
  await page.evaluate(async()=>{await createCardInstallment({name:'TV · 국민카드',purchaseAmount:1200000,months:12,purchaseDate:'2026-01-10',firstPaymentDate:'2026-02-25',interestMode:'paid',annualRate:12});render()});
  await page.locator('[data-card-hub]').click();
- await expect(page.locator('[data-card-monthly="estimated"]')).toHaveText('112,000원');await page.locator('.card-purchases summary').click();await expect(page.locator('.card-plan-row')).toContainText('1,200,000원');
+ await expect(page.locator('[data-card-monthly="estimated"]')).toHaveText('112,000원');await page.locator('.card-purchases summary').click();await expect(page.locator('.card-plan-row')).toContainText('112,000원');await expect(page.locator('.card-plan-row')).not.toContainText('1,200,000원');expect(await page.evaluate(()=>cardPlanSummary(financeSchedules().find(s=>s.cardPlan),'2026-02').remainingPrincipal)).toBe(1200000);
  await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
  const id=await page.evaluate(()=>window.__assetOS.getState().financeSchedules.items.find(s=>s.cardPlan).id);
  await page.locator('[data-schedule-category="card"][data-schedule-scope="schedule"]').click();await page.locator(`.schedule-list [data-fixed-cost-item="${id}"]`).click();await page.locator('[data-schedule-loan-principal]').fill('100000');await page.locator('[data-schedule-loan-interest]').fill('12345');await page.locator('[data-schedule-complete]').click();
@@ -376,7 +376,7 @@ test('@core @release legacy card plans retain payment correction and recurrence 
  expect(await page.evaluate(id=>schedulePlannedAmount(financeSchedules().find(s=>s.id===id),'2026-03-25'),id)).toBe(111000);
  await page.getByRole('button',{name:'예정금액 수정',exact:true}).click();await form.locator('[name="amount"]').fill('126000');await form.locator('[name="scope"]').selectOption('future');await form.getByRole('button',{name:'수정 저장'}).click();
  expect(await page.evaluate(id=>schedulePlannedAmount(financeSchedules().find(s=>s.id===id),'2026-03-25'),id)).toBe(126000);
- await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);await page.reload();await page.waitForFunction(()=>!!window.__assetOS);await page.evaluate(()=>nav('integrated','schedule'));await page.locator('[data-card-hub]').click();await expect(page.locator('[data-card-monthly="paid"]')).toHaveText('113,000원');await page.locator('.card-purchases summary').click();await expect(page.locator('.card-plan-row')).toContainText('1,100,000원');await expect(page.locator('.card-plan-row')).toContainText('113,000원');
+ await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);await page.reload();await page.waitForFunction(()=>!!window.__assetOS);await page.evaluate(()=>nav('integrated','schedule'));await page.locator('[data-integrated-month-select]').fill('2026-02');await page.locator('[data-card-hub]').click();await expect(page.locator('[data-card-monthly="paid"]')).toHaveText('113,000원');await page.locator('.card-purchases summary').click();expect(await page.evaluate(()=>cardPlanSummary(financeSchedules().find(s=>s.cardPlan),'2026-02').remainingPrincipal)).toBe(1100000);await expect(page.locator('.card-plan-row')).not.toContainText('1,100,000원');await expect(page.locator('.card-plan-row')).toContainText('113,000원');
  expect(await page.evaluate(()=>integratedSpendingAnalysis('2026-01').total)).toBe(1200000);expect(await page.evaluate(()=>integratedSpendingAnalysis('2026-02').total)).toBe(0);
  await expectNoHorizontalOverflow(page);expect(appErrors).toEqual([]);
 });
