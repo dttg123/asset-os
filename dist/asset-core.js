@@ -3918,6 +3918,16 @@ function restoreViewPreferences() {
     }
     catch { /* Ignore malformed view metadata; the financial state stays authoritative. */ }
 }
+const INTEGRATED_QUERY_KEYS = ['integratedMonth', 'integratedMonthViewedOn', 'spendingPeriod', 'spendingView', 'spendingCategoryFilter', 'spendingChartContext', 'spendingChartPeriod', 'integratedLedgerFilter', 'integratedLedgerCategory'];
+function captureIntegratedQuery() {
+    const query = {};
+    for (const key of INTEGRATED_QUERY_KEYS)
+        if (viewPreferenceValue(key, setting()[key]))
+            query[key] = setting()[key];
+    return query;
+}
+function restoreIntegratedQuery(query) { for (const key of INTEGRATED_QUERY_KEYS)
+    delete setting()[key]; Object.assign(setting(), query); }
 function resetIntegratedViewOnLaunch() {
     const today = localYmd();
     setting().integratedMonth = today.slice(0, 7);

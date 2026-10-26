@@ -229,6 +229,8 @@ function queueCloudStatePush(){
 declare function waitForStorageSave():Promise<void>;
 declare function runStoredCommand<T>(command:()=>Promise<T>):Promise<T>;
 async function cloudApplyRemoteEnvelope(payload:unknown,revision=cloudBaseRevision){if(typeof runStoredCommand==='function')return runStoredCommand(()=>cloudApplyRemoteEnvelopeNow(payload,revision));return cloudApplyRemoteEnvelopeNow(payload,revision)}
+declare function captureIntegratedQuery():Record<string,unknown>;
+declare function restoreIntegratedQuery(query:Record<string,unknown>):void;
 async function cloudApplyRemoteEnvelopeNow(payload:unknown,revision:number){
  if(typeof waitForStorageSave==='function')await waitForStorageSave();if(!cloudPayloadValid(payload))throw new Error('클라우드 데이터 형식 오류');
  const local=cloudLocalEnvelope();
@@ -236,7 +238,9 @@ async function cloudApplyRemoteEnvelopeNow(payload:unknown,revision:number){
  const migrated=migrateStateData(payload.data,Number(payload.schemaVersion)||SCHEMA_VERSION),normalized=normalizeState(migrated.data);
  const savedAt=String(payload.savedAt||new Date().toISOString());
  const savedEnvelope={schemaVersion:SCHEMA_VERSION,appVersion:APP_VERSION,environment:APP_ENV,savedAt,data:normalized};if(typeof assetLocalDatabase!=='undefined')await assetLocalDatabase.commit(savedEnvelope);else localStorage.setItem(KEY,JSON.stringify(savedEnvelope));
+ const query=typeof captureIntegratedQuery==='function'?captureIntegratedQuery():null;
  state=normalized;lastPersistedState=clone(normalized);
+ if(query&&typeof restoreIntegratedQuery==='function')restoreIntegratedQuery(query);
  cloudBaseFingerprint=cloudEnvelopeFingerprint(payload);cloudBaseRevision=Number(revision)||0;cloudPendingWrite=null;cloudConflict=null;await cloudPersistSyncMetadata();pruneRecoveryKeys();if(assetAppUnlocked)render();
 }
 

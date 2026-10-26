@@ -422,8 +422,11 @@ async function cloudApplyRemoteEnvelopeNow(payload, revision) {
         await assetLocalDatabase.commit(savedEnvelope);
     else
         localStorage.setItem(KEY, JSON.stringify(savedEnvelope));
+    const query = typeof captureIntegratedQuery === 'function' ? captureIntegratedQuery() : null;
     state = normalized;
     lastPersistedState = clone(normalized);
+    if (query && typeof restoreIntegratedQuery === 'function')
+        restoreIntegratedQuery(query);
     cloudBaseFingerprint = cloudEnvelopeFingerprint(payload);
     cloudBaseRevision = Number(revision) || 0;
     cloudPendingWrite = null;

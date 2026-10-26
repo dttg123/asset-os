@@ -38,6 +38,11 @@ function restoreViewPreferences():void{
  }catch{/* Ignore malformed view metadata; the financial state stays authoritative. */}
 }
 declare function localYmd():string;
+const INTEGRATED_QUERY_KEYS=['integratedMonth','integratedMonthViewedOn','spendingPeriod','spendingView','spendingCategoryFilter','spendingChartContext','spendingChartPeriod','integratedLedgerFilter','integratedLedgerCategory'] as const;
+function captureIntegratedQuery():Record<string,unknown>{
+ const query:Record<string,unknown>={};for(const key of INTEGRATED_QUERY_KEYS)if(viewPreferenceValue(key,setting()[key]))query[key]=setting()[key];return query
+}
+function restoreIntegratedQuery(query:Record<string,unknown>):void{for(const key of INTEGRATED_QUERY_KEYS)delete setting()[key];Object.assign(setting(),query)}
 function resetIntegratedViewOnLaunch():void{
  const today=localYmd();setting().integratedMonth=today.slice(0,7);setting().integratedMonthViewedOn=today;
  setting().spendingChartContext='';setting().spendingChartPeriod='';
