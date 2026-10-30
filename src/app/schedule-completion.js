@@ -103,11 +103,12 @@ async function commitScheduleCompletion(schedule, date, draft) {
     return (await persist(false));
 }
 function renderScheduleCompletion(date, message) {
-    closeSheets();
+    const current = document.querySelector('#detailSheet.open .schedule-detail-list');
+    const sameDay = current?.dataset.scheduleDate === date;
+    const scheduleFilter = sameDay ? current?.dataset.scheduleFilter || '' : '';
     render();
-    const token = typeof sheetInteractionToken === 'function' ? sheetInteractionToken() : 0, hash = location.hash;
-    setTimeout(async () => { if (location.hash !== hash || typeof sheetInteractionToken === 'function' && sheetInteractionToken() !== token || document.querySelector('.sheet.open'))
-        return; await openScheduleDay(date); }, 60);
+    if (sameDay)
+        void openScheduleDay(date, scheduleFilter, true);
     toast(message);
     haptic('light');
 }
