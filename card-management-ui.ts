@@ -38,7 +38,7 @@ declare let integratedSpendingPage:()=>string;
 declare let openIntegratedSpendingDetail:(scope?:string,key?:string,month?:string)=>void;
 declare function openIntegratedTransactionDetail(id:string):void;
 declare let integratedSummaryPage:()=>string;
-declare let openScheduleDay:(date:string,id?:string)=>Promise<void>;
+declare let openScheduleDay:(date:string,id?:string,preserveOpen?:boolean)=>Promise<void>;
 declare let openCardInstallmentForm:()=>void;
 declare let openCardPlanDetail:(id:string)=>void;
 declare let openCardPlansHub:()=>void;
