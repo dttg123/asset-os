@@ -139,7 +139,7 @@ openCardPlansHub=function(){cardPreviousHub();$('#sheetBody').insertAdjacentHTML
 const cardPreviousSummary=integratedSummaryPage;
 integratedSummaryPage=function(){return cardPreviousSummary()+`<section class="card cardv2-entry"><div><h2>카드 구매 기록</h2><small>일시불·할부와 납부 일정을 연결해요.</small></div>${cardUiButton('＋ 구매 기록','purchase-new')}</section>`};
 const cardPreviousScheduleDay=openScheduleDay;
-openScheduleDay=async function(date:string,id=''){const s=financeSchedules().find(x=>x.id===id);if(s&&cardV2(s)){openCardLedgerDetail(id);return}await cardPreviousScheduleDay(date,id);const list=financeSchedules().filter(x=>cardV2(x)?.bills.some(b=>b.dueDate===date));for(const card of list)$('#sheetBody').insertAdjacentHTML('beforeend',cardUiButton(`${card.name} · 청구·납부 보기`,'purchase-open',card.id));bindCardManagement()};
+openScheduleDay=async function(date:string,id='',preserveOpen=false){const s=financeSchedules().find(x=>x.id===id);if(s&&cardV2(s)){openCardLedgerDetail(id);return}await cardPreviousScheduleDay(date,id,preserveOpen);const list=financeSchedules().filter(x=>cardV2(x)?.bills.some(b=>b.dueDate===date));for(const card of list)$('#sheetBody').insertAdjacentHTML('beforeend',cardUiButton(`${card.name} · 청구·납부 보기`,'purchase-open',card.id));bindCardManagement()};
 const cardPreviousBind=bind;
 bind=function(){cardPreviousBind();bindCardManagement();bindSpendingReview()};
 
