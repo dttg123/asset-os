@@ -27,7 +27,7 @@ declare function setting():{integratedMonth:string;[key:string]:unknown};
 declare function persist(notify?:boolean):Promise<boolean>;
 declare function closeSheets():void;
 declare function render():void;
-declare function openScheduleDay(date:string):Promise<void>;
+declare function openScheduleDay(date:string,scheduleId?:string,preserveOpen?:boolean):Promise<void>;
 declare function toast(message:string):void;
 declare function haptic(kind:string):void;
 declare function sheetInteractionToken():number;
@@ -111,7 +111,7 @@ async function commitScheduleCompletion(schedule:Schedule,date:string,draft:Comp
 }
 
 function renderScheduleCompletion(date:string,message:string):void{
- closeSheets();render();const token=typeof sheetInteractionToken==='function'?sheetInteractionToken():0,hash=location.hash;setTimeout(async ()=>{if(location.hash!==hash||typeof sheetInteractionToken==='function'&&sheetInteractionToken()!==token||document.querySelector('.sheet.open'))return;await openScheduleDay(date)},60);toast(message);haptic('light')
+ const current=document.querySelector('#detailSheet.open .schedule-detail-list') as HTMLElement|null;const sameDay=current?.dataset.scheduleDate===date;const scheduleFilter=sameDay?current?.dataset.scheduleFilter||'':'';render();if(sameDay)void openScheduleDay(date,scheduleFilter,true);toast(message);haptic('light')
 }
 
 async function updateScheduleActualPayment(scheduleId:string,date:string,amount:number,principal=0,interest=0):Promise<boolean>{
