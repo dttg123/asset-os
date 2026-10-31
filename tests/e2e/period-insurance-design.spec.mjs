@@ -170,7 +170,7 @@ test('@core equal card installments remain independent and deleting one payment 
  for(let index=0;index<ids.length;index++){
   await openCardScheduleGroup(page);await page.locator(`.schedule-list [data-fixed-cost-item="${ids[index]}"]`).click();
   await page.locator(`[data-schedule-loan-principal="${ids[index]}"]`).fill('120000');await page.locator(`[data-schedule-loan-interest="${ids[index]}"]`).fill('3600');await page.locator(`[data-schedule-complete="${ids[index]}"]`).click();
-  await expect(page.locator(`[data-schedule-actual-edit="${ids[index]}"]`)).toBeVisible();
+  await page.locator('.schedule-item-tools summary').click();await expect(page.locator(`[data-schedule-actual-edit="${ids[index]}"]`)).toBeVisible();
   if(index===0)expect(await page.evaluate(id=>scheduleCompletionTx(id,'2026-01-31'),ids[1])).toBeNull();
   await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
  }
