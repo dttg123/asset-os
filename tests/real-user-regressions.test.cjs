@@ -70,7 +70,7 @@ test('home wording and selected-month summaries cannot regress',()=>{
 test('completed schedules show actual amounts and empty calendar days are not buttons',()=>{
  const pages=read('integrated-pages.ts');
  assert.match(pages,/function scheduleOccurrenceDisplayAmount/);
- assert.match(pages,/o\.status==='done'\?'실제 금액'/);
+ assert.match(pages,/실제 납부액/);assert.match(pages,/schedule-payment-variance/);
  assert.match(pages,/list\.length\?`<button class="schedule-day/);
  assert.match(pages,/:`<span class="schedule-day/);
 });

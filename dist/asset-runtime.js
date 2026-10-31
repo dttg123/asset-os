@@ -1029,7 +1029,7 @@ if ('serviceWorker' in navigator)
                 timer = setInterval(applyUpdate, 1000);
         });
         try {
-            const reg = await navigator.serviceWorker.register('./service-worker.js?v=0.7.21&build=20261030-1', { scope: './', updateViaCache: 'none' });
+            const reg = await navigator.serviceWorker.register('./service-worker.js?v=0.7.22&build=20261031-1', { scope: './', updateViaCache: 'none' });
             let checking = false;
             const check = async () => { if (checking || document.visibilityState === 'hidden')
                 return; checking = true; try {
