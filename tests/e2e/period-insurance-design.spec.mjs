@@ -14,8 +14,8 @@ test('@core selected months and insurance payment status stay explicit without c
  });
  const before=await page.evaluate(()=>({ledger:JSON.stringify(state.integrated.ledger),insurance:JSON.stringify(state.insurance),net:integratedFinancialModel().netAssets}));
  await expect(page.getByRole('heading',{name:'2026년 2월 소비',exact:true})).toBeVisible();
- await page.getByRole('main').getByRole('button',{name:'일정',exact:true}).click();await expect(page.getByRole('heading',{name:'2026년 2월 남은 납부액',exact:true})).toBeVisible();
- await page.getByRole('button',{name:'다음 달',exact:true}).click();await expect(page.getByRole('heading',{name:'2026년 3월 남은 납부액',exact:true})).toBeVisible();
+ await page.getByRole('main').getByRole('button',{name:'일정',exact:true}).click();await expect(page.getByRole('heading',{name:'2026년 2월 금융 일정',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'다음 달',exact:true}).click();await expect(page.getByRole('heading',{name:'2026년 3월 금융 일정',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'내 Asset OS 열기',exact:true}).click();await page.locator('[data-settings-group="finance"]').click();await page.locator('[data-profile-action="insurance"]').click();
  const card=page.locator('[data-insurance-id="paid"]');await expect(card).toContainText('계약 유지');await expect(card).toContainText('납입 종료');await expect(card).toContainText('현재 월 보험료에서 제외');await expect(card).not.toContainText('일정 연결 안 됨');
  await expect(page.locator('#sheetBody .sheetrow.total strong')).toHaveText('10,000원');await expect(page.locator('[data-insurance-id="lump"]')).toContainText('일시납');
@@ -75,7 +75,7 @@ test('@core final card installment remains saved and completed history survives 
  });
  await openCardScheduleGroup(page);await page.locator(`.schedule-list [data-fixed-cost-item="${id}"]`).click();
  await page.locator('[data-schedule-loan-principal]').fill('5001');await page.locator('[data-schedule-loan-interest]').fill('0');await page.locator('[data-schedule-complete]').click();
- await expect(page.locator('[data-schedule-actual-edit]')).toBeVisible();
+ await page.locator('.schedule-item-tools summary').click();await expect(page.locator('[data-schedule-actual-edit]')).toBeVisible();
  await page.evaluate(()=>closeSheets({all:true}));await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);await page.reload();await page.waitForFunction(()=>!!window.__assetOS);await page.locator('[data-integrated-month-select]').fill('2026-09');
  await page.locator('[data-card-hub]').click();
  await expect(page.locator('.card-completed summary')).toHaveText('납부 완료 1건 · 기록 보기');

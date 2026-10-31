@@ -3581,11 +3581,13 @@ integratedSchedulePage = function () {
     template.innerHTML = v069SchedulePage();
     const title = template.content.querySelector('.schedule-head h2'), small = template.content.querySelector('.schedule-head small'), pill = template.content.querySelector('.schedule-head .count-pill'), list = template.content.querySelector('.schedule-card .schedule-list');
     if (title)
-        title.textContent = `${integratedMonthLabel(month)} 남은 납부액`;
+        title.textContent = `${integratedMonthLabel(month)} 금융 일정`;
     if (small)
-        small.innerHTML = `<span class="schedule-payment-summary"><b>${won(pending.filter(o => o.schedule.kind !== 'income').reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0))}</b> · 납부 ${pending.filter(o => o.schedule.kind !== 'income').length}건</span>${pending.some(o => o.schedule.kind === 'income') ? '<span class="schedule-income-summary">수입 예정 ' + won(pending.filter(o => o.schedule.kind === 'income').reduce((sum, o) => sum + scheduleOccurrenceDisplayAmount(o), 0)) + ' 별도</span>' : ''}`;
+        small.textContent = '미완료와 완료 금액을 구분해요.';
     if (pill)
         pill.textContent = `완료 ${done}건`;
+    const out = occ.filter(o => o.schedule.kind !== 'income'), remaining = out.filter(o => o.status !== 'done'), completed = out.filter(o => o.status === 'done'), sum = (rows) => rows.reduce((n, o) => n + scheduleOccurrenceDisplayAmount(o), 0);
+    template.content.querySelector('.schedule-head')?.insertAdjacentHTML('afterend', `<div class='schedule-month-snapshot'><div class='remaining'><span>남은 납입·납부</span><strong>${won(sum(remaining))}</strong></div><div><span>완료한 금액</span><strong>${won(sum(completed))}</strong></div><div><span>미완료</span><strong>${remaining.length}건</strong></div></div><p class='schedule-money-note'>저축·투자 납입과 대출 원금은 소비 합계와 별도예요.${pending.some(o => o.schedule.kind === 'income') ? ' 수입 예정 ' + won(sum(pending.filter(o => o.schedule.kind === 'income'))) + '도 합계에서 제외했어요.' : ''}</p>`);
     const finished = occ.filter(o => o.status === 'done');
     if (list)
         list.innerHTML = `<div class="schedule-pending-list">${v069ScheduleGroups(pending, 'schedule') || '<div class="integrated-empty">선택한 달의 미완료 일정이 없어요.</div>'}</div>${finished.length ? `<details class="schedule-fold schedule-completed"><summary>완료 ${finished.length}건 보기</summary>${v069ScheduleGroups(finished, 'completed')}</details>` : ''}`;
