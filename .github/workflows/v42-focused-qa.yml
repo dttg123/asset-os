@@ -1,0 +1,23 @@
+name: v42-focused-qa
+on:
+  push:
+    branches:
+      - feat/integrated-v42-ux-20261104
+permissions:
+  contents: read
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test tests/e2e/integrated-v42-ux.spec.mjs --reporter=line

@@ -162,9 +162,11 @@ function ux42AddCategory(container:HTMLElement,category:Ux42Category):void{
 function ux42DecorateSpending():void{
  const review=document.querySelector('.spending-review');if(!review)return;
  ux42ResetIfNeeded();
- review.querySelector('.spending-view')?.remove();
+
+ const oldView=review.querySelector<HTMLElement>('.spending-view');
+ const oldCards=[...review.querySelectorAll<HTMLElement>('.spending-card')];
+ const oldFilters=[...review.querySelectorAll<HTMLElement>('.cardv2-filters')];
  review.querySelector('.spending-year-views')?.remove();
- review.querySelectorAll('.spending-card').forEach(function(node){node.remove()});
  const hero=review.querySelector('.spending-hero');
  const heroNew=hero?.querySelector<HTMLElement>('[data-spending-new]');if(heroNew)heroNew.remove();
  const hint=review.querySelector('.spending-chart-window');
@@ -198,8 +200,14 @@ function ux42DecorateSpending():void{
  const split=review.querySelector('.spending-split');
  if(split)split.after(categoryCard);else hero?.after(categoryCard);
  const categoryPanel=ux42Node('section','card ux42-category-focus');
- categoryPanel.dataset.ux42CategoryPanel='';
+ categoryPanel.dataset.ux42CategoryPanel='';categoryPanel.setAttribute('aria-live','polite');
  categoryCard.after(categoryPanel);
+ const advanced=ux42Node('details','ux42-deep-analysis');
+ advanced.append(ux42Node('summary','', '항목 전체 · 미분류 · 상세 분석'));
+ if(oldView)advanced.append(oldView);
+ oldFilters.forEach(function(node){advanced.append(node)});
+ oldCards.forEach(function(node){advanced.append(node)});
+ if(oldView||oldCards.length)categoryPanel.after(advanced);
  review.querySelectorAll<HTMLElement>('.spending-split [data-spending-detail]').forEach(function(button){
   button.onclick=function(){ux42SetFocus('category',spendingFocusedPeriod(),'','',button.dataset.spendingDetail==='fixed'?'fixed':'variable')};
  });
@@ -267,7 +275,7 @@ function ux42OpenEntryMenu():void{
   ['수입','급여·기타 수입을 추가','income'],
   ['저축·투자','계좌 간 납입·이체를 기록','saving'],
   ['카드 구매','일시불·할부 구매를 기록','card'],
-  ['금융 일정','반복 납부·청구를 조회','schedule']
+  ['납부 일정 보기','보험·대출·저축 납부는 해당 기록에서','schedule']
  ];
  for(const choice of choices){
   const button=ux42Node('button','ux42-entry-choice');
@@ -365,6 +373,7 @@ bind=function(){
   tabs.after(actions);
  }
  const tab=route().tab;
+ if(tab==='ledger')shell.querySelectorAll('[data-integrated-new]').forEach(function(node){node.remove()});
  if(tab==='spending')ux42DecorateSpending();
  if(tab==='summary')ux42DecorateSummary();
  if(tab==='schedule')ux42DecorateSchedule();

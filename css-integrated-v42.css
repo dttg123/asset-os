@@ -49,3 +49,9 @@
 .ux42-interest-hint{display:block;color:var(--muted);font-size:11px;line-height:1.5}
 .ux42-schedule-hint{font-size:12px;color:var(--muted);line-height:1.5;padding:4px 6px}
 @media(max-width:370px){.integrated-module-shell .ux42-common-action{gap:4px}.ux42-common-action span{font-size:10px}.ux42-common-action .ux42-add{padding:9px 11px}.ux42-category-card{padding:12px!important}.ux42-mini-bars{gap:5px}}
+
+.ux42-deep-analysis{margin:10px 0;padding:0 9px 10px;border-radius:15px;background:var(--surface2);border:1px solid var(--line)}
+.ux42-deep-analysis>summary{cursor:pointer;padding:13px 6px;min-height:48px;font-size:13px;font-weight:700;color:var(--muted)}
+.ux42-deep-analysis[open]{background:transparent}
+.ux42-deep-analysis .spending-view{margin:10px 0}
+.ux42-deep-analysis .spending-card{margin-top:10px}
