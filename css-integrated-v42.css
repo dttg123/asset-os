@@ -55,3 +55,6 @@
 .ux42-deep-analysis[open]{background:transparent}
 .ux42-deep-analysis .spending-view{margin:10px 0}
 .ux42-deep-analysis .spending-card{margin-top:10px}
+
+/* WCAG AA contrast for all accent palettes, including dark orange. */
+.integrated-module-shell .ux42-common-action .ux42-add{color:var(--text)}
