@@ -48,7 +48,7 @@ test('@core delayed classification saves cannot reopen an old detail over naviga
  for(const next of ['ledger','input']){
   await page.evaluate(()=>{nav('integrated','spending');window.__classificationOriginal=saveSpendingClassifications;saveSpendingClassifications=async(...args)=>{await new Promise(resolve=>window.__finishClassification=resolve);return window.__classificationOriginal(...args)};openSpendingClassification(['month-9'],'2026-10')});
   await page.locator('#cardLedgerForm [name="item"]').fill('지연 저장 '+next);await page.locator('#cardLedgerForm button[type="submit"]').click();await page.waitForFunction(()=>!!window.__finishClassification);await close(page);await page.evaluate(()=>nav('integrated','ledger'));
-  if(next==='input'){await page.locator('[data-integrated-new]').click();await page.locator('#entryAmount').fill('12345')}
+  if(next==='input'){await page.locator('.ux42-add').click();await page.locator('[data-ux42-choice="expense"]').click();await page.locator('#entryAmount').fill('12345')}
   await page.evaluate(async()=>{window.__finishClassification();await new Promise(resolve=>setTimeout(resolve,400))});
   expect(await page.evaluate(()=>route().tab)).toBe('ledger');await expect(page.locator('#detailSheet')).not.toHaveClass(/open/);
   if(next==='input'){await expect(page.locator('#formSheet')).toHaveClass(/open/);await expect(page.locator('#entryAmount')).toHaveValue('12345');await close(page)}
