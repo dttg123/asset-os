@@ -41,7 +41,7 @@ test('@core today defaults ignore stale months and thirty schedules stay grouped
  });
  await expect(page.locator('[data-integrated-month-select]')).toHaveValue('2026-10');
  await page.locator('[data-integrated-month-select]').fill('2026-09');await page.locator('[data-integrated-month-select]').dispatchEvent('change');
- await page.locator('[data-summary-entry]').first().click();await expect(page.locator('#entryDate')).toHaveValue('2026-10-17');
+ await page.locator('.ux42-presets-fold summary').click();await page.locator('[data-summary-entry]').first().click();await expect(page.locator('#entryDate')).toHaveValue('2026-10-17');
  await page.getByRole('button',{name:'입력창 닫기',exact:true}).click();
  await page.getByRole('main').getByRole('button',{name:'일정',exact:true}).click();
  await expect(page.locator('.schedule-pending-list .schedule-row')).toHaveCount(20);

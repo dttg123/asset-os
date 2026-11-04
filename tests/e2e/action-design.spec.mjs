@@ -17,7 +17,7 @@ test('@core action design keeps historical dates explicit and close preserves un
   await page.setViewportSize({width,height:915});
   const box=await page.getByRole('button',{name:'이전 달',exact:true}).boundingBox();expect(box.width).toBeGreaterThanOrEqual(44);expect(box.height).toBeGreaterThanOrEqual(44);
   await page.screenshot({path:`/tmp/asset-action-summary-${info.project.name}-${width}.png`,animations:'disabled'});
-  await page.locator('[data-summary-entry]').first().click();
+  if(!(await page.locator('.ux42-presets-fold').evaluate(e=>e.open)))await page.locator('.ux42-presets-fold summary').click();await page.locator('[data-summary-entry]').first().click();
   await expect(page.locator('#entryDate')).toHaveValue(await page.evaluate(()=>localYmd()));
   await expect(page.locator('#entryDateContext')).toContainText('오늘');
   await page.locator('#entryAmount').fill('12345');
@@ -88,9 +88,9 @@ test('@core domestic polish prioritizes accounts and entry, keeps save reachable
  const order=await page.evaluate(()=>[...document.querySelector('.home-app-stack').children].map(el=>el.className));
  expect(order[0]).toBe('hero');expect(order[1]).toContain('home-account-list');expect(order[2]).toBe('home-plan');
  await page.evaluate(()=>nav('integrated','summary'));
- const primary=page.locator('[data-household-expense]'),presets=page.locator('.integrated-quick-presets');
+ const primary=page.locator('.ux42-add'),presets=page.locator('.ux42-presets-fold');
  expect((await primary.boundingBox()).y).toBeLessThan((await presets.boundingBox()).y);
- await primary.click();await expect(page.locator('#formSheet')).toHaveClass(/open/);
+ await primary.click();await page.locator('[data-ux42-choice="expense"]').click();await expect(page.locator('#formSheet')).toHaveClass(/open/);
  for(const width of [320,390,412]){
   await page.setViewportSize({width,height:600});
   await page.locator('#formSheet').evaluate(el=>{el.scrollTop=el.scrollHeight});
@@ -113,7 +113,7 @@ test('@core domestic polish prioritizes accounts and entry, keeps save reachable
   for(const theme of ['light','dark'])for(const accent of ['blue','mint','purple','orange']){
    document.documentElement.dataset.theme=theme;document.documentElement.dataset.accent=accent;
    await new Promise(resolve=>requestAnimationFrame(resolve));
-   const tabElement=document.querySelector('.integrated-tabs button.active'),buttonElement=document.querySelector('[data-household-expense]');
+   const tabElement=document.querySelector('.integrated-tabs button.active'),buttonElement=document.querySelector('.ux42-add');
    await Promise.all([tabElement,buttonElement].flatMap(el=>el.getAnimations()).map(animation=>animation.finished.catch(()=>{})));
    const tab=getComputedStyle(tabElement),button=getComputedStyle(buttonElement);
    results.push({theme,accent,tab:ratio(tab.color,getComputedStyle(document.body).backgroundColor),button:ratio(button.color,button.backgroundColor)});
@@ -124,7 +124,7 @@ test('@core domestic polish prioritizes accounts and entry, keeps save reachable
  expect(await page.evaluate(()=>JSON.stringify(state.integrated.ledger))).toBe(before);
  await page.addStyleTag({content:'#qaBanner{display:none!important}'});
  await page.screenshot({path:`/tmp/asset-domestic-final-${info.project.name}.png`,animations:'disabled'});
- await page.evaluate(async()=>{await saveCardAccount({name:'QA 국민카드',issuer:'국민카드',paymentDay:14})});await page.evaluate(()=>{sheetDirty=false;closeSheets({all:true});cancelSheetBackForNavigation();nav('integrated','summary')});await page.locator('[data-card-action="purchase-new"]').click();
+ await page.evaluate(async()=>{await saveCardAccount({name:'QA 국민카드',issuer:'국민카드',paymentDay:14})});await page.evaluate(()=>{sheetDirty=false;closeSheets({all:true});cancelSheetBackForNavigation();nav('integrated','summary')});await page.locator('.ux42-add').click();await page.locator('[data-ux42-choice="card"]').click();
  await page.setViewportSize({width:320,height:600});
  await expect.poll(async()=>{const box=await page.locator('#cardLedgerForm button[type="submit"]').boundingBox();return box?Math.round(box.y+box.height):Infinity}).toBeLessThanOrEqual(601);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1)).toBe(true);
