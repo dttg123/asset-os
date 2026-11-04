@@ -61,7 +61,8 @@
       "ui-settings.js",
       "policy-review-ui.js",
       "release-v069.js",
-      "card-management-ui.js"
+      "card-management-ui.js",
+      "integrated-ux-v42.js"
     ],
     "asset-runtime.js": [
       "src/storage/cloud-save-contract.js",
@@ -83,7 +84,8 @@
       "css-shared-investment.css",
       "css-core-hardening.css",
       "css-release-v069.css",
-      "css-app-refresh.css"
+      "css-app-refresh.css",
+      "css-integrated-v42.css"
     ]
   }
 }
