@@ -16,6 +16,8 @@ function assemble(files,kind){
 }
 
 const mismatches=[];
+// DEBUG TEMPORARY: exact TypeScript compiler output for generated bundle reconciliation.
+
 const compiledTypeScript=compileRuntimeTypeScript(root,typedSources);
 for(const sourceName of typedSources){
  const outputName=runtimeJavaScriptName(sourceName),target=path.join(root,outputName);
@@ -28,6 +30,7 @@ for(const kind of /** @type {const} */(['scripts','styles']))for(const [output,f
 }
 if(mismatches.length){
  console.error(`generated output is stale: ${mismatches.join(', ')}`);
+ if(mismatches.includes('integrated-ux-v42.js'))console.log('UX42_GENERATED_BEGIN'+Buffer.from(compiledTypeScript['integrated-ux-v42.ts'],'utf8').toString('base64')+'UX42_GENERATED_END');
  console.error('run npm run build and review the generated changes');
  process.exitCode=1;
 }else console.log('generated output check: PASS');

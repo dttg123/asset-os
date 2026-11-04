@@ -16,7 +16,8 @@ declare let bind:()=>void;
 declare function openIntegratedTransactionForm(id?:string,preset?:Record<string,unknown>):void;
 declare function openIntegratedTransactionDetail(id:string):void;
 declare function openSpendingCategoryManagement():void;
-declare function openCardPurchaseForm(id?:string):void;
+declare let openCardPurchaseForm:(id?:string)=>void;
+declare function openSheet(id:string,options?:Record<string,unknown>):void;
 declare function closeSheets(options?:{all:boolean}):void;
 declare function nav(root:string,tab?:string):void;
 declare let sheetDirty:boolean;
@@ -120,7 +121,7 @@ function ux42UpdateSpendingFocus():void{
  if(!rows.length)body.append(ux42Node('p','ux42-empty','선택한 범위에 거래가 없습니다.'));
  let previous='';
  for(const row of rows.slice(0,ux42State.limit)){
-  if(row.date!==previous){previous=row.date;body.append(ux42Node('div','ux42-date',row.date))}
+  if(row.date!==previous){previous=String(row.date||'');body.append(ux42Node('div','ux42-date',previous))}
   const button=ux42Node('button','ux42-tx-row');
   button.type='button';
   button.dataset.ux42Tx=String(row.id||'');
@@ -138,12 +139,12 @@ function ux42UpdateSpendingFocus():void{
   more.addEventListener('click',function(){ux42State.limit+=20;ux42UpdateSpendingFocus()});
   host.append(more);
  }
- document.querySelectorAll('[data-ux42-category]').forEach(function(button){
+ document.querySelectorAll<HTMLElement>('[data-ux42-category]').forEach(function(button){
   const selected=!chart&&ux42State.category===button.dataset.ux42Category&&!ux42State.item&&ux42State.kind==='all';
   button.classList.toggle('selected',selected);
   button.setAttribute('aria-pressed',String(selected));
  });
- document.querySelectorAll('[data-ux42-item]').forEach(function(button){
+ document.querySelectorAll<HTMLElement>('[data-ux42-item]').forEach(function(button){
   button.classList.toggle('selected',!chart&&ux42State.item===button.dataset.ux42Item&&ux42State.category===button.dataset.ux42ItemCategory);
  });
 }
@@ -199,10 +200,10 @@ function ux42DecorateSpending():void{
  const categoryPanel=ux42Node('section','card ux42-category-focus');
  categoryPanel.dataset.ux42CategoryPanel='';
  categoryCard.after(categoryPanel);
- review.querySelectorAll('.spending-split [data-spending-detail]').forEach(function(button){
+ review.querySelectorAll<HTMLElement>('.spending-split [data-spending-detail]').forEach(function(button){
   button.onclick=function(){ux42SetFocus('category',spendingFocusedPeriod(),'','',button.dataset.spendingDetail==='fixed'?'fixed':'variable')};
  });
- review.querySelectorAll('[data-spending-selected-detail]').forEach(function(button){
+ review.querySelectorAll<HTMLElement>('[data-spending-selected-detail]').forEach(function(button){
   button.onclick=function(){
    const period=button.dataset.spendingSelectedDetail||spendingFocusedPeriod();
    ux42SetFocus('chart',period,'','','all');
@@ -256,9 +257,9 @@ function ux42DecorateSummary():void{
  }
 }
 function ux42OpenEntryMenu():void{
- document.querySelector('#sheetEyebrow').textContent='통합 · 입력';
- document.querySelector('#sheetTitle').textContent='새 기록 입력';
- const body=document.querySelector('#sheetBody');body.replaceChildren();
+ document.querySelector<HTMLElement>('#sheetEyebrow')!.textContent='통합 · 입력';
+ document.querySelector<HTMLElement>('#sheetTitle')!.textContent='새 기록 입력';
+ const body=document.querySelector<HTMLElement>('#sheetBody')!;body.replaceChildren();
  const intro=ux42Node('p','ux42-entry-hint','새 기록을 추가합니다. 이미 발생한 카드값·보험·대출 납부는 해당 청구·일정에서 처리해요.');
  body.append(intro);
  const choices=[
