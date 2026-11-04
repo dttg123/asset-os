@@ -1142,3 +1142,4 @@ body[data-root="integrated"] .integrated-monthbar .spending-period-label{width:1
 
 /* WCAG AA contrast for all accent palettes, including dark orange. */
 .integrated-module-shell .ux42-common-action .ux42-add{color:var(--text)}
+html[data-theme="dark"] .integrated-module-shell .ux42-common-action .ux42-add{background:var(--surface2);color:var(--text)}
