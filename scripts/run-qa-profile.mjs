@@ -33,7 +33,11 @@ run(process.execPath,['--test',...selected.map(name=>`tests/${name}`)]);
 
 if(profile!=='fast'){
  const grep=profile==='core'?'@smoke|@core':profile==='full'?'@smoke|@core':'@smoke|@core|@release';
- run(process.platform==='win32'?'npx.cmd':'npx',['playwright','test','--grep',grep]);
+ const args=['playwright','test','--grep',grep];
+ // On a failing PR, stop early instead of waiting for many stale-selector timeouts.
+ // A passing run still executes the entire suite without skipping any test.
+ if(process.env.CI&&profile==='core')args.push('--max-failures=8');
+ run(process.platform==='win32'?'npx.cmd':'npx',args);
 }
 
 console.log(`QA ${profile.toUpperCase()}: PASS`);
