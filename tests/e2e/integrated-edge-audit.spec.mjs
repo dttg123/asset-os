@@ -25,13 +25,13 @@ test('@core edge ledger pagination and cross-period search retain every row exac
 
 test('@core edge year quarter half and leap-month navigation agree with their aggregates',async({page})=>{
  await page.evaluate(async()=>{for(const [date,amount] of [['2025-12-31',100],['2026-01-01',200],['2026-06-30',400],['2026-07-01',800],['2026-12-31',1600],['2027-01-01',3200],['2024-02-29',6400]])state.integrated.ledger.push({id:date,type:'expense',date,amount,fromAccountId:'edge-cash',category:'식비'});await persist(false);nav('integrated','spending')});
- for(const [anchor,mode,total,count] of [['2026-01','quarter','200원',3],['2026-06','half','600원',6],['2026-07','half','2,400원',6],['2026-12','year','3,000원',12],['2024-02','month','6,400원',29]]){await page.locator('[data-spending-period="month"]').click();await page.locator('[data-integrated-month-select]').fill(anchor);await page.locator(`[data-spending-period="${mode}"]`).click();await expect(page.locator('.spending-hero>strong')).toHaveText(total);await expect(page.locator('main .spending-trend button')).toHaveCount(count);expect(await page.evaluate(()=>integratedSpendingView(integratedSelectedMonth(),spendingPeriodMode()).trend.reduce((n,x)=>n+x.amount,0))).toBe(Number(total.replace(/\D/g,'')))}
+ for(const [anchor,mode,total,count] of [['2026-01','quarter','200원',4],['2026-06','quarter','400원',4],['2026-07','quarter','800원',4],['2026-12','years','3,000원',6],['2024-02','month','6,400원',29]]){await page.locator('[data-spending-period="month"]').click();await page.locator('[data-integrated-month-select]').fill(anchor);await page.locator(`[data-spending-period="${mode}"]`).click();await expect(page.locator('.spending-hero>strong')).toHaveText(total);await expect(page.locator('main .spending-trend button')).toHaveCount(count);expect(await page.evaluate(()=>{const v=integratedSpendingView(integratedSelectedMonth(),spendingPeriodMode());return ['quarter','years'].includes(spendingPeriodMode())?v.trend.find(x=>x.month===spendingPeriodKey())?.amount:v.trend.reduce((n,x)=>n+x.amount,0)})).toBe(Number(total.replace(/\D/g,'')))}
  await page.locator('[data-integrated-month-select]').fill('2026-12');await page.locator('[data-spending-period="quarter"]').click();await page.locator('[data-integrated-month-shift="1"]').click();await expect(page.locator('[data-spending-period-picker]')).toHaveText('2027년 1분기⌄');expect(await page.evaluate(()=>integratedSelectedMonth())).toBe('2027-03');await expect(page.locator('.spending-hero>strong')).toHaveText('3,200원');
 });
 
 test('@core edge refund in another month keeps original classification and negative consumption',async({page})=>{
  await page.evaluate(async()=>{state.integrated.ledger=[{id:'purchase',type:'expense',date:'2026-09-30',amount:1000,fromAccountId:'edge-cash',category:'식비',fixed:true,meta:{spendingItem:'환불QA'}},{id:'refund',type:'refund',date:'2026-10-01',amount:400,toAccountId:'edge-cash',category:'환불',meta:{refundOf:'purchase'}}];await persist(false);await saveSpendingClassifications(['purchase'],'쇼핑','수정환불QA');nav('integrated','spending')});
- await expect(page.locator('.spending-hero>strong')).toHaveText('-400원');await expect(page.locator('.spending-split')).toContainText('-400원');await page.locator('[data-spending-category-filter="쇼핑"]').first().click();await page.locator('[data-spending-item="수정환불QA"]').click();await page.locator('[data-spending-item-tab="transactions"]').first().click();await expect(page.locator('.spending-transactions')).toContainText('환불');await expect(page.locator('.spending-transactions')).toContainText('-400원');await close(page);await page.evaluate(()=>nav('integrated','ledger'));await expect(page.locator('.ledger-category-group h3')).toContainText('쇼핑');await expect(page.locator('.integrated-ledger-amount')).toHaveText('+400원');
+ await expect(page.locator('.spending-hero>strong')).toHaveText('-400원');await expect(page.locator('.spending-split')).toContainText('-400원');await page.locator('[data-ux42-category="쇼핑"]').click();await expect(page.locator('.ux42-category-focus')).toContainText('수정환불QA');await expect(page.locator('.ux42-category-focus')).toContainText('-400원');await page.evaluate(()=>nav('integrated','ledger'));await expect(page.locator('.ledger-category-group h3')).toContainText('쇼핑');await expect(page.locator('.integrated-ledger-amount')).toHaveText('+400원');
 });
 
 test('@core edge same-day schedules stay distinct, month-end clamps and ended schedules disappear',async({page})=>{
@@ -39,15 +39,34 @@ test('@core edge same-day schedules stay distinct, month-end clamps and ended sc
  expect(await page.evaluate(()=>scheduleOccurrences('2024-02').map(o=>[o.schedule.id,o.date]))).toEqual([['a','2024-02-29'],['b','2024-02-29']]);await page.locator('[data-schedule-category="insurance"]').click();await page.locator('[data-fixed-cost-item="a"]').click();await expect(page.locator('.schedule-detail-item')).toHaveCount(1);await expect(page.locator('.schedule-detail-item')).not.toContainText('QA 생활');await close(page);await page.locator('[data-integrated-month-shift="1"]').click();expect(await page.evaluate(()=>scheduleOccurrences('2024-03').map(o=>o.schedule.id))).toEqual(['a']);
 });
 
-test('@core edge category detail pagination and browser back preserve filters and financial data',async({page})=>{
+test('@core edge inline category pagination and browser back preserve filters and financial data',async({page})=>{
  await page.evaluate(async()=>{for(let i=0;i<35;i++)state.integrated.ledger.push({id:'list-'+i,type:'expense',date:'2026-10-01',amount:100,fromAccountId:'edge-cash',category:'보험',meta:{spendingItem:'보험'+i}});await persist(false);nav('integrated','spending')});
- const before=await page.evaluate(()=>({finance:JSON.stringify(state.integrated),revision:assetLocalDatabase.revision}));await page.locator('[data-spending-select="2026-10-01"]').click();await page.locator('[data-spending-selected-detail]').click();await page.locator('[data-spending-group="보험"]').click();await expect(page.locator('.spending-transactions [data-spending-transaction]')).toHaveCount(10);await page.locator('[data-spending-more]').click();await expect(page.locator('.spending-transactions [data-spending-transaction]')).toHaveCount(30);await page.locator('[data-spending-more]').click();await expect(page.locator('.spending-transactions [data-spending-transaction]')).toHaveCount(35);await page.goBack();await expect(page.locator('#detailSheet')).not.toHaveClass(/open/);await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);await page.locator('[data-spending-category-filter="보험"]').first().click();await page.locator('[data-integrated-month-shift="1"]').click();await expect(page.locator('.spending-item-groups')).toContainText('해당 소비 항목이 없습니다.');await page.locator('[data-integrated-month-shift="-1"]').click();await expect(page.locator('.spending-items [data-spending-item]')).toHaveCount(35);expect(await page.evaluate(()=>({finance:JSON.stringify(state.integrated),revision:assetLocalDatabase.revision}))).toEqual(before);
+ const before=await page.evaluate(()=>({finance:JSON.stringify(state.integrated),revision:assetLocalDatabase.revision}));
+ await page.locator('[data-spending-select="2026-10-01"]').click();
+ await expect(page.locator('[data-ux42-chart-panel] [data-ux42-tx]')).toHaveCount(8);
+ await page.locator('[data-ux42-chart-panel] .ux42-more').click();
+ await expect(page.locator('[data-ux42-chart-panel] [data-ux42-tx]')).toHaveCount(28);
+ await page.locator('[data-ux42-chart-panel] .ux42-more').click();
+ await expect(page.locator('[data-ux42-chart-panel] [data-ux42-tx]')).toHaveCount(35);
+ await page.locator('[data-ux42-chart-panel] [data-ux42-tx="list-0"]').click();
+ await expect(page.locator('#detailSheet.open')).toBeVisible();
+ await page.goBack();await expect(page.locator('#detailSheet')).not.toHaveClass(/open/);
+ await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
+ await expect(page.locator('[data-ux42-chart-panel] [data-ux42-tx]')).toHaveCount(35);
+ await page.locator('[data-ux42-category="보험"]').click();
+ await expect(page.locator('[data-ux42-category-panel] [data-ux42-tx]')).toHaveCount(8);
+ await page.locator('[data-integrated-month-shift="1"]').click();
+ await expect(page.locator('.ux42-category-list')).toContainText('기록이 없습니다');
+ await page.locator('[data-integrated-month-shift="-1"]').click();
+ await page.locator('.ux42-items-fold summary').click();
+ await expect(page.locator('.ux42-item-row')).toHaveCount(35);
+ expect(await page.evaluate(()=>({finance:JSON.stringify(state.integrated),revision:assetLocalDatabase.revision}))).toEqual(before);
 });
 
 test('@core edge long item category and schedule labels do not push amounts outside the phone',async({page})=>{
  await page.setViewportSize({width:320,height:915});
  await page.evaluate(async()=>{const name='매우긴이름'.repeat(12);state.integrated.ledger=[{id:'long',type:'expense',date:'2026-10-01',amount:123456789,fromAccountId:'edge-cash',category:name,meta:{spendingItem:name}}];state.financeSchedules.items=[{id:'long-schedule',name,kind:'insurance',amount:123456789,day:31,startDate:'2026-01-01',active:true}];await persist(false);nav('integrated','ledger')});
- for(const tab of ['ledger','spending','schedule']){await page.evaluate(tab=>nav('integrated',tab),tab);expect(await page.evaluate(()=>({inner:innerWidth,scroll:document.documentElement.scrollWidth})),tab).toEqual({inner:320,scroll:320});if(tab==='spending'){await page.locator('[data-spending-category-filter]').first().click();await expect(page.locator('.spending-items b')).toHaveText('123,456,789원');expect(await page.locator('.spending-items b').evaluate(e=>e.getBoundingClientRect().right)).toBeLessThanOrEqual(320)}}
+ for(const tab of ['ledger','spending','schedule']){await page.evaluate(tab=>nav('integrated',tab),tab);expect(await page.evaluate(()=>({inner:innerWidth,scroll:document.documentElement.scrollWidth})),tab).toEqual({inner:320,scroll:320});if(tab==='spending'){await page.locator('.ux42-category-row').first().click();await expect(page.locator('.ux42-category-focus .ux42-tx-row b')).toHaveText('123,456,789원');expect(await page.locator('.ux42-category-focus .ux42-tx-row b').evaluate(e=>e.getBoundingClientRect().right)).toBeLessThanOrEqual(320)}}
 });
 
 test('@core edge card hub selects the same month as the parent and handles multiple issuers',async({page})=>{

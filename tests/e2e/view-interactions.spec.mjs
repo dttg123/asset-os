@@ -32,14 +32,14 @@ test('@core view-only clicks never commit the financial ledger or lock the scree
  await page.locator('main').locator('[data-pension-asset-analysis]').click();await close(page);
  await page.locator('.nav[data-root="integrated"]').click();
  await page.locator('main').locator('[data-integrated-tab="spending"]').click();
- await page.locator('main').locator('[data-spending-period="year"]').click();
- await page.locator('main').locator('.spending-view [data-spending-view="items"]').click();
- await page.locator('main').locator('.spending-view [data-spending-view="categories"]').click();
+ await page.locator('main').locator('[data-spending-period="years"]').click();
+ await page.locator('main .ux42-items-fold summary').click();await page.locator('main .ux42-item-row').first().click();
+ await page.locator('main .ux42-category-row').first().click();
  await page.evaluate(()=>openPolicyHub('pension'));await close(page);
  await page.evaluate(()=>openFinancialProductHub('all'));await close(page);
  const result=await page.evaluate(()=>({commits:window.__viewCommits,busy:window.__viewBusy,sameRevision:assetLocalDatabase.revision===window.__viewRevision,sameFinance:JSON.stringify({accounts:state.accounts,pension:state.pension,integrated:state.integrated,financeSchedules:state.financeSchedules,financialProducts:state.financialProducts,policies:state.policies,brokerKis:state.brokerKis})===window.__viewBaseline,guard:localStorage.getItem('asset-os-v1.9.45-live')}));
  expect(result).toEqual({commits:0,busy:0,sameRevision:true,sameFinance:true,guard:'view-qa-operating-guard'});expect(errors).toEqual([]);
- await page.reload();await page.waitForFunction(()=>!!window.__assetOS);expect(await page.evaluate(()=>({scope:setting().pensionAssetScope,period:setting().spendingPeriod,view:setting().spendingView}))).toEqual({scope:'pension',period:'year',view:'categories'});
+ await page.reload();await page.waitForFunction(()=>!!window.__assetOS);expect(await page.evaluate(()=>({scope:setting().pensionAssetScope,period:setting().spendingPeriod,view:setting().spendingView||'categories'}))).toEqual({scope:'pension',period:'years',view:'categories'});
 });
 
 test('@core navigation and analysis keep stable content and accessible focus without repeated fades',async({page})=>{

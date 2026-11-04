@@ -62,5 +62,6 @@
   "qa-mode.ts",
   "pwa.ts",
   "boot.ts",
-  "card-management-ui.ts"
+  "card-management-ui.ts",
+  "integrated-ux-v42.ts"
 ]

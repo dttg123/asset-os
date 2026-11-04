@@ -338,7 +338,7 @@ test('@core native integrated summary opens presets and card installments withou
  await expect(page.locator('.fixed-cost-preview')).toContainText('TV · 국민카드');
  await page.screenshot({path:`/tmp/asset-native-summary-${test.info().project.name}.png`});
  const before=await page.evaluate(()=>window.__assetOS.getState().integrated.ledger.length);
- await page.locator('[data-summary-entry]').first().click();
+ await page.locator('.ux42-presets-fold summary').click();await page.locator('[data-summary-entry]').first().click();
  const form=page.locator('#integratedTxForm');await expect(form.locator('[name="amount"]')).toHaveValue('25000');
  expect(await page.evaluate(()=>window.__assetOS.getState().integrated.ledger.length)).toBe(before);
  await form.locator('[data-entry-category="교통"]').click();await expect(form.locator('[name="category"]')).toHaveValue('교통');

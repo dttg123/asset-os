@@ -5,6 +5,7 @@ test.beforeEach(async({page})=>{
  await page.goto('/index.html?qa=1#/home');await page.waitForFunction(()=>!!window.__assetOS);
  await page.evaluate(async()=>{const next=window.__assetOS.getState();next.integrated.accounts=[{id:'cash-main',kind:'cash',name:'QA 현금'}];next.integrated.liabilities=[];next.integrated.ledger=[{id:'opening',type:'openingAsset',date:'2025-01-01',amount:10000000,toAccountId:'cash-main'}];next.financialProducts={items:[],events:[]};next.financeSchedules={items:[]};next.insurance={policies:[]};next.settings.cardAccounts=[];next.settings.integratedMonth='2026-10';next.settings.integratedMonthViewedOn=localYmd();next.settings.spendingPeriod='month';next.settings.spendingView='categories';await window.__assetOS.replaceState(next)});
 });
+async function openDeep(page){const d=page.locator('.ux42-deep-analysis');if(await d.count()&&!(await d.evaluate(e=>e.open)))await d.locator('summary').first().click()}
 async function close(page){await page.evaluate(()=>{sheetDirty=false;closeSheets({all:true});cancelSheetBackForNavigation()});await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop)}
 
 test('@core insurance paths share one monthly payment, block duplicate cash and survive ZIP reload',async({page})=>{
@@ -19,17 +20,17 @@ test('@core insurance paths share one monthly payment, block duplicate cash and 
 
 test('@core category identity scopes totals and edits, renamed search and month filters',async({page})=>{
  await page.evaluate(async()=>{state.integrated.ledger.push({id:'food',date:'2026-10-01',type:'expense',amount:100,fromAccountId:'cash-main',category:'식비',meta:{spendingItem:'같은 이름'}},{id:'shop',date:'2026-10-02',type:'expense',amount:200,fromAccountId:'cash-main',category:'쇼핑',meta:{spendingItem:'같은 이름'}},{id:'nov',date:'2026-09-01',type:'expense',amount:300,fromAccountId:'cash-main',category:'보험'});await persist(false);nav('integrated','spending')});
- const before=await page.evaluate(()=>JSON.stringify(state.integrated));await page.locator('[data-spending-category-filter="식비"]').click();await expect(page.locator('.spending-items')).toContainText('100원');await expect(page.locator('.spending-items')).not.toContainText('300원');await page.locator('[data-spending-item]').click();await page.locator('[data-spending-classify-item]').click();await expect(page.locator('#cardLedgerForm .source-note')).toContainText('구매 1건');await page.locator('[name="item"]').fill('바꾼 이름');await page.locator('#cardLedgerForm button[type="submit"]').click();await close(page);
+ const before=await page.evaluate(()=>JSON.stringify(state.integrated));await openDeep(page);await page.locator('[data-spending-category-filter="식비"]').click();await openDeep(page);await openDeep(page);await expect(page.locator('.spending-items')).toContainText('100원');await expect(page.locator('.spending-items')).not.toContainText('300원');await page.locator('[data-spending-item]').click();await page.locator('[data-spending-classify-item]').click();await expect(page.locator('#cardLedgerForm .source-note')).toContainText('구매 1건');await page.locator('[name="item"]').fill('바꾼 이름');await page.locator('#cardLedgerForm button[type="submit"]').click();await close(page);
  expect(await page.evaluate(()=>JSON.stringify(state.integrated))).toBe(before);expect(await page.evaluate(()=>setting().spendingClassifications.shop)).toBeUndefined();await page.evaluate(()=>nav('integrated','ledger'));await page.locator('[data-integrated-search-form] input').fill('바꾼 이름');await page.locator('[data-integrated-search-form] button[type="submit"]').click();await expect(page.locator('.integrated-ledger-row')).toHaveCount(1);await expect(page.locator('.ledger-category-group h3')).toContainText('식비');
- await page.evaluate(()=>{setting().spendingCategoryFilter='쇼핑';nav('integrated','spending')});await page.locator('[data-integrated-month-shift="-1"]').click();await expect(page.locator('.spending-items')).toContainText('300원');expect(await page.evaluate(()=>setting().spendingCategoryFilter)).toBe('');
+ await page.evaluate(()=>{setting().spendingCategoryFilter='쇼핑';nav('integrated','spending')});await page.locator('[data-integrated-month-shift="-1"]').click();await openDeep(page);await expect(page.locator('.spending-items')).toContainText('300원');expect(await page.evaluate(()=>setting().spendingCategoryFilter)).toBe('');
 });
 
 test('@core overview is monthly and analysis periods have one stable chart with reloadable selection',async({page},info)=>{
  await page.evaluate(async()=>{state.integrated.ledger.push({id:'a',date:'2026-08-01',type:'expense',amount:1000,fromAccountId:'cash-main',category:'식비'},{id:'b',date:'2026-10-02',type:'expense',amount:500,fromAccountId:'cash-main',category:'식비'});await persist(false);nav('integrated','summary')});
  await expect(page.locator('.integrated-consumption-preview h2')).toHaveText('2026년 10월 소비');await expect(page.locator('main .spending-chart')).toHaveCount(0);await expect(page.locator('main [data-spending-period]')).toHaveCount(0);
  await page.locator('.integrated-consumption-preview [data-integrated-tab-go]').click();await expect(page.locator('.spending-chart')).toHaveCount(1);await expect(page.locator('[data-spending-select="2026-10-02"]')).toHaveAttribute('aria-pressed','true');
- for(const [mode,count] of [['month',31],['quarter',3],['half',6],['year',12],['years',6]]){await page.locator(`[data-spending-period="${mode}"]`).click();await expect(page.locator('.spending-trend button')).toHaveCount(count)}
- await page.locator('[data-spending-period="half"]').click();const hero=await page.locator('.spending-hero>strong').textContent(),before=await page.locator('.spending-chart-selection').boundingBox(),list=await page.locator('.spending-view').boundingBox();await page.locator('[data-spending-select="2026-08"]').click();await expect(page.locator('[data-spending-selected-amount]')).toHaveText('1,000원');await expect(page.locator('.spending-hero>strong')).toHaveText(hero);expect((await page.locator('.spending-chart-selection').boundingBox()).height).toBe(before.height);expect((await page.locator('.spending-view').boundingBox()).y).toBe(list.y);
+ for(const [mode,count] of [['month',31],['quarter',4],['years',6]]){await page.locator(`[data-spending-period="${mode}"]`).click();await expect(page.locator('.spending-trend button')).toHaveCount(count)}
+ await page.locator('[data-spending-period="quarter"]').click();const hero=await page.locator('.spending-hero>strong').textContent(),before=await page.locator('.spending-chart-selection').boundingBox();await page.locator('[data-spending-select="2026-Q3"]').click();await expect(page.locator('[data-spending-selected-amount]')).toHaveText('1,000원');await expect(page.locator('[data-ux42-chart-panel] [data-ux42-tx="a"]')).toBeVisible();await expect(page.locator('.spending-hero>strong')).toHaveText(hero);expect((await page.locator('.spending-chart-selection').boundingBox()).height).toBe(before.height);
  await page.reload();await page.waitForFunction(()=>!!window.__assetOS);expect(await page.evaluate(()=>integratedSelectedMonth())).toBe(await page.evaluate(()=>localYmd().slice(0,7)));
  for(const width of [320,412,768])for(const theme of ['light','dark']){await page.setViewportSize({width,height:915});await page.evaluate(theme=>{setting().theme=theme;applyTheme()},theme);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);const ys=await page.locator('[data-spending-period]').evaluateAll(es=>es.map(e=>Math.round(e.getBoundingClientRect().y)));expect(new Set(ys).size).toBe(1)}
  await page.setViewportSize({width:412,height:915});await page.screenshot({path:`/tmp/asset-os-0712-consumption-${info.project.name}.png`});
@@ -59,14 +60,14 @@ test('@core fully paid cards keep issuer monthly totals while completed purchase
 
 test('@core annual chart shows every month without scrolling or financial commits',async({page})=>{
  for(const width of [320,412,768]){
-  await page.setViewportSize({width,height:915});await page.evaluate(()=>{setting().spendingPeriod='year';nav('integrated','spending')});
+  await page.setViewportSize({width,height:915});await page.evaluate(()=>{setting().spendingPeriod='years';nav('integrated','spending')});
   const chart=page.locator('main .spending-trend');await chart.scrollIntoViewIfNeeded();
   expect(await chart.evaluate(e=>e.scrollWidth<=e.clientWidth+1)).toBe(true);
   const rect=await chart.boundingBox();
   for(const label of await chart.locator('button>strong').all()){const box=await label.boundingBox();expect(box.x).toBeGreaterThanOrEqual(rect.x-1);expect(box.x+box.width).toBeLessThanOrEqual(rect.x+rect.width+1)}
-  await expect(chart.locator('button>strong')).toHaveText(Array.from({length:12},(_,i)=>String(i+1)));
+  await expect(chart.locator('button>strong')).toHaveText(Array.from({length:6},(_,i)=>String(2021+i)));
   const before=await page.evaluate(()=>({ledger:JSON.stringify(state.integrated.ledger),revision:assetLocalDatabase.revision}));
-  await page.locator('[data-spending-select="2026-01"]').click();await expect(page.locator('[data-spending-selected-label]')).toHaveText('2026년 1월');
+  await page.locator('[data-spending-select="2026"]').click();await expect(page.locator('[data-spending-selected-label]')).toHaveText('2026년');
   expect(await page.evaluate(()=>({ledger:JSON.stringify(state.integrated.ledger),revision:assetLocalDatabase.revision}))).toEqual(before);
  }
 });
