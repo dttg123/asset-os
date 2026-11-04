@@ -20,4 +20,4 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run build
       - run: npx playwright install --with-deps chromium
-      - run: npx playwright test tests/e2e/integrated-v42-ux.spec.mjs tests/e2e/integrated-layout.spec.mjs tests/e2e/card-ledger-v2.spec.mjs tests/e2e/integrated-audit.spec.mjs tests/e2e/monthly-clarity.spec.mjs --max-failures=8 --retries=0 --timeout=20000 --reporter=line
+      - run: npx playwright test tests/e2e/integrated-v42-ux.spec.mjs tests/e2e/integrated-layout.spec.mjs tests/e2e/card-ledger-v2.spec.mjs tests/e2e/integrated-audit.spec.mjs tests/e2e/monthly-clarity.spec.mjs tests/e2e/integrated-postsave.spec.mjs tests/e2e/integrated-edge-audit.spec.mjs tests/e2e/integrated-unified.spec.mjs tests/e2e/recent-feature-interactions.spec.mjs tests/e2e/spending-navigation-drag.spec.mjs tests/e2e/view-interactions.spec.mjs --max-failures=8 --retries=0 --timeout=20000 --reporter=line

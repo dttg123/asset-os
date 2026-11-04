@@ -13,7 +13,7 @@ async function close(page){await page.evaluate(()=>{sheetDirty=false;closeSheets
 async function seed(page){await page.evaluate(async()=>{state.integrated.ledger=[{id:'fund',date:'2026-01-01',type:'openingAsset',amount:100000,toAccountId:'cash-main'},{id:'policy',date:'2026-10-01',type:'expense',amount:1000,fromAccountId:'cash-main',category:'보험'},{id:'shop',date:'2026-10-02',type:'expense',amount:1000,fromAccountId:'cash-main',category:'쇼핑'}];await persist(false);nav('integrated','ledger')})}
 
 test('@core saving another category reveals the new transaction instead of retaining a hiding filter',async({page})=>{
- await seed(page);await page.locator('[data-integrated-category="보험"]').click();await page.locator('[data-integrated-new]').click();const form=page.locator('#integratedTxForm');await form.locator('[data-entry-type="lifeExpense"]').click();await form.locator('[name="amount"]').fill('100');await form.locator('[name="date"]').fill('2026-10-25');await form.locator('[name="category"]').fill('식비');await form.locator('.integrated-form-save').click();await expect(page.locator('#formSheet')).not.toHaveClass(/open/);
+ await seed(page);await page.locator('[data-integrated-category="보험"]').click();await page.locator('.ux42-add').click();await page.locator('[data-ux42-choice="expense"]').click();const form=page.locator('#integratedTxForm');await form.locator('[data-entry-type="lifeExpense"]').click();await form.locator('[name="amount"]').fill('100');await form.locator('[name="date"]').fill('2026-10-25');await form.locator('[name="category"]').fill('식비');await form.locator('.integrated-form-save').click();await expect(page.locator('#formSheet')).not.toHaveClass(/open/);
  const added=await page.evaluate(()=>state.integrated.ledger.find(t=>t.amount===100).id);await expect(page.locator(`[data-integrated-tx="${added}"]`)).toBeVisible();expect(await page.evaluate(()=>setting().integratedLedgerCategory)).toBe('');
 });
 
@@ -21,8 +21,20 @@ test('@core a refund entered from spending is visible despite the previous ledge
  await seed(page);await page.locator('[data-integrated-category="쇼핑"]').click();await page.evaluate(()=>{nav('integrated','spending');openIntegratedRefundForm('policy')});await page.locator('#refundForm [name="date"]').fill('2026-10-25');await page.locator('#refundForm [name="amount"]').fill('50');await page.locator('#refundForm button').click();await expect(page.locator('#formSheet')).not.toHaveClass(/open/);const refund=await page.evaluate(()=>state.integrated.ledger.find(t=>t.type==='refund').id);await expect(page.locator(`[data-integrated-tx="${refund}"]`)).toBeVisible();expect(await page.evaluate(()=>setting().integratedLedgerCategory)).toBe('');
 });
 
-test('@core browser back from a scrolled spending item preserves category position and finance',async({page})=>{
- await page.evaluate(async()=>{for(let i=0;i<50;i++)state.integrated.ledger.push({id:'scroll-'+i,type:'expense',date:'2026-10-01',amount:100+i,fromAccountId:'cash-main',category:'식비',meta:{spendingItem:'항목 '+i}});await persist(false);nav('integrated','spending')});await page.locator('[data-spending-category-filter="식비"]').click();const row=page.locator('[data-spending-item="항목 10"]');await row.scrollIntoViewIfNeeded();const before=await page.evaluate(()=>({y:scrollY,ledger:JSON.stringify(state.integrated),revision:assetLocalDatabase.revision}));await row.click();await expect(page.locator('#detailSheet')).toHaveClass(/open/);await page.goBack();await expect(page.locator('#detailSheet')).not.toHaveClass(/open/);await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);await expect.poll(()=>page.evaluate(()=>scrollY)).toBeCloseTo(before.y,0);expect(await page.evaluate(()=>setting().spendingCategoryFilter)).toBe('식비');expect(await page.evaluate(()=>({ledger:JSON.stringify(state.integrated),revision:assetLocalDatabase.revision}))).toEqual({ledger:before.ledger,revision:before.revision});
+test('@core browser back from inline spending transaction retains category and scroll without financial commits',async({page})=>{
+ await page.evaluate(async()=>{for(let i=0;i<50;i++)state.integrated.ledger.push({id:'scroll-'+i,type:'expense',date:'2026-10-01',amount:100+i,fromAccountId:'cash-main',category:'식비',meta:{spendingItem:'항목 '+i}});await persist(false);nav('integrated','spending')});
+ await page.locator('[data-ux42-category="식비"]').click();
+ await page.locator('.ux42-category-focus .ux42-more').click();
+ const row=page.locator('.ux42-category-focus [data-ux42-tx="scroll-10"]');
+ await row.scrollIntoViewIfNeeded();
+ const before=await page.evaluate(()=>({y:scrollY,ledger:JSON.stringify(state.integrated),revision:assetLocalDatabase.revision}));
+ await row.click();await expect(page.locator('#detailSheet')).toHaveClass(/open/);
+ await page.goBack();await expect(page.locator('#detailSheet')).not.toHaveClass(/open/);
+ await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
+ await expect.poll(()=>page.evaluate(()=>scrollY)).toBeCloseTo(before.y,0);
+ await expect(page.locator('[data-ux42-category="식비"]')).toHaveAttribute('aria-pressed','true');
+ await expect(page.locator('.ux42-category-focus [data-ux42-tx="scroll-10"]')).toBeVisible();
+ expect(await page.evaluate(()=>({ledger:JSON.stringify(state.integrated),revision:assetLocalDatabase.revision}))).toEqual({ledger:before.ledger,revision:before.revision});
 });
 
 test('@core integrated investment detail routes to ISA pension and IRP and returns home without financial commits',async({page})=>{

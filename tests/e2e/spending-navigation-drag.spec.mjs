@@ -8,13 +8,35 @@ test.beforeEach(async({page})=>{
 const snapshot=page=>page.evaluate(()=>({ledger:JSON.stringify(state.integrated),revision:assetLocalDatabase.revision}));
 async function choose(page,year,part){await page.locator('[data-spending-period-picker]').click();await page.locator('[data-spending-period-form] [name="year"]').fill(year);if(part)await page.locator('[data-spending-period-form] [name="part"]').selectOption(part);await page.locator('[data-spending-period-form] button').click();await expect(page.locator('#detailSheet')).not.toHaveClass(/open/);await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop)}
 
-test('@core period picker and arrows reconcile year boundaries, totals, chart and details without writes',async({page})=>{
+test('@core period picker and arrows reconcile quarter and annual scopes, totals, detail and year boundaries without writes',async({page})=>{
  const before=await snapshot(page);
- await page.locator('[data-spending-period="half"]').click();await expect(page.locator('[data-spending-period-picker]')).toContainText('2026년 하반기');await expect(page.locator('.spending-hero>strong')).toHaveText('900원');
- await page.locator('[data-integrated-month-shift="-1"]').click();await expect(page.locator('[data-spending-period-picker]')).toContainText('2026년 상반기');await expect(page.locator('.spending-hero>strong')).toHaveText('100원');
- await choose(page,'2027','1');await expect(page.locator('[data-spending-period-picker]')).toContainText('2027년 상반기');await expect(page.locator('.spending-hero>strong')).toHaveText('800원');await expect(page.locator('[data-spending-selected-label]')).toHaveText('2027년 1월');await page.locator('[data-spending-selected-detail]').click();await expect(page.locator('#sheetTitle')).toHaveText('2027년 1월 소비 내역');await expect(page.locator('.spending-group-total strong')).toHaveText('800원');await page.goBack();await expect(page.locator('#detailSheet')).not.toHaveClass(/open/);await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
- await page.locator('[data-spending-period="quarter"]').click();await page.locator('[data-integrated-month-shift="-1"]').click();await expect(page.locator('[data-spending-period-picker]')).toContainText('2026년 4분기');await expect(page.locator('.spending-hero>strong')).toHaveText('700원');await page.locator('[data-integrated-month-shift="-1"]').click();await expect(page.locator('.spending-hero>strong')).toHaveText('200원');await choose(page,'2026','2');await expect(page.locator('.spending-hero>strong')).toHaveText('0원');await expect(page.locator('.spending-categories')).toContainText('기록이 없습니다');
- await page.locator('[data-spending-period="year"]').click();await choose(page,'2027');await expect(page.locator('.spending-hero>strong')).toHaveText('800원');expect(await snapshot(page)).toEqual(before);
+ await page.locator('[data-spending-period="quarter"]').click();
+ await expect(page.locator('[data-spending-period-picker]')).toContainText('2026년 4분기');
+ await expect(page.locator('.spending-hero>strong')).toHaveText('700원');
+ await page.locator('[data-integrated-month-shift="-1"]').click();
+ await expect(page.locator('[data-spending-period-picker]')).toContainText('2026년 3분기');
+ await expect(page.locator('.spending-hero>strong')).toHaveText('200원');
+ await choose(page,'2027','1');
+ await expect(page.locator('[data-spending-period-picker]')).toContainText('2027년 1분기');
+ await expect(page.locator('.spending-hero>strong')).toHaveText('800원');
+ await expect(page.locator('[data-spending-selected-label]')).toHaveText('2027년 1분기');
+ await page.locator('[data-spending-selected-detail]').click();
+ await expect(page.locator('[data-ux42-chart-panel] .ux42-focus-amount')).toHaveText('800원');
+ await page.locator('[data-ux42-chart-panel] [data-ux42-tx="2027-01-01"]').click();
+ await expect(page.locator('#detailSheet.open')).toBeVisible();
+ await page.goBack();await expect(page.locator('#detailSheet')).not.toHaveClass(/open/);
+ await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
+ await expect(page.locator('[data-ux42-chart-panel] .ux42-focus-amount')).toHaveText('800원');
+ await page.locator('[data-integrated-month-shift="-1"]').click();
+ await expect(page.locator('[data-spending-period-picker]')).toContainText('2026년 4분기');
+ await expect(page.locator('.spending-hero>strong')).toHaveText('700원');
+ await page.locator('[data-integrated-month-shift="-1"]').click();
+ await expect(page.locator('.spending-hero>strong')).toHaveText('200원');
+ await choose(page,'2026','2');await expect(page.locator('.spending-hero>strong')).toHaveText('0원');
+ await expect(page.locator('.ux42-category-list')).toContainText('기록이 없습니다');
+ await page.locator('[data-spending-period="years"]').click();await choose(page,'2027');
+ await expect(page.locator('.spending-hero>strong')).toHaveText('800원');
+ expect(await snapshot(page)).toEqual(before);
  for(const width of [320,412,768]){await page.setViewportSize({width,height:915});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true)}
 });
 
@@ -22,7 +44,7 @@ test('@core drag selects intermediate days and keeps the detail date and persist
  const before=await snapshot(page),hero=await page.locator('.spending-hero>strong').textContent();await page.locator('.spending-trend').scrollIntoViewIfNeeded();
  const first=await page.locator('[data-spending-select="2026-10-01"]').boundingBox(),mid=await page.locator('[data-spending-select="2026-10-14"]').boundingBox();const a={x:first.x+first.width/2,y:first.y+45},b={x:mid.x+mid.width/2,y:mid.y+45};
  await page.mouse.move(a.x,a.y);await page.mouse.down();await page.mouse.move(b.x,b.y,{steps:14});await expect(page.locator('[data-spending-selected-label]')).toHaveText('2026년 10월 14일');await expect(page.locator('[data-spending-selected-amount]')).toHaveText('400원');await page.mouse.up();await expect(page.locator('[data-spending-select="2026-10-14"]')).toHaveAttribute('aria-pressed','true');await expect(page.locator('.spending-hero>strong')).toHaveText(hero);
- await page.locator('[data-spending-selected-detail]').click();await expect(page.locator('#sheetTitle')).toHaveText('2026년 10월 14일 소비 내역');await expect(page.locator('.spending-group-total strong')).toHaveText('400원');await page.goBack();await expect(page.locator('#detailSheet')).not.toHaveClass(/open/);await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);await page.reload();await page.waitForFunction(()=>!!window.__assetOS);expect(await page.evaluate(()=>integratedSelectedMonth())).toBe(await page.evaluate(()=>localYmd().slice(0,7)));expect(await snapshot(page)).toEqual(before);
+ await page.locator('[data-spending-selected-detail]').click();await expect(page.locator('[data-ux42-chart-panel] .ux42-focus-amount')).toHaveText('400원');await page.locator('[data-ux42-chart-panel] [data-ux42-tx="2026-10-14"]').click();await expect(page.locator('#detailSheet.open')).toBeVisible();await page.goBack();await expect(page.locator('#detailSheet')).not.toHaveClass(/open/);await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);await page.reload();await page.waitForFunction(()=>!!window.__assetOS);expect(await page.evaluate(()=>integratedSelectedMonth())).toBe(await page.evaluate(()=>localYmd().slice(0,7)));expect(await snapshot(page)).toEqual(before);
  const currentMonth=await page.evaluate(()=>localYmd().slice(0,7)),last=await page.evaluate(month=>new Date(Number(month.slice(0,4)),Number(month.slice(5,7)),0).getDate(),currentMonth);await page.locator('[data-spending-select="'+currentMonth+'-14"]').press('End');await expect(page.locator('[data-spending-selected-label]')).toHaveText(currentMonth.slice(0,4)+'년 '+Number(currentMonth.slice(5,7))+'월 '+last+'일');await expect(page.locator('[data-spending-selected-amount]')).toHaveText('0원');
 });
 
