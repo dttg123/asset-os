@@ -121,3 +121,23 @@ test('@core direct expense save and continue records each amount once through th
  await expect(page.locator('#formSheet')).not.toHaveClass(/open/);
  expect(await page.evaluate(()=>({count:state.integrated.ledger.length,amounts:state.integrated.ledger.filter(t=>t.date==='2026-10-26').map(t=>t.amount)}))).toEqual({count:before+2,amounts:[12345,6789]});
 });
+
+test('@core all three period buttons fill the selector equally on phone and tablet',async({page},info)=>{
+ const before=await page.evaluate(()=>JSON.stringify(state.integrated));
+ for(const width of [320,412,768]){
+  await page.setViewportSize({width,height:915});
+  for(const mode of ['month','quarter','years']){
+   await page.locator(`[data-spending-period="${mode}"]`).click();
+   const layout=await page.locator('.ux42-periods').evaluate(el=>{
+    const bounds=el.getBoundingClientRect(),buttons=[...el.querySelectorAll('button')].map(button=>button.getBoundingClientRect());
+    return {columns:getComputedStyle(el).gridTemplateColumns.split(' ').length,widths:buttons.map(b=>b.width),left:buttons[0].left-bounds.left,right:bounds.right-buttons.at(-1).right};
+   });
+   expect(layout.columns).toBe(3);
+   expect(Math.max(...layout.widths)-Math.min(...layout.widths)).toBeLessThan(1);
+   expect(layout.left).toBeLessThanOrEqual(5);
+   expect(layout.right).toBeLessThanOrEqual(5);
+  }
+  if(width===412)await page.locator('.ux42-periods').screenshot({path:`test-results/monthly-clarity-periods-${info.project.name}.png`});
+ }
+ expect(await page.evaluate(()=>JSON.stringify(state.integrated))).toEqual(before);
+});

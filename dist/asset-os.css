@@ -1086,7 +1086,7 @@ body[data-root="integrated"] .integrated-monthbar .spending-period-label{width:1
 .integrated-module-shell .ux42-common-action{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 2px 8px}
 .ux42-common-action span{font-size:12px;color:var(--muted);line-height:1.4}
 .ux42-common-action .ux42-add{border:0;flex-shrink:0;border-radius:12px;background:var(--soft);color:var(--accent2);padding:11px 15px;min-height:44px;font-weight:750}
-.ux42-periods{grid-template-columns:repeat(3,minmax(0,1fr))}
+.spending-period-tools>.ux42-periods{grid-template-columns:repeat(3,minmax(0,1fr))}
 .ux42-category-card,.ux42-category-focus,.ux42-chart-focus{min-width:0}
 .ux42-category-card{padding:14px 15px!important}
 .ux42-title-row,.ux42-focus-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0}
