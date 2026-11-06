@@ -13,9 +13,13 @@ declare function spendingPeriodLabel(period:string):string;
 declare function won(value:unknown):string;
 declare function route():{root:string;tab:string};
 declare let bind:()=>void;
-declare function openIntegratedTransactionForm(id?:string,preset?:Record<string,unknown>):void;
+declare let openIntegratedTransactionForm:(id?:string,preset?:Record<string,unknown>)=>void;
 declare function openIntegratedTransactionDetail(id:string):void;
 declare function openSpendingCategoryManagement():void;
+declare function openSpendingItemDetail(key:string,period?:string,tab?:string,category?:string):void;
+declare function setting():{spendingView?:string};
+declare function rememberViewPreferences():void;
+declare function render():void;
 declare let openCardPurchaseForm:(id?:string)=>void;
 declare function openSheet(id:string,options?:Record<string,unknown>):void;
 declare function closeSheets(options?:{all:boolean}):void;
@@ -29,7 +33,7 @@ declare let selectSpendingChartPoint:(chart:HTMLElement,button:HTMLElement)=>voi
  * Loaded after existing integrated/card modules and before boot.
  */
 'use strict';
-const ux42State={context:'',target:'category',period:'',category:'',item:'',kind:'all',limit:8};
+const ux42State={context:'',target:'category',period:'',category:'',item:'',itemId:'',kind:'all',limit:8};
 function ux42Node<T extends keyof HTMLElementTagNameMap>(tag:T,cls:string,textValue?:unknown):HTMLElementTagNameMap[T]{
  const node=document.createElement(tag);
  if(cls)node.className=cls;
@@ -47,6 +51,7 @@ function ux42ResetIfNeeded():void{
   ux42State.period=spendingFocusedPeriod();
   ux42State.category='';
   ux42State.item='';
+  ux42State.itemId='';
   ux42State.kind='all';
   ux42State.limit=8;
  }
@@ -84,6 +89,7 @@ function ux42SetFocus(target:string,period:string,category:string,item:string,ki
  ux42State.period=period||spendingFocusedPeriod();
  ux42State.category=category||'';
  ux42State.item=item||'';
+ ux42State.itemId=item?String(ux42PeriodRows(ux42State.period).find(function(row){return ux42RowItem(row)===item&&String(row.category||'미분류')===category})?.id||''):'';
  ux42State.kind=kind||'all';
  ux42State.limit=8;
  ux42UpdateSpendingFocus();
@@ -98,6 +104,9 @@ function ux42UpdateSpendingFocus():void{
  categoryPanel.hidden=chart;
  const host=chart?chartPanel:categoryPanel,period=ux42State.period||spendingFocusedPeriod();
  let rows=ux42PeriodRows(period);
+ // Follow the selected source record when its display name or category is edited.
+ const selectedItem=ux42State.itemId?rows.find(function(row){return row.id===ux42State.itemId}):undefined;
+ if(selectedItem){ux42State.item=ux42RowItem(selectedItem);ux42State.category=String(selectedItem.category||'미분류')}
  if(ux42State.category)rows=rows.filter(function(row){return String(row.category||'미분류')===ux42State.category});
  if(ux42State.item)rows=rows.filter(function(row){return ux42RowItem(row)===ux42State.item});
  if(ux42State.kind==='fixed')rows=rows.filter(function(row:Ux42Row){return Boolean(row.fixed)});
@@ -111,11 +120,17 @@ function ux42UpdateSpendingFocus():void{
  left.append(ux42Node('strong','',caption||'선택한 소비 내역'),ux42Node('small','',rows.length+'건 · 원장 기준'));
  const right=ux42Node('strong','ux42-focus-amount',won(amount));
  heading.append(left,right);host.append(heading);
- if(!chart&&(ux42State.category||ux42State.item||ux42State.kind!=='all')){
+ if(chart||ux42State.category||ux42State.item||ux42State.kind!=='all'){
   const clear=ux42Node('button','ux42-clear','선택 해제 · 기간 전체 보기');
   clear.type='button';
   clear.addEventListener('click',function(){ux42SetFocus('category',spendingFocusedPeriod(),'','','all')});
   host.append(clear);
+ }
+ if(ux42State.item){
+  const detail=ux42Node('button','ux42-item-detail','항목 상세 · 이름·분류 수정');
+  detail.type='button';
+  detail.addEventListener('click',function(){openSpendingItemDetail(ux42State.item,period,'summary',ux42State.category)});
+  host.append(detail);
  }
  const body=ux42Node('div','ux42-focus-rows');
  if(!rows.length)body.append(ux42Node('p','ux42-empty','선택한 범위에 거래가 없습니다.'));
@@ -163,59 +178,74 @@ function ux42DecorateSpending():void{
  const review=document.querySelector('.spending-review');if(!review)return;
  ux42ResetIfNeeded();
 
- const oldView=review.querySelector<HTMLElement>('.spending-view');
- const oldCards=[...review.querySelectorAll<HTMLElement>('.spending-card')];
- const oldFilters=[...review.querySelectorAll<HTMLElement>('.cardv2-filters')];
- review.querySelector('.spending-year-views')?.remove();
+ // Replace both legacy lists with one category/item browser.
+ review.querySelectorAll('.spending-view,.spending-card,.cardv2-filters,.spending-year-views').forEach(function(node){node.remove()});
  const hero=review.querySelector('.spending-hero');
- const heroNew=hero?.querySelector<HTMLElement>('[data-spending-new]');if(heroNew)heroNew.remove();
+ hero?.querySelector('[data-spending-new]')?.remove();
  const hint=review.querySelector('.spending-chart-window');
- if(hint)hint.textContent=spendingPeriodMode()==='quarter'?'해당 연도의 1~4분기 합계':spendingPeriodMode()==='years'?'연도별 합계 · 기록 없는 연도는 0원':'날짜별 순소비 · 막대 선택 시 아래에 거래 표시';
- const firstTotal=ux42Node('section','ux42-chart-focus');
- firstTotal.dataset.ux42ChartPanel='';firstTotal.hidden=true;
- hero?.after(firstTotal);
+ if(hint)hint.textContent=spendingPeriodMode()==='quarter'?'분기를 누르면 아래에서 거래 확인':spendingPeriodMode()==='years'?'연도를 누르면 아래에서 거래 확인':'그래프를 누르면 해당 날짜의 거래 확인';
+ // Keep the date picker as an optional keyboard/touch alternative.
+ const picker=review.querySelector('.spending-day-picker');
+ if(picker){
+  const fold=ux42Node('details','ux42-date-picker');
+  fold.append(ux42Node('summary','','날짜 직접 선택'));
+  picker.replaceWith(fold);fold.append(picker);
+ }
+ const selectedDetail=review.querySelector<HTMLElement>('[data-spending-selected-detail]');
+ if(selectedDetail)selectedDetail.textContent='거래 보기';
  const analysis=integratedSpendingAnalysis(spendingFocusedPeriod());
  const categoryCard=ux42Node('section','card ux42-category-card');
  const title=ux42Node('div','ux42-title-row');
- title.append(ux42Node('h2','', '카테고리별 소비'));
+ title.append(ux42Node('h2','', '소비 내역'));
  const manage=ux42Node('button','tinybtn','분류 관리');
  manage.type='button';manage.addEventListener('click',function(){openSpendingCategoryManagement()});
  title.append(manage);categoryCard.append(title);
+ const view=setting().spendingView==='items'?'items':'categories';
+ const switcher=ux42Node('div','cardv2-segment ux42-views');
+ switcher.setAttribute('aria-label','소비 내역 보기');
+ for(const [key,label] of [['categories','카테고리별'],['items','항목별']]){
+  const button=ux42Node('button',view===key?'active':'',label);
+  button.type='button';button.dataset.ux42View=key;
+  button.setAttribute('aria-pressed',String(view===key));
+  button.addEventListener('click',function(){
+   setting().spendingView=key;rememberViewPreferences();render();
+  });
+  switcher.append(button);
+ }
+ categoryCard.append(switcher);
  const list=ux42Node('div','ux42-category-list');
+ list.hidden=view!=='categories';
  analysis.categories.forEach(function(category){ux42AddCategory(list,category)});
  if(!analysis.categories.length)list.append(ux42Node('p','ux42-empty','선택한 기간의 소비 기록이 없습니다.'));
  categoryCard.append(list);
- const itemFold=ux42Node('details','ux42-items-fold');
- itemFold.append(ux42Node('summary','', '구매 항목 분석 · TOP 5 / 전체 항목'));
  const items=ux42Node('div','ux42-item-list');
- [...analysis.items].sort(function(a,b){return b.amount-a.amount}).forEach(function(item,index){
+ items.hidden=view!=='items';
+ [...analysis.items].sort(function(a,b){return b.amount-a.amount}).forEach(function(item){
   const b=ux42Node('button','ux42-item-row');
   b.type='button';b.dataset.ux42Item=item.key;b.dataset.ux42ItemCategory=item.category;
-  const left=ux42Node('span','');left.append(ux42Node('strong','',(index<5?String(index+1)+'. ':'')+item.key),ux42Node('small','',item.category+' · '+item.count+'건'));
+  const left=ux42Node('span','');left.append(ux42Node('strong','',item.key),ux42Node('small','',item.category+' · '+item.count+'건'));
   b.append(left,ux42Node('b','',won(item.amount)));
   b.addEventListener('click',function(){ux42SetFocus('category',spendingFocusedPeriod(),item.category,item.key,'all')});
   items.append(b);
  });
- itemFold.append(items);categoryCard.append(itemFold);
+ if(!analysis.items.length)items.append(ux42Node('p','ux42-empty','선택한 기간의 소비 기록이 없습니다.'));
+ categoryCard.append(items);
  const split=review.querySelector('.spending-split');
  if(split)split.after(categoryCard);else hero?.after(categoryCard);
+ const chartPanel=ux42Node('section','card ux42-chart-focus');
+ chartPanel.dataset.ux42ChartPanel='';chartPanel.hidden=true;chartPanel.setAttribute('aria-live','polite');
  const categoryPanel=ux42Node('section','card ux42-category-focus');
  categoryPanel.dataset.ux42CategoryPanel='';categoryPanel.setAttribute('aria-live','polite');
- categoryCard.after(categoryPanel);
- const advanced=ux42Node('details','ux42-deep-analysis');
- advanced.append(ux42Node('summary','', '항목 전체 · 미분류 · 상세 분석'));
- if(oldView)advanced.append(oldView);
- oldFilters.forEach(function(node){advanced.append(node)});
- oldCards.forEach(function(node){advanced.append(node)});
- if(oldView||oldCards.length)categoryPanel.after(advanced);
+ categoryCard.after(chartPanel,categoryPanel);
  review.querySelectorAll<HTMLElement>('.spending-split [data-spending-detail]').forEach(function(button){
-  button.onclick=function(){ux42SetFocus('category',spendingFocusedPeriod(),'','',button.dataset.spendingDetail==='fixed'?'fixed':'variable')};
+  button.addEventListener('click',function(event){event.stopImmediatePropagation();ux42SetFocus('category',spendingFocusedPeriod(),'','',button.dataset.spendingDetail==='fixed'?'fixed':'variable')},{capture:true});
  });
  review.querySelectorAll<HTMLElement>('[data-spending-selected-detail]').forEach(function(button){
-  button.onclick=function(){
+  button.addEventListener('click',function(event){
+   event.stopImmediatePropagation();
    const period=button.dataset.spendingSelectedDetail||spendingFocusedPeriod();
    ux42SetFocus('chart',period,'','','all');
-  };
+  },{capture:true});
  });
  ux42UpdateSpendingFocus();
 }
@@ -264,6 +294,25 @@ function ux42DecorateSummary():void{
   area.append(bars,readout);preview.append(area);
  }
 }
+function ux42EntryBack(form:HTMLFormElement):void{
+ if(form.querySelector('.ux42-back'))return;
+ const back=ux42Node('button','ux42-back','‹ 카드 구매·다른 입력');
+ back.type='button';form.prepend(back);
+ back.addEventListener('click',function(){
+  const doBack=function(){sheetDirty=false;ux42OpenEntryMenu()};
+  if(sheetDirty)showDialog({title:'입력을 취소할까요?',message:'저장하지 않은 입력은 사라집니다.',confirmText:'입력 종류로',cancelText:'계속 입력'},doBack);
+  else doBack();
+ });
+}
+const ux42PreviousTransaction=openIntegratedTransactionForm;
+openIntegratedTransactionForm=function(id?:string,preset?:Record<string,unknown>):void{
+ ux42PreviousTransaction(id,preset);
+ const form=document.querySelector<HTMLFormElement>('#formSheet.open #integratedTxForm.integrated-entry');
+ if(!id&&form)ux42EntryBack(form);
+};
+function ux42OpenTransaction(type:string):void{
+ openIntegratedTransactionForm('',{uiType:type});
+}
 function ux42OpenEntryMenu():void{
  document.querySelector<HTMLElement>('#sheetEyebrow')!.textContent='통합 · 입력';
  document.querySelector<HTMLElement>('#sheetTitle')!.textContent='새 기록 입력';
@@ -271,10 +320,10 @@ function ux42OpenEntryMenu():void{
  const intro=ux42Node('p','ux42-entry-hint','새 기록을 추가합니다. 이미 발생한 카드값·보험·대출 납부는 해당 청구·일정에서 처리해요.');
  body.append(intro);
  const choices=[
-  ['지출','소비 기록을 추가','expense'],
+  ['지출','현금·체크카드 등 생활비 기록','expense'],
   ['수입','급여·기타 수입을 추가','income'],
   ['저축·투자','계좌 간 납입·이체를 기록','saving'],
-  ['카드 구매','일시불·할부 구매를 기록','card'],
+  ['카드 구매','신용카드 일시불·할부 기록','card'],
   ['납부 일정 보기','보험·대출·저축 납부는 해당 기록에서','schedule']
  ];
  for(const choice of choices){
@@ -285,7 +334,7 @@ function ux42OpenEntryMenu():void{
   button.addEventListener('click',function(){
    if(choice[2]==='card')openCardPurchaseForm();
    else if(choice[2]==='schedule'){closeSheets({all:true});nav('integrated','schedule')}
-   else openIntegratedTransactionForm('',{uiType:choice[2]==='income'?'externalIncome':choice[2]==='saving'?'savingInvestment':'lifeExpense'});
+   else ux42OpenTransaction(choice[2]==='income'?'externalIncome':choice[2]==='saving'?'savingInvestment':'lifeExpense');
   });
   body.append(button);
  }
@@ -294,15 +343,7 @@ function ux42OpenEntryMenu():void{
 function ux42UpgradePurchase(id:string):void{
  const form=document.querySelector<HTMLFormElement>('#formSheet.open .card-purchase-form');
  if(!form)return;
- if(!form.querySelector('.ux42-back')){
-  const back=ux42Node('button','ux42-back','‹ 입력 종류로 돌아가기');
-  back.type='button';form.prepend(back);
-  back.addEventListener('click',function(){
-   const doBack=function(){sheetDirty=false;ux42OpenEntryMenu()};
-   if(sheetDirty)showDialog({title:'입력을 취소할까요?',message:'저장하지 않은 구매 입력은 사라집니다.',confirmText:'입력 종류로',cancelText:'계속 입력'},doBack);
-   else doBack();
-  });
- }
+ if(!id)ux42EntryBack(form);
  const months=form.elements.namedItem('months') as HTMLSelectElement|null;
  const interest=form.elements.namedItem('interestMode') as HTMLSelectElement|null;
  const rate=form.elements.namedItem('annualRate') as HTMLInputElement|null;
@@ -366,9 +407,13 @@ bind=function(){
  const tabs=shell.querySelector('.integrated-tabs');
  if(tabs&&!shell.querySelector('.ux42-common-action')){
   const actions=ux42Node('div','ux42-common-action');
-  actions.append(ux42Node('span','', '새 기록은 입력에서 · 납부는 해당 일정에서'));
+  actions.append(ux42Node('span','',route().tab==='spending'?'현금·체크카드 지출 기록':'새 기록 입력 · 납부는 해당 일정에서'));
   const button=ux42Node('button','ux42-add','＋ 입력');
-  button.type='button';button.addEventListener('click',ux42OpenEntryMenu);
+  button.type='button';
+  if(route().tab==='spending'){
+   button.textContent='＋ 지출';
+   button.addEventListener('click',function(){ux42OpenTransaction('lifeExpense')});
+  }else button.addEventListener('click',ux42OpenEntryMenu);
   actions.append(button);
   tabs.after(actions);
  }

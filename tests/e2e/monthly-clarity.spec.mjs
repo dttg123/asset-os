@@ -26,7 +26,7 @@ test('@core monthly overview analysis resets stale annual context and category r
   if(width===412&&theme==='light'){await page.locator('.ux42-category-list').scrollIntoViewIfNeeded();await page.locator('.ux42-category-list').screenshot({path:`test-results/monthly-clarity-categories-${info.project.name}.png`})}
  }
  await expect(page.locator('.ux42-item-list')).not.toBeVisible();
- await page.locator('.ux42-items-fold summary').click();
+ await page.locator('[data-ux42-view="items"]').click();
  await expect(page.locator('.ux42-item-row')).toHaveCount(2);
  for(const width of [320,412,768]){
   await page.setViewportSize({width,height:915});

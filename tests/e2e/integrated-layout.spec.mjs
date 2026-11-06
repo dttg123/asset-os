@@ -26,6 +26,7 @@ test('@core period charts remain legible in narrow light dark and tablet layouts
 
 test('@core daily positive zero and refund selections link to matching details without saving finance',async({page})=>{
  const before=await page.evaluate(()=>({finance:JSON.stringify(state.integrated),revision:assetLocalDatabase.revision}));
+ await page.locator('.ux42-date-picker summary').click();
  for(const [day,amount] of [['01','1,000,000원'],['14','346,200원'],['20','-50,000원'],['31','0원']]){
   await page.locator('[data-spending-day-picker]').selectOption('2026-10-'+day);await expect(page.locator(`[data-spending-select="2026-10-${day}"]`)).toHaveAttribute('aria-pressed','true');await expect(page.locator('[data-spending-selected-amount]')).toHaveText(amount);await page.locator('[data-spending-selected-detail]').click();await expect(page.locator('[data-ux42-chart-panel] .ux42-focus-amount')).toHaveText(amount);
  }

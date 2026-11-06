@@ -33,8 +33,8 @@ test('@core view-only clicks never commit the financial ledger or lock the scree
  await page.locator('.nav[data-root="integrated"]').click();
  await page.locator('main').locator('[data-integrated-tab="spending"]').click();
  await page.locator('main').locator('[data-spending-period="years"]').click();
- await page.locator('main .ux42-items-fold summary').click();await page.locator('main .ux42-item-row').first().click();
- await page.locator('main .ux42-category-row').first().click();
+ await page.locator('main [data-ux42-view="items"]').click();await page.locator('main .ux42-item-row').first().click();
+ await page.locator('main [data-ux42-view="categories"]').click();await page.locator('main .ux42-category-row').first().click();
  await page.evaluate(()=>openPolicyHub('pension'));await close(page);
  await page.evaluate(()=>openFinancialProductHub('all'));await close(page);
  const result=await page.evaluate(()=>({commits:window.__viewCommits,busy:window.__viewBusy,sameRevision:assetLocalDatabase.revision===window.__viewRevision,sameFinance:JSON.stringify({accounts:state.accounts,pension:state.pension,integrated:state.integrated,financeSchedules:state.financeSchedules,financialProducts:state.financialProducts,policies:state.policies,brokerKis:state.brokerKis})===window.__viewBaseline,guard:localStorage.getItem('asset-os-v1.9.45-live')}));
