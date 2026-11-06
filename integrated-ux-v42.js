@@ -319,11 +319,15 @@ function ux42EntryBack(form) {
             doBack();
     });
 }
+const ux42PreviousTransaction = openIntegratedTransactionForm;
+openIntegratedTransactionForm = function (id, preset) {
+    ux42PreviousTransaction(id, preset);
+    const form = document.querySelector('#formSheet.open #integratedTxForm.integrated-entry');
+    if (!id && form)
+        ux42EntryBack(form);
+};
 function ux42OpenTransaction(type) {
     openIntegratedTransactionForm('', { uiType: type });
-    const form = document.querySelector('#formSheet.open #integratedTxForm');
-    if (form)
-        ux42EntryBack(form);
 }
 function ux42OpenEntryMenu() {
     document.querySelector('#sheetEyebrow').textContent = '통합 · 입력';

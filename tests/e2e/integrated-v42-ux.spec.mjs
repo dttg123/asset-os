@@ -111,6 +111,7 @@ test('@core direct expense save and continue records each amount once through th
  await expect(page.locator('#integratedTxForm')).toBeVisible();
  await expect(page.locator('#entryAmount')).toHaveValue('');
  await expect(page.locator('#entryDate')).toHaveValue('2026-10-26');
+ await expect(page.locator('#integratedTxForm .ux42-back')).toBeVisible();
  await page.locator('#entryAmount').fill('6789');
  await page.locator('#entrySpendingItem').fill('연속 입력 두 번째');
  await page.locator('#integratedTxForm .integrated-form-save').click();

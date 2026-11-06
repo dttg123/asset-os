@@ -13,7 +13,7 @@ declare function spendingPeriodLabel(period:string):string;
 declare function won(value:unknown):string;
 declare function route():{root:string;tab:string};
 declare let bind:()=>void;
-declare function openIntegratedTransactionForm(id?:string,preset?:Record<string,unknown>):void;
+declare let openIntegratedTransactionForm:(id?:string,preset?:Record<string,unknown>)=>void;
 declare function openIntegratedTransactionDetail(id:string):void;
 declare function openSpendingCategoryManagement():void;
 declare function openSpendingItemDetail(key:string,period?:string,tab?:string,category?:string):void;
@@ -298,10 +298,14 @@ function ux42EntryBack(form:HTMLFormElement):void{
   else doBack();
  });
 }
+const ux42PreviousTransaction=openIntegratedTransactionForm;
+openIntegratedTransactionForm=function(id?:string,preset?:Record<string,unknown>):void{
+ ux42PreviousTransaction(id,preset);
+ const form=document.querySelector<HTMLFormElement>('#formSheet.open #integratedTxForm.integrated-entry');
+ if(!id&&form)ux42EntryBack(form);
+};
 function ux42OpenTransaction(type:string):void{
  openIntegratedTransactionForm('',{uiType:type});
- const form=document.querySelector<HTMLFormElement>('#formSheet.open #integratedTxForm');
- if(form)ux42EntryBack(form);
 }
 function ux42OpenEntryMenu():void{
  document.querySelector<HTMLElement>('#sheetEyebrow')!.textContent='통합 · 입력';
