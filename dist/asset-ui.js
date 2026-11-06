@@ -4141,7 +4141,7 @@ function bindSpendingReview() {
  * Loaded after existing integrated/card modules and before boot.
  */
 'use strict';
-const ux42State = { context: '', target: 'category', period: '', category: '', item: '', kind: 'all', limit: 8 };
+const ux42State = { context: '', target: 'category', period: '', category: '', item: '', itemId: '', kind: 'all', limit: 8 };
 function ux42Node(tag, cls, textValue) {
     const node = document.createElement(tag);
     if (cls)
@@ -4161,6 +4161,7 @@ function ux42ResetIfNeeded() {
         ux42State.period = spendingFocusedPeriod();
         ux42State.category = '';
         ux42State.item = '';
+        ux42State.itemId = '';
         ux42State.kind = 'all';
         ux42State.limit = 8;
     }
@@ -4204,6 +4205,7 @@ function ux42SetFocus(target, period, category, item, kind) {
     ux42State.period = period || spendingFocusedPeriod();
     ux42State.category = category || '';
     ux42State.item = item || '';
+    ux42State.itemId = item ? String(ux42PeriodRows(ux42State.period).find(function (row) { return ux42RowItem(row) === item && String(row.category || '미분류') === category; })?.id || '') : '';
     ux42State.kind = kind || 'all';
     ux42State.limit = 8;
     ux42UpdateSpendingFocus();
@@ -4219,6 +4221,12 @@ function ux42UpdateSpendingFocus() {
     categoryPanel.hidden = chart;
     const host = chart ? chartPanel : categoryPanel, period = ux42State.period || spendingFocusedPeriod();
     let rows = ux42PeriodRows(period);
+    // Follow the selected source record when its display name or category is edited.
+    const selectedItem = ux42State.itemId ? rows.find(function (row) { return row.id === ux42State.itemId; }) : undefined;
+    if (selectedItem) {
+        ux42State.item = ux42RowItem(selectedItem);
+        ux42State.category = String(selectedItem.category || '미분류');
+    }
     if (ux42State.category)
         rows = rows.filter(function (row) { return String(row.category || '미분류') === ux42State.category; });
     if (ux42State.item)
@@ -4381,13 +4389,14 @@ function ux42DecorateSpending() {
     categoryPanel.setAttribute('aria-live', 'polite');
     categoryCard.after(chartPanel, categoryPanel);
     review.querySelectorAll('.spending-split [data-spending-detail]').forEach(function (button) {
-        button.onclick = function () { ux42SetFocus('category', spendingFocusedPeriod(), '', '', button.dataset.spendingDetail === 'fixed' ? 'fixed' : 'variable'); };
+        button.addEventListener('click', function (event) { event.stopImmediatePropagation(); ux42SetFocus('category', spendingFocusedPeriod(), '', '', button.dataset.spendingDetail === 'fixed' ? 'fixed' : 'variable'); }, { capture: true });
     });
     review.querySelectorAll('[data-spending-selected-detail]').forEach(function (button) {
-        button.onclick = function () {
+        button.addEventListener('click', function (event) {
+            event.stopImmediatePropagation();
             const period = button.dataset.spendingSelectedDetail || spendingFocusedPeriod();
             ux42SetFocus('chart', period, '', '', 'all');
-        };
+        }, { capture: true });
     });
     ux42UpdateSpendingFocus();
 }

@@ -102,6 +102,9 @@ test('@core spending has one list browser and direct expense entry preserves a c
 
 test('@core direct expense save and continue records each amount once through the normal form',async({page})=>{
  const before=await page.evaluate(()=>state.integrated.ledger.length);
+ await page.locator('[data-spending-selected-detail]').click();
+ await expect(page.locator('[data-ux42-chart-panel]')).toBeVisible();
+ await expect(page.locator('#detailSheet')).not.toHaveClass(/open/);
  await page.locator('.ux42-add').click();
  await page.locator('#entryAmount').fill('12345');
  await page.locator('#entryDate').fill('2026-10-26');

@@ -24,7 +24,7 @@ test('@core current period shortcut compares the displayed scope rather than its
 
 test('@core native month selection clears stale category and chart context before rendering',async({page})=>{
  const before=await snapshot(page);await page.evaluate(()=>{setting().spendingView='items';setting().spendingCategoryFilter='식비';setting().spendingChartContext='2060-12:month';setting().spendingChartPeriod='2060-12-01';nav('integrated','spending')});
- await page.locator('[data-integrated-month-select]').fill('2060-11');await expect(page.locator('.spending-hero>strong')).toHaveText('200원');await expect(page.locator('[data-spending-selected-label]')).toHaveText('2060년 11월 1일');await expect(page.locator('.cardv2-filters button').first()).toHaveClass(/active/);expect(await page.evaluate(()=>({filter:setting().spendingCategoryFilter,context:setting().spendingChartContext}))).toEqual({filter:'',context:undefined});expect(await snapshot(page)).toEqual(before);
+ await page.locator('[data-integrated-month-select]').fill('2060-11');await expect(page.locator('.spending-hero>strong')).toHaveText('200원');await expect(page.locator('[data-spending-selected-label]')).toHaveText('2060년 11월 1일');await expect(page.locator('.ux42-item-list')).toBeVisible();await expect(page.locator('.ux42-item-row.selected')).toHaveCount(0);expect(await page.evaluate(()=>({filter:setting().spendingCategoryFilter,context:setting().spendingChartContext}))).toEqual({filter:'',context:undefined});expect(await snapshot(page)).toEqual(before);
 });
 
 test('@core card hubs remain readable and purchase entry exists once in overview only',async({page})=>{
