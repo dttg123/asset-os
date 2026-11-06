@@ -65,3 +65,36 @@ test('@core monthly cards never duplicate purchases or mix current principal int
 test('@core cloud restore cannot replace the local month with an older saved query',async({page})=>{
  const before=await finances(page);await page.evaluate(async()=>{setting().integratedMonth='2026-09';setting().spendingPeriod='month';const envelope=cloudCurrentEnvelope();envelope.data.settings.integratedMonth='2026-07';envelope.data.settings.integratedMonthViewedOn=localYmd();envelope.data.settings.spendingPeriod='year';await cloudApplyRemoteEnvelope(envelope,1);nav('integrated','spending')});await expect(page.locator('[data-integrated-month-select]')).toHaveValue('2026-09');await expect(page.locator('.spending-period [data-spending-period="month"]')).toHaveClass(/active/);expect((await finances(page)).data).toBe(before.data);
 });
+
+
+test('@core pending groups and actual spending stay separate and empty-month input returns to the selected month',async({page})=>{
+ await page.evaluate(async()=>{state.settings.integratedMonth='2026-11';state.financeSchedules.items=[['ins','QA 보험','insurance',30000],['loan','QA 대출','loan',100000],['phone','QA 통신','expense',40000]].map(([id,name,kind,amount])=>({id,name,kind,amount,day:25,startDate:'2026-01-01',active:true}));await persist(false);nav('integrated','summary')});
+ const before=await finances(page);
+ await expect(page.locator('.fixed-cost-head-right b')).toHaveText('170,000원');
+ await expect(page.locator('.integrated-consumption-value')).toHaveText('0원');
+ await expect(page.locator('.consumption-empty-note')).toContainText('아직 이 달에 기록된 소비가 없어요');
+ const preview=page.locator('.fixed-cost-preview');
+ await expect(preview.locator('[data-schedule-category="insurance"]')).toContainText('30,000원');
+ await expect(preview.locator('[data-schedule-category="loan"]')).toContainText('100,000원');
+ await preview.locator('[data-schedule-category="insurance"]').click();
+ await preview.locator('[data-fixed-cost-item="ins"]').click();
+ await expect(page.locator('#detailSheet.open')).toContainText('QA 보험');await close(page);
+ for(const width of [320,412,768]){
+  await page.setViewportSize({width,height:915});
+  expect(await page.locator('.fixed-cost-head>span:first-child').evaluate(e=>{const t=e.querySelector('strong').getBoundingClientRect(),n=e.querySelector('small').getBoundingClientRect();return Math.abs(t.left-n.left)<1&&n.top>=t.bottom-1})).toBe(true);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+ }
+ expect(await finances(page)).toEqual(before);
+ await page.locator('[data-ux42-expense]').click();
+ const form=page.locator('#integratedTxForm');
+ await expect(form.locator('[name="date"]')).toHaveValue(/^2026-11-/);
+ await form.locator('[name="amount"]').fill('12000');await form.locator('[name="category"]').fill('식비');await form.locator('.integrated-form-save').click();
+ await expect(page.locator('#formSheet')).not.toHaveClass(/open/);
+ await page.evaluate(()=>nav('integrated','summary'));
+ await expect(page.locator('.integrated-consumption-value')).toHaveText('12,000원');
+ await expect(page.locator('.consumption-empty-note')).toHaveCount(0);
+ await expect(page.locator('.consumption-month-split')).toContainText('변동비 12,000원');
+ await expect(page.locator('.fixed-cost-head-right b')).toHaveText('170,000원');
+ await page.locator('.integrated-consumption-preview [data-integrated-tab-go="spending"]').click();
+ await expect(page.locator('.spending-hero-head')).toContainText('2026년 11월');await expect(page.locator('.spending-hero>strong')).toHaveText('12,000원');
+});

@@ -1148,3 +1148,20 @@ html[data-theme="dark"] .integrated-module-shell .ux42-common-action .ux42-add{b
 .ux42-item-detail{border:0;border-radius:10px;background:var(--soft);color:var(--text);padding:11px 12px;min-height:44px;width:100%;margin-top:10px;text-align:left;font-size:12px;font-weight:650}
 .ux42-date-picker summary{padding:10px 0;min-height:44px;color:var(--muted);font-size:12px;cursor:pointer}
 .ux42-date-picker .spending-day-picker{margin-top:0}
+
+/* Monthly obligations: one aligned heading, then categories of pending payments. */
+.integrated-module-shell .fixed-cost-head>span:first-child{display:flex;flex-direction:column;align-items:flex-start;gap:6px;width:100%;min-width:0}
+.integrated-module-shell .fixed-cost-head>span:first-child strong{word-break:keep-all;overflow-wrap:anywhere}
+.integrated-module-shell .fixed-cost-head>span:first-child small{margin:0;text-align:left;white-space:normal}
+.integrated-module-shell [data-fixed-cost-card].open .fixed-cost-preview{display:none}
+.integrated-module-shell .fixed-cost-preview .schedule-category-head{width:100%;min-height:58px;display:grid;grid-template-columns:minmax(0,1fr) auto 16px;align-items:center;gap:8px;padding:12px 0;text-align:left;background:transparent;color:var(--text);border:0;border-bottom:1px solid var(--line)}
+.integrated-module-shell .fixed-cost-preview .schedule-category-head>span{display:flex;align-items:center;gap:8px;min-width:0}
+.integrated-module-shell .fixed-cost-preview .schedule-category-head strong,.integrated-module-shell .fixed-cost-preview .schedule-category-head b{font-size:14px;white-space:nowrap}
+.integrated-module-shell .fixed-cost-preview .schedule-category-head small{font-size:12px;color:var(--muted)}
+.integrated-module-shell .fixed-cost-preview .schedule-row{grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:14px 0}
+.integrated-module-shell .fixed-cost-preview .schedule-row:before{display:none}
+.integrated-module-shell .fixed-cost-preview .schedule-row .schedule-status{grid-column:1/-1;justify-self:end}
+.integrated-module-shell .fixed-cost-preview .schedule-copy{min-width:0}
+.integrated-module-shell .fixed-cost-preview .schedule-copy strong{overflow-wrap:anywhere;word-break:keep-all}
+.consumption-empty-note{font-size:13px;line-height:1.6;color:var(--muted);margin:12px 0}
+.ux42-expense-entry{min-height:44px;padding:10px 14px;margin:0 0 16px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--text);font-weight:650}
