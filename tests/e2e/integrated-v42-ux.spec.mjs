@@ -56,6 +56,8 @@ test('@core month daily quarter 1-4 and annual per-year chart keep original unch
 });
 test('@core unified input keeps card purchase route, one-off default and partial interest rounds',async({page})=>{
  await page.locator('.ux42-add').click();
+ await expect(page.locator('#integratedTxForm')).toBeVisible();
+ await page.locator('#integratedTxForm .ux42-back').click();
  await expect(page.locator('#detailSheet.open [data-ux42-choice]')).toHaveCount(5);
  await page.locator('[data-ux42-choice="card"]').click();
  await expect(page.locator('#formSheet.open .card-purchase-form')).toBeVisible();
@@ -73,4 +75,45 @@ test('@core all integrated tabs retain one consistent entry action',async({page}
   await expect(page.locator('.ux42-common-action .ux42-add')).toHaveCount(1);
   await expect(page.locator('.cardv2-entry')).toHaveCount(0);
  }
+});
+
+test('@core spending has one list browser and direct expense entry preserves a cancelled draft',async({page})=>{
+ await expect(page.locator('.ux42-deep-analysis,.ux42-items-fold,.spending-view,.spending-card')).toHaveCount(0);
+ await expect(page.locator('.ux42-category-list')).toBeVisible();
+ await page.locator('[data-ux42-view="items"]').click();
+ await expect(page.locator('.ux42-category-list')).not.toBeVisible();
+ await expect(page.locator('.ux42-item-list')).toBeVisible();
+ await page.locator('[data-ux42-item="공통 이름"][data-ux42-item-category="생활"]').click();
+ await expect(page.locator('[data-ux42-category-panel] [data-ux42-tx]')).toHaveCount(1);
+ await page.locator('.ux42-item-detail').click();
+ await expect(page.locator('#sheetTitle')).toHaveText('공통 이름');
+ await expect(page.locator('[data-spending-classify-item]')).toBeVisible();
+ await page.evaluate(()=>{sheetDirty=false;closeSheets({all:true});cancelSheetBackForNavigation()});
+ await page.waitForFunction(()=>!sheetBackTimer&&!suppressSheetPop);
+ await page.locator('.ux42-add').click();
+ await expect(page.locator('#integratedTxForm')).toBeVisible();
+ await page.locator('#entryAmount').fill('12345');
+ await page.locator('#entrySpendingItem').fill('입력 중인 지출');
+ await page.locator('#integratedTxForm .ux42-back').click();
+ await page.getByRole('button',{name:'계속 입력',exact:true}).click();
+ await expect(page.locator('#entryAmount')).toHaveValue('12345');
+ await expect(page.locator('#entrySpendingItem')).toHaveValue('입력 중인 지출');
+});
+
+test('@core direct expense save and continue records each amount once through the normal form',async({page})=>{
+ const before=await page.evaluate(()=>state.integrated.ledger.length);
+ await page.locator('.ux42-add').click();
+ await page.locator('#entryAmount').fill('12345');
+ await page.locator('#entryDate').fill('2026-10-26');
+ await page.locator('#entrySpendingItem').fill('연속 입력 첫 번째');
+ await page.locator('#entryCategory').fill('식비');
+ await page.locator('[data-entry-continue]').click();
+ await expect(page.locator('#integratedTxForm')).toBeVisible();
+ await expect(page.locator('#entryAmount')).toHaveValue('');
+ await expect(page.locator('#entryDate')).toHaveValue('2026-10-26');
+ await page.locator('#entryAmount').fill('6789');
+ await page.locator('#entrySpendingItem').fill('연속 입력 두 번째');
+ await page.locator('#integratedTxForm .integrated-form-save').click();
+ await expect(page.locator('#formSheet')).not.toHaveClass(/open/);
+ expect(await page.evaluate(()=>({count:state.integrated.ledger.length,amounts:state.integrated.ledger.filter(t=>t.date==='2026-10-26').map(t=>t.amount)}))).toEqual({count:before+2,amounts:[12345,6789]});
 });

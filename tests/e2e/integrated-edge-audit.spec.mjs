@@ -58,7 +58,7 @@ test('@core edge inline category pagination and browser back preserve filters an
  await page.locator('[data-integrated-month-shift="1"]').click();
  await expect(page.locator('.ux42-category-list')).toContainText('기록이 없습니다');
  await page.locator('[data-integrated-month-shift="-1"]').click();
- await page.locator('.ux42-items-fold summary').click();
+ await page.locator('[data-ux42-view="items"]').click();
  await expect(page.locator('.ux42-item-row')).toHaveCount(35);
  expect(await page.evaluate(()=>({finance:JSON.stringify(state.integrated),revision:assetLocalDatabase.revision}))).toEqual(before);
 });

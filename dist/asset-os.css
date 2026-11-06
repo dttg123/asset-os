@@ -1143,3 +1143,13 @@ body[data-root="integrated"] .integrated-monthbar .spending-period-label{width:1
 /* WCAG AA contrast for all accent palettes, including dark orange. */
 .integrated-module-shell .ux42-common-action .ux42-add{color:var(--text)}
 html[data-theme="dark"] .integrated-module-shell .ux42-common-action .ux42-add{background:var(--surface2);color:var(--text)}
+
+/* One list and one selected transaction area. */
+.ux42-category-list[hidden],.ux42-item-list[hidden]{display:none!important}
+.ux42-views{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));margin:12px 0 6px}
+.ux42-views button{min-height:44px}
+.ux42-category-label,.ux42-item-row>span,.ux42-tx-row>span{flex:1}
+.ux42-category-row b,.ux42-item-row b,.ux42-tx-row b{flex-shrink:0;white-space:nowrap}
+.ux42-item-detail{border:0;border-radius:10px;background:var(--soft);color:var(--text);padding:11px 12px;min-height:44px;width:100%;margin-top:10px;text-align:left;font-size:12px;font-weight:650}
+.ux42-date-picker summary{padding:10px 0;min-height:44px;color:var(--muted);font-size:12px;cursor:pointer}
+.ux42-date-picker .spending-day-picker{margin-top:0}
