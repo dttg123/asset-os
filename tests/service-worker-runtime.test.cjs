@@ -133,3 +133,17 @@ test('service worker refreshes an allowlisted static response from the network',
   const cached = env.stores.get(releaseCache).get(request.url);
   assert.equal(await cached.text(), 'fresh-runtime');
 });
+
+
+test('installation manifest bypasses HTTP cache while retaining the offline fallback', async () => {
+ const env=workerEnvironment();await env.dispatch('install');
+ let fetched;
+ env.setFetch(async request=>{fetched=request;return new Response('{"theme_color":"#f4f5f7"}',{status:200})});
+ const request=new Request('https://example.test/app/manifest.webmanifest');
+ const response=await env.dispatch('fetch',request);
+ assert.equal(fetched.cache,'no-store');assert.equal(fetched.url,request.url);
+ assert.equal((await response.json()).theme_color,'#f4f5f7');
+ await new Promise(resolve=>setImmediate(resolve));
+ env.setFetch(async()=>{throw Error('offline')});
+ assert.equal((await(await env.dispatch('fetch',request)).json()).theme_color,'#f4f5f7');
+});
