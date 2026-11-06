@@ -162,7 +162,7 @@ integratedSummaryPage = function () {
             amount.textContent = won(total);
         if (body) {
             body.innerHTML = commitments.length ? `<p class="source-note">고정지출·저축·투자·상환 일정이에요. 완료된 일정도 함께 표시하며, 소비 합계에는 저축과 원금 상환을 더하지 않아요.</p>` + v069ScheduleGroups(commitments, 'summary') : '<div class="integrated-empty">선택한 달에 등록된 정기 일정이 없습니다.</div>';
-            body.insertAdjacentHTML('beforebegin', `<div class="fixed-cost-preview">${pending.slice(0, 3).map(o => `<button class="schedule-row" data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"><span class="schedule-copy"><strong>${escapeHtml(integratedScheduleName(o.schedule))}</strong><small>${escapeHtml(o.date)}</small></span><strong class="schedule-amount">${won(scheduleOccurrenceDisplayAmount(o))}</strong></button>`).join('')}<button class="diagnostic-action" data-integrated-tab-go="schedule">납입·납부 일정 전체 보기 ›</button></div>`);
+            body.insertAdjacentHTML('beforebegin', `<div class="fixed-cost-preview">${v069ScheduleGroups(pending, 'summary-preview') || '<p class="source-note">남은 납부 일정이 없어요.</p>'}<button class="diagnostic-action" data-integrated-tab-go="schedule">납입·납부 일정 전체 보기 ›</button></div>`);
         }
         schedule.insertAdjacentHTML('afterend', integratedConsumptionPreview(month));
     }

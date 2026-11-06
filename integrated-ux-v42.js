@@ -477,8 +477,10 @@ bind = function () {
         shell.querySelectorAll('[data-integrated-new]').forEach(function (node) { node.remove(); });
     if (tab === 'spending')
         ux42DecorateSpending();
-    if (tab === 'summary')
+    if (tab === 'summary') {
         ux42DecorateSummary();
+        shell.querySelectorAll('[data-ux42-expense]').forEach(button => button.addEventListener('click', () => openIntegratedTransactionForm('', { uiType: 'lifeExpense', date: integratedEntryDateForMonth(integratedSelectedMonth()) })));
+    }
     if (tab === 'schedule')
         ux42DecorateSchedule();
 };

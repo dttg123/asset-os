@@ -1115,7 +1115,7 @@ function openCardPlanDetail(id) {
 function spendingPeriodControls() { return `<div class="cardv2-segment spending-period" aria-label="소비 조회 기간">${[['month', '월'], ['quarter', '분기'], ['half', '반기'], ['year', '연간']].map(([key, label]) => `<button data-spending-period="${escapeHtml(key)}" class="${escapeHtml((setting().spendingPeriod === 'years' ? 'year' : String(setting().spendingPeriod || 'month')) === key ? 'active' : '')}">${label}</button>`).join('')}</div>`; }
 function integratedConsumptionPreview(month) {
     const x = integratedSpendingAnalysis(month);
-    return `<section class="card integrated-consumption-preview"><div class="integrated-consumption-head"><h2>${escapeHtml(integratedMonthLabel(month))} 소비</h2><button data-integrated-tab-go="spending" data-spending-open-month="${escapeHtml(month)}">소비 분석 ›</button></div><div class="integrated-consumption-value">${won(x.total)}</div><div class="consumption-month-split"><span>고정지출 <b>${won(x.fixedRows.reduce((n, r) => n + Number(r.amount || 0), 0))}</b></span><span>변동비 <b>${won(x.variableRows.reduce((n, r) => n + Number(r.amount || 0), 0))}</b></span></div><small>카드 원금 납부는 소비에 다시 더하지 않아요.</small></section>`;
+    return `<section class="card integrated-consumption-preview"><div class="integrated-consumption-head"><h2>${escapeHtml(integratedMonthLabel(month))} 소비</h2><button data-integrated-tab-go="spending" data-spending-open-month="${escapeHtml(month)}">소비 분석 ›</button></div><div class="integrated-consumption-value">${won(x.total)}</div>${!x.rows.length ? '<p class="consumption-empty-note">아직 이 달에 기록된 소비가 없어요. 위의 남은 납부액은 예정 금액이에요.</p><button class="ux42-expense-entry" data-ux42-expense>소비 기록하기</button>' : ''}<div class="consumption-month-split"><span>고정지출 <b>${won(x.fixedRows.reduce((n, r) => n + Number(r.amount || 0), 0))}</b></span><span>변동비 <b>${won(x.variableRows.reduce((n, r) => n + Number(r.amount || 0), 0))}</b></span></div><small>실제 소비 기록 기준 · 카드 원금·저축·대출 원금은 소비에 더하지 않아요.</small></section>`;
 }
 function openScheduleAmountForm(id, date, actual = false) {
     const s = financeSchedules().find(x => x.id === id), o = scheduleOccurrences(date.slice(0, 7)).find(x => x.schedule.id === id && x.date === date);
@@ -3542,7 +3542,7 @@ integratedSummaryPage = function () {
             amount.textContent = won(total);
         if (body) {
             body.innerHTML = commitments.length ? `<p class="source-note">고정지출·저축·투자·상환 일정이에요. 완료된 일정도 함께 표시하며, 소비 합계에는 저축과 원금 상환을 더하지 않아요.</p>` + v069ScheduleGroups(commitments, 'summary') : '<div class="integrated-empty">선택한 달에 등록된 정기 일정이 없습니다.</div>';
-            body.insertAdjacentHTML('beforebegin', `<div class="fixed-cost-preview">${pending.slice(0, 3).map(o => `<button class="schedule-row" data-fixed-cost-item="${escapeHtml(o.schedule.id)}" data-fixed-cost-date="${escapeHtml(o.date)}"><span class="schedule-copy"><strong>${escapeHtml(integratedScheduleName(o.schedule))}</strong><small>${escapeHtml(o.date)}</small></span><strong class="schedule-amount">${won(scheduleOccurrenceDisplayAmount(o))}</strong></button>`).join('')}<button class="diagnostic-action" data-integrated-tab-go="schedule">납입·납부 일정 전체 보기 ›</button></div>`);
+            body.insertAdjacentHTML('beforebegin', `<div class="fixed-cost-preview">${v069ScheduleGroups(pending, 'summary-preview') || '<p class="source-note">남은 납부 일정이 없어요.</p>'}<button class="diagnostic-action" data-integrated-tab-go="schedule">납입·납부 일정 전체 보기 ›</button></div>`);
         }
         schedule.insertAdjacentHTML('afterend', integratedConsumptionPreview(month));
     }
@@ -4615,8 +4615,10 @@ bind = function () {
         shell.querySelectorAll('[data-integrated-new]').forEach(function (node) { node.remove(); });
     if (tab === 'spending')
         ux42DecorateSpending();
-    if (tab === 'summary')
+    if (tab === 'summary') {
         ux42DecorateSummary();
+        shell.querySelectorAll('[data-ux42-expense]').forEach(button => button.addEventListener('click', () => openIntegratedTransactionForm('', { uiType: 'lifeExpense', date: integratedEntryDateForMonth(integratedSelectedMonth()) })));
+    }
     if (tab === 'schedule')
         ux42DecorateSchedule();
 };

@@ -1,3 +1,4 @@
+declare function integratedEntryDateForMonth(month?:unknown):string;
 type Ux42Row={id?:string;date?:string;amount?:number;category?:string;type?:string;fixed?:boolean;meta?:{spendingItem?:string}};
 type Ux42Category={key:string;amount:number;count:number};
 type Ux42Item={key:string;amount:number;count:number;category:string};
@@ -420,6 +421,6 @@ bind=function(){
  const tab=route().tab;
  if(tab==='ledger')shell.querySelectorAll('[data-integrated-new]').forEach(function(node){node.remove()});
  if(tab==='spending')ux42DecorateSpending();
- if(tab==='summary')ux42DecorateSummary();
+ if(tab==='summary'){ux42DecorateSummary();shell.querySelectorAll('[data-ux42-expense]').forEach(button=>button.addEventListener('click',()=>openIntegratedTransactionForm('',{uiType:'lifeExpense',date:integratedEntryDateForMonth(integratedSelectedMonth())})))}
  if(tab==='schedule')ux42DecorateSchedule();
 };
