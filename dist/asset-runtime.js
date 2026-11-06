@@ -1009,6 +1009,9 @@ if ('serviceWorker' in navigator)
         const refreshTheme = () => { if (typeof syncBrowserTheme === 'function')
             syncBrowserTheme(); };
         window.addEventListener('pageshow', refreshTheme);
+        window.addEventListener('focus', refreshTheme);
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible')
+            refreshTheme(); });
         let controller = navigator.serviceWorker.controller, refreshing = false, pending = false, timer;
         const applyUpdate = () => {
             if (!pending || refreshing || document.visibilityState === 'hidden' || document.querySelector('.sheet.open,dialog[open],[data-storage-saving]'))
@@ -1044,9 +1047,8 @@ if ('serviceWorker' in navigator)
                 checking = false;
                 applyUpdate();
             } };
-            window.addEventListener('focus', () => { refreshTheme(); void check(); });
-            document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible')
-                refreshTheme(); void check(); });
+            window.addEventListener('focus', () => { void check(); });
+            document.addEventListener('visibilitychange', () => { void check(); });
             await check();
         }
         catch { }

@@ -3,6 +3,8 @@ declare function syncBrowserTheme():void;
 if('serviceWorker'in navigator)window.addEventListener('load',async()=>{
  const refreshTheme=()=>{if(typeof syncBrowserTheme==='function')syncBrowserTheme()};
  window.addEventListener('pageshow',refreshTheme);
+ window.addEventListener('focus',refreshTheme);
+ document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshTheme()});
  let controller=navigator.serviceWorker.controller,refreshing=false,pending=false,timer:ReturnType<typeof setInterval>|undefined;
  const applyUpdate=()=>{
   if(!pending||refreshing||document.visibilityState==='hidden'||document.querySelector('.sheet.open,dialog[open],[data-storage-saving]'))return;
@@ -18,8 +20,8 @@ if('serviceWorker'in navigator)window.addEventListener('load',async()=>{
   const reg=await navigator.serviceWorker.register('./service-worker.js?v=0.7.27&build=20261107-2',{scope:'./',updateViaCache:'none'});
   let checking=false;
   const check=async()=>{if(checking||document.visibilityState==='hidden')return;checking=true;try{await reg.update()}catch{}finally{checking=false;applyUpdate()}};
-  window.addEventListener('focus',()=>{refreshTheme();void check()});
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshTheme();void check()});
+  window.addEventListener('focus',()=>{void check()});
+  document.addEventListener('visibilitychange',()=>{void check()});
   await check();
  }catch{}
 });
