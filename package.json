@@ -1,6 +1,6 @@
 {
   "name": "asset-os",
-  "version": "0.7.24",
+  "version": "0.7.25",
   "private": true,
   "description": "Personal Asset OS quality gates",
   "engines": {

@@ -129,3 +129,16 @@ test('@core domestic polish prioritizes accounts and entry, keeps save reachable
  await expect.poll(async()=>{const box=await page.locator('#cardLedgerForm button[type="submit"]').boundingBox();return box?Math.round(box.y+box.height):Infinity}).toBeLessThanOrEqual(601);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1)).toBe(true);
 });
+
+test('@core browser chrome uses the page background across themes and navigation',async({page})=>{
+ await page.goto('/index.html?qa=1#/home');await page.waitForFunction(()=>!!window.__assetOS);
+ const manifest=await (await page.request.get('/manifest.webmanifest')).json();
+ expect(manifest.theme_color).toBe('#f4f5f7');
+ expect(manifest.background_color).toBe('#f4f5f7');
+ const before=await page.evaluate(()=>JSON.stringify(state.integrated));
+ for(const theme of ['light','dark'])for(const root of ['home','integrated']){
+  await page.evaluate(({theme,root})=>{setting().theme=theme;nav(root,root==='integrated'?'spending':undefined);render()},{theme,root});
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content',theme==='dark'?'#10151e':'#f4f5f7');
+ }
+ expect(await page.evaluate(()=>JSON.stringify(state.integrated))).toEqual(before);
+});
