@@ -1,6 +1,10 @@
+"use strict";
 'use strict';
 if ('serviceWorker' in navigator)
     window.addEventListener('load', async () => {
+        const refreshTheme = () => { if (typeof syncBrowserTheme === 'function')
+            syncBrowserTheme(); };
+        window.addEventListener('pageshow', refreshTheme);
         let controller = navigator.serviceWorker.controller, refreshing = false, pending = false, timer;
         const applyUpdate = () => {
             if (!pending || refreshing || document.visibilityState === 'hidden' || document.querySelector('.sheet.open,dialog[open],[data-storage-saving]'))
@@ -36,8 +40,9 @@ if ('serviceWorker' in navigator)
                 checking = false;
                 applyUpdate();
             } };
-            window.addEventListener('focus', () => { void check(); });
-            document.addEventListener('visibilitychange', () => { void check(); });
+            window.addEventListener('focus', () => { refreshTheme(); void check(); });
+            document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible')
+                refreshTheme(); void check(); });
             await check();
         }
         catch { }

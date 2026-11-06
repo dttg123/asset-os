@@ -1234,10 +1234,6 @@ function syncBrowserTheme() {
     if (theme)
         theme.content = color;
 }
-window.addEventListener('pageshow', syncBrowserTheme);
-window.addEventListener('focus', syncBrowserTheme);
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible')
-    syncBrowserTheme(); });
 function applyTheme() { const s = setting(); document.documentElement.dataset.theme = s.theme; document.documentElement.dataset.accent = s.accent; syncBrowserTheme(); $('#themeToggle').checked = s.theme === 'dark'; $('#fabToggle').checked = false; $('#hapticToggle').checked = s.haptics; $('#fab').hidden = true; $$('#accentChoices .swatch').forEach(b => b.classList.toggle('active', b.dataset.value === s.accent)); }
 function updateDiagnostics() { const h = state.accounts.reduce((sum, a) => sum + visibleHoldingCount(a), 0), d = state.accounts.reduce((sum, a) => sum + dividends(a).length, 0), current = state.accounts.filter(isCurrentAccount).length, past = state.accounts.filter(isPastAccount).length, integrity = typeof systemIntegrityIssues === 'function' ? systemIntegrityIssues().length : 0, usage = state.system?.storageUsage; if ($('#dataCounts'))
     $('#dataCounts').textContent = `${state.accounts.length} / ${h} / ${d}`; if ($('#accountMenuCount'))
