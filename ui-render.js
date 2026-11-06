@@ -78,8 +78,15 @@ function render() { integratedSelectedMonth(); const r = route(); document.body.
 function bindTransactionSearch() { const integratedForm = $('[data-integrated-search-form]'); if (integratedForm)
     integratedForm.onsubmit = e => { e.preventDefault(); integratedLedgerSearch = String(new FormData(e.currentTarget).get('query') || '').trim(); integratedSearchDisplayLimit = 50; render(); }; $('[data-integrated-search-clear]')?.addEventListener('click', () => { integratedLedgerSearch = ''; integratedSearchDisplayLimit = 50; render(); }); $('[data-integrated-search-more]')?.addEventListener('click', () => { integratedSearchDisplayLimit += 50; renderKeepingScroll(); }); const pensionForm = $('[data-pension-search-form]'); if (pensionForm)
     pensionForm.onsubmit = e => { e.preventDefault(); pensionTransactionSearch = String(new FormData(e.currentTarget).get('query') || '').trim(); pensionTransactionDisplayLimit = 20; render(); }; $('[data-pension-search-clear]')?.addEventListener('click', () => { pensionTransactionSearch = ''; pensionTransactionDisplayLimit = 20; render(); }); }
-function applyTheme() { const s = setting(); document.documentElement.dataset.theme = s.theme; document.documentElement.dataset.accent = s.accent; const browserTheme = document.querySelector('meta[name="theme-color"]'); if (browserTheme)
-    browserTheme.content = getComputedStyle(document.body).getPropertyValue('--bg').trim(); $('#themeToggle').checked = s.theme === 'dark'; $('#fabToggle').checked = false; $('#hapticToggle').checked = s.haptics; $('#fab').hidden = true; $$('#accentChoices .swatch').forEach(b => b.classList.toggle('active', b.dataset.value === s.accent)); }
+function syncBrowserTheme() {
+    const color = getComputedStyle(document.body).getPropertyValue('--bg').trim();
+    if (!/^#[0-9a-f]{6}$/i.test(color))
+        return;
+    const theme = document.querySelector('meta[name="theme-color"]');
+    if (theme)
+        theme.content = color;
+}
+function applyTheme() { const s = setting(); document.documentElement.dataset.theme = s.theme; document.documentElement.dataset.accent = s.accent; syncBrowserTheme(); $('#themeToggle').checked = s.theme === 'dark'; $('#fabToggle').checked = false; $('#hapticToggle').checked = s.haptics; $('#fab').hidden = true; $$('#accentChoices .swatch').forEach(b => b.classList.toggle('active', b.dataset.value === s.accent)); }
 function updateDiagnostics() { const h = state.accounts.reduce((sum, a) => sum + visibleHoldingCount(a), 0), d = state.accounts.reduce((sum, a) => sum + dividends(a).length, 0), current = state.accounts.filter(isCurrentAccount).length, past = state.accounts.filter(isPastAccount).length, integrity = typeof systemIntegrityIssues === 'function' ? systemIntegrityIssues().length : 0, usage = state.system?.storageUsage; if ($('#dataCounts'))
     $('#dataCounts').textContent = `${state.accounts.length} / ${h} / ${d}`; if ($('#accountMenuCount'))
     $('#accountMenuCount').textContent = `${state.accounts.length}개 계좌 · 현재 ${current}개 · 이전 ${past}개`; if ($('#errorCount')) {

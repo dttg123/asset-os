@@ -1002,9 +1002,16 @@ function initQaMode() { if (!QA_MODE)
     versionValue.textContent = `${APP_VERSION} QA`; /* Preserve empty and manually entered QA data; fixtures require explicit generation. */ /* Preserve empty and manually entered QA data; fixtures require explicit generation. */ $('#qaGenerate').onclick = () => showDialog({ title: 'QA 35년 실사용 데이터 생성', message: 'QA 저장소만 덮어씁니다. 운영 데이터와 Supabase에는 접근하지 않습니다.', confirmText: '생성', cancelText: '취소' }, qaGenerateThirtyFiveYears); $('#qaMistakes').onclick = qaRunMistakes; $('#qaReset').onclick = () => showDialog({ title: 'QA 데이터 초기화', message: '이 브라우저의 QA 데이터만 삭제합니다. 운영 데이터는 유지됩니다.', confirmText: 'QA만 초기화', cancelText: '취소' }, qaResetData); qaRenderStats(); }
 ;
 /* asset-os source: pwa.js */
+"use strict";
 'use strict';
 if ('serviceWorker' in navigator)
     window.addEventListener('load', async () => {
+        const refreshTheme = () => { if (typeof syncBrowserTheme === 'function')
+            syncBrowserTheme(); };
+        window.addEventListener('pageshow', refreshTheme);
+        window.addEventListener('focus', refreshTheme);
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible')
+            refreshTheme(); });
         let controller = navigator.serviceWorker.controller, refreshing = false, pending = false, timer;
         const applyUpdate = () => {
             if (!pending || refreshing || document.visibilityState === 'hidden' || document.querySelector('.sheet.open,dialog[open],[data-storage-saving]'))
@@ -1029,7 +1036,7 @@ if ('serviceWorker' in navigator)
                 timer = setInterval(applyUpdate, 1000);
         });
         try {
-            const reg = await navigator.serviceWorker.register('./service-worker.js?v=0.7.26&build=20261107-1', { scope: './', updateViaCache: 'none' });
+            const reg = await navigator.serviceWorker.register('./service-worker.js?v=0.7.27&build=20261107-2', { scope: './', updateViaCache: 'none' });
             let checking = false;
             const check = async () => { if (checking || document.visibilityState === 'hidden')
                 return; checking = true; try {

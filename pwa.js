@@ -1,6 +1,13 @@
+"use strict";
 'use strict';
 if ('serviceWorker' in navigator)
     window.addEventListener('load', async () => {
+        const refreshTheme = () => { if (typeof syncBrowserTheme === 'function')
+            syncBrowserTheme(); };
+        window.addEventListener('pageshow', refreshTheme);
+        window.addEventListener('focus', refreshTheme);
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible')
+            refreshTheme(); });
         let controller = navigator.serviceWorker.controller, refreshing = false, pending = false, timer;
         const applyUpdate = () => {
             if (!pending || refreshing || document.visibilityState === 'hidden' || document.querySelector('.sheet.open,dialog[open],[data-storage-saving]'))
@@ -25,7 +32,7 @@ if ('serviceWorker' in navigator)
                 timer = setInterval(applyUpdate, 1000);
         });
         try {
-            const reg = await navigator.serviceWorker.register('./service-worker.js?v=0.7.26&build=20261107-1', { scope: './', updateViaCache: 'none' });
+            const reg = await navigator.serviceWorker.register('./service-worker.js?v=0.7.27&build=20261107-2', { scope: './', updateViaCache: 'none' });
             let checking = false;
             const check = async () => { if (checking || document.visibilityState === 'hidden')
                 return; checking = true; try {
