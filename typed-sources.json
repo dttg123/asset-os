@@ -63,5 +63,6 @@
   "pwa.ts",
   "boot.ts",
   "card-management-ui.ts",
-  "integrated-ux-v42.ts"
+  "integrated-ux-v42.ts",
+  "banksalad-import.ts"
 ]

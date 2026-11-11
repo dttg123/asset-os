@@ -1170,3 +1170,22 @@ html[data-theme="dark"] .integrated-module-shell .ux42-common-action .ux42-add{b
 .integrated-module-shell .fixed-cost-preview .schedule-copy strong{overflow-wrap:anywhere;word-break:keep-all}
 .consumption-empty-note{font-size:13px;line-height:1.6;color:var(--muted);margin:12px 0}
 .ux42-expense-entry{min-height:44px;padding:10px 14px;margin:0 0 16px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--text);font-weight:650}
+
+.banksalad-preview .banksalad-action{box-sizing:border-box;width:100%;padding:12px 14px;min-height:44px;border-radius:12px;border:1px solid var(--line);background:var(--surface2);color:var(--text);font:inherit;font-weight:600}
+.banksalad-preview .banksalad-action.primary{border:0;background:var(--accent);color:#fff}
+.banksalad-preview [hidden]{display:none!important}
+.banksalad-preview input,.banksalad-preview select{box-sizing:border-box;width:100%;min-width:0}
+.banksalad-status{font-size:13px;line-height:1.5;color:var(--muted);overflow-wrap:anywhere}
+.banksalad-dates{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.banksalad-totals,.banksalad-save-box{border:1px solid var(--line);padding:12px;border-radius:12px;margin:10px 0}
+.banksalad-totals small{display:block;margin-top:4px;color:var(--muted)}
+.banksalad-setup{margin:12px 0}
+.banksalad-setup summary{min-height:40px;padding:8px 0;font-weight:600}
+.banksalad-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:8px;padding:14px 0;border-bottom:1px solid var(--line)}
+.banksalad-row>div{display:grid;gap:4px;overflow-wrap:anywhere}
+.banksalad-row small{color:var(--muted);font-size:12px;line-height:1.5}
+.banksalad-row>label,.banksalad-row>.banksalad-review{grid-column:1/-1}
+.banksalad-amount{font-variant-numeric:tabular-nums;white-space:nowrap}
+.banksalad-check{display:flex;align-items:center;gap:8px;min-height:44px;font-size:13px;line-height:1.5}
+.banksalad-preview .banksalad-check input{width:20px;height:20px;flex:0 0 20px}
+.banksalad-preview button:disabled{opacity:.5}

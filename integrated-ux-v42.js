@@ -350,6 +350,7 @@ function ux42OpenEntryMenu() {
         ['수입', '급여·기타 수입을 추가', 'income'],
         ['저축·투자', '계좌 간 납입·이체를 기록', 'saving'],
         ['카드 구매', '신용카드 일시불·할부 기록', 'card'],
+        ['뱅샐 엑셀 미리보기', '파일의 카드 사용·취소·출금 확인', 'banksalad'],
         ['납부 일정 보기', '보험·대출·저축 납부는 해당 기록에서', 'schedule']
     ];
     for (const choice of choices) {
@@ -362,6 +363,8 @@ function ux42OpenEntryMenu() {
         button.addEventListener('click', function () {
             if (choice[2] === 'card')
                 openCardPurchaseForm();
+            else if (choice[2] === 'banksalad')
+                openBanksaladPreview();
             else if (choice[2] === 'schedule') {
                 closeSheets({ all: true });
                 nav('integrated', 'schedule');

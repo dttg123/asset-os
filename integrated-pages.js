@@ -19,7 +19,8 @@ function integratedMonthBar(spending = false) {
 }
 function integratedTabs(tab) { return `<div class="integrated-tabs four"><button class="${escapeHtml(tab === 'summary' ? 'active' : '')}" data-integrated-tab="summary">전체</button><button class="${escapeHtml(tab === 'ledger' ? 'active' : '')}" data-integrated-tab="ledger">거래</button><button class="${escapeHtml(tab === 'spending' ? 'active' : '')}" data-integrated-tab="spending">소비</button><button class="${escapeHtml(tab === 'schedule' ? 'active' : '')}" data-integrated-tab="schedule">일정</button></div>`; }
 function integratedAccountName(id) { return integratedStore().accounts.find(a => a.id === id)?.name || integratedStore().liabilities.find(x => x.id === id)?.name || id || '-'; }
-function integratedTxLabel(t) { if (t.meta?.cardPlanId) {
+function integratedTxLabel(t) { if (t.meta?.unallocatedCardPayment)
+    return '카드대금 출금 · 배분 대기'; if (t.meta?.cardPlanId) {
     if (t.meta.cardInterestRefund)
         return '카드 이자 환불';
     if (t.type === 'externalExpense')
@@ -35,7 +36,8 @@ function integratedTxLabel(t) { if (t.meta?.cardPlanId) {
     if (['debtPrincipal', 'externalDebtPrincipal'].includes(t.type || ''))
         return '카드 원금 납부';
 } return { refund: '환불', openingAsset: '기초자산', openingLiability: '기초부채', externalIncome: '수입', externalAssetIn: '저축·투자', externalAssetOut: '상품 출금', expense: '생활지출', externalExpense: '외부 결제 과거지출', debtInterest: '대출 이자 납부', debtInterestExternal: '대출 이자 납부', debtPrincipal: '대출 원금 상환', externalDebtPrincipal: '대출 원금 상환', internalTransfer: '저축·투자', externalWithdrawal: '기타 지출', adjustment: '잔액보정' }[t.type || ''] || t.type; }
-function integratedTxFilterKey(t) { const account = integratedStore().accounts.find(a => a.id === t.toAccountId); if (t.type === 'externalIncome')
+function integratedTxFilterKey(t) { if (t.meta?.unallocatedCardPayment)
+    return 'debt'; const account = integratedStore().accounts.find(a => a.id === t.toAccountId); if (t.type === 'externalIncome')
     return 'income'; if (['refund', 'expense', 'externalExpense', 'externalWithdrawal', 'externalAssetOut'].includes(t.type || ''))
     return 'expense'; if (['internalTransfer', 'externalAssetIn'].includes(t.type || '') && ['isa', 'pension', 'irp', 'deposit', 'savings'].includes(account?.kind || ''))
     return 'saving'; if (['debtInterest', 'debtInterestExternal', 'debtPrincipal', 'externalDebtPrincipal'].includes(t.type || ''))

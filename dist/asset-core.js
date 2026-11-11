@@ -1345,6 +1345,7 @@ function integratedSpendingAnalysis(month = integratedLatestMonth()) {
 }
 ;
 /* asset-os source: integrated-schedule-engine.js */
+"use strict";
 'use strict';
 function normalizeFinanceSchedules(input) { const src = input && typeof input === 'object' ? input : { items: [] }, items = Array.isArray(src.items) ? src.items : []; return { items: items.map((x, i) => ({ ...x, id: String(x.id || `schedule-${i + 1}`), name: String(x.name || `일정 ${i + 1}`), kind: ['income', 'investment', 'saving', 'loan', 'insurance', 'expense'].includes(x.kind || '') ? x.kind : 'expense', amount: Math.max(0, Number(x.amount) || 0), amountMode: x.amountMode === 'estimate' ? 'estimate' : 'fixed', day: (x.day === 0 || x.day === '0') ? 0 : Math.min(31, Math.max(1, Number(x.day) || DEFAULT_FINANCE_DAY)), recurrence: x.recurrence === 'monthly' ? 'monthly' : 'monthly', startDate: String(x.startDate || ''), endDate: String(x.endDate || ''), targetKind: String(x.targetKind || ''), targetAccountId: String(x.targetAccountId || ''), targetPensionAccountId: String(x.targetPensionAccountId || ''), targetIsaAccountId: String(x.targetIsaAccountId || ''), productId: String(x.productId || ''), liabilityId: String(x.liabilityId || ''), active: x.active !== false, note: String(x.note || ''), source: String(x.source || 'user'), needsDate: !!x.needsDate, attention: String(x.attention || '') })) }; }
 function financeSchedules() { return state.financeSchedules?.items || []; }
@@ -1757,8 +1758,23 @@ function cardPurchaseInput(input, existingCardId = '') {
         throw new Error('부분무이자의 이자 부담 회차를 확인해 주세요.');
     return { name, plan: { ledgerVersion: 2, purchaseDate, firstPaymentDate: first, purchaseAmount: gross - discount, grossAmount: gross, purchaseDiscount: discount, months, annualRate: mode === 'free' ? 0 : rate, interestMode: mode, cardId, category, merchant, paidInterestRounds, bills: [], payments: [] } };
 }
-async function createCardPurchase(input) { let key = ''; const ok = await cardCommit(() => { const { name, plan } = cardPurchaseInput(input), id = uid('card-plan'), liabilityId = uid('card-debt'), store = integratedStore(), s = { id, name, kind: 'loan', amount: 0, amountMode: 'estimate', day: Number(plan.firstPaymentDate.slice(8)), startDate: plan.firstPaymentDate, active: true, liabilityId, source: 'user', cardPlan: plan }; store.liabilities.push({ id: liabilityId, kind: 'other', name, cardPlanId: id, productId: '' }); store.ledger.push({ id: uid('igl'), date: plan.purchaseDate, type: 'openingLiability', amount: plan.purchaseAmount, liabilityId, category: plan.category, meta: { cardPlanId: id } }, { id: uid('igl'), date: plan.purchaseDate, type: 'externalExpense', amount: plan.purchaseAmount, category: plan.category, note: merchantLabel(plan, name), meta: { cardPlanId: id, cardPurchase: true, spendingItem: name, merchant: plan.merchant, cardId: plan.cardId } }); if (!state.financeSchedules)
-    state.financeSchedules = { items: [] }; state.financeSchedules.items.push(normalizeFinanceSchedules({ items: [s] }).items[0]); key = id; }); return ok ? key : ''; }
+function stageCardPurchase(input) {
+    const { name, plan } = cardPurchaseInput(input), id = uid('card-plan'), liabilityId = uid('card-debt'), store = integratedStore();
+    const schedule = { id, name, kind: 'loan', amount: 0, amountMode: 'estimate', day: Number(plan.firstPaymentDate.slice(8)), startDate: plan.firstPaymentDate, active: true, liabilityId, source: 'user', cardPlan: plan };
+    store.liabilities.push({ id: liabilityId, kind: 'other', name, cardPlanId: id, productId: '' });
+    store.ledger.push({ id: uid('igl'), date: plan.purchaseDate, type: 'openingLiability', amount: plan.purchaseAmount, liabilityId, category: plan.category, meta: { cardPlanId: id } }, { id: uid('igl'), date: plan.purchaseDate, type: 'externalExpense', amount: plan.purchaseAmount, category: plan.category, note: merchantLabel(plan, name), meta: { cardPlanId: id, cardPurchase: true, spendingItem: name, merchant: plan.merchant, cardId: plan.cardId } });
+    if (!state.financeSchedules)
+        state.financeSchedules = { items: [] };
+    state.financeSchedules.items.push(normalizeFinanceSchedules({ items: [schedule] }).items[0]);
+    return id;
+}
+async function createCardPurchase(input) {
+    return runStoredCommand(async () => {
+        let key = '';
+        const ok = await cardCommit(() => { key = stageCardPurchase(input); });
+        return ok ? key : '';
+    });
+}
 // Import is a confirmed balance observation, not a fabricated historical cash payment.
 function cardHistoryIssue(value, purchaseAmount, purchaseDate, months) {
     const b = value, validDate = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && Number.isFinite(Date.parse(v + 'T00:00:00Z')) && new Date(v + 'T00:00:00Z').toISOString().slice(0, 10) === v, money = (v) => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0;
@@ -1879,26 +1895,31 @@ function cardPaymentRows(s, date, principal, interest, pointsPrincipal, pointsIn
     return rows;
 }
 async function recordCardPayment(id, input) {
-    let key = '';
-    const ok = await cardCommit(() => {
-        const { s, p } = requireCard(id), date = cardDate(input.date, true), payoff = input.kind === 'payoff', bill = payoff ? null : p.bills.find(b => b.id === String(input.billId || ''));
-        if (date < p.purchaseDate || p.historyBaseline && date < p.historyBaseline.asOf || !payoff && !bill)
-            throw new Error('납부일과 청구 기록을 확인해 주세요.');
-        if (bill && (cardBillPaid(p, bill) || date < bill.issuedDate))
-            throw new Error('이미 납부했거나 명세서 확인일보다 이른 납부입니다.');
-        const principal = payoff ? cardMoney(input.principal) : bill.principal - bill.principalDiscount, interest = payoff ? cardMoney(input.interest ?? 0) : bill.interest - bill.interestDiscount, pointsPrincipal = cardMoney(input.pointsPrincipal ?? 0), pointsInterest = cardMoney(input.pointsInterest ?? 0);
-        if (payoff && (principal !== cardRemaining(s, date) || principal <= 0) || principal > cardRemaining(s, date))
-            throw new Error('남은 원금과 상환 원금을 확인해 주세요.');
-        key = uid('card-payment');
-        const rows = cardPaymentRows(s, date, principal, interest, pointsPrincipal, pointsInterest, key, bill || null), cash = principal + interest - pointsPrincipal - pointsInterest;
-        integratedStore().ledger.push(...rows);
-        p.payments.push({ id: key, billId: bill?.id || '', date, kind: payoff ? 'payoff' : 'bill', principal, interest, pointsPrincipal, pointsInterest, cash, rowIds: rows.map(x => x.id) });
-        if (payoff)
-            for (const b of p.bills)
-                if (!cardBillPaid(p, b))
-                    b.settledBy = key;
+    return runStoredCommand(async () => {
+        let key = '';
+        const ok = await cardCommit(() => {
+            const { s, p } = requireCard(id), date = cardDate(input.date, true), payoff = input.kind === 'payoff', bill = payoff ? null : p.bills.find(b => b.id === String(input.billId || ''));
+            if (date < p.purchaseDate || p.historyBaseline && date < p.historyBaseline.asOf || !payoff && !bill)
+                throw new Error('납부일과 청구 기록을 확인해 주세요.');
+            if (bill && (cardBillPaid(p, bill) || date < bill.issuedDate))
+                throw new Error('이미 납부했거나 명세서 확인일보다 이른 납부입니다.');
+            const principal = payoff ? cardMoney(input.principal) : bill.principal - bill.principalDiscount, interest = payoff ? cardMoney(input.interest ?? 0) : bill.interest - bill.interestDiscount, pointsPrincipal = cardMoney(input.pointsPrincipal ?? 0), pointsInterest = cardMoney(input.pointsInterest ?? 0);
+            if (payoff && (principal !== cardRemaining(s, date) || principal <= 0) || principal > cardRemaining(s, date))
+                throw new Error('남은 원금과 상환 원금을 확인해 주세요.');
+            if (integratedStore().ledger.some(row => row.meta?.unallocatedCardPayment && row.date === date && row.meta.cardId === p.cardId)) {
+                throw new Error('같은 날짜의 카드대금 출금 기록이 있어요. 기존 출금과 청구를 먼저 대조해 주세요.');
+            }
+            key = uid('card-payment');
+            const rows = cardPaymentRows(s, date, principal, interest, pointsPrincipal, pointsInterest, key, bill || null), cash = principal + interest - pointsPrincipal - pointsInterest;
+            integratedStore().ledger.push(...rows);
+            p.payments.push({ id: key, billId: bill?.id || '', date, kind: payoff ? 'payoff' : 'bill', principal, interest, pointsPrincipal, pointsInterest, cash, rowIds: rows.map(x => x.id) });
+            if (payoff)
+                for (const b of p.bills)
+                    if (!cardBillPaid(p, b))
+                        b.settledBy = key;
+        });
+        return ok ? key : '';
     });
-    return ok ? key : '';
 }
 async function removeCardPayment(id, paymentId) { return cardCommit(() => { const { s, p } = requireCard(id), payment = p.payments.find(x => x.id === paymentId); if (!payment || p.payments.at(-1)?.id !== paymentId)
     throw new Error('마지막 납부부터 되돌려 주세요.'); cardAssertLatestEvent(s, paymentId); integratedStore().ledger = integratedStore().ledger.filter(x => x.meta?.cardEventId !== paymentId); p.payments = p.payments.filter(x => x.id !== paymentId); for (const b of p.bills)
@@ -1922,15 +1943,36 @@ function cardInterestRefundRows(s, date, eventId, cash, points) {
     }
     return out;
 }
-async function recordCardRefund(id, input) { let key = ''; const ok = await cardCommit(() => { const { s, p } = requireCard(id), date = cardDate(input.date, true), amount = cardMoney(input.amount ?? 0), interestCash = cardMoney(input.interestCashAmount ?? 0), interestPoints = cardMoney(input.interestPointsAmount ?? 0), original = cardOriginal(s); if (!original || date < p.purchaseDate || !amount && !interestCash && !interestPoints)
-    throw new Error('환불 금액과 날짜를 확인해 주세요.'); const refunded = cardRows(s).filter(x => x.type === 'refund' && !x.meta?.cardInterestRefund).reduce((sum, x) => sum + Number(x.amount || 0), 0); if (amount + refunded > p.purchaseAmount)
-    throw new Error('환불·할인 합계가 구매금액을 초과합니다.'); const cash = cardMoney(input.cashAmount ?? 0), points = cardMoney(input.pointsAmount ?? 0), debt = amount - cash - points, remaining = Math.max(0, cardRemaining(s, date)), paidCash = p.payments.filter(x => x.date <= date).reduce((sum, x) => sum + x.principal - x.pointsPrincipal, 0), paidPoints = p.payments.filter(x => x.date <= date).reduce((sum, x) => sum + x.pointsPrincipal, 0), refundedCash = cardRows(s).filter(x => x.type === 'refund' && x.meta?.cardCashRefund && !x.meta?.cardInterestRefund).reduce((sum, x) => sum + Number(x.amount || 0), 0), refundedPoints = cardRows(s).filter(x => x.type === 'refund' && x.meta?.cardPointsRefund && !x.meta?.cardInterestRefund).reduce((sum, x) => sum + Number(x.amount || 0), 0); if (debt < 0 || debt > remaining || cash + refundedCash > paidCash || points + refundedPoints > paidPoints)
-    throw new Error('환불의 현금·포인트·미납 원금 구분을 확인해 주세요.'); key = uid('card-refund'); const interestRows = cardInterestRefundRows(s, date, key, interestCash, interestPoints), rows = integratedStore().ledger; rows.push(...interestRows); if (debt) {
-    rows.push(cardPosting(s, date, 'externalDebtPrincipal', debt, key, { cardCredit: 'refund' }));
-    rows.push({ ...cardPosting(s, date, 'refund', debt, key, { refundOf: original.id, cardCredit: 'refund' }), toAccountId: '' });
-} if (cash)
-    rows.push(cardPosting(s, date, 'refund', cash, key, { refundOf: original.id, cardCashRefund: true, cardCredit: 'refund' }, 'cash-main')); if (points)
-    rows.push({ ...cardPosting(s, date, 'refund', points, key, { refundOf: original.id, cardPointsRefund: true, cardCredit: 'refund' }), toAccountId: '' }); }); return ok ? key : ''; }
+function stageCardRefund(id, input) {
+    const { s, p } = requireCard(id), date = cardDate(input.date, true), amount = cardMoney(input.amount ?? 0), interestCash = cardMoney(input.interestCashAmount ?? 0), interestPoints = cardMoney(input.interestPointsAmount ?? 0), original = cardOriginal(s);
+    if (!original || date < p.purchaseDate || !amount && !interestCash && !interestPoints)
+        throw new Error('환불 금액과 날짜를 확인해 주세요.');
+    const refunded = cardRows(s).filter(x => x.type === 'refund' && !x.meta?.cardInterestRefund).reduce((sum, x) => sum + Number(x.amount || 0), 0);
+    if (amount + refunded > p.purchaseAmount)
+        throw new Error('환불·할인 합계가 구매금액을 초과합니다.');
+    const cash = cardMoney(input.cashAmount ?? 0), points = cardMoney(input.pointsAmount ?? 0), debt = amount - cash - points, remaining = Math.max(0, cardRemaining(s, date)), paidCash = p.payments.filter(x => x.date <= date).reduce((sum, x) => sum + x.principal - x.pointsPrincipal, 0), paidPoints = p.payments.filter(x => x.date <= date).reduce((sum, x) => sum + x.pointsPrincipal, 0), refundedCash = cardRows(s).filter(x => x.type === 'refund' && x.meta?.cardCashRefund && !x.meta?.cardInterestRefund).reduce((sum, x) => sum + Number(x.amount || 0), 0), refundedPoints = cardRows(s).filter(x => x.type === 'refund' && x.meta?.cardPointsRefund && !x.meta?.cardInterestRefund).reduce((sum, x) => sum + Number(x.amount || 0), 0);
+    if (debt < 0 || debt > remaining || cash + refundedCash > paidCash || points + refundedPoints > paidPoints)
+        throw new Error('환불의 현금·포인트·미납 원금 구분을 확인해 주세요.');
+    const key = uid('card-refund');
+    const interestRows = cardInterestRefundRows(s, date, key, interestCash, interestPoints), rows = integratedStore().ledger;
+    rows.push(...interestRows);
+    if (debt) {
+        rows.push(cardPosting(s, date, 'externalDebtPrincipal', debt, key, { cardCredit: 'refund' }));
+        rows.push({ ...cardPosting(s, date, 'refund', debt, key, { refundOf: original.id, cardCredit: 'refund' }), toAccountId: '' });
+    }
+    if (cash)
+        rows.push(cardPosting(s, date, 'refund', cash, key, { refundOf: original.id, cardCashRefund: true, cardCredit: 'refund' }, 'cash-main'));
+    if (points)
+        rows.push({ ...cardPosting(s, date, 'refund', points, key, { refundOf: original.id, cardPointsRefund: true, cardCredit: 'refund' }), toAccountId: '' });
+    return key;
+}
+async function recordCardRefund(id, input) {
+    return runStoredCommand(async () => {
+        let key = '';
+        const ok = await cardCommit(() => { key = stageCardRefund(id, input); });
+        return ok ? key : '';
+    });
+}
 async function removeCardRefund(id, eventId) { return cardCommit(() => { const { s } = requireCard(id); if (!cardRows(s).some(x => x.meta?.cardEventId === eventId && x.meta?.cardCredit === 'refund'))
     throw new Error('환불 기록을 찾지 못했습니다.'); cardAssertLatestEvent(s, eventId); integratedStore().ledger = integratedStore().ledger.filter(x => x.meta?.cardEventId !== eventId); }); }
 // Pure boundary validation also runs before startup migration and backup restore.

@@ -62,7 +62,8 @@
       "policy-review-ui.js",
       "release-v069.js",
       "card-management-ui.js",
-      "integrated-ux-v42.js"
+      "integrated-ux-v42.js",
+      "banksalad-import.js"
     ],
     "asset-runtime.js": [
       "src/storage/cloud-save-contract.js",
