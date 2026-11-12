@@ -1,6 +1,6 @@
 declare function crc32(bytes:Uint8Array):number;
 type BanksaladRow={
- date:string;time:string;sourceType:string;group:string;category:string;name:string;amount:number;method:string;memo:string;
+ date:string;time:string;sourceType:string;group:string;category:string;name:string;amount:number;method:string;memo:string;origin?:'screenshot';
 };
 const banksaladHeaders=['날짜','시간','타입','대분류','소분류','내용','금액','화폐','결제수단','메모'];
 const banksaladMaxFile=8*1024*1024;
@@ -187,7 +187,9 @@ function banksaladReview(rows:BanksaladRow[]):BanksaladReviewedRow[]{
   if(prior&&!saved)issues.push('가져온 뒤 금액이 변경된 기록');
   if(!saved&&kind==='purchase'&&ledger.some(entry=>!entry.meta?.qaFixture&&entry.date===row.date&&
     ['expense','externalExpense'].includes(entry.type)&&entry.amount===-row.amount&&
-    [entry.note,entry.meta?.spendingItem,entry.meta?.merchant].includes(row.name)))issues.push(banksaladExistingIssue);
+    ([entry.note,entry.meta?.spendingItem,entry.meta?.merchant].includes(row.name)||
+     (row.origin==='screenshot'||entry.meta?.banksaladOrigin==='screenshot')&&!!row.time&&
+     String(entry.meta?.banksaladTime||'').slice(0,5)===row.time.slice(0,5))))issues.push(banksaladExistingIssue);
   if(!saved&&kind==='refund'&&ledger.some(entry=>entry.type==='refund'&&entry.date===row.date&&entry.amount===row.amount))issues.push(banksaladExistingIssue);
   if(!saved&&kind==='payment'&&(
    ledger.some(entry=>entry.type==='externalWithdrawal'&&entry.date===row.date&&entry.amount===-row.amount)||
@@ -262,7 +264,8 @@ async function saveBanksaladBatch(rows:BanksaladRow[],drafts:ReadonlyMap<string,
       result.payment-=row.amount;
      }
      for(const entry of ledger.filter(item=>!oldIds.has(item.id))){
-      entry.meta={...entry.meta,banksaladSourceKey:key,
+      entry.meta={...entry.meta,banksaladSourceKey:key,banksaladTime:row.time,
+       ...(row.origin?{banksaladOrigin:row.origin}:{}),
        banksaladPrimary:entry.type==='externalExpense'||entry.type==='refund'||entry.type==='externalWithdrawal'};
      }
      result.count++;
@@ -300,7 +303,8 @@ function banksaladCardSelect(label:string):{field:HTMLLabelElement;input:HTMLSel
  }
  return {field:banksaladField(label,input),input};
 }
-function openBanksaladPreview():void{
+type BanksaladReviewPreset={rows:BanksaladRow[];label:string;drafts?:ReadonlyMap<string,BanksaladDraft>};
+function openBanksaladPreview(preset?:BanksaladReviewPreset):void{
  document.querySelector<HTMLElement>('#sheetEyebrow')!.textContent='통합 · 가져오기';
  document.querySelector<HTMLElement>('#sheetTitle')!.textContent='뱅샐 엑셀 미리보기';
  const panel=banksaladNode('div','banksalad-preview'),back=banksaladNode('button','ux42-back','‹ 입력 종류');
@@ -333,7 +337,7 @@ function openBanksaladPreview():void{
  setup.append(purchaseCard.field,banksaladField('일시불 첫 청구일',due),banksaladField('카드대금 출금계좌',account),confirmation,
   banksaladNode('p','ux42-entry-hint','카드 사용은 일시불로 확인한 건만 선택하세요. 할부는 기존 카드 구매 입력에서 확인해 주세요.'));
  const filter=banksaladNode('select');
- for(const [value,label] of Object.entries({all:'전체',purchase:'카드 사용 후보',refund:'취소·환불',payment:'카드대금 출금',other:'수입·이체',issues:'중복·확인 필요',saved:'저장 완료'})){
+ for(const [value,label] of Object.entries({all:'전체',purchase:'카드 사용 후보',refund:'취소·환불',payment:'카드대금 출금',other:'수입·이체',selected:'선택한 거래',issues:'중복·확인 필요',saved:'저장 완료'})){
   const option=banksaladNode('option','',label);option.value=value;filter.append(option);
  }
  const saveBox=banksaladNode('div','banksalad-save-box'),save=banksaladNode('button','primary banksalad-action','선택 거래 테스트 저장');
@@ -379,6 +383,7 @@ function openBanksaladPreview():void{
   left.append(banksaladNode('small','',row.date+' '+row.time),banksaladNode('strong','',row.name||row.group),banksaladNode('small','',row.method));
   const issueText=row.saved?'저장 완료':row.issues.join(' · ');
   if(issueText)left.append(banksaladNode('small','banksalad-review',issueText));
+  if(row.origin==='screenshot')left.append(banksaladNode('small','banksalad-review','사진으로 확인한 사용'));
   article.append(left,right);
   if(QA_MODE&&!row.saved&&!row.issues.length&&kind!=='other'){
    const input=banksaladNode('input');input.type='checkbox';input.checked=picked.has(key);
@@ -424,7 +429,7 @@ function openBanksaladPreview():void{
    banksaladNode('small','','카드대금 순출금 '+won(sum(current.filter(row=>banksaladRowKind(row)==='payment'))))
   );
   visible=current.filter(row=>filter.value==='all'||(filter.value==='issues'?row.issues.length>0:
-   filter.value==='saved'?row.saved:banksaladRowKind(row)===filter.value));
+   filter.value==='saved'?row.saved:filter.value==='selected'?picked.has(banksaladSourceKey(row)):banksaladRowKind(row)===filter.value));
   limit=30;paint();updateSelection();
  }
  for(const field of [from,to,filter])field.addEventListener('change',refresh);
@@ -444,6 +449,25 @@ function openBanksaladPreview():void{
   }catch(error){result.textContent=error instanceof Error?error.message:'저장에 실패했어요.'}
   finally{busy=false;updateSelection()}
  });
+ function applyRows(loaded:BanksaladRow[],label:string,drafts?:ReadonlyMap<string,BanksaladDraft>){
+  rows=structuredClone(loaded).sort((a,b)=>b.date.localeCompare(a.date)||b.time.localeCompare(a.time));
+  if(!rows.length)return;
+  picked.clear();paymentCards.clear();refundKeys.clear();result.textContent='';
+  const latest=rows[0].date,earliest=rows[rows.length-1].date;
+  const week=new Date(Date.parse(latest+'T00:00:00Z')-6*86400000).toISOString().slice(0,10);
+  from.min=to.min=earliest;from.max=to.max=latest;from.value=week<earliest?earliest:week;to.value=latest;
+  if(QA_MODE&&drafts){
+   for(const [key,draft] of drafts){
+    picked.add(key);
+    if(draft.kind==='purchase'){purchaseCard.input.value=draft.cardId;due.value=draft.firstPaymentDate}
+    if(draft.kind==='refund')refundKeys.set(key,draft.originalKey);
+    if(draft.kind==='payment'){paymentCards.set(key,draft.cardId);account.value=draft.accountId;confirmed.checked=draft.balanceConfirmed}
+   }
+   filter.value='selected';
+  }else filter.value='all';
+  message.textContent=label+' · '+earliest+' ~ '+latest;
+  content.hidden=false;refresh();
+ }
  picker.addEventListener('change',async()=>{
   const file=picker.files?.[0];picker.value='';
   if(!file||busy)return;
@@ -451,13 +475,9 @@ function openBanksaladPreview():void{
   try{
    const loaded=await readBanksaladFile(file);
    if(token!==sheetInteractionToken())return;
-   rows=loaded;picked.clear();paymentCards.clear();refundKeys.clear();result.textContent='';
-   const latest=rows[0].date,earliest=rows[rows.length-1].date;
-   const week=new Date(Date.parse(latest+'T00:00:00Z')-6*86400000).toISOString().slice(0,10);
-   from.min=to.min=earliest;from.max=to.max=latest;from.value=week<earliest?earliest:week;to.value=latest;
-   message.textContent='파일 전체 '+rows.length.toLocaleString('ko-KR')+'건 · '+earliest+' ~ '+latest;
-   content.hidden=false;refresh();
+   applyRows(loaded,'파일 전체 '+loaded.length.toLocaleString('ko-KR')+'건');
   }catch(error){if(token===sheetInteractionToken())message.textContent=error instanceof Error?error.message:'파일을 읽지 못했어요.'}
   finally{choose.disabled=false}
  });
+ if(QA_MODE&&preset)applyRows(preset.rows,preset.label,preset.drafts);
 }

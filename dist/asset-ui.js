@@ -4842,7 +4842,9 @@ function banksaladReview(rows) {
             issues.push('가져온 뒤 금액이 변경된 기록');
         if (!saved && kind === 'purchase' && ledger.some(entry => !entry.meta?.qaFixture && entry.date === row.date &&
             ['expense', 'externalExpense'].includes(entry.type) && entry.amount === -row.amount &&
-            [entry.note, entry.meta?.spendingItem, entry.meta?.merchant].includes(row.name)))
+            ([entry.note, entry.meta?.spendingItem, entry.meta?.merchant].includes(row.name) ||
+                (row.origin === 'screenshot' || entry.meta?.banksaladOrigin === 'screenshot') && !!row.time &&
+                    String(entry.meta?.banksaladTime || '').slice(0, 5) === row.time.slice(0, 5))))
             issues.push(banksaladExistingIssue);
         if (!saved && kind === 'refund' && ledger.some(entry => entry.type === 'refund' && entry.date === row.date && entry.amount === row.amount))
             issues.push(banksaladExistingIssue);
@@ -4932,7 +4934,8 @@ async function saveBanksaladBatch(rows, drafts) {
                         result.payment -= row.amount;
                     }
                     for (const entry of ledger.filter(item => !oldIds.has(item.id))) {
-                        entry.meta = { ...entry.meta, banksaladSourceKey: key,
+                        entry.meta = { ...entry.meta, banksaladSourceKey: key, banksaladTime: row.time,
+                            ...(row.origin ? { banksaladOrigin: row.origin } : {}),
                             banksaladPrimary: entry.type === 'externalExpense' || entry.type === 'refund' || entry.type === 'externalWithdrawal' };
                     }
                     result.count++;
@@ -4972,7 +4975,7 @@ function banksaladCardSelect(label) {
     }
     return { field: banksaladField(label, input), input };
 }
-function openBanksaladPreview() {
+function openBanksaladPreview(preset) {
     document.querySelector('#sheetEyebrow').textContent = '통합 · 가져오기';
     document.querySelector('#sheetTitle').textContent = '뱅샐 엑셀 미리보기';
     const panel = banksaladNode('div', 'banksalad-preview'), back = banksaladNode('button', 'ux42-back', '‹ 입력 종류');
@@ -5015,7 +5018,7 @@ function openBanksaladPreview() {
     confirmation.append(confirmed, banksaladNode('span', '', '계좌에서 출금을 확인했고, 선택 계좌의 기준잔액에는 아직 반영하지 않았어요.'));
     setup.append(purchaseCard.field, banksaladField('일시불 첫 청구일', due), banksaladField('카드대금 출금계좌', account), confirmation, banksaladNode('p', 'ux42-entry-hint', '카드 사용은 일시불로 확인한 건만 선택하세요. 할부는 기존 카드 구매 입력에서 확인해 주세요.'));
     const filter = banksaladNode('select');
-    for (const [value, label] of Object.entries({ all: '전체', purchase: '카드 사용 후보', refund: '취소·환불', payment: '카드대금 출금', other: '수입·이체', issues: '중복·확인 필요', saved: '저장 완료' })) {
+    for (const [value, label] of Object.entries({ all: '전체', purchase: '카드 사용 후보', refund: '취소·환불', payment: '카드대금 출금', other: '수입·이체', selected: '선택한 거래', issues: '중복·확인 필요', saved: '저장 완료' })) {
         const option = banksaladNode('option', '', label);
         option.value = value;
         filter.append(option);
@@ -5069,6 +5072,8 @@ function openBanksaladPreview() {
         const issueText = row.saved ? '저장 완료' : row.issues.join(' · ');
         if (issueText)
             left.append(banksaladNode('small', 'banksalad-review', issueText));
+        if (row.origin === 'screenshot')
+            left.append(banksaladNode('small', 'banksalad-review', '사진으로 확인한 사용'));
         article.append(left, right);
         if (QA_MODE && !row.saved && !row.issues.length && kind !== 'other') {
             const input = banksaladNode('input');
@@ -5125,7 +5130,7 @@ function openBanksaladPreview() {
         const current = currentRows(), sum = (selected) => selected.reduce((total, row) => total - row.amount, 0);
         totals.replaceChildren(banksaladNode('strong', '', current.length + '건 · 저장 완료 ' + current.filter(row => row.saved).length + '건'), banksaladNode('small', '', '원본 순지출 ' + won(sum(current.filter(row => row.sourceType === '지출')))), banksaladNode('small', '', '카드대금 순출금 ' + won(sum(current.filter(row => banksaladRowKind(row) === 'payment')))));
         visible = current.filter(row => filter.value === 'all' || (filter.value === 'issues' ? row.issues.length > 0 :
-            filter.value === 'saved' ? row.saved : banksaladRowKind(row) === filter.value));
+            filter.value === 'saved' ? row.saved : filter.value === 'selected' ? picked.has(banksaladSourceKey(row)) : banksaladRowKind(row) === filter.value));
         limit = 30;
         paint();
         updateSelection();
@@ -5161,6 +5166,43 @@ function openBanksaladPreview() {
             updateSelection();
         }
     });
+    function applyRows(loaded, label, drafts) {
+        rows = structuredClone(loaded).sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time));
+        if (!rows.length)
+            return;
+        picked.clear();
+        paymentCards.clear();
+        refundKeys.clear();
+        result.textContent = '';
+        const latest = rows[0].date, earliest = rows[rows.length - 1].date;
+        const week = new Date(Date.parse(latest + 'T00:00:00Z') - 6 * 86400000).toISOString().slice(0, 10);
+        from.min = to.min = earliest;
+        from.max = to.max = latest;
+        from.value = week < earliest ? earliest : week;
+        to.value = latest;
+        if (QA_MODE && drafts) {
+            for (const [key, draft] of drafts) {
+                picked.add(key);
+                if (draft.kind === 'purchase') {
+                    purchaseCard.input.value = draft.cardId;
+                    due.value = draft.firstPaymentDate;
+                }
+                if (draft.kind === 'refund')
+                    refundKeys.set(key, draft.originalKey);
+                if (draft.kind === 'payment') {
+                    paymentCards.set(key, draft.cardId);
+                    account.value = draft.accountId;
+                    confirmed.checked = draft.balanceConfirmed;
+                }
+            }
+            filter.value = 'selected';
+        }
+        else
+            filter.value = 'all';
+        message.textContent = label + ' · ' + earliest + ' ~ ' + latest;
+        content.hidden = false;
+        refresh();
+    }
     picker.addEventListener('change', async () => {
         const file = picker.files?.[0];
         picker.value = '';
@@ -5173,20 +5215,7 @@ function openBanksaladPreview() {
             const loaded = await readBanksaladFile(file);
             if (token !== sheetInteractionToken())
                 return;
-            rows = loaded;
-            picked.clear();
-            paymentCards.clear();
-            refundKeys.clear();
-            result.textContent = '';
-            const latest = rows[0].date, earliest = rows[rows.length - 1].date;
-            const week = new Date(Date.parse(latest + 'T00:00:00Z') - 6 * 86400000).toISOString().slice(0, 10);
-            from.min = to.min = earliest;
-            from.max = to.max = latest;
-            from.value = week < earliest ? earliest : week;
-            to.value = latest;
-            message.textContent = '파일 전체 ' + rows.length.toLocaleString('ko-KR') + '건 · ' + earliest + ' ~ ' + latest;
-            content.hidden = false;
-            refresh();
+            applyRows(loaded, '파일 전체 ' + loaded.length.toLocaleString('ko-KR') + '건');
         }
         catch (error) {
             if (token === sheetInteractionToken())
@@ -5196,4 +5225,6 @@ function openBanksaladPreview() {
             choose.disabled = false;
         }
     });
+    if (QA_MODE && preset)
+        applyRows(preset.rows, preset.label, preset.drafts);
 }
