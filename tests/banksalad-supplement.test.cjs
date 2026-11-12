@@ -6,7 +6,7 @@ const root=path.resolve(__dirname,'..');
 function setup(){
  const runtime=financialRuntime();
  runtime.context.structuredClone=structuredClone;
- for(const file of ['integrated-forms.js','banksalad-import.js'])vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),runtime.context,{filename:file});
+ for(const file of ['integrated-forms.js','integrated-pages.js','banksalad-import.js'])vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),runtime.context,{filename:file});
  runtime.run("toast=()=>{};state.integrated.ledger=[{id:'opening',date:'2026-10-01',type:'openingAsset',amount:50000,toAccountId:'cash-main'}];state.integrated.liabilities=[];state.financeSchedules={items:[]};state.settings.cardAccounts=[{id:'samsung',name:'QA 삼성',issuer:'삼성카드',paymentDay:25}];lastPersistedState=clone(state)");
  return runtime;
 }
@@ -36,4 +36,17 @@ test('minute-level screenshot matching works in either import order and preserve
  await r.run('saveBanksaladBatch(__args[0],new Map([[banksaladSourceKey(__args[0][0]),__args[1]]]))',[[excel],purchaseDraft]);
  const review=r.plain(r.run('banksaladReview(__args[0])',[[screenshot,{...screenshot,time:'22:33:00'},{...screenshot,amount:-30500}]]));
  assert.deepEqual(review.map(row=>row.issues.length),[1,0,0]);
+});
+
+
+test('card cancellation principal reduction is labelled separately from a cash payment',async()=>{
+ const r=setup();
+ const purchase={...screenshot,amount:-4800};
+ const refund={...purchase,time:'22:33:00',amount:4800};
+ await r.run('saveBanksaladBatch(__args[0],new Map([[banksaladSourceKey(__args[0][0]),__args[1]],[banksaladSourceKey(__args[0][1]),{kind:"refund",originalKey:banksaladSourceKey(__args[0][0])}]]))',[[purchase,refund],purchaseDraft]);
+ assert.equal(r.run("integratedTxLabel(integratedStore().ledger.find(row=>row.type==='externalDebtPrincipal'))"),'카드 취소 원금 차감');
+ assert.equal(r.run("integratedTxLabel(integratedStore().ledger.find(row=>row.type==='refund'))"),'카드 환불');
+ assert.equal(r.run("integratedSpendingAnalysis('2026-11').total"),0);
+ assert.equal(r.run("integratedReplay().assets['cash-main']"),50000);
+ assert.equal(r.run("integratedReplay().totalDebt"),0);
 });

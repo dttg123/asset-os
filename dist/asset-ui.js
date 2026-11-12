@@ -899,6 +899,8 @@ function integratedTxLabel(t) { if (t.meta?.unallocatedCardPayment)
         return '카드 청구할인';
     if (t.type === 'refund')
         return '카드 환불';
+    if (t.meta.cardCredit === 'refund' && t.type === 'externalDebtPrincipal')
+        return '카드 취소 원금 차감';
     if (t.meta.cardPoints)
         return '카드 포인트 납부';
     if (['debtInterest', 'debtInterestExternal'].includes(t.type || ''))
