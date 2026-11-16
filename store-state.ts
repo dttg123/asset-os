@@ -1,3 +1,4 @@
+declare function subscriptionSyncTransactions():void;
 'use strict';
 type StateRecord=Record<string,unknown>&{id?:string;name?:string;type?:string;status?:string;investmentRole?:string;assetClass?:string;quoteType?:string;openedAt?:string;closedAt?:string;maturityAt?:string;verifiedAt?:string;policyId?:string;reversesTransactionId?:string;tradeDate?:string;settlementDate?:string|null;revisions?:StateRecord[];meta?:Record<string,unknown>};
 type StateAccount=StateRecord&{holdings:StateRecord[];transactions:StateRecord[];assetSnapshots:StateRecord[];reconciliations:StateRecord[];corporateActions:StateRecord[];policyHistory:StateRecord[];baseline?:{date?:string;cash?:number;contribution?:number};baselineDate?:string};
@@ -134,6 +135,7 @@ async function persist(notify=true):Promise<boolean>{
  storageSavePending=true;updateStorageBusyUi();
  const before:StateData=clone((lastPersistedState||state) as StateData);
  try{
+  if(typeof subscriptionSyncTransactions==='function')subscriptionSyncTransactions();
   state!.accounts.forEach((a:StateAccount)=>{syncHoldingLifecycle(a);rebuildLedgerIndexes(a)});syncCurrentPensionSnapshot();syncCurrentIsaSnapshot();
   const candidate=clone(state!),retention=compactStateSnapshots(candidate,localYmd());candidate.system={...(candidate.system||{}),loadWarning:'',saveError:''};
   let raw=stateEnvelopeJson(candidate),bytes=stateEnvelopeBytes(raw);

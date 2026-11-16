@@ -58,7 +58,9 @@ test('@core unified input keeps card purchase route, one-off default and partial
  await page.locator('.ux42-add').click();
  await expect(page.locator('#integratedTxForm')).toBeVisible();
  await page.locator('#integratedTxForm .ux42-back').click();
- await expect(page.locator('#detailSheet.open [data-ux42-choice]')).toHaveCount(5);
+ const choices=page.locator('#detailSheet.open [data-ux42-choice]');
+ await expect(choices).toHaveCount(6);
+ expect(await choices.evaluateAll(rows=>rows.map(row=>row.dataset.ux42Choice))).toEqual(['expense','income','saving','card','banksalad','schedule']);
  await page.locator('[data-ux42-choice="card"]').click();
  await expect(page.locator('#formSheet.open .card-purchase-form')).toBeVisible();
  await expect(page.locator('#formSheet .ux42-back')).toBeVisible();

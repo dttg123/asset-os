@@ -107,7 +107,7 @@ function homeFinancialAlerts() { const today = localYmd(), alerts = []; for (con
 } return alerts.sort((a, b) => a.detail.localeCompare(b.detail, 'ko')); }
 function homeSystemAlerts() { const balance = pensionBalanceIssueRows(), balanceTitles = new Set(balance.map(row => row.title)), finance = homeFinancialAlerts(), system = systemIntegrityIssues().filter(message => !message.startsWith('ISA:') && !balanceTitles.has(message)).map(message => ({ title: message, detail: '통합에서 확인', kind: 'system' })), backup = backupHealth(); if (['warn', 'danger'].includes(backup.level))
     system.push({ title: backup.label, detail: backup.detail, kind: 'backup' }); const refresh = typeof investmentRefreshStatus === 'function' ? investmentRefreshStatus() : { errors: [] }, names = { pension: '개인연금', irp: 'IRP' }; for (const key of (refresh.errors || []))
-    system.push({ title: `${names[key] || key} 갱신 확인 필요`, detail: '이전 자료를 유지하고 있습니다.', kind: 'refresh' }); return [...finance, ...balance, ...system]; }
+    system.push({ title: `${names[key] || key} 갱신 확인 필요`, detail: '이전 자료를 유지하고 있습니다.', kind: 'refresh' }); return [...finance, ...balance, ...system, ...(typeof subscriptionNotifications === 'function' ? subscriptionNotifications() : [])]; }
 function homeChangeMarkup() { const change = homeMonthChange(); return change.available ? `<div class="change home-change"><strong class="${escapeHtml(change.netChange < 0 ? 'negative' : 'positive')}">이번 달 순자산 ${signed(change.netChange)}</strong></div>` : '<div class="change">이번 달 변화 준비 중</div>'; }
 function homeChangeDetailMarkup() { const change = homeMonthChange(); return change.available ? `<div class="sheetrows"><div class="sheetrow"><span>이번 달 순자산 변화</span><strong>${signed(change.netChange)}</strong></div><div class="sheetrow"><span>외부 순유입</span><strong>${signed(change.externalNet)}</strong></div><div class="sheetrow"><span>평가·기타</span><strong>${signed(change.marketOther)}</strong></div></div>` : '<div class="source-note">월 변화 기준을 준비 중입니다.</div>'; }
 function homeCard(id) {
@@ -136,7 +136,8 @@ function homeAccountRow(id) { const template = document.createElement('template'
     detail.innerHTML = '<span aria-hidden="true">›</span>';
 } return template.innerHTML; }
 function homeAlertCount() { const isaReady = homeSample().isaSource === 'asset-os'; return scheduleUrgentOccurrences().length + (isaReady ? allIsaIssues().length : 0) + homeSystemAlerts().length + (isaReady && nearestMaturityAlert() ? 1 : 0); }
-function openAlertsCenter() { const isaReady = homeSample().isaSource === 'asset-os', issues = isaReady ? allIsaIssues() : [], alert = isaReady ? nearestMaturityAlert() : null, urgent = scheduleUrgentOccurrences(), system = homeSystemAlerts(); $('#sheetEyebrow').textContent = '알림'; $('#sheetTitle').textContent = '확인할 알림'; $('#sheetBody').innerHTML = `<div class="integrity-list">${urgent.map(o => `<button class="integrity-row" data-home-schedule="${escapeHtml(o.date)}"><i class="integrity-dot ${o.status === 'overdue' ? 'high' : ''}"></i><span class="integrity-copy"><strong>${escapeHtml(o.schedule.name)} · ${scheduleStatusLabel(o.status)}</strong><small>${escapeHtml(o.date)} · ${won(o.schedule.amount)}</small></span><span class="integrity-go">›</span></button>`).join('')}${issues.map(x => `<button class="integrity-row" data-integrity-account="${escapeHtml(x.accountId)}" ${x.transactionId ? `data-integrity-tx="${escapeHtml(x.transactionId)}"` : ''}><i class="integrity-dot ${x.severity === 'high' ? 'high' : ''}"></i><span class="integrity-copy"><strong>${escapeHtml(x.title)}</strong><small>${escapeHtml(state.accounts.find(a => a.id === x.accountId)?.name || 'ISA')} · ${escapeHtml(x.detail)}</small></span><span class="integrity-go">›</span></button>`).join('')}${system.map(item => `<button class="integrity-row" ${item.accountId ? `data-pension-balance-check="${escapeHtml(item.accountId)}"` : item.productId ? `data-finance-alert="${escapeHtml(item.productId)}"` : item.kind === 'backup' ? 'data-backup-alert' : item.kind === 'refresh' ? 'data-refresh-alert' : 'data-system-alert'}><i class="integrity-dot"></i><span class="integrity-copy"><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.detail)}</small></span><span class="integrity-go">›</span></button>`).join('')}${alert ? `<button class="integrity-row" data-maturity-alert="${escapeHtml(alert.account.id)}"><i class="integrity-dot"></i><span class="integrity-copy"><strong>${escapeHtml(alert.account.name)} 만기 ${alert.label}</strong><small>${alert.date}</small></span><span class="integrity-go">›</span></button>` : ''}${!urgent.length && !issues.length && !system.length && !alert ? '<div class="empty-state"><strong>지금 처리할 중요 알림이 없습니다.</strong></div>' : ''}</div>${homeInvestmentRefreshMarkup()}`; openSheet('#detailSheet'); setTimeout(() => bindIntegrityActions(), 0); }
+function openAlertsCenter() { const isaReady = homeSample().isaSource === 'asset-os', issues = isaReady ? allIsaIssues() : [], alert = isaReady ? nearestMaturityAlert() : null, urgent = scheduleUrgentOccurrences(), system = homeSystemAlerts(); $('#sheetEyebrow').textContent = '알림'; $('#sheetTitle').textContent = '확인할 알림'; $('#sheetBody').innerHTML = `<div class="integrity-list">${urgent.map(o => `<button class="integrity-row" data-home-schedule="${escapeHtml(o.date)}"><i class="integrity-dot ${o.status === 'overdue' ? 'high' : ''}"></i><span class="integrity-copy"><strong>${escapeHtml(o.schedule.name)} · ${scheduleStatusLabel(o.status)}</strong><small>${escapeHtml(o.date)} · ${won(o.schedule.amount)}</small></span><span class="integrity-go">›</span></button>`).join('')}${issues.map(x => `<button class="integrity-row" data-integrity-account="${escapeHtml(x.accountId)}" ${x.transactionId ? `data-integrity-tx="${escapeHtml(x.transactionId)}"` : ''}><i class="integrity-dot ${x.severity === 'high' ? 'high' : ''}"></i><span class="integrity-copy"><strong>${escapeHtml(x.title)}</strong><small>${escapeHtml(state.accounts.find(a => a.id === x.accountId)?.name || 'ISA')} · ${escapeHtml(x.detail)}</small></span><span class="integrity-go">›</span></button>`).join('')}${system.map(item => `<button class="integrity-row" ${item.subscriptionNoticeId ? `data-subscription-notice="${escapeHtml(item.subscriptionNoticeId)}"` : item.accountId ? `data-pension-balance-check="${escapeHtml(item.accountId)}"` : item.productId ? `data-finance-alert="${escapeHtml(item.productId)}"` : item.kind === 'backup' ? 'data-backup-alert' : item.kind === 'refresh' ? 'data-refresh-alert' : 'data-system-alert'}><i class="integrity-dot"></i><span class="integrity-copy"><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.detail)}</small></span><span class="integrity-go">›</span></button>`).join('')}${alert ? `<button class="integrity-row" data-maturity-alert="${escapeHtml(alert.account.id)}"><i class="integrity-dot"></i><span class="integrity-copy"><strong>${escapeHtml(alert.account.name)} 만기 ${alert.label}</strong><small>${alert.date}</small></span><span class="integrity-go">›</span></button>` : ''}${!urgent.length && !issues.length && !system.length && !alert ? '<div class="empty-state"><strong>지금 처리할 중요 알림이 없습니다.</strong></div>' : ''}</div>${homeInvestmentRefreshMarkup()}`; openSheet('#detailSheet'); setTimeout(() => { bindIntegrityActions(); if (typeof subscriptionBindUi === 'function')
+    subscriptionBindUi(); }, 0); }
 function bindIntegrityActions() {
     $$('[data-pension-balance-check]').forEach(button => button.onclick = () => openPensionBalanceDetail(button.dataset.pensionBalanceCheck || ''));
     $$('[data-home-schedule]').forEach(b => b.onclick = async () => { const d = b.dataset.homeSchedule; if (!d)
@@ -160,7 +161,7 @@ function bindIntegrityActions() {
 }
 function homeTrendMarkup() { const rows = financialGrowthSeries('3m').filter(row => row.coverage?.complete && Number.isFinite(row.netAssets)); if (rows.length < 2)
     return ''; const first = rows[0], last = rows.at(-1), delta = last.netAssets - first.netAssets, changeClass = delta < 0 ? 'negative' : delta > 0 ? 'positive' : 'neutral'; return `<button class="home-trend home-change-compare" data-home-growth><span class="home-trend-head"><strong>순자산 변화</strong><span>상세 보기 ›</span></span><strong class="home-compare-delta ${escapeHtml(changeClass)}">${delta === 0 ? '변화 없음' : signed(delta)}</strong><span class="home-compare-values"><span>${escapeHtml(first.asOf)}<b>${won(first.netAssets)}</b></span><span aria-hidden="true">→</span><span>${escapeHtml(last.asOf)}<b>${won(last.netAssets)}</b></span></span></button>`; }
-function home() { const s = homeSample(); return `<div class="stack home-app-stack"><button class="hero" data-detail="total"><div class="herohead"><div class="label">순금융자산</div><span class="heropeek">›</span></div><div class="heroamount ${amountClass(s.total - s.debt)}" title="${escapeHtml(won(s.total - s.debt))}">${displayWon(s.total - s.debt)}</div><div class="home-module-caption">보유 금융자산에서 대출·부채 차감</div>${homeChangeMarkup()}</button><section class="card home-account-list"><div class="sectionhead"><h2>내 계좌</h2></div>${['isa', 'pension', 'cash'].map(homeAccountRow).join('')}</section><section class="home-plan">${homeCard('contribution')}</section>${homeTrendMarkup()}</div>`; }
+function home() { const s = homeSample(); return `<div class="stack home-app-stack"><button class="hero" data-detail="total"><div class="herohead"><div class="label">순금융자산</div><span class="heropeek">›</span></div><div class="heroamount ${amountClass(s.total - s.debt)}" title="${escapeHtml(won(s.total - s.debt))}">${displayWon(s.total - s.debt)}</div><div class="home-module-caption">보유 금융자산에서 대출·부채 차감</div>${homeChangeMarkup()}</button><section class="card home-account-list"><div class="sectionhead"><h2>내 계좌</h2></div>${['isa', 'pension', 'cash'].map(homeAccountRow).join('')}</section><section class="home-plan">${homeCard('contribution')}</section>${homeTrendMarkup()}${typeof subscriptionCardMarkup === 'function' ? subscriptionCardMarkup() : ''}</div>`; }
 ;
 /* asset-os source: isa-summary.js */
 'use strict';
@@ -889,7 +890,8 @@ function integratedMonthBar(spending = false) {
 }
 function integratedTabs(tab) { return `<div class="integrated-tabs four"><button class="${escapeHtml(tab === 'summary' ? 'active' : '')}" data-integrated-tab="summary">전체</button><button class="${escapeHtml(tab === 'ledger' ? 'active' : '')}" data-integrated-tab="ledger">거래</button><button class="${escapeHtml(tab === 'spending' ? 'active' : '')}" data-integrated-tab="spending">소비</button><button class="${escapeHtml(tab === 'schedule' ? 'active' : '')}" data-integrated-tab="schedule">일정</button></div>`; }
 function integratedAccountName(id) { return integratedStore().accounts.find(a => a.id === id)?.name || integratedStore().liabilities.find(x => x.id === id)?.name || id || '-'; }
-function integratedTxLabel(t) { if (t.meta?.cardPlanId) {
+function integratedTxLabel(t) { if (t.meta?.unallocatedCardPayment)
+    return '카드대금 출금 · 배분 대기'; if (t.meta?.cardPlanId) {
     if (t.meta.cardInterestRefund)
         return '카드 이자 환불';
     if (t.type === 'externalExpense')
@@ -898,6 +900,8 @@ function integratedTxLabel(t) { if (t.meta?.cardPlanId) {
         return '카드 청구할인';
     if (t.type === 'refund')
         return '카드 환불';
+    if (t.meta.cardCredit === 'refund' && t.type === 'externalDebtPrincipal')
+        return '카드 취소 원금 차감';
     if (t.meta.cardPoints)
         return '카드 포인트 납부';
     if (['debtInterest', 'debtInterestExternal'].includes(t.type || ''))
@@ -905,7 +909,8 @@ function integratedTxLabel(t) { if (t.meta?.cardPlanId) {
     if (['debtPrincipal', 'externalDebtPrincipal'].includes(t.type || ''))
         return '카드 원금 납부';
 } return { refund: '환불', openingAsset: '기초자산', openingLiability: '기초부채', externalIncome: '수입', externalAssetIn: '저축·투자', externalAssetOut: '상품 출금', expense: '생활지출', externalExpense: '외부 결제 과거지출', debtInterest: '대출 이자 납부', debtInterestExternal: '대출 이자 납부', debtPrincipal: '대출 원금 상환', externalDebtPrincipal: '대출 원금 상환', internalTransfer: '저축·투자', externalWithdrawal: '기타 지출', adjustment: '잔액보정' }[t.type || ''] || t.type; }
-function integratedTxFilterKey(t) { const account = integratedStore().accounts.find(a => a.id === t.toAccountId); if (t.type === 'externalIncome')
+function integratedTxFilterKey(t) { if (t.meta?.unallocatedCardPayment)
+    return 'debt'; const account = integratedStore().accounts.find(a => a.id === t.toAccountId); if (t.type === 'externalIncome')
     return 'income'; if (['refund', 'expense', 'externalExpense', 'externalWithdrawal', 'externalAssetOut'].includes(t.type || ''))
     return 'expense'; if (['internalTransfer', 'externalAssetIn'].includes(t.type || '') && ['isa', 'pension', 'irp', 'deposit', 'savings'].includes(account?.kind || ''))
     return 'saving'; if (['debtInterest', 'debtInterestExternal', 'debtPrincipal', 'externalDebtPrincipal'].includes(t.type || ''))
@@ -1043,11 +1048,12 @@ else {
     body = '<div class="integrated-empty">표시할 상세 정보가 없습니다.</div>';
 } $('#sheetTitle').textContent = title; $('#sheetBody').innerHTML = body; openSheet('#detailSheet'); $$('[data-integrated-module-go]').forEach(b => b.onclick = async () => { const target = b.dataset.integratedModuleGo; closeSheets(); if (target === 'isa')
     return nav('isa', 'summary'); setting().pensionAssetScope = target === 'irp' ? 'irp' : 'pension'; rememberViewPreferences(); nav('pension', 'assets'); }); }
-function integratedSpendingPage() { const month = integratedSelectedMonth(), analysis = integratedSpendingAnalysis(month), budget = Math.max(0, Number(setting().monthlyLivingBudget) || 0), remaining = budget - analysis.total, max = Math.max(1, ...analysis.trend.map((row) => row.amount)), comparison = analysis.previousTotal === 0 ? (analysis.total ? '지난달 기록 없음' : '지난달과 동일') : analysis.change === 0 ? '지난달과 동일' : `${analysis.change > 0 ? '▲' : '▼'} ${won(Math.abs(analysis.change))} · ${Math.abs(analysis.changeRate || 0).toFixed(1)}%`; return `<section class="spending-hero"><div class="spending-hero-head"><span>${escapeHtml(integratedMonthLabel(month))} 총 소비</span><button data-spending-new>＋ 지출</button></div><strong>${won(analysis.total)}</strong><small class="${escapeHtml(analysis.change > 0 ? 'up' : analysis.change < 0 ? 'down' : '')}">지난달 대비 ${comparison}</small></section><button class="card spending-budget-card" data-spending-budget><span>${budget ? '월 생활비 목표' : '생활비 목표 설정'}</span>${budget ? `<strong>${won(budget)}</strong><small>사용 ${won(analysis.total)} · ${remaining >= 0 ? '남음' : '초과'} ${won(Math.abs(remaining))}</small><i><b style="width:${Math.min(100, analysis.total / Math.max(1, budget) * 100)}%"></b></i>` : '<small>원할 때만 한 번 설정합니다. 카테고리별 예산은 만들지 않습니다.</small>'}</button><section class="card spending-split"><button data-spending-detail="fixed"><span>고정비</span><strong>${won(analysis.fixed)}</strong><small>${analysis.fixedRows.length}건</small></button><button data-spending-detail="variable"><span>변동비</span><strong>${won(analysis.variable)}</strong><small>${analysis.variableRows.length}건</small></button></section><section class="card spending-card"><div class="sectionhead"><h2>카테고리별 소비</h2><span>${analysis.categories.length}개</span></div><div class="spending-categories">${analysis.categories.map((row) => `<button data-spending-detail="category" data-spending-key="${escapeHtml(row.key)}"><span>${escapeHtml(row.key)}<small>${row.count}건</small></span><strong>${won(row.amount)}</strong><i>›</i></button>`).join('') || '<div class="integrated-empty">이 달의 소비 기록이 없습니다.</div>'}</div></section><section class="card spending-card"><div class="sectionhead"><h2>최근 6개월 소비</h2><button class="tinybtn" data-spending-detail="all">원장 보기</button></div><div class="spending-trend">${analysis.trend.map((row) => `<button data-spending-month="${escapeHtml(row.month)}" data-spending-detail="month"><span class="spending-bar"><i style="height:${row.amount ? Math.max(8, row.amount / max * 100) : 2}%"></i></span><strong>${row.label}</strong><small>${row.amount ? displayWon(row.amount) : '0원'}</small></button>`).join('')}</div></section>`; }
+function integratedSpendingPage() { const month = integratedSelectedMonth(), analysis = integratedSpendingAnalysis(month), budget = Math.max(0, Number(setting().monthlyLivingBudget) || 0), remaining = budget - analysis.total, max = Math.max(1, ...analysis.trend.map((row) => row.amount)), comparison = analysis.previousTotal === 0 ? (analysis.total ? '지난달 기록 없음' : '지난달과 동일') : analysis.change === 0 ? '지난달과 동일' : `${analysis.change > 0 ? '▲' : '▼'} ${won(Math.abs(analysis.change))} · ${Math.abs(analysis.changeRate || 0).toFixed(1)}%`; return `<button class="diagnostic-action" data-subscription-hub>구독·이용권 관리 ›</button><section class="spending-hero"><div class="spending-hero-head"><span>${escapeHtml(integratedMonthLabel(month))} 총 소비</span><button data-spending-new>＋ 지출</button></div><strong>${won(analysis.total)}</strong><small class="${escapeHtml(analysis.change > 0 ? 'up' : analysis.change < 0 ? 'down' : '')}">지난달 대비 ${comparison}</small></section><button class="card spending-budget-card" data-spending-budget><span>${budget ? '월 생활비 목표' : '생활비 목표 설정'}</span>${budget ? `<strong>${won(budget)}</strong><small>사용 ${won(analysis.total)} · ${remaining >= 0 ? '남음' : '초과'} ${won(Math.abs(remaining))}</small><i><b style="width:${Math.min(100, analysis.total / Math.max(1, budget) * 100)}%"></b></i>` : '<small>원할 때만 한 번 설정합니다. 카테고리별 예산은 만들지 않습니다.</small>'}</button><section class="card spending-split"><button data-spending-detail="fixed"><span>고정비</span><strong>${won(analysis.fixed)}</strong><small>${analysis.fixedRows.length}건</small></button><button data-spending-detail="variable"><span>변동비</span><strong>${won(analysis.variable)}</strong><small>${analysis.variableRows.length}건</small></button></section><section class="card spending-card"><div class="sectionhead"><h2>카테고리별 소비</h2><span>${analysis.categories.length}개</span></div><div class="spending-categories">${analysis.categories.map((row) => `<button data-spending-detail="category" data-spending-key="${escapeHtml(row.key)}"><span>${escapeHtml(row.key)}<small>${row.count}건</small></span><strong>${won(row.amount)}</strong><i>›</i></button>`).join('') || '<div class="integrated-empty">이 달의 소비 기록이 없습니다.</div>'}</div></section><section class="card spending-card"><div class="sectionhead"><h2>최근 6개월 소비</h2><button class="tinybtn" data-spending-detail="all">원장 보기</button></div><div class="spending-trend">${analysis.trend.map((row) => `<button data-spending-month="${escapeHtml(row.month)}" data-spending-detail="month"><span class="spending-bar"><i style="height:${row.amount ? Math.max(8, row.amount / max * 100) : 2}%"></i></span><strong>${row.label}</strong><small>${row.amount ? displayWon(row.amount) : '0원'}</small></button>`).join('')}</div></section>`; }
 function openMonthlyLivingBudgetForm() { $('#formEyebrow').textContent = '통합 · 소비'; $('#formTitle').textContent = '월 생활비 목표'; $('#formBody').innerHTML = `<form id="livingBudgetForm" class="form"><div class="source-note">전체 생활비 목표 하나만 관리합니다. 0원으로 저장하면 목표 표시를 끕니다.</div><div class="field"><label>월 목표금액</label><input name="budget" type="number" inputmode="numeric" min="0" step="10000" value="${escapeHtml(Math.max(0, Number(setting().monthlyLivingBudget) || 0))}" required></div><button class="integrated-form-save" type="submit">저장</button></form>`; openSheet('#formSheet', { mode: 'input' }); $('#livingBudgetForm').onsubmit = async (e) => { e.preventDefault(); setting().monthlyLivingBudget = Math.max(0, Math.round(Number(new FormData(e.currentTarget).get('budget')) || 0)); if (!(await persist()))
     return; sheetDirty = false; closeSheets({ all: true }); nav('integrated', 'spending'); toast(setting().monthlyLivingBudget ? '생활비 목표를 저장했습니다.' : '생활비 목표를 껐습니다.'); }; }
 function openIntegratedSpendingDetail(scope = 'all', key = '', month = integratedSelectedMonth()) { const analysis = integratedSpendingAnalysis(month), rows = scope === 'fixed' ? analysis.fixedRows : scope === 'variable' ? analysis.variableRows : scope === 'other' ? analysis.rows.filter(row => new Set(analysis.categories.slice(5).map(x => x.key)).has(String(row.category || '기타').trim() || '기타')) : scope === 'category' ? analysis.rows.filter(row => (String(row.category || '기타').trim() || '기타') === key) : analysis.rows; $('#sheetEyebrow').textContent = '통합 · 소비 분석'; $('#sheetTitle').textContent = scope === 'category' ? key : `${integratedMonthLabel(month)} 소비`; $('#sheetBody').innerHTML = `<div class="integrated-ledger-list">${[...rows].reverse().map(t => `<button class="integrated-ledger-row is-clickable" data-integrated-tx="${escapeHtml(t.id)}" style="width:100%;border:0;background:transparent;text-align:left;color:inherit"><div><strong>${escapeHtml(t.category || integratedTxLabel(t))}</strong><small>${escapeHtml(t.date)} · ${t.type === 'expense' ? (t.fixed ? '고정비' : '변동비') : '고정비'}</small></div><div class="integrated-ledger-right">${integratedTxAmountMarkup(t)}<span class="integrated-chevron">›</span></div></button>`).join('') || '<div class="integrated-empty">해당 소비 기록이 없습니다.</div>'}</div>`; openSheet('#detailSheet'); $$('[data-integrated-tx]').forEach(button => button.onclick = () => openIntegratedTransactionDetail(button.dataset.integratedTx || '')); }
-function integratedPage(tab = 'summary') { const safe = ['summary', 'ledger', 'spending', 'schedule'].includes(tab) ? tab : 'summary', content = safe === 'ledger' ? integratedLedgerPage() : safe === 'spending' ? integratedSpendingPage() : safe === 'schedule' ? integratedSchedulePage() : integratedSummaryPage(), tabs = integratedTabs(safe).replace('integrated-tabs four', 'integrated-tabs four module-primary-tabs'), month = integratedMonthBar(safe === 'spending'); return `<div class="module-page-shell integrated-module-shell">${tabs}${month}<div class="stack">${content}</div></div>`; }
+function integratedPage(tab = 'summary') { if (tab === 'subscriptions')
+    return `<div class="module-page-shell integrated-module-shell">${integratedTabs('spending')}${subscriptionHubPage()}</div>`; const safe = ['summary', 'ledger', 'spending', 'schedule'].includes(tab) ? tab : 'summary', content = safe === 'ledger' ? integratedLedgerPage() : safe === 'spending' ? integratedSpendingPage() : safe === 'schedule' ? integratedSchedulePage() : integratedSummaryPage(), tabs = integratedTabs(safe).replace('integrated-tabs four', 'integrated-tabs four module-primary-tabs'), month = integratedMonthBar(safe === 'spending'); return `<div class="module-page-shell integrated-module-shell">${tabs}${month}<div class="stack">${content}</div></div>`; }
 function bindScheduleTools() {
     $$('[data-card-all-purchases]').forEach(b => b.onclick = openCardPurchaseArchive);
     $$('[data-card-plan-open]').forEach(b => b.onclick = () => openCardPlanDetail(b.dataset.cardPlanOpen || ''));
@@ -1221,7 +1227,8 @@ function render() { integratedSelectedMonth(); const r = route(); document.body.
     badge.hidden = count === 0;
     badge.textContent = count > 99 ? '99+' : String(count);
     bell.setAttribute('aria-label', count ? `검토·중요 알림 ${count}건` : '검토·중요 알림 없음');
-} applyTheme(); bind(); bindTransactionSearch(); if (typeof refreshOpenCardOverview === 'function')
+} applyTheme(); bind(); if (typeof subscriptionBindUi === 'function')
+    subscriptionBindUi(); bindTransactionSearch(); if (typeof refreshOpenCardOverview === 'function')
     refreshOpenCardOverview(); updateDiagnostics(); }
 function bindTransactionSearch() { const integratedForm = $('[data-integrated-search-form]'); if (integratedForm)
     integratedForm.onsubmit = e => { e.preventDefault(); integratedLedgerSearch = String(new FormData(e.currentTarget).get('query') || '').trim(); integratedSearchDisplayLimit = 50; render(); }; $('[data-integrated-search-clear]')?.addEventListener('click', () => { integratedLedgerSearch = ''; integratedSearchDisplayLimit = 50; render(); }); $('[data-integrated-search-more]')?.addEventListener('click', () => { integratedSearchDisplayLimit += 50; renderKeepingScroll(); }); const pensionForm = $('[data-pension-search-form]'); if (pensionForm)
@@ -1338,6 +1345,7 @@ function bind() {
 }
 ;
 /* asset-os source: integrated-forms.js */
+"use strict";
 'use strict';
 function integratedPolicyLimitIssues(store = integratedStore()) {
     const issues = [];
@@ -1861,9 +1869,11 @@ function openIntegratedTransactionDetail(id) {
     const display = integratedTransactionDisplay(tx);
     $('#sheetEyebrow').textContent = '통합 · 거래';
     $('#sheetTitle').textContent = display.item;
-    const sourceBox = tx.meta?.cardPlanId ? '<div class="source-note">카드 구매·청구·납부에 연결된 기록입니다.</div><button class="diagnostic-action" data-linked-card>카드 구매·납부 보기</button>' : tx.readonly ? `<div class="source-note">${tx.sourceModule === 'isa' ? 'ISA' : '개인연금'}의 실제 기록을 자동으로 읽은 거래입니다. 통합에서 중복 수정하지 않습니다.</div><button class="diagnostic-action" data-linked-source="${escapeHtml(tx.sourceModule)}">원본 화면 열기</button>` : productLinkedManaged ? `<div class="source-note">금융상품과 연결된 거래입니다. 통합에서 따로 수정하면 상품 잔액과 어긋날 수 있어 상품 화면에서 관리합니다.</div><button class="diagnostic-action" data-linked-product="${escapeHtml(tx.productId)}">금융상품 열기</button>` : `<div class="integrated-detail-note">수정·삭제하면 통합 수치가 즉시 다시 계산됩니다.</div><div class="integrated-detail-actions"><button data-integrated-edit="${escapeHtml(tx.id || '')}">수정</button><button class="danger" data-integrated-delete-detail="${escapeHtml(tx.id || '')}">삭제</button></div>`;
-    $('#sheetBody').innerHTML = `<div class="sheetrows"><div class="sheetrow"><span>분류</span><strong data-transaction-category>${escapeHtml(display.category)}</strong></div><div class="sheetrow"><span>날짜</span><strong>${escapeHtml(tx.date)}</strong></div><div class="sheetrow"><span>유형</span><strong>${escapeHtml(integratedTxLabel(tx))}</strong></div><div class="sheetrow"><span>금액</span><strong>${tx.type === 'adjustment' ? signed(Number(tx.delta) || 0) : won(tx.amount)}</strong></div>${integratedTxAccountsText(tx) ? `<div class="sheetrow"><span>계좌</span><strong>${escapeHtml(integratedTxAccountsText(tx))}</strong></div>` : ''}${tx.note ? `<div class="sheetrow"><span>메모</span><strong>${escapeHtml(tx.note)}</strong></div>` : ''}</div>${sourceBox}${classificationSource ? '<button class="diagnostic-action" data-transaction-classify>이름·분류 수정</button>' : ''}${integratedEntryPresetFromRecord(tx) ? '<button class="diagnostic-action" data-entry-copy>이 기록 복사</button>' : ''}${!tx.meta?.cardPlanId && ['expense', 'externalExpense'].includes(tx.type || '') ? `<button class="diagnostic-action" data-refund="${escapeHtml(tx.id || '')}">환불·부분취소</button>` : ''}`;
+    const sourceBox = tx.meta?.unallocatedCardPayment ? '<div class="source-note">계좌에서 확인한 카드대금 출금입니다. 개별 청구 배분을 기다리고 있어요.</div><button class="danger" data-integrated-delete-detail="' + escapeHtml(tx.id || '') + '">출금 기록 삭제</button>' : tx.meta?.cardPlanId ? '<div class="source-note">카드 구매·청구·납부에 연결된 기록입니다.</div><button class="diagnostic-action" data-linked-card>카드 구매·납부 보기</button>' : tx.readonly ? `<div class="source-note">${tx.sourceModule === 'isa' ? 'ISA' : '개인연금'}의 실제 기록을 자동으로 읽은 거래입니다. 통합에서 중복 수정하지 않습니다.</div><button class="diagnostic-action" data-linked-source="${escapeHtml(tx.sourceModule)}">원본 화면 열기</button>` : productLinkedManaged ? `<div class="source-note">금융상품과 연결된 거래입니다. 통합에서 따로 수정하면 상품 잔액과 어긋날 수 있어 상품 화면에서 관리합니다.</div><button class="diagnostic-action" data-linked-product="${escapeHtml(tx.productId)}">금융상품 열기</button>` : `<div class="integrated-detail-note">수정·삭제하면 통합 수치가 즉시 다시 계산됩니다.</div><div class="integrated-detail-actions"><button data-integrated-edit="${escapeHtml(tx.id || '')}">수정</button><button class="danger" data-integrated-delete-detail="${escapeHtml(tx.id || '')}">삭제</button></div>`;
+    $('#sheetBody').innerHTML = `<div class="sheetrows"><div class="sheetrow"><span>분류</span><strong data-transaction-category>${escapeHtml(display.category)}</strong></div><div class="sheetrow"><span>날짜</span><strong>${escapeHtml(tx.date)}</strong></div><div class="sheetrow"><span>유형</span><strong>${escapeHtml(integratedTxLabel(tx))}</strong></div><div class="sheetrow"><span>금액</span><strong>${tx.type === 'adjustment' ? signed(Number(tx.delta) || 0) : won(tx.amount)}</strong></div>${integratedTxAccountsText(tx) ? `<div class="sheetrow"><span>계좌</span><strong>${escapeHtml(integratedTxAccountsText(tx))}</strong></div>` : ''}${tx.note ? `<div class="sheetrow"><span>메모</span><strong>${escapeHtml(tx.note)}</strong></div>` : ''}</div>${sourceBox}${classificationSource ? `<button class="diagnostic-action" data-subscription-tx-link="${escapeHtml(tx.id || '')}">구독 연결·관리</button>` : ''}${classificationSource ? '<button class="diagnostic-action" data-transaction-classify>이름·분류 수정</button>' : ''}${integratedEntryPresetFromRecord(tx) ? '<button class="diagnostic-action" data-entry-copy>이 기록 복사</button>' : ''}${!tx.meta?.cardPlanId && ['expense', 'externalExpense'].includes(tx.type || '') ? `<button class="diagnostic-action" data-refund="${escapeHtml(tx.id || '')}">환불·부분취소</button>` : ''}`;
     openSheet('#detailSheet');
+    if (typeof subscriptionBindUi === 'function')
+        subscriptionBindUi();
     $('[data-linked-card]')?.addEventListener('click', () => openCardLedgerDetail(String(tx.meta?.cardPlanId)));
     $('[data-transaction-classify]')?.addEventListener('click', () => { if (classificationSource)
         openSpendingClassification([String(classificationSource.id)], String(tx.date).slice(0, 7), String(tx.meta?.cardPlanId || '')); });
@@ -4495,6 +4505,7 @@ function ux42OpenEntryMenu() {
         ['수입', '급여·기타 수입을 추가', 'income'],
         ['저축·투자', '계좌 간 납입·이체를 기록', 'saving'],
         ['카드 구매', '신용카드 일시불·할부 기록', 'card'],
+        ['뱅샐 엑셀 미리보기', '파일의 카드 사용·취소·출금 확인', 'banksalad'],
         ['납부 일정 보기', '보험·대출·저축 납부는 해당 기록에서', 'schedule']
     ];
     for (const choice of choices) {
@@ -4507,6 +4518,8 @@ function ux42OpenEntryMenu() {
         button.addEventListener('click', function () {
             if (choice[2] === 'card')
                 openCardPurchaseForm();
+            else if (choice[2] === 'banksalad')
+                openBanksaladPreview();
             else if (choice[2] === 'schedule') {
                 closeSheets({ all: true });
                 nav('integrated', 'schedule');
@@ -4629,3 +4642,726 @@ bind = function () {
     if (tab === 'schedule')
         ux42DecorateSchedule();
 };
+;
+/* asset-os source: banksalad-import.js */
+"use strict";
+const banksaladHeaders = ['날짜', '시간', '타입', '대분류', '소분류', '내용', '금액', '화폐', '결제수단', '메모'];
+const banksaladMaxFile = 8 * 1024 * 1024;
+const banksaladMaxXml = 12 * 1024 * 1024;
+function banksaladXmlElements(node, name) {
+    return Array.from(node.getElementsByTagNameNS('*', name));
+}
+function banksaladZip(bytes) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const invalid = () => new Error('뱅크샐러드에서 받은 .xlsx 원본 파일을 선택해 주세요.');
+    let end = bytes.length - 22;
+    const first = Math.max(0, end - 65535);
+    for (; end >= first; end--)
+        if (view.getUint32(end, true) === 0x06054b50 && end + 22 + view.getUint16(end + 20, true) === bytes.length)
+            break;
+    if (end < first || view.getUint32(end + 4, true) !== 0)
+        throw invalid();
+    const count = view.getUint16(end + 10, true), centralStart = view.getUint32(end + 16, true);
+    const centralEnd = centralStart + view.getUint32(end + 12, true);
+    if (count > 1024 || count !== view.getUint16(end + 8, true) || centralEnd > end)
+        throw invalid();
+    const decoder = new TextDecoder(), entries = new Map();
+    let offset = centralStart;
+    for (let index = 0; index < count; index++) {
+        if (offset + 46 > centralEnd || view.getUint32(offset, true) !== 0x02014b50)
+            throw invalid();
+        const nameEnd = offset + 46 + view.getUint16(offset + 28, true);
+        const next = nameEnd + view.getUint16(offset + 30, true) + view.getUint16(offset + 32, true);
+        if (next > centralEnd)
+            throw invalid();
+        const name = decoder.decode(bytes.subarray(offset + 46, nameEnd));
+        if (entries.has(name))
+            throw invalid();
+        entries.set(name, offset);
+        offset = next;
+    }
+    let expanded = 0;
+    return {
+        has: (name) => entries.has(name),
+        async xml(name) {
+            const entry = entries.get(name);
+            if (entry === undefined)
+                throw invalid();
+            const method = view.getUint16(entry + 10, true), size = view.getUint32(entry + 24, true);
+            const packed = view.getUint32(entry + 20, true), local = view.getUint32(entry + 42, true);
+            expanded += size;
+            if (expanded > banksaladMaxXml || local + 30 > centralStart || view.getUint32(local, true) !== 0x04034b50 ||
+                (view.getUint16(entry + 8, true) & 1) || method !== view.getUint16(local + 8, true))
+                throw invalid();
+            const start = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
+            if (start + packed > centralStart || (method !== 0 && method !== 8))
+                throw invalid();
+            const payload = bytes.subarray(start, start + packed), result = method === 0 ? payload : new Uint8Array(size);
+            if (method === 8) {
+                if (typeof DecompressionStream === 'undefined')
+                    throw new Error('엑셀을 열려면 브라우저를 업데이트해 주세요.');
+                const reader = new Blob([payload]).stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader();
+                let written = 0;
+                try {
+                    for (;;) {
+                        const chunk = await reader.read();
+                        if (chunk.done)
+                            break;
+                        if (written + chunk.value.length > size)
+                            throw invalid();
+                        result.set(chunk.value, written);
+                        written += chunk.value.length;
+                    }
+                }
+                finally {
+                    await reader.cancel().catch(() => { });
+                    reader.releaseLock();
+                }
+                if (written !== size)
+                    throw invalid();
+            }
+            if (result.length !== size || crc32(result) !== view.getUint32(entry + 16, true))
+                throw invalid();
+            const text = decoder.decode(result);
+            if (/<!DOCTYPE/i.test(text))
+                throw invalid();
+            const document = new DOMParser().parseFromString(text, 'application/xml');
+            if (banksaladXmlElements(document, 'parsererror').length)
+                throw invalid();
+            return document;
+        }
+    };
+}
+function banksaladDate(value, date1904 = false) {
+    if (/^\d+(?:\.0+)?$/.test(value)) {
+        const serial = Number(value);
+        if (serial < 0 || serial > 100000)
+            return '';
+        return new Date(Date.UTC(1899, 11, 30) + (serial + (date1904 ? 1462 : 0)) * 86400000).toISOString().slice(0, 10);
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value))
+        return '';
+    const date = new Date(value + 'T00:00:00Z');
+    return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? value : '';
+}
+function banksaladTime(value) {
+    if (!value)
+        return '';
+    if (/^\d{2}:\d{2}(?::\d{2})?$/.test(value)) {
+        const [h, m, s = 0] = value.split(':').map(Number);
+        return h < 24 && m < 60 && s < 60 ? [h, m, s].map(n => String(n).padStart(2, '0')).join(':') : '';
+    }
+    const fraction = Number(value);
+    if (!Number.isFinite(fraction) || fraction < 0 || fraction >= 1)
+        return '';
+    const seconds = Math.min(86399, Math.round(fraction * 86400));
+    return [Math.floor(seconds / 3600), Math.floor(seconds % 3600 / 60), seconds % 60].map(n => String(n).padStart(2, '0')).join(':');
+}
+async function readBanksaladFile(file) {
+    if (!/\.xlsx$/i.test(file.name) || !file.size || file.size > banksaladMaxFile)
+        throw new Error('8MB 이하의 뱅크샐러드 .xlsx 파일을 선택해 주세요.');
+    const zip = banksaladZip(new Uint8Array(await file.arrayBuffer()));
+    const [workbook, links, strings] = await Promise.all([
+        zip.xml('xl/workbook.xml'), zip.xml('xl/_rels/workbook.xml.rels'),
+        zip.has('xl/sharedStrings.xml') ? zip.xml('xl/sharedStrings.xml') : null
+    ]);
+    const sheet = banksaladXmlElements(workbook, 'sheet').find(node => node.getAttribute('name') === '가계부 내역');
+    const id = sheet?.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
+    const link = banksaladXmlElements(links, 'Relationship').find(node => node.getAttribute('Id') === id);
+    const target = link?.getAttribute('Target') || '';
+    if (!/^(?:\/xl\/)?worksheets\/[\w.-]+\.xml$/.test(target) || link?.getAttribute('TargetMode') === 'External')
+        throw new Error('가계부 내역 시트를 찾지 못했어요.');
+    const shared = strings ? banksaladXmlElements(strings, 'si').map(node => banksaladXmlElements(node, 't').map(t => t.textContent || '').join('')) : [];
+    const worksheet = await zip.xml(target.startsWith('/') ? target.slice(1) : 'xl/' + target);
+    const date1904 = /^(?:1|true)$/.test(banksaladXmlElements(workbook, 'workbookPr')[0]?.getAttribute('date1904') || '');
+    const data = banksaladXmlElements(worksheet, 'sheetData')[0], rows = data ? banksaladXmlElements(data, 'row') : [];
+    const values = (row) => {
+        const cells = Array(10).fill('');
+        for (const cell of banksaladXmlElements(row, 'c')) {
+            const address = /^([A-J])\d+$/.exec(cell.getAttribute('r') || '');
+            if (!address)
+                continue;
+            if (banksaladXmlElements(cell, 'f').length)
+                throw new Error('수식이 있는 가계부는 열 수 없어요. 내려받은 원본을 선택해 주세요.');
+            const type = cell.getAttribute('t'), value = banksaladXmlElements(cell, 'v')[0]?.textContent || '';
+            cells[address[1].charCodeAt(0) - 65] = (type === 's' ? shared[Number(value)] ?? '' : type === 'inlineStr' ?
+                banksaladXmlElements(cell, 't').map(t => t.textContent || '').join('') : value).trim();
+        }
+        return cells;
+    };
+    if (!rows.length || values(rows[0]).some((value, index) => value !== banksaladHeaders[index]))
+        throw new Error('가계부 열 구성이 달라서 열 수 없어요.');
+    const result = [];
+    for (const row of rows.slice(1)) {
+        const cells = values(row);
+        if (cells.every(value => !value))
+            continue;
+        const [rawDate, rawTime, sourceType, group, category, name, rawAmount, currency, method, memo] = cells;
+        const date = banksaladDate(rawDate, date1904), time = banksaladTime(rawTime), amount = Number(rawAmount);
+        if (!date || (rawTime && !time) || !sourceType || !rawAmount || !Number.isSafeInteger(amount) || currency !== 'KRW') {
+            throw new Error('가계부 ' + row.getAttribute('r') + '행의 날짜·시간·유형·금액·통화를 확인해 주세요.');
+        }
+        result.push({ date, time, sourceType, group, category, name, amount, method, memo });
+    }
+    if (!result.length)
+        throw new Error('파일에 거래가 없어요.');
+    return result.sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time));
+}
+function banksaladSourceKey(row) {
+    return JSON.stringify([row.date, row.time, row.sourceType, row.name, row.amount, row.method]);
+}
+function banksaladRowKind(row) {
+    if (row.group === '카드대금')
+        return 'payment';
+    if (row.sourceType === '지출')
+        return row.amount > 0 ? 'refund' : 'purchase';
+    return 'other';
+}
+const banksaladDuplicateIssue = '파일 안에 같은 거래 후보';
+const banksaladExistingIssue = '기존 원장과 중복 후보';
+function banksaladReview(rows) {
+    const keyCounts = new Map(), ledger = integratedStore().ledger;
+    const suppressed = new Set();
+    if (typeof sourceArchiveRecords === 'function')
+        for (const record of sourceArchiveRecords()) {
+            const keys = record.meta?.suppressedBanksaladSourceKeys;
+            if (Array.isArray(keys))
+                for (const key of keys)
+                    if (typeof key === 'string')
+                        suppressed.add(key);
+            const decisions = record.meta?.decisions;
+            if (Array.isArray(decisions))
+                for (const value of decisions) {
+                    if (value && typeof value === 'object' && 'decision' in value && value.decision === 'exclude' && 'sourceKey' in value && typeof value.sourceKey === 'string')
+                        suppressed.add(value.sourceKey);
+                }
+        }
+    for (const row of rows) {
+        const key = banksaladSourceKey(row);
+        keyCounts.set(key, (keyCounts.get(key) || 0) + 1);
+    }
+    const primary = new Map();
+    const payments = new Map();
+    for (const entry of ledger) {
+        if (entry.meta?.qaFixture)
+            continue;
+        if (typeof entry.meta?.banksaladSourceKey === 'string' && entry.meta?.banksaladPrimary)
+            primary.set(entry.meta.banksaladSourceKey, entry);
+        if (entry.fromAccountId && ['debtPrincipal', 'debtInterest'].includes(entry.type)) {
+            const event = String(entry.meta?.cardEventId || (entry.meta?.scheduleId ? entry.meta.scheduleId + ' ' + entry.meta.scheduleDate : entry.id));
+            const key = entry.date + ' ' + event, existing = payments.get(key) || { date: entry.date, cardId: String(entry.meta?.cardId || ''), amount: 0 };
+            existing.amount += Number(entry.amount) || 0;
+            payments.set(key, existing);
+        }
+    }
+    return rows.map(row => {
+        const key = banksaladSourceKey(row), kind = banksaladRowKind(row), prior = primary.get(key);
+        const expectedType = kind === 'payment' ? 'externalWithdrawal' : kind === 'refund' ? 'refund' : 'externalExpense';
+        const saved = suppressed.has(key) || !!prior && prior.date === row.date && (prior.type === expectedType || prior.meta?.historicalLoanPayment === true && ['debtInterest', 'debtInterestExternal'].includes(prior.type)) && Number(prior.amount) === Math.abs(row.amount);
+        const issues = [];
+        if (!saved && (keyCounts.get(key) || 0) > 1)
+            issues.push(banksaladDuplicateIssue);
+        if (prior && !saved)
+            issues.push('가져온 뒤 금액이 변경된 기록');
+        if (!saved && kind === 'purchase' && ledger.some(entry => !entry.meta?.qaFixture && entry.date === row.date &&
+            ['expense', 'externalExpense'].includes(entry.type) && entry.amount === -row.amount &&
+            ([entry.note, entry.meta?.spendingItem, entry.meta?.merchant].includes(row.name) ||
+                (row.origin === 'screenshot' || entry.meta?.banksaladOrigin === 'screenshot') && !!row.time &&
+                    String(entry.meta?.banksaladTime || '').slice(0, 5) === row.time.slice(0, 5))))
+            issues.push(banksaladExistingIssue);
+        if (!saved && kind === 'refund' && ledger.some(entry => entry.type === 'refund' && entry.date === row.date && entry.amount === row.amount))
+            issues.push(banksaladExistingIssue);
+        if (!saved && kind === 'payment' && (ledger.some(entry => entry.type === 'externalWithdrawal' && entry.date === row.date && entry.amount === -row.amount) ||
+            Array.from(payments.values()).some(payment => payment.date === row.date && payment.amount === -row.amount)))
+            issues.push(banksaladExistingIssue);
+        const dateError = postedDateError(row.date);
+        if (dateError)
+            issues.push(dateError);
+        if (kind === 'payment' && row.amount >= 0)
+            issues.push('납부 취소·환급은 확인 필요');
+        return { ...row, saved, issues };
+    });
+}
+function banksaladPaymentIssue(row, draft) {
+    const store = integratedStore(), account = store.accounts.find(item => item.id === draft.accountId);
+    if (!draft.balanceConfirmed)
+        return '기준잔액에 아직 반영하지 않은 출금인지 확인해 주세요.';
+    if (!account || !['cash', 'deposit', 'parking'].includes(account.kind || ''))
+        return '실제 출금계좌에 해당하는 현금성 계좌를 선택해 주세요.';
+    const observed = store.ledger.filter(entry => (entry.type === 'openingAsset' && entry.toAccountId === draft.accountId) ||
+        (entry.type === 'adjustment' && entry.accountId === draft.accountId && entry.meta?.reconciliation));
+    if (observed.some(entry => entry.date >= row.date))
+        return '출금일 이후에 확인한 잔액이 있어요. 이미 포함된 출금인지 먼저 확인해 주세요.';
+    const card = cardAccounts().find(item => item.id === draft.cardId && !item.archived);
+    if (!card)
+        return '납부한 카드를 선택해 주세요.';
+    const issuer = String(card.issuer || '');
+    const sourceIssuer = /삼성/.test(row.name) ? '삼성' : /KB|국민/i.test(row.name) ? '국민' : '';
+    if (sourceIssuer && issuer !== '기타 카드' && !issuer.includes(sourceIssuer) && !(sourceIssuer === '국민' && /KB/i.test(issuer))) {
+        return '원본 출금 내역의 카드사와 선택한 카드사가 달라요.';
+    }
+    return '';
+}
+function banksaladPrimaryRow(key) {
+    return integratedStore().ledger.find(entry => entry.meta?.banksaladSourceKey === key && entry.meta?.banksaladPrimary);
+}
+async function saveBanksaladBatch(rows, drafts) {
+    if (!QA_MODE)
+        throw new Error('현재는 테스트 원장에서만 저장할 수 있어요.');
+    const snapshot = structuredClone(rows);
+    const requested = new Map([...drafts].map(([key, draft]) => [key, structuredClone(draft)]));
+    return runStoredCommand(async () => {
+        const review = banksaladReview(snapshot), available = new Set(review.map(banksaladSourceKey));
+        if ([...requested.keys()].some(key => !available.has(key)))
+            throw new Error('선택한 거래가 파일에 없어요.');
+        const pending = review.filter(row => requested.has(banksaladSourceKey(row)) && !row.saved)
+            .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+        const result = { count: 0, purchase: 0, refund: 0, payment: 0 };
+        if (!pending.length)
+            return result;
+        let failure = '';
+        const ok = await cardCommit(() => {
+            try {
+                for (const row of pending) {
+                    const key = banksaladSourceKey(row), draft = requested.get(key);
+                    if (!cardMoney(Math.abs(row.amount)))
+                        throw new Error('0원 거래는 저장할 수 없어요.');
+                    if (row.issues.length || banksaladRowKind(row) !== draft.kind)
+                        throw new Error('중복 후보 또는 거래 유형을 확인해 주세요.');
+                    const ledger = integratedStore().ledger, oldIds = new Set(ledger.map(entry => entry.id));
+                    if (draft.kind === 'purchase') {
+                        stageCardPurchase({
+                            cardId: draft.cardId, name: row.name, purchaseDate: row.date, purchaseAmount: -row.amount,
+                            firstPaymentDate: draft.firstPaymentDate, months: 1, interestMode: 'free',
+                            category: row.category === '미분류' ? row.group : row.category || row.group
+                        });
+                        result.purchase -= row.amount;
+                    }
+                    else if (draft.kind === 'refund') {
+                        const original = banksaladPrimaryRow(draft.originalKey);
+                        const planId = original?.meta?.cardPlanId;
+                        if (!original || original.type !== 'externalExpense' || typeof planId !== 'string' || original.date > row.date)
+                            throw new Error('취소할 카드 원거래를 선택해 주세요.');
+                        stageCardRefund(planId, { date: row.date, amount: row.amount });
+                        result.refund += row.amount;
+                    }
+                    else {
+                        const issue = banksaladPaymentIssue(row, draft);
+                        if (issue)
+                            throw new Error(issue);
+                        ledger.push({
+                            id: uid('igl'), date: row.date, type: 'externalWithdrawal', amount: -row.amount, fromAccountId: draft.accountId,
+                            category: row.name, note: '카드대금 출금 확인 · 청구 배분 대기',
+                            meta: { unallocatedCardPayment: true, cardId: draft.cardId, sourcePaymentMethod: row.method, balanceConfirmed: true }
+                        });
+                        result.payment -= row.amount;
+                    }
+                    for (const entry of ledger.filter(item => !oldIds.has(item.id))) {
+                        entry.meta = { ...entry.meta, banksaladSourceKey: key, banksaladTime: row.time,
+                            ...(row.origin ? { banksaladOrigin: row.origin } : {}),
+                            banksaladPrimary: entry.type === 'externalExpense' || entry.type === 'refund' || entry.type === 'externalWithdrawal' };
+                    }
+                    result.count++;
+                }
+            }
+            catch (error) {
+                failure = error instanceof Error ? error.message : String(error);
+                throw error;
+            }
+        });
+        if (!ok)
+            throw new Error(failure || '저장을 완료하지 못했어요. 이번 선택 전체를 되돌렸어요.');
+        return result;
+    });
+}
+function banksaladNode(tag, cls = '', text) {
+    const node = document.createElement(tag);
+    node.className = cls;
+    if (text !== undefined)
+        node.textContent = String(text);
+    return node;
+}
+function banksaladField(label, input) {
+    const field = banksaladNode('label', 'field');
+    field.append(banksaladNode('span', '', label), input);
+    return field;
+}
+function banksaladCardSelect(label) {
+    const input = banksaladNode('select');
+    const empty = banksaladNode('option', '', '카드 선택');
+    empty.value = '';
+    input.append(empty);
+    for (const card of cardAccounts().filter(card => !card.archived)) {
+        const option = banksaladNode('option', '', card.name);
+        option.value = card.id;
+        input.append(option);
+    }
+    return { field: banksaladField(label, input), input };
+}
+function openBanksaladPreview(preset) {
+    document.querySelector('#sheetEyebrow').textContent = '통합 · 가져오기';
+    document.querySelector('#sheetTitle').textContent = '뱅샐 엑셀 미리보기';
+    const panel = banksaladNode('div', 'banksalad-preview'), back = banksaladNode('button', 'ux42-back', '‹ 입력 종류');
+    back.type = 'button';
+    back.addEventListener('click', ux42OpenEntryMenu);
+    const intro = banksaladNode('p', 'ux42-entry-hint', QA_MODE ?
+        '원본 엑셀을 읽고, 확인한 거래를 테스트 원장에 저장해요. 카드대금 출금은 소비 합계에 더하지 않아요.' :
+        '원본 엑셀의 거래를 이 기기에서 확인해요. 현재 저장은 테스트 원장에서 검증 중이에요.');
+    const choose = banksaladNode('button', 'primary banksalad-action', '엑셀 파일 선택');
+    choose.type = 'button';
+    const picker = banksaladNode('input');
+    picker.type = 'file';
+    picker.accept = '.xlsx';
+    picker.hidden = true;
+    choose.addEventListener('click', () => picker.click());
+    const message = banksaladNode('p', 'banksalad-status');
+    message.setAttribute('role', 'status');
+    const content = banksaladNode('div');
+    content.hidden = true;
+    const dates = banksaladNode('div', 'banksalad-dates'), from = banksaladNode('input'), to = banksaladNode('input');
+    from.type = 'date';
+    to.type = 'date';
+    dates.append(banksaladField('시작일', from), banksaladField('종료일', to));
+    const totals = banksaladNode('div', 'banksalad-totals');
+    const setup = banksaladNode('details', 'banksalad-setup');
+    setup.append(banksaladNode('summary', '', '테스트 저장 설정'));
+    const purchaseCard = banksaladCardSelect('카드 사용을 기록할 카드'), due = banksaladNode('input');
+    due.type = 'date';
+    const account = banksaladNode('select'), emptyAccount = banksaladNode('option', '', '출금계좌 선택');
+    emptyAccount.value = '';
+    account.append(emptyAccount);
+    for (const candidate of integratedStore().accounts.filter(row => ['cash', 'deposit', 'parking'].includes(row.kind || ''))) {
+        const option = banksaladNode('option', '', candidate.name);
+        option.value = candidate.id;
+        account.append(option);
+    }
+    const confirmed = banksaladNode('input');
+    confirmed.type = 'checkbox';
+    const confirmation = banksaladNode('label', 'banksalad-check');
+    confirmation.append(confirmed, banksaladNode('span', '', '계좌에서 출금을 확인했고, 선택 계좌의 기준잔액에는 아직 반영하지 않았어요.'));
+    setup.append(purchaseCard.field, banksaladField('일시불 첫 청구일', due), banksaladField('카드대금 출금계좌', account), confirmation, banksaladNode('p', 'ux42-entry-hint', '카드 사용은 일시불로 확인한 건만 선택하세요. 할부는 기존 카드 구매 입력에서 확인해 주세요.'));
+    const filter = banksaladNode('select');
+    for (const [value, label] of Object.entries({ all: '전체', purchase: '카드 사용 후보', refund: '취소·환불', payment: '카드대금 출금', other: '수입·이체', selected: '선택한 거래', issues: '중복·확인 필요', saved: '저장 완료' })) {
+        const option = banksaladNode('option', '', label);
+        option.value = value;
+        filter.append(option);
+    }
+    const saveBox = banksaladNode('div', 'banksalad-save-box'), save = banksaladNode('button', 'primary banksalad-action', '선택 거래 테스트 저장');
+    save.type = 'button';
+    save.disabled = true;
+    const selection = banksaladNode('p', 'banksalad-status'), result = banksaladNode('p', 'banksalad-status');
+    result.setAttribute('role', 'status');
+    saveBox.append(selection, save, result);
+    const list = banksaladNode('div', 'banksalad-results'), more = banksaladNode('button', 'banksalad-action', '더 보기');
+    more.type = 'button';
+    content.append(dates, totals);
+    if (QA_MODE)
+        content.append(setup, saveBox);
+    content.append(banksaladField('거래 보기', filter), list, more);
+    panel.append(back, intro, picker, choose, message, content);
+    document.querySelector('#sheetBody').replaceChildren(panel);
+    openSheet('#detailSheet');
+    const token = sheetInteractionToken();
+    let rows = [], reviewed = [], visible = [], limit = 30, busy = false;
+    const picked = new Set(), paymentCards = new Map(), refundKeys = new Map();
+    function currentRows() { return reviewed.filter(row => row.date >= from.value && row.date <= to.value); }
+    function selectedDrafts() {
+        const drafts = new Map();
+        for (const row of currentRows()) {
+            const key = banksaladSourceKey(row);
+            if (!picked.has(key) || row.saved || row.issues.length)
+                continue;
+            const kind = banksaladRowKind(row);
+            if (kind === 'purchase' && purchaseCard.input.value && due.value)
+                drafts.set(key, { kind, cardId: purchaseCard.input.value, firstPaymentDate: due.value });
+            if (kind === 'refund' && refundKeys.has(key))
+                drafts.set(key, { kind, originalKey: refundKeys.get(key) });
+            if (kind === 'payment' && paymentCards.get(key) && account.value && confirmed.checked) {
+                drafts.set(key, { kind, cardId: paymentCards.get(key), accountId: account.value, balanceConfirmed: true });
+            }
+        }
+        return drafts;
+    }
+    function updateSelection() {
+        const drafts = selectedDrafts(), pickedRows = currentRows().filter(row => picked.has(banksaladSourceKey(row)) && !row.saved);
+        const amount = (kind) => pickedRows.filter(row => banksaladRowKind(row) === kind).reduce((sum, row) => sum + Math.abs(row.amount), 0);
+        selection.textContent = pickedRows.length + '건 선택 · 저장 준비 ' + drafts.size + '건 · 순소비 ' + won(amount('purchase') - amount('refund')) + ' · 출금 ' + won(amount('payment'));
+        save.disabled = busy || !drafts.size || drafts.size !== pickedRows.length || !from.validity.valid || !to.validity.valid || from.value > to.value;
+    }
+    function item(row) {
+        const key = banksaladSourceKey(row), kind = banksaladRowKind(row), article = banksaladNode('article', 'banksalad-row');
+        const left = banksaladNode('div'), right = banksaladNode('strong', 'banksalad-amount', (row.amount > 0 ? '+' : '') + won(row.amount));
+        left.append(banksaladNode('small', '', row.date + ' ' + row.time), banksaladNode('strong', '', row.name || row.group), banksaladNode('small', '', row.method));
+        const issueText = row.saved ? '저장 완료' : row.issues.join(' · ');
+        if (issueText)
+            left.append(banksaladNode('small', 'banksalad-review', issueText));
+        if (row.origin === 'screenshot')
+            left.append(banksaladNode('small', 'banksalad-review', '사진으로 확인한 사용'));
+        article.append(left, right);
+        if (QA_MODE && !row.saved && !row.issues.length && kind !== 'other') {
+            const input = banksaladNode('input');
+            input.type = 'checkbox';
+            input.checked = picked.has(key);
+            const label = banksaladNode('label', 'banksalad-check');
+            label.append(input, banksaladNode('span', '', kind === 'purchase' ? '일시불 확인 · 선택' : kind === 'payment' ? '카드대금 출금 확인 · 선택' : '취소·환불 확인 · 선택'));
+            input.addEventListener('change', () => { if (input.checked)
+                picked.add(key);
+            else
+                picked.delete(key); result.textContent = ''; updateSelection(); });
+            article.append(label);
+            if (kind === 'payment') {
+                const card = banksaladCardSelect('납부한 카드');
+                card.input.value = paymentCards.get(key) || '';
+                card.input.addEventListener('change', () => { paymentCards.set(key, card.input.value); updateSelection(); });
+                article.append(card.field, banksaladNode('small', 'banksalad-review', '청구 배분 대기 · 소비 합계에서 제외'));
+            }
+            if (kind === 'refund') {
+                const original = banksaladNode('select'), empty = banksaladNode('option', '', '취소 원거래 선택');
+                empty.value = '';
+                original.append(empty);
+                for (const candidate of rows.filter(source => source.sourceType === '지출' && source.amount < 0 && source.name === row.name &&
+                    -source.amount >= row.amount && (source.date < row.date || source.date === row.date && source.time <= row.time))) {
+                    const option = banksaladNode('option', '', candidate.date + ' ' + candidate.time + ' · ' + won(-candidate.amount));
+                    option.value = banksaladSourceKey(candidate);
+                    original.append(option);
+                }
+                original.value = refundKeys.get(key) || '';
+                original.addEventListener('change', () => { if (original.value)
+                    refundKeys.set(key, original.value);
+                else
+                    refundKeys.delete(key); updateSelection(); });
+                article.append(banksaladField('취소 원거래', original));
+            }
+            if (kind === 'purchase' && !/CARD|신용카드/i.test(row.method))
+                article.append(banksaladNode('small', 'banksalad-review', '카드 이용내역과 대조 후 선택'));
+        }
+        return article;
+    }
+    function paint() {
+        list.replaceChildren(...visible.slice(0, limit).map(item));
+        more.hidden = limit >= visible.length;
+    }
+    function refresh() {
+        reviewed = banksaladReview(rows);
+        if (!from.value || !to.value || from.value > to.value || !from.validity.valid || !to.validity.valid) {
+            totals.textContent = '파일 기간 안에서 시작일과 종료일을 확인해 주세요.';
+            list.replaceChildren();
+            more.hidden = true;
+            save.disabled = true;
+            return;
+        }
+        const current = currentRows(), sum = (selected) => selected.reduce((total, row) => total - row.amount, 0);
+        totals.replaceChildren(banksaladNode('strong', '', current.length + '건 · 저장 완료 ' + current.filter(row => row.saved).length + '건'), banksaladNode('small', '', '원본 순지출 ' + won(sum(current.filter(row => row.sourceType === '지출')))), banksaladNode('small', '', '카드대금 순출금 ' + won(sum(current.filter(row => banksaladRowKind(row) === 'payment')))));
+        visible = current.filter(row => filter.value === 'all' || (filter.value === 'issues' ? row.issues.length > 0 :
+            filter.value === 'saved' ? row.saved : filter.value === 'selected' ? picked.has(banksaladSourceKey(row)) : banksaladRowKind(row) === filter.value));
+        limit = 30;
+        paint();
+        updateSelection();
+    }
+    for (const field of [from, to, filter])
+        field.addEventListener('change', refresh);
+    for (const field of [purchaseCard.input, due, account, confirmed])
+        field.addEventListener('change', updateSelection);
+    more.addEventListener('click', () => { limit += 30; paint(); });
+    save.addEventListener('click', async () => {
+        if (busy || save.disabled)
+            return;
+        const drafts = selectedDrafts();
+        busy = true;
+        save.disabled = true;
+        result.textContent = '선택 거래를 저장하는 중…';
+        try {
+            const saved = await saveBanksaladBatch(rows, drafts);
+            for (const key of drafts.keys())
+                picked.delete(key);
+            if (saved.count)
+                render();
+            refresh();
+            result.textContent = saved.count + '건 저장 · 순소비 ' + won(saved.purchase - saved.refund) + ' · 카드대금 출금 ' + won(saved.payment);
+            if (saved.count)
+                toast('확인한 거래 ' + saved.count + '건을 테스트 원장에 저장했어요.');
+        }
+        catch (error) {
+            result.textContent = error instanceof Error ? error.message : '저장에 실패했어요.';
+        }
+        finally {
+            busy = false;
+            updateSelection();
+        }
+    });
+    function applyRows(loaded, label, drafts) {
+        rows = structuredClone(loaded).sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time));
+        if (!rows.length)
+            return;
+        picked.clear();
+        paymentCards.clear();
+        refundKeys.clear();
+        result.textContent = '';
+        const latest = rows[0].date, earliest = rows[rows.length - 1].date;
+        const week = new Date(Date.parse(latest + 'T00:00:00Z') - 6 * 86400000).toISOString().slice(0, 10);
+        from.min = to.min = earliest;
+        from.max = to.max = latest;
+        from.value = week < earliest ? earliest : week;
+        to.value = latest;
+        if (QA_MODE && drafts) {
+            for (const [key, draft] of drafts) {
+                picked.add(key);
+                if (draft.kind === 'purchase') {
+                    purchaseCard.input.value = draft.cardId;
+                    due.value = draft.firstPaymentDate;
+                }
+                if (draft.kind === 'refund')
+                    refundKeys.set(key, draft.originalKey);
+                if (draft.kind === 'payment') {
+                    paymentCards.set(key, draft.cardId);
+                    account.value = draft.accountId;
+                    confirmed.checked = draft.balanceConfirmed;
+                }
+            }
+            filter.value = 'selected';
+        }
+        else
+            filter.value = 'all';
+        message.textContent = label + ' · ' + earliest + ' ~ ' + latest;
+        content.hidden = false;
+        refresh();
+    }
+    picker.addEventListener('change', async () => {
+        const file = picker.files?.[0];
+        picker.value = '';
+        if (!file || busy)
+            return;
+        choose.disabled = true;
+        content.hidden = true;
+        message.textContent = '엑셀을 읽는 중…';
+        try {
+            const loaded = await readBanksaladFile(file);
+            if (token !== sheetInteractionToken())
+                return;
+            applyRows(loaded, '파일 전체 ' + loaded.length.toLocaleString('ko-KR') + '건');
+        }
+        catch (error) {
+            if (token === sheetInteractionToken())
+                message.textContent = error instanceof Error ? error.message : '파일을 읽지 못했어요.';
+        }
+        finally {
+            choose.disabled = false;
+        }
+    });
+    if (QA_MODE && preset)
+        applyRows(preset.rows, preset.label, preset.drafts);
+}
+;
+/* asset-os source: subscription-ui.js */
+'use strict';
+let subscriptionUiFilter = 'active';
+const subscriptionCycleLabels = { monthly: '매월', annual: '연간', irregular: '비정기', unknown: '주기 확인 필요' };
+const subscriptionStatusLabels = { active: '이용 중', ending: '해지 예정', ended: '종료', unknown: '확인 필요' };
+function subscriptionElement(selector) { return document.querySelector(selector); }
+function subscriptionMoney(s) { return s.amount === null ? '요금 확인 필요' : won(s.amount); }
+function subscriptionCardMarkup() {
+    const t = subscriptionTotals(), items = subscriptionStore().items;
+    if (!items.length)
+        return '';
+    return `<section class="card subscription-home"><div class="sectionhead"><h2>현재 구독·이용권</h2><button class="tinybtn" data-subscription-hub>전체 보기 ›</button></div><div class="subscription-total"><span>매월 결제 · ${t.monthlyCount}개</span><strong>${won(t.monthly)}</strong></div><div class="subscription-total"><span>연간 이용권 · ${t.annualCount}개</span><strong>${won(t.annual)}</strong></div></section>`;
+}
+function subscriptionServiceRow(s) { const status = subscriptionCurrentStatus(s); return `<button class="subscription-service" data-subscription-detail="${escapeHtml(s.id)}"><span class="subscription-logo" aria-hidden="true">${escapeHtml(s.name.slice(0, 1))}</span><span class="subscription-service-copy"><strong>${escapeHtml(s.name)}</strong><small>${escapeHtml(subscriptionStatusLabels[status])}${status === 'ending' && s.endDate ? ' · ' + escapeHtml(s.endDate) + '까지 이용' : s.nextDate ? ' · ' + escapeHtml(s.nextDate) + ' 결제 예정' : ''}</small></span><span class="subscription-service-price"><strong>${escapeHtml(subscriptionMoney(s))}</strong><small>${escapeHtml(subscriptionCycleLabels[s.cycle])}</small></span><span aria-hidden="true">›</span></button>`; }
+function subscriptionHubPage() {
+    const items = subscriptionStore().items, filtered = items.filter(s => { const status = subscriptionCurrentStatus(s); return subscriptionUiFilter === 'active' ? ['active', 'ending'].includes(status) : subscriptionUiFilter === 'unknown' ? status === 'unknown' : status === 'ended'; });
+    const tabs = [['active', '이용 중'], ['unknown', '확인 필요'], ['ended', '종료 이력']].filter(([key]) => key !== 'unknown' || items.some(s => subscriptionCurrentStatus(s) === 'unknown'));
+    return `<section class="stack"><div class="subscription-page-title"><div><small>통합 · 소비</small><h2>구독·이용권</h2></div><button class="tinybtn" data-subscription-new>＋ 등록</button></div><div class="subscription-tabs">${tabs.map(([key, label]) => `<button data-subscription-filter="${escapeHtml(key)}" aria-pressed="${escapeHtml(subscriptionUiFilter === key)}">${label}</button>`).join('')}</div>${filtered.length ? ['monthly', 'annual', 'irregular', 'unknown'].map(cycle => { const group = filtered.filter(s => s.cycle === cycle); return group.length ? `<section class="card subscription-group"><h3>${escapeHtml(subscriptionCycleLabels[cycle])}</h3>${group.map(subscriptionServiceRow).join('')}</section>` : ''; }).join('') : '<div class="card empty-state">이 상태의 구독이 없습니다.</div>'}<button class="diagnostic-action" data-subscription-back>소비 분석으로</button></section>`;
+}
+function subscriptionShowSheet(title, html) { const eyebrow = subscriptionElement('#sheetEyebrow'), heading = subscriptionElement('#sheetTitle'), body = subscriptionElement('#sheetBody'); if (!eyebrow || !heading || !body)
+    return; eyebrow.textContent = '통합 · 구독'; heading.textContent = title; body.innerHTML = html; openSheet('#detailSheet'); subscriptionBindUi(); }
+async function subscriptionUiSave(change, onSuccess) { try {
+    if (await subscriptionCommit(change)) {
+        render();
+        onSuccess();
+    }
+    else
+        toast('저장하지 못했습니다. 기존 상태를 유지했어요.');
+}
+catch (error) {
+    toast(error instanceof Error ? error.message : '구독 정보를 확인해 주세요.');
+} }
+function openSubscriptionDetail(id) {
+    const s = subscriptionFind(id);
+    if (!s)
+        return;
+    const rows = subscriptionRows(id), status = subscriptionCurrentStatus(s), sum = rows.reduce((n, t) => n + (t.type === 'refund' ? -1 : 1) * t.amount, 0);
+    subscriptionShowSheet(s.name, `<div class="subscription-detail-hero"><span>${escapeHtml(subscriptionStatusLabels[status])} · ${escapeHtml(subscriptionCycleLabels[s.cycle])}</span><strong>${escapeHtml(subscriptionMoney(s))}</strong></div><div class="sheetrows"><div class="sheetrow"><span>다음 결제일</span><strong>${escapeHtml(status === 'ended' || status === 'ending' ? '갱신 예정 없음' : s.nextDate || '확인 필요')}</strong></div><div class="sheetrow"><span>이용 종료일</span><strong>${escapeHtml(s.endDate || '확인 필요')}</strong></div><div class="sheetrow"><span>연결된 실제 결제 합계</span><strong>${won(sum)}</strong></div></div><div class="subscription-actions"><button data-subscription-edit="${escapeHtml(id)}">정보 수정</button><button data-subscription-manage="${escapeHtml(id)}">해지·재가입 관리</button><button data-subscription-pick="${escapeHtml(id)}">기존 거래 연결</button></div><h3>결제 이력</h3><div class="subscription-payments">${rows.map(t => `<div class="subscription-payment"><button data-subscription-tx="${escapeHtml(t.id)}"><strong>${escapeHtml(t.date)} · ${t.type === 'refund' ? '환불 ' : ''}${won(t.amount)}</strong><small>${escapeHtml(String(t.meta.banksaladMethod || t.category || ''))}</small></button>${t.type !== 'refund' ? `<button class="tinybtn" aria-label="${escapeHtml(t.date)} 거래 연결 해제" data-subscription-unlink="${escapeHtml(t.id)}" data-subscription-id="${escapeHtml(id)}">연결 해제</button>` : ''}</div>`).join('') || '<p class="source-note">연결된 결제내역이 없습니다.</p>'}</div>${s.events.length ? `<h3>이용 상태 이력</h3><div class="source-note">${s.events.map(e => `${escapeHtml(e.date || '날짜 미확인')} · ${escapeHtml(subscriptionStatusLabels[e.action] || (e.action === 'rejoin' ? '재가입' : e.action))}`).join('<br>')}</div>` : ''}`);
+}
+function openSubscriptionForm(id = '') {
+    const s = subscriptionFind(id), value = (key) => s?.[key] ?? '';
+    subscriptionShowSheet(s ? '구독 정보 수정' : '구독·이용권 등록', `<form id="subscriptionForm" class="form"><div class="field"><label for="subName">서비스명</label><input id="subName" name="name" required maxlength="100" value="${escapeHtml(value('name'))}"></div><div class="field"><label for="subAmount">결제 요금 · 원</label><input id="subAmount" name="amount" type="number" min="1" step="1" inputmode="numeric" placeholder="모르면 비워두기" value="${escapeHtml(value('amount'))}"></div><div class="field"><label for="subCycle">결제 주기</label><select id="subCycle" name="cycle">${Object.entries(subscriptionCycleLabels).map(([k, v]) => `<option value="${escapeHtml(k)}" ${s?.cycle === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div><div class="field"><label for="subStatus">이용 상태</label><select id="subStatus" name="status">${Object.entries(subscriptionStatusLabels).map(([k, v]) => `<option value="${escapeHtml(k)}" ${(s?.status || 'unknown') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div><div class="field"><label for="subNext">다음 결제일 · 선택</label><input id="subNext" name="nextDate" type="date" value="${escapeHtml(value('nextDate'))}"></div><div class="field"><label for="subEnd">이용 종료일 · 선택</label><input id="subEnd" name="endDate" type="date" value="${escapeHtml(value('endDate'))}"></div><div class="field"><label for="subUrl">서비스 구독 관리 주소 · 선택</label><input id="subUrl" name="manageUrl" type="url" placeholder="https://" value="${escapeHtml(value('manageUrl'))}"></div><button type="submit" class="primary">저장</button></form>`);
+    const form = document.querySelector('#subscriptionForm');
+    if (form)
+        form.onsubmit = async (e) => { e.preventDefault(); const d = new FormData(form); let saved = ''; await subscriptionUiSave(() => { saved = subscriptionSaveItem({ id: id || undefined, name: String(d.get('name') || ''), amount: d.get('amount') ? Number(d.get('amount')) : null, cycle: String(d.get('cycle')), status: String(d.get('status')), nextDate: String(d.get('nextDate') || ''), endDate: String(d.get('endDate') || ''), manageUrl: String(d.get('manageUrl') || '') }); }, () => openSubscriptionDetail(saved)); };
+}
+function openSubscriptionManage(id) {
+    const s = subscriptionFind(id);
+    if (!s)
+        return;
+    subscriptionShowSheet(s.name + ' · 해지 관리', `${s.manageUrl ? `<a class="diagnostic-action" href="${escapeHtml(s.manageUrl)}" target="_blank" rel="noopener noreferrer">서비스 구독 관리 페이지 열기 ↗</a>` : '<p class="source-note">서비스에서 실제 해지한 뒤 상태를 기록해 주세요. 관리 주소는 정보 수정에서 등록할 수 있어요.</p>'}<form id="subscriptionStatusForm" class="form"><div class="field"><label for="subAction">처리</label><select id="subAction" name="status"><option value="ending">자동갱신 껐어요 · 남은 기간 이용</option><option value="ended">이미 이용 종료됐어요</option><option value="active">다시 가입했어요</option></select></div><div class="field"><label for="subChanged">변경일</label><input id="subChanged" name="date" required type="date" max="${escapeHtml(localYmd())}" value="${escapeHtml(localYmd())}"></div><div class="field"><label for="subUntil">이용 가능한 마지막 날 · 선택</label><input id="subUntil" name="endDate" type="date" value="${escapeHtml(s.endDate)}"></div><button class="primary" type="submit">상태 기록</button></form><p class="source-note">과거 결제는 유지되고, 갱신 중단 상태에서는 다음 결제를 예정하지 않아요.</p>`);
+    const form = document.querySelector('#subscriptionStatusForm');
+    if (form)
+        form.onsubmit = async (e) => { e.preventDefault(); const d = new FormData(form); await subscriptionUiSave(() => subscriptionChangeStatus(id, String(d.get('status')), String(d.get('date')), String(d.get('endDate') || '')), () => openSubscriptionDetail(id)); };
+}
+function openSubscriptionPicker(id) {
+    const s = subscriptionFind(id);
+    if (!s)
+        return;
+    subscriptionShowSheet('기존 거래 연결', `<form id="subscriptionLinkForm" class="form"><div class="field"><label for="subSearch">날짜·사용처·금액 검색</label><input id="subSearch" type="search" placeholder="전체 기간에서 검색"></div><div id="subscriptionPickRows"></div><label class="subscription-check"><input type="checkbox" name="learn">같은 사용처·금액·결제수단은 다음에도 자동 연결</label><p class="source-note">구글·결제대행사처럼 여러 서비스를 섞어 표시하는 이름은 자동 규칙으로 사용하지 않아요.</p><button type="submit" class="primary">선택한 거래 연결</button></form>`);
+    const form = document.querySelector('#subscriptionLinkForm'), search = document.querySelector('#subSearch'), host = subscriptionElement('#subscriptionPickRows'), picked = new Set();
+    const draw = () => { if (!host)
+        return; const q = (search?.value || '').trim().toLowerCase(), rows = integratedStore().ledger.filter(t => ['expense', 'externalExpense'].includes(t.type) && !t.meta.cardHistoricalPurchase && !t.meta.subscriptionId && (!q || [t.date, subscriptionMerchant(t), String(t.amount)].join(' ').toLowerCase().includes(q))).sort((a, b) => b.date.localeCompare(a.date)); host.innerHTML = `<p class="source-note">${rows.length}건 · 최대 30건 표시${rows.length > 30 ? ' · 검색해서 범위를 좁혀주세요.' : ''}</p>` + rows.slice(0, 30).map(t => `<label class="subscription-check"><input type="checkbox" data-subscription-pick-tx="${escapeHtml(t.id)}" ${picked.has(t.id) ? 'checked' : ''}><span>${escapeHtml(t.date)} · ${escapeHtml(subscriptionMerchant(t) || t.category || '지출')}<strong>${won(t.amount)}</strong></span></label>`).join(''); host.querySelectorAll('[data-subscription-pick-tx]').forEach(input => input.onchange = () => { if (input.checked)
+        picked.add(input.dataset.subscriptionPickTx || '');
+    else
+        picked.delete(input.dataset.subscriptionPickTx || ''); }); };
+    if (search)
+        search.oninput = draw;
+    draw();
+    if (form)
+        form.onsubmit = async (e) => { e.preventDefault(); await subscriptionUiSave(() => subscriptionLink(id, [...picked], new FormData(form).get('learn') === 'on'), () => openSubscriptionDetail(id)); };
+}
+function openSubscriptionTransactionLink(txId) {
+    const tx = integratedStore().ledger.find(t => t.id === txId);
+    if (!tx)
+        return;
+    const linked = String(tx.meta.subscriptionId || '');
+    if (linked) {
+        openSubscriptionDetail(linked);
+        return;
+    }
+    subscriptionShowSheet('이 거래를 구독에 연결', `<form id="subscriptionSingleForm" class="form"><p>${escapeHtml(tx.date)} · ${won(tx.amount)}</p><div class="field"><label for="subSelect">서비스 선택</label><select name="id" id="subSelect">${subscriptionStore().items.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`).join('')}</select></div><button type="submit" class="primary">연결</button></form><button class="diagnostic-action" data-subscription-new>새 구독 등록</button>`);
+    const form = document.querySelector('#subscriptionSingleForm');
+    if (form)
+        form.onsubmit = async (e) => { e.preventDefault(); const id = String(new FormData(form).get('id') || ''); await subscriptionUiSave(() => subscriptionLink(id, [txId]), () => openSubscriptionDetail(id)); };
+}
+function subscriptionNotifications() { return subscriptionPendingNotices().map(n => { const s = subscriptionFind(n.subscriptionId), tx = integratedStore().ledger.find(t => t.id === n.transactionId); return { title: (s?.name || '구독') + (n.kind === 'after-end' ? ' · 해지 후 결제 확인' : n.kind === 'price-change' ? ' · 요금 변경 확인' : ' · 거래 연결 확인'), detail: (tx?.date || '') + ' · ' + won(tx?.amount || 0), kind: 'subscription', subscriptionNoticeId: n.id }; }); }
+function openSubscriptionNotice(id) {
+    const n = subscriptionPendingNotices().find(n => n.id === id);
+    if (!n)
+        return;
+    const s = subscriptionFind(n.subscriptionId), tx = integratedStore().ledger.find(t => t.id === n.transactionId);
+    if (!s || !tx)
+        return;
+    subscriptionShowSheet(s.name + ' · 결제 확인', `<p>${escapeHtml(tx.date)} · ${won(tx.amount)}</p><p class="source-note">확인 전에는 구독 상태를 자동으로 바꾸지 않아요.</p><div class="subscription-actions">${n.kind === 'after-end' ? `<button data-subscription-resolve="rejoin" data-subscription-notice-id="${escapeHtml(id)}">재가입한 결제예요</button><button data-subscription-resolve="charged" data-subscription-notice-id="${escapeHtml(id)}">해지 후 청구예요</button>` : `<button data-subscription-resolve="price-confirmed" data-subscription-notice-id="${escapeHtml(id)}">이 구독의 결제예요 · 요금 반영</button>`}<button data-subscription-resolve="other" data-subscription-notice-id="${escapeHtml(id)}">다른 결제예요</button></div>`);
+}
+function subscriptionBindUi() {
+    const bind = (selector, fn) => document.querySelectorAll(selector).forEach(b => b.onclick = () => fn(b));
+    bind('[data-subscription-hub]', () => { closeSheets({ all: true }); nav('integrated', 'subscriptions'); });
+    bind('[data-subscription-back]', () => nav('integrated', 'spending'));
+    bind('[data-subscription-filter]', b => { subscriptionUiFilter = b.dataset.subscriptionFilter || 'active'; render(); });
+    bind('[data-subscription-new]', () => openSubscriptionForm());
+    bind('[data-subscription-detail]', b => openSubscriptionDetail(b.dataset.subscriptionDetail || ''));
+    bind('[data-subscription-edit]', b => openSubscriptionForm(b.dataset.subscriptionEdit || ''));
+    bind('[data-subscription-manage]', b => openSubscriptionManage(b.dataset.subscriptionManage || ''));
+    bind('[data-subscription-pick]', b => openSubscriptionPicker(b.dataset.subscriptionPick || ''));
+    bind('[data-subscription-tx]', b => openIntegratedTransactionDetail(b.dataset.subscriptionTx || ''));
+    bind('[data-subscription-tx-link]', b => openSubscriptionTransactionLink(b.dataset.subscriptionTxLink || ''));
+    bind('[data-subscription-unlink]', b => { const id = b.dataset.subscriptionId || ''; void subscriptionUiSave(() => subscriptionUnlink(id, b.dataset.subscriptionUnlink || ''), () => openSubscriptionDetail(id)); });
+    bind('[data-subscription-notice]', b => openSubscriptionNotice(b.dataset.subscriptionNotice || ''));
+    bind('[data-subscription-resolve]', b => { const id = b.dataset.subscriptionNoticeId || '', n = subscriptionPendingNotices().find(n => n.id === id); void subscriptionUiSave(() => subscriptionResolveNotice(id, b.dataset.subscriptionResolve), () => { if (n)
+        openSubscriptionDetail(n.subscriptionId); }); });
+}

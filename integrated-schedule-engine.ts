@@ -1,3 +1,4 @@
+declare function runStoredCommand<T>(command:()=>Promise<T>):Promise<T>;
 'use strict';
 type ScheduleRecord=Record<string,unknown>&{id:string;kind?:string;type?:string;date?:string;day?:number|string;startDate?:string;endDate?:string;targetAccountId?:string;targetKind?:string;productId?:string;meta?:Record<string,unknown>;settlement?:{date?:string};transactions?:ScheduleRecord[]};
 type ScheduleState=Record<string,unknown>&{accounts:ScheduleRecord[];financeSchedules?:{items:ScheduleRecord[]};financialProducts?:{items:ScheduleRecord[]}};
@@ -225,7 +226,25 @@ function cardPurchaseInput(input:Record<string,unknown>,existingCardId=''):{name
  if(mode==='partial'&&(!paidInterestRounds.length||paidInterestRounds.some(n=>!Number.isInteger(n)||n<1||n>months)||new Set(paidInterestRounds).size!==paidInterestRounds.length))throw new Error('부분무이자의 이자 부담 회차를 확인해 주세요.');
  return{name,plan:{ledgerVersion:2,purchaseDate,firstPaymentDate:first,purchaseAmount:gross-discount,grossAmount:gross,purchaseDiscount:discount,months,annualRate:mode==='free'?0:rate,interestMode:mode,cardId,category,merchant,paidInterestRounds,bills:[],payments:[]}};
 }
-async function createCardPurchase(input:Record<string,unknown>):Promise<string>{let key='';const ok=await cardCommit(()=>{const {name,plan}=cardPurchaseInput(input),id=uid('card-plan'),liabilityId=uid('card-debt'),store=integratedStore(),s:ScheduleRecord={id,name,kind:'loan',amount:0,amountMode:'estimate',day:Number(plan.firstPaymentDate.slice(8)),startDate:plan.firstPaymentDate,active:true,liabilityId,source:'user',cardPlan:plan};(store.liabilities as ScheduleRecord[]).push({id:liabilityId,kind:'other',name,cardPlanId:id,productId:''});(store.ledger as ScheduleRecord[]).push({id:uid('igl'),date:plan.purchaseDate,type:'openingLiability',amount:plan.purchaseAmount,liabilityId,category:plan.category,meta:{cardPlanId:id}},{id:uid('igl'),date:plan.purchaseDate,type:'externalExpense',amount:plan.purchaseAmount,category:plan.category,note:merchantLabel(plan,name),meta:{cardPlanId:id,cardPurchase:true,spendingItem:name,merchant:plan.merchant,cardId:plan.cardId}});if(!state.financeSchedules)state.financeSchedules={items:[]};state.financeSchedules.items.push(normalizeFinanceSchedules({items:[s]}).items[0]);key=id});return ok?key:''}
+function stageCardPurchase(input:Record<string,unknown>):string{
+ const {name,plan}=cardPurchaseInput(input),id=uid('card-plan'),liabilityId=uid('card-debt'),store=integratedStore();
+ const schedule:ScheduleRecord={id,name,kind:'loan',amount:0,amountMode:'estimate',day:Number(plan.firstPaymentDate.slice(8)),startDate:plan.firstPaymentDate,active:true,liabilityId,source:'user',cardPlan:plan};
+ (store.liabilities as ScheduleRecord[]).push({id:liabilityId,kind:'other',name,cardPlanId:id,productId:''});
+ (store.ledger as ScheduleRecord[]).push(
+  {id:uid('igl'),date:plan.purchaseDate,type:'openingLiability',amount:plan.purchaseAmount,liabilityId,category:plan.category,meta:{cardPlanId:id}},
+  {id:uid('igl'),date:plan.purchaseDate,type:'externalExpense',amount:plan.purchaseAmount,category:plan.category,note:merchantLabel(plan,name),meta:{cardPlanId:id,cardPurchase:true,spendingItem:name,merchant:plan.merchant,cardId:plan.cardId}}
+ );
+ if(!state.financeSchedules)state.financeSchedules={items:[]};
+ state.financeSchedules.items.push(normalizeFinanceSchedules({items:[schedule]}).items[0]);
+ return id;
+}
+async function createCardPurchase(input:Record<string,unknown>):Promise<string>{
+ return runStoredCommand(async()=>{
+ let key='';
+ const ok=await cardCommit(()=>{key=stageCardPurchase(input)});
+ return ok?key:'';
+ });
+}
 // Import is a confirmed balance observation, not a fabricated historical cash payment.
 function cardHistoryIssue(value:unknown,purchaseAmount:number,purchaseDate:string,months:number):string{
  const b=value as CardHistoryBaseline|undefined,validDate=(v:unknown)=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&Number.isFinite(Date.parse(v+'T00:00:00Z'))&&new Date(v+'T00:00:00Z').toISOString().slice(0,10)===v,money=(v:unknown)=>typeof v==='number'&&Number.isSafeInteger(v)&&v>=0;
@@ -267,19 +286,32 @@ function cardPaymentRows(s:ScheduleRecord,date:string,principal:number,interest:
  const metadata:Record<string,unknown>={cardPayment:true,...(bill?{cardBillId:bill.id,scheduleId:s.id,scheduleDate:bill.dueDate,loanPrincipal:principal,loanInterest:interest,actualAmount:principal+interest,scheduledAmount:cardBillTotal(bill)}:{cardPayoff:true})},rows:ScheduleRecord[]=[];
  for(const [type,amount,cash,component] of [['debtPrincipal',principal-pointsPrincipal,true,'principal'],['externalDebtPrincipal',pointsPrincipal,false,'principal'],['debtInterest',interest-pointsInterest,true,'interest'],['debtInterestExternal',pointsInterest,false,'interest']] as const)if(amount)rows.push(cardPosting(s,date,type,amount,eventId,{...metadata,component,cardPoints:!cash},cash?'cash-main':''));return rows;
 }
-async function recordCardPayment(id:string,input:Record<string,unknown>):Promise<string>{let key='';const ok=await cardCommit(()=>{
+async function recordCardPayment(id:string,input:Record<string,unknown>):Promise<string>{
+ return runStoredCommand(async()=>{let key='';const ok=await cardCommit(()=>{
  const {s,p}=requireCard(id),date=cardDate(input.date,true),payoff=input.kind==='payoff',bill=payoff?null:p.bills.find(b=>b.id===String(input.billId||''));
  if(date<p.purchaseDate||p.historyBaseline&&date<p.historyBaseline.asOf||!payoff&&!bill)throw new Error('납부일과 청구 기록을 확인해 주세요.');if(bill&&(cardBillPaid(p,bill)||date<bill.issuedDate))throw new Error('이미 납부했거나 명세서 확인일보다 이른 납부입니다.');
  const principal=payoff?cardMoney(input.principal):bill!.principal-bill!.principalDiscount,interest=payoff?cardMoney(input.interest??0):bill!.interest-bill!.interestDiscount,pointsPrincipal=cardMoney(input.pointsPrincipal??0),pointsInterest=cardMoney(input.pointsInterest??0);
  if(payoff&&(principal!==cardRemaining(s,date)||principal<=0)||principal>cardRemaining(s,date))throw new Error('남은 원금과 상환 원금을 확인해 주세요.');
+ if((integratedStore().ledger as ScheduleRecord[]).some(row=>row.meta?.unallocatedCardPayment&&row.date===date&&row.meta.cardId===p.cardId)){
+  throw new Error('같은 날짜의 카드대금 출금 기록이 있어요. 기존 출금과 청구를 먼저 대조해 주세요.');
+ }
  key=uid('card-payment');const rows=cardPaymentRows(s,date,principal,interest,pointsPrincipal,pointsInterest,key,bill||null),cash=principal+interest-pointsPrincipal-pointsInterest;(integratedStore().ledger as ScheduleRecord[]).push(...rows);
  p.payments.push({id:key,billId:bill?.id||'',date,kind:payoff?'payoff':'bill',principal,interest,pointsPrincipal,pointsInterest,cash,rowIds:rows.map(x=>x.id)});if(payoff)for(const b of p.bills)if(!cardBillPaid(p,b))b.settledBy=key;
- });return ok?key:''}
+ });return ok?key:'' });
+}
 async function removeCardPayment(id:string,paymentId:string):Promise<boolean>{return cardCommit(()=>{const {s,p}=requireCard(id),payment=p.payments.find(x=>x.id===paymentId);if(!payment||p.payments.at(-1)?.id!==paymentId)throw new Error('마지막 납부부터 되돌려 주세요.');cardAssertLatestEvent(s,paymentId);integratedStore().ledger=(integratedStore().ledger as ScheduleRecord[]).filter(x=>x.meta?.cardEventId!==paymentId);p.payments=p.payments.filter(x=>x.id!==paymentId);for(const b of p.bills)if(b.settledBy===paymentId)delete b.settledBy})}
 function cardInterestRefundRows(s:ScheduleRecord,date:string,eventId:string,cash:number,points:number):ScheduleRecord[]{
  const all=cardRows(s),out:ScheduleRecord[]=[];for(const [type,amount] of [['debtInterest',cash],['debtInterestExternal',points]] as const){let left=amount;for(const original of all.filter(x=>x.type===type&&String(x.date)<=date)){const used=all.filter(x=>x.type==='refund'&&x.meta?.refundOf===original.id).reduce((sum,x)=>sum+Number(x.amount||0),0),part=Math.min(left,Number(original.amount||0)-used);if(part>0){out.push({...cardPosting(s,date,'refund',part,eventId,{refundOf:original.id,cardInterestRefund:true,cardCashRefund:type==='debtInterest',cardPointsRefund:type==='debtInterestExternal',cardCredit:'refund'},type==='debtInterest'?'cash-main':''),fixed:true,...(type==='debtInterestExternal'?{toAccountId:''}:{})});left-=part}if(!left)break}if(left)throw new Error('돌려받은 이자·포인트가 실제 납부한 이자를 초과합니다.')}return out;
 }
-async function recordCardRefund(id:string,input:Record<string,unknown>):Promise<string>{let key='';const ok=await cardCommit(()=>{const {s,p}=requireCard(id),date=cardDate(input.date,true),amount=cardMoney(input.amount??0),interestCash=cardMoney(input.interestCashAmount??0),interestPoints=cardMoney(input.interestPointsAmount??0),original=cardOriginal(s);if(!original||date<p.purchaseDate||!amount&&!interestCash&&!interestPoints)throw new Error('환불 금액과 날짜를 확인해 주세요.');const refunded=cardRows(s).filter(x=>x.type==='refund'&&!x.meta?.cardInterestRefund).reduce((sum,x)=>sum+Number(x.amount||0),0);if(amount+refunded>p.purchaseAmount)throw new Error('환불·할인 합계가 구매금액을 초과합니다.');const cash=cardMoney(input.cashAmount??0),points=cardMoney(input.pointsAmount??0),debt=amount-cash-points,remaining=Math.max(0,cardRemaining(s,date)),paidCash=p.payments.filter(x=>x.date<=date).reduce((sum,x)=>sum+x.principal-x.pointsPrincipal,0),paidPoints=p.payments.filter(x=>x.date<=date).reduce((sum,x)=>sum+x.pointsPrincipal,0),refundedCash=cardRows(s).filter(x=>x.type==='refund'&&x.meta?.cardCashRefund&&!x.meta?.cardInterestRefund).reduce((sum,x)=>sum+Number(x.amount||0),0),refundedPoints=cardRows(s).filter(x=>x.type==='refund'&&x.meta?.cardPointsRefund&&!x.meta?.cardInterestRefund).reduce((sum,x)=>sum+Number(x.amount||0),0);if(debt<0||debt>remaining||cash+refundedCash>paidCash||points+refundedPoints>paidPoints)throw new Error('환불의 현금·포인트·미납 원금 구분을 확인해 주세요.');key=uid('card-refund');const interestRows=cardInterestRefundRows(s,date,key,interestCash,interestPoints),rows=integratedStore().ledger as ScheduleRecord[];rows.push(...interestRows);if(debt){rows.push(cardPosting(s,date,'externalDebtPrincipal',debt,key,{cardCredit:'refund'}));rows.push({...cardPosting(s,date,'refund',debt,key,{refundOf:original.id,cardCredit:'refund'}),toAccountId:''})}if(cash)rows.push(cardPosting(s,date,'refund',cash,key,{refundOf:original.id,cardCashRefund:true,cardCredit:'refund'},'cash-main'));if(points)rows.push({...cardPosting(s,date,'refund',points,key,{refundOf:original.id,cardPointsRefund:true,cardCredit:'refund'}),toAccountId:''})});return ok?key:''}
+function stageCardRefund(id:string,input:Record<string,unknown>):string{const {s,p}=requireCard(id),date=cardDate(input.date,true),amount=cardMoney(input.amount??0),interestCash=cardMoney(input.interestCashAmount??0),interestPoints=cardMoney(input.interestPointsAmount??0),original=cardOriginal(s);if(!original||date<p.purchaseDate||!amount&&!interestCash&&!interestPoints)throw new Error('환불 금액과 날짜를 확인해 주세요.');const refunded=cardRows(s).filter(x=>x.type==='refund'&&!x.meta?.cardInterestRefund).reduce((sum,x)=>sum+Number(x.amount||0),0);if(amount+refunded>p.purchaseAmount)throw new Error('환불·할인 합계가 구매금액을 초과합니다.');const cash=cardMoney(input.cashAmount??0),points=cardMoney(input.pointsAmount??0),debt=amount-cash-points,remaining=Math.max(0,cardRemaining(s,date)),paidCash=p.payments.filter(x=>x.date<=date).reduce((sum,x)=>sum+x.principal-x.pointsPrincipal,0),paidPoints=p.payments.filter(x=>x.date<=date).reduce((sum,x)=>sum+x.pointsPrincipal,0),refundedCash=cardRows(s).filter(x=>x.type==='refund'&&x.meta?.cardCashRefund&&!x.meta?.cardInterestRefund).reduce((sum,x)=>sum+Number(x.amount||0),0),refundedPoints=cardRows(s).filter(x=>x.type==='refund'&&x.meta?.cardPointsRefund&&!x.meta?.cardInterestRefund).reduce((sum,x)=>sum+Number(x.amount||0),0);if(debt<0||debt>remaining||cash+refundedCash>paidCash||points+refundedPoints>paidPoints)throw new Error('환불의 현금·포인트·미납 원금 구분을 확인해 주세요.');const key=uid('card-refund');const interestRows=cardInterestRefundRows(s,date,key,interestCash,interestPoints),rows=integratedStore().ledger as ScheduleRecord[];rows.push(...interestRows);if(debt){rows.push(cardPosting(s,date,'externalDebtPrincipal',debt,key,{cardCredit:'refund'}));rows.push({...cardPosting(s,date,'refund',debt,key,{refundOf:original.id,cardCredit:'refund'}),toAccountId:''})}if(cash)rows.push(cardPosting(s,date,'refund',cash,key,{refundOf:original.id,cardCashRefund:true,cardCredit:'refund'},'cash-main'));if(points)rows.push({...cardPosting(s,date,'refund',points,key,{refundOf:original.id,cardPointsRefund:true,cardCredit:'refund'}),toAccountId:''});return key;
+}
+async function recordCardRefund(id:string,input:Record<string,unknown>):Promise<string>{
+ return runStoredCommand(async()=>{
+ let key='';
+ const ok=await cardCommit(()=>{key=stageCardRefund(id,input)});
+ return ok?key:'';
+ });
+}
 async function removeCardRefund(id:string,eventId:string):Promise<boolean>{return cardCommit(()=>{const {s}=requireCard(id);if(!cardRows(s).some(x=>x.meta?.cardEventId===eventId&&x.meta?.cardCredit==='refund'))throw new Error('환불 기록을 찾지 못했습니다.');cardAssertLatestEvent(s,eventId);integratedStore().ledger=(integratedStore().ledger as ScheduleRecord[]).filter(x=>x.meta?.cardEventId!==eventId)})}
 
 // Pure boundary validation also runs before startup migration and backup restore.
