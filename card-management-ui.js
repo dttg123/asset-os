@@ -1,8 +1,8 @@
 "use strict";
 'use strict';
 const CARD_ISSUER_TEMPLATES = ['국민카드', '삼성카드', '현대카드', '신한카드', '하나카드', '롯데카드', '우리카드', 'NH농협카드', '기타 카드'];
-const SETTINGS_GROUPS = [{ key: 'assets', title: '자산·연동', icon: '☁', hint: 'Google·클라우드 · 한국투자 연결', actions: ['cloud-auth', 'kis'] }, { key: 'finance', title: '금융 관리', icon: '▣', hint: '카드·할부 · 보험 · 납부 일정', actions: ['cards', 'card-ledger', 'insurance', 'schedule', 'categories', 'products'] }, { key: 'invest', title: '투자·연금', icon: '↗', hint: 'ISA · 연금저축 · IRP · AI 전략', actions: ['policies', 'pension-settings', 'ai-strategy'] }, { key: 'data', title: '앱 설정·데이터 관리', icon: '⚙', hint: '화면·테마 · 백업·복원 · 시스템 진단', actions: ['appearance', 'backup', 'advanced'] }];
-const SETTINGS_LABELS = { 'cloud-auth': 'Google · 클라우드', kis: '한국투자 연결', cards: '카드 관리', 'card-ledger': '카드·할부 내역', insurance: '내 보험', schedule: '금융 일정', categories: '소비 카테고리', products: '예금·적금·대출 상품', policies: 'ISA·연금 제도 관리', 'pension-settings': '개인연금 설정', 'ai-strategy': 'AI 투자전략', appearance: '화면 및 테마', backup: '백업·복원', advanced: '고급 설정·시스템 진단' };
+const SETTINGS_GROUPS = [{ key: 'assets', title: '자산·연동', icon: '☁', hint: 'Google·클라우드 · 한국투자 연결', actions: ['cloud-auth', 'kis'] }, { key: 'finance', title: '금융 관리', icon: '▣', hint: '카드·할부 · 보험 · 구독 · 납부 일정', actions: ['cards', 'card-ledger', 'insurance', 'subscriptions', 'schedule', 'categories', 'products'] }, { key: 'invest', title: '투자·연금', icon: '↗', hint: 'ISA · 연금저축 · IRP · AI 전략', actions: ['policies', 'pension-settings', 'ai-strategy'] }, { key: 'data', title: '앱 설정·데이터 관리', icon: '⚙', hint: '화면·테마 · 백업·복원 · 시스템 진단', actions: ['appearance', 'backup', 'advanced'] }];
+const SETTINGS_LABELS = { 'cloud-auth': 'Google · 클라우드', kis: '한국투자 연결', cards: '카드 관리', 'card-ledger': '카드·할부 내역', insurance: '내 보험', subscriptions: '구독·이용권', schedule: '금융 일정', categories: '소비 카테고리', products: '예금·적금·대출 상품', policies: 'ISA·연금 제도 관리', 'pension-settings': '개인연금 설정', 'ai-strategy': 'AI 투자전략', appearance: '화면 및 테마', backup: '백업·복원', advanced: '고급 설정·시스템 진단' };
 function cardUiButton(label, action, id = '', extra = '') { return `<button type="button" class="diagnostic-action" data-card-action="${escapeHtml(action)}" data-card-id="${escapeHtml(id)}" ${extra}>${escapeHtml(label)}</button>`; }
 function cardUiPair(label, value) { return `<div class="sheetrow"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`; }
 function cardUiInput(name, label, value = '', type = 'text', required = true) { return `<div class="field"><label for="card-field-${escapeHtml(name)}">${escapeHtml(label)}</label><input id="card-field-${escapeHtml(name)}" name="${escapeHtml(name)}" type="${escapeHtml(type)}" value="${escapeHtml(value)}" ${type === 'number' ? 'min="0" step="1" inputmode="numeric"' : ''} ${required ? 'required' : ''}></div>`; }
@@ -54,6 +54,8 @@ else if (action === 'card-ledger')
     openCardPlansHub();
 else if (action === 'insurance')
     openInsuranceHub();
+else if (action === 'subscriptions')
+    openSubscriptionHub();
 else if (action === 'schedule') {
     closeSheets({ all: true });
     nav('integrated', 'schedule');
