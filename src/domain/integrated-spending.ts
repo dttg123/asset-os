@@ -26,12 +26,22 @@ declare const state:unknown;
 declare function financeSchedules():Array<{id?:string;source?:string;kind?:string;name?:string;productId?:string}>;
 declare function integratedManualLedger():IntegratedSpendingRow[];
 type SpendingClassification={category:string;item:string};
+function spendingMerchantName(raw:unknown):string{
+ const name=String(raw||'').trim();if(typeof setting!=='function'||setting().merchantNameCleanup!==true)return name;
+ const compact=name.replace(/\s+/g,'').replace(/^(?:주식회사|\(주\)|\(유\))/,'');
+ if(/^(?:구글(?:페이먼트(?:코리아)?(?:유한회사)?|페이|플레이)?|google(?:play|pay|payments)?)$/i.test(compact))return '구글플레이';
+ if(compact==='우아한형제들'||compact==='배달의민족')return '배달의민족';
+ const brands:Array<[RegExp,string]>=[[/^컴포즈커피/,'컴포즈커피'],[/^메가(?:엠지씨|MGC)?커피/i,'메가MGC커피'],[/^(?:지에스(?:\(GS\))?25|GS25)/i,'GS25'],[/^(?:씨유(?:\(CU\))?|CU(?:\(씨유\))?)(?:$|[가-힣(])/i,'CU'],[/^세븐일레븐/,'세븐일레븐'],[/^이마트24/,'이마트24'],[/^이마트(?:$|[^0-9])/,'이마트'],[/^파리바게[뜨트]/,'파리바게뜨'],[/^(?:한국)?맥도날드/,'맥도날드'],[/^금화왕돈까스/,'금화왕돈까스'],[/^보사노바커피로스터스/,'보사노바커피로스터스'],[/^현대자동차.*점$/,'현대자동차']];
+ return brands.find(([pattern])=>pattern.test(compact))?.[1]||name;
+}
 function spendingCategoryNamesSafe(name:string):boolean{if(typeof setting!=='function')return DEFAULT_SPENDING_CATEGORIES.includes(name);return spendingCategoryNames().includes(spendingCategoryLabel(name))}
 function spendingClassification(row:IntegratedSpendingRow):SpendingClassification{
  const settings=typeof setting==='function'?setting():{},map=settings.spendingClassifications,entry=map&&typeof map==='object'&&!Array.isArray(map)&&Object.hasOwn(map,String(row.id))?(map as Record<string,unknown>)[String(row.id)]:null,label=entry&&typeof entry==='object'?entry as Record<string,unknown>:{};
  const history=typeof financeSchedules==='function'&&financeSchedules().some(x=>x.id===row.meta?.cardPlanId&&x.source==='statement-history'),merchant=String(row.meta?.merchant||'').trim(),fallback=history&&row.category==='기타'?(merchant==='조이시티'?'게임·취미':'미분류'):row.category;
  const schedule=typeof financeSchedules==='function'?financeSchedules().find(x=>x.id===row.meta?.scheduleId):null,raw=String(fallback||'').trim(),known=spendingCategoryNamesSafe(raw),derived=schedule?.kind==='insurance'&&['','기타','미분류'].includes(raw)?'보험':known?raw:schedule?.kind==='insurance'?'보험':raw==='어머니용돈'?'용돈·선물':raw.includes('보험')?'보험':raw==='생활비'?'기타':fallback;
- return{category:spendingCategoryLabel(typeof label.category==='string'&&label.category?label.category:derived),item:typeof label.item==='string'&&label.item?label.item:String(history&&merchant?merchant:row.meta?.spendingItem||row.meta?.merchant||schedule?.name||(row.category==='기타'?'기타 지출':row.category)||'이름 없는 지출')};
+ const item=typeof label.item==='string'&&label.item?label.item:String(history&&merchant?merchant:row.meta?.spendingItem||row.meta?.merchant||schedule?.name||(row.category==='기타'?'기타 지출':row.category)||'이름 없는 지출');
+ const category=typeof label.category==='string'&&label.category?label.category:settings.googlePlayIsGaming===true&&spendingMerchantName(merchant||item)==='구글플레이'?'게임·취미':derived;
+ return{category:spendingCategoryLabel(category),item:spendingMerchantName(item)};
 }
 async function saveSpendingClassifications(ids:string[],category:string,item:string):Promise<boolean>{
  const source=typeof state!=='undefined'&&typeof integratedManualLedger==='function'?integratedManualLedger():integratedLedger(),selected=[...new Set(ids)],name=String(item||'').trim(),group=String(category||'').trim(),settings=setting(),had=Object.hasOwn(settings,'spendingClassifications'),before=settings.spendingClassifications;

@@ -4,20 +4,15 @@ const subscriptionCycleLabels = { monthly: '매월', annual: '연간', irregular
 const subscriptionStatusLabels = { active: '이용 중', ending: '해지 예정', ended: '종료', unknown: '확인 필요' };
 function subscriptionElement(selector) { return document.querySelector(selector); }
 function subscriptionMoney(s) { return s.amount === null ? '요금 확인 필요' : won(s.amount); }
-function subscriptionCardMarkup() {
-    const t = subscriptionTotals(), items = subscriptionStore().items;
-    if (!items.length)
-        return '';
-    return `<section class="card subscription-home"><div class="sectionhead"><h2>현재 구독·이용권</h2><button class="tinybtn" data-subscription-hub>전체 보기 ›</button></div><div class="subscription-total"><span>매월 결제 · ${t.monthlyCount}개</span><strong>${won(t.monthly)}</strong></div><div class="subscription-total"><span>연간 이용권 · ${t.annualCount}개</span><strong>${won(t.annual)}</strong></div></section>`;
-}
 function subscriptionServiceRow(s) { const status = subscriptionCurrentStatus(s); return `<button class="subscription-service" data-subscription-detail="${escapeHtml(s.id)}"><span class="subscription-logo" aria-hidden="true">${escapeHtml(s.name.slice(0, 1))}</span><span class="subscription-service-copy"><strong>${escapeHtml(s.name)}</strong><small>${escapeHtml(subscriptionStatusLabels[status])}${status === 'ending' && s.endDate ? ' · ' + escapeHtml(s.endDate) + '까지 이용' : s.nextDate ? ' · ' + escapeHtml(s.nextDate) + ' 결제 예정' : ''}</small></span><span class="subscription-service-price"><strong>${escapeHtml(subscriptionMoney(s))}</strong><small>${escapeHtml(subscriptionCycleLabels[s.cycle])}</small></span><span aria-hidden="true">›</span></button>`; }
-function subscriptionHubPage() {
+function subscriptionHubPage(inSheet = false) {
     const items = subscriptionStore().items, filtered = items.filter(s => { const status = subscriptionCurrentStatus(s); return subscriptionUiFilter === 'active' ? ['active', 'ending'].includes(status) : subscriptionUiFilter === 'unknown' ? status === 'unknown' : status === 'ended'; });
     const tabs = [['active', '이용 중'], ['unknown', '확인 필요'], ['ended', '종료 이력']].filter(([key]) => key !== 'unknown' || items.some(s => subscriptionCurrentStatus(s) === 'unknown'));
-    return `<section class="stack"><div class="subscription-page-title"><div><small>통합 · 소비</small><h2>구독·이용권</h2></div><button class="tinybtn" data-subscription-new>＋ 등록</button></div><div class="subscription-tabs">${tabs.map(([key, label]) => `<button data-subscription-filter="${escapeHtml(key)}" aria-pressed="${escapeHtml(subscriptionUiFilter === key)}">${label}</button>`).join('')}</div>${filtered.length ? ['monthly', 'annual', 'irregular', 'unknown'].map(cycle => { const group = filtered.filter(s => s.cycle === cycle); return group.length ? `<section class="card subscription-group"><h3>${escapeHtml(subscriptionCycleLabels[cycle])}</h3>${group.map(subscriptionServiceRow).join('')}</section>` : ''; }).join('') : '<div class="card empty-state">이 상태의 구독이 없습니다.</div>'}<button class="diagnostic-action" data-subscription-back>소비 분석으로</button></section>`;
+    return `<section class="stack" data-subscription-hub-view><div class="subscription-page-title">${inSheet ? '' : '<div><small>설정 · 금융 관리</small><h2>구독·이용권</h2></div>'}<button class="tinybtn" data-subscription-new>＋ 등록</button></div><div class="subscription-tabs">${tabs.map(([key, label]) => `<button data-subscription-filter="${escapeHtml(key)}" aria-pressed="${escapeHtml(subscriptionUiFilter === key)}">${label}</button>`).join('')}</div>${filtered.length ? ['monthly', 'annual', 'irregular', 'unknown'].map(cycle => { const group = filtered.filter(s => s.cycle === cycle); return group.length ? `<section class="card subscription-group"><h3>${escapeHtml(subscriptionCycleLabels[cycle])}</h3>${group.map(subscriptionServiceRow).join('')}</section>` : ''; }).join('') : '<div class="card empty-state">이 상태의 구독이 없습니다.</div>'}<button class="diagnostic-action" data-subscription-back>금융 관리로</button></section>`;
 }
 function subscriptionShowSheet(title, html) { const eyebrow = subscriptionElement('#sheetEyebrow'), heading = subscriptionElement('#sheetTitle'), body = subscriptionElement('#sheetBody'); if (!eyebrow || !heading || !body)
-    return; eyebrow.textContent = '통합 · 구독'; heading.textContent = title; body.innerHTML = html; openSheet('#detailSheet'); subscriptionBindUi(); }
+    return; eyebrow.textContent = '금융 관리 · 구독'; heading.textContent = title; body.innerHTML = html; openSheet('#detailSheet'); subscriptionBindUi(); }
+function openSubscriptionHub() { subscriptionShowSheet('구독·이용권', subscriptionHubPage(true)); }
 async function subscriptionUiSave(change, onSuccess) { try {
     if (await subscriptionCommit(change)) {
         render();
@@ -95,9 +90,12 @@ function openSubscriptionNotice(id) {
 }
 function subscriptionBindUi() {
     const bind = (selector, fn) => document.querySelectorAll(selector).forEach(b => b.onclick = () => fn(b));
-    bind('[data-subscription-hub]', () => { closeSheets({ all: true }); nav('integrated', 'subscriptions'); });
-    bind('[data-subscription-back]', () => nav('integrated', 'spending'));
-    bind('[data-subscription-filter]', b => { subscriptionUiFilter = b.dataset.subscriptionFilter || 'active'; render(); });
+    bind('[data-subscription-hub]', () => openSubscriptionHub());
+    bind('[data-subscription-back]', () => openSettingsGroup('finance'));
+    bind('[data-subscription-filter]', b => { subscriptionUiFilter = b.dataset.subscriptionFilter || 'active'; if (document.querySelector('#detailSheet.open [data-subscription-hub-view]'))
+        openSubscriptionHub();
+    else
+        render(); });
     bind('[data-subscription-new]', () => openSubscriptionForm());
     bind('[data-subscription-detail]', b => openSubscriptionDetail(b.dataset.subscriptionDetail || ''));
     bind('[data-subscription-edit]', b => openSubscriptionForm(b.dataset.subscriptionEdit || ''));

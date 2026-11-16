@@ -17,7 +17,7 @@ if('serviceWorker'in navigator)window.addEventListener('load',async()=>{
   pending=true;applyUpdate();if(!refreshing&&!timer)timer=setInterval(applyUpdate,1000);
  });
  try{
-  const reg=await navigator.serviceWorker.register('./service-worker.js?v=0.7.28&build=20261117-1',{scope:'./',updateViaCache:'none'});
+  const reg=await navigator.serviceWorker.register('./service-worker.js?v=0.7.29&build=20261117-2',{scope:'./',updateViaCache:'none'});
   let checking=false;
   const check=async()=>{if(checking||document.visibilityState==='hidden')return;checking=true;try{await reg.update()}catch{}finally{checking=false;applyUpdate()}};
   window.addEventListener('focus',()=>{void check()});
