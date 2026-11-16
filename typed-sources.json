@@ -64,5 +64,7 @@
   "boot.ts",
   "card-management-ui.ts",
   "integrated-ux-v42.ts",
-  "banksalad-import.ts"
+  "banksalad-import.ts",
+  "subscription-engine.ts",
+  "subscription-ui.ts"
 ]

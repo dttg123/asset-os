@@ -28,7 +28,8 @@
       "backup-v04.js",
       "insurance.js",
       "source-archive.js",
-      "core-accessors.js"
+      "core-accessors.js",
+      "subscription-engine.js"
     ],
     "asset-ledgers.js": [
       "src/domain/investment-position.js",
@@ -63,7 +64,8 @@
       "release-v069.js",
       "card-management-ui.js",
       "integrated-ux-v42.js",
-      "banksalad-import.js"
+      "banksalad-import.js",
+      "subscription-ui.js"
     ],
     "asset-runtime.js": [
       "src/storage/cloud-save-contract.js",
@@ -86,7 +88,8 @@
       "css-core-hardening.css",
       "css-release-v069.css",
       "css-app-refresh.css",
-      "css-integrated-v42.css"
+      "css-integrated-v42.css",
+      "css-subscriptions.css"
     ]
   }
 }

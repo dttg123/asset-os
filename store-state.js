@@ -1,3 +1,4 @@
+"use strict";
 'use strict';
 function normalizeState(data) {
     assertStateDataShape(data || seed);
@@ -346,6 +347,8 @@ async function persist(notify = true) {
     updateStorageBusyUi();
     const before = clone((lastPersistedState || state));
     try {
+        if (typeof subscriptionSyncTransactions === 'function')
+            subscriptionSyncTransactions();
         state.accounts.forEach((a) => { syncHoldingLifecycle(a); rebuildLedgerIndexes(a); });
         syncCurrentPensionSnapshot();
         syncCurrentIsaSnapshot();

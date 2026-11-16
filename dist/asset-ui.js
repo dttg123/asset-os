@@ -107,7 +107,7 @@ function homeFinancialAlerts() { const today = localYmd(), alerts = []; for (con
 } return alerts.sort((a, b) => a.detail.localeCompare(b.detail, 'ko')); }
 function homeSystemAlerts() { const balance = pensionBalanceIssueRows(), balanceTitles = new Set(balance.map(row => row.title)), finance = homeFinancialAlerts(), system = systemIntegrityIssues().filter(message => !message.startsWith('ISA:') && !balanceTitles.has(message)).map(message => ({ title: message, detail: '통합에서 확인', kind: 'system' })), backup = backupHealth(); if (['warn', 'danger'].includes(backup.level))
     system.push({ title: backup.label, detail: backup.detail, kind: 'backup' }); const refresh = typeof investmentRefreshStatus === 'function' ? investmentRefreshStatus() : { errors: [] }, names = { pension: '개인연금', irp: 'IRP' }; for (const key of (refresh.errors || []))
-    system.push({ title: `${names[key] || key} 갱신 확인 필요`, detail: '이전 자료를 유지하고 있습니다.', kind: 'refresh' }); return [...finance, ...balance, ...system]; }
+    system.push({ title: `${names[key] || key} 갱신 확인 필요`, detail: '이전 자료를 유지하고 있습니다.', kind: 'refresh' }); return [...finance, ...balance, ...system, ...(typeof subscriptionNotifications === 'function' ? subscriptionNotifications() : [])]; }
 function homeChangeMarkup() { const change = homeMonthChange(); return change.available ? `<div class="change home-change"><strong class="${escapeHtml(change.netChange < 0 ? 'negative' : 'positive')}">이번 달 순자산 ${signed(change.netChange)}</strong></div>` : '<div class="change">이번 달 변화 준비 중</div>'; }
 function homeChangeDetailMarkup() { const change = homeMonthChange(); return change.available ? `<div class="sheetrows"><div class="sheetrow"><span>이번 달 순자산 변화</span><strong>${signed(change.netChange)}</strong></div><div class="sheetrow"><span>외부 순유입</span><strong>${signed(change.externalNet)}</strong></div><div class="sheetrow"><span>평가·기타</span><strong>${signed(change.marketOther)}</strong></div></div>` : '<div class="source-note">월 변화 기준을 준비 중입니다.</div>'; }
 function homeCard(id) {
@@ -136,7 +136,8 @@ function homeAccountRow(id) { const template = document.createElement('template'
     detail.innerHTML = '<span aria-hidden="true">›</span>';
 } return template.innerHTML; }
 function homeAlertCount() { const isaReady = homeSample().isaSource === 'asset-os'; return scheduleUrgentOccurrences().length + (isaReady ? allIsaIssues().length : 0) + homeSystemAlerts().length + (isaReady && nearestMaturityAlert() ? 1 : 0); }
-function openAlertsCenter() { const isaReady = homeSample().isaSource === 'asset-os', issues = isaReady ? allIsaIssues() : [], alert = isaReady ? nearestMaturityAlert() : null, urgent = scheduleUrgentOccurrences(), system = homeSystemAlerts(); $('#sheetEyebrow').textContent = '알림'; $('#sheetTitle').textContent = '확인할 알림'; $('#sheetBody').innerHTML = `<div class="integrity-list">${urgent.map(o => `<button class="integrity-row" data-home-schedule="${escapeHtml(o.date)}"><i class="integrity-dot ${o.status === 'overdue' ? 'high' : ''}"></i><span class="integrity-copy"><strong>${escapeHtml(o.schedule.name)} · ${scheduleStatusLabel(o.status)}</strong><small>${escapeHtml(o.date)} · ${won(o.schedule.amount)}</small></span><span class="integrity-go">›</span></button>`).join('')}${issues.map(x => `<button class="integrity-row" data-integrity-account="${escapeHtml(x.accountId)}" ${x.transactionId ? `data-integrity-tx="${escapeHtml(x.transactionId)}"` : ''}><i class="integrity-dot ${x.severity === 'high' ? 'high' : ''}"></i><span class="integrity-copy"><strong>${escapeHtml(x.title)}</strong><small>${escapeHtml(state.accounts.find(a => a.id === x.accountId)?.name || 'ISA')} · ${escapeHtml(x.detail)}</small></span><span class="integrity-go">›</span></button>`).join('')}${system.map(item => `<button class="integrity-row" ${item.accountId ? `data-pension-balance-check="${escapeHtml(item.accountId)}"` : item.productId ? `data-finance-alert="${escapeHtml(item.productId)}"` : item.kind === 'backup' ? 'data-backup-alert' : item.kind === 'refresh' ? 'data-refresh-alert' : 'data-system-alert'}><i class="integrity-dot"></i><span class="integrity-copy"><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.detail)}</small></span><span class="integrity-go">›</span></button>`).join('')}${alert ? `<button class="integrity-row" data-maturity-alert="${escapeHtml(alert.account.id)}"><i class="integrity-dot"></i><span class="integrity-copy"><strong>${escapeHtml(alert.account.name)} 만기 ${alert.label}</strong><small>${alert.date}</small></span><span class="integrity-go">›</span></button>` : ''}${!urgent.length && !issues.length && !system.length && !alert ? '<div class="empty-state"><strong>지금 처리할 중요 알림이 없습니다.</strong></div>' : ''}</div>${homeInvestmentRefreshMarkup()}`; openSheet('#detailSheet'); setTimeout(() => bindIntegrityActions(), 0); }
+function openAlertsCenter() { const isaReady = homeSample().isaSource === 'asset-os', issues = isaReady ? allIsaIssues() : [], alert = isaReady ? nearestMaturityAlert() : null, urgent = scheduleUrgentOccurrences(), system = homeSystemAlerts(); $('#sheetEyebrow').textContent = '알림'; $('#sheetTitle').textContent = '확인할 알림'; $('#sheetBody').innerHTML = `<div class="integrity-list">${urgent.map(o => `<button class="integrity-row" data-home-schedule="${escapeHtml(o.date)}"><i class="integrity-dot ${o.status === 'overdue' ? 'high' : ''}"></i><span class="integrity-copy"><strong>${escapeHtml(o.schedule.name)} · ${scheduleStatusLabel(o.status)}</strong><small>${escapeHtml(o.date)} · ${won(o.schedule.amount)}</small></span><span class="integrity-go">›</span></button>`).join('')}${issues.map(x => `<button class="integrity-row" data-integrity-account="${escapeHtml(x.accountId)}" ${x.transactionId ? `data-integrity-tx="${escapeHtml(x.transactionId)}"` : ''}><i class="integrity-dot ${x.severity === 'high' ? 'high' : ''}"></i><span class="integrity-copy"><strong>${escapeHtml(x.title)}</strong><small>${escapeHtml(state.accounts.find(a => a.id === x.accountId)?.name || 'ISA')} · ${escapeHtml(x.detail)}</small></span><span class="integrity-go">›</span></button>`).join('')}${system.map(item => `<button class="integrity-row" ${item.subscriptionNoticeId ? `data-subscription-notice="${escapeHtml(item.subscriptionNoticeId)}"` : item.accountId ? `data-pension-balance-check="${escapeHtml(item.accountId)}"` : item.productId ? `data-finance-alert="${escapeHtml(item.productId)}"` : item.kind === 'backup' ? 'data-backup-alert' : item.kind === 'refresh' ? 'data-refresh-alert' : 'data-system-alert'}><i class="integrity-dot"></i><span class="integrity-copy"><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.detail)}</small></span><span class="integrity-go">›</span></button>`).join('')}${alert ? `<button class="integrity-row" data-maturity-alert="${escapeHtml(alert.account.id)}"><i class="integrity-dot"></i><span class="integrity-copy"><strong>${escapeHtml(alert.account.name)} 만기 ${alert.label}</strong><small>${alert.date}</small></span><span class="integrity-go">›</span></button>` : ''}${!urgent.length && !issues.length && !system.length && !alert ? '<div class="empty-state"><strong>지금 처리할 중요 알림이 없습니다.</strong></div>' : ''}</div>${homeInvestmentRefreshMarkup()}`; openSheet('#detailSheet'); setTimeout(() => { bindIntegrityActions(); if (typeof subscriptionBindUi === 'function')
+    subscriptionBindUi(); }, 0); }
 function bindIntegrityActions() {
     $$('[data-pension-balance-check]').forEach(button => button.onclick = () => openPensionBalanceDetail(button.dataset.pensionBalanceCheck || ''));
     $$('[data-home-schedule]').forEach(b => b.onclick = async () => { const d = b.dataset.homeSchedule; if (!d)
@@ -160,7 +161,7 @@ function bindIntegrityActions() {
 }
 function homeTrendMarkup() { const rows = financialGrowthSeries('3m').filter(row => row.coverage?.complete && Number.isFinite(row.netAssets)); if (rows.length < 2)
     return ''; const first = rows[0], last = rows.at(-1), delta = last.netAssets - first.netAssets, changeClass = delta < 0 ? 'negative' : delta > 0 ? 'positive' : 'neutral'; return `<button class="home-trend home-change-compare" data-home-growth><span class="home-trend-head"><strong>순자산 변화</strong><span>상세 보기 ›</span></span><strong class="home-compare-delta ${escapeHtml(changeClass)}">${delta === 0 ? '변화 없음' : signed(delta)}</strong><span class="home-compare-values"><span>${escapeHtml(first.asOf)}<b>${won(first.netAssets)}</b></span><span aria-hidden="true">→</span><span>${escapeHtml(last.asOf)}<b>${won(last.netAssets)}</b></span></span></button>`; }
-function home() { const s = homeSample(); return `<div class="stack home-app-stack"><button class="hero" data-detail="total"><div class="herohead"><div class="label">순금융자산</div><span class="heropeek">›</span></div><div class="heroamount ${amountClass(s.total - s.debt)}" title="${escapeHtml(won(s.total - s.debt))}">${displayWon(s.total - s.debt)}</div><div class="home-module-caption">보유 금융자산에서 대출·부채 차감</div>${homeChangeMarkup()}</button><section class="card home-account-list"><div class="sectionhead"><h2>내 계좌</h2></div>${['isa', 'pension', 'cash'].map(homeAccountRow).join('')}</section><section class="home-plan">${homeCard('contribution')}</section>${homeTrendMarkup()}</div>`; }
+function home() { const s = homeSample(); return `<div class="stack home-app-stack"><button class="hero" data-detail="total"><div class="herohead"><div class="label">순금융자산</div><span class="heropeek">›</span></div><div class="heroamount ${amountClass(s.total - s.debt)}" title="${escapeHtml(won(s.total - s.debt))}">${displayWon(s.total - s.debt)}</div><div class="home-module-caption">보유 금융자산에서 대출·부채 차감</div>${homeChangeMarkup()}</button><section class="card home-account-list"><div class="sectionhead"><h2>내 계좌</h2></div>${['isa', 'pension', 'cash'].map(homeAccountRow).join('')}</section><section class="home-plan">${homeCard('contribution')}</section>${homeTrendMarkup()}${typeof subscriptionCardMarkup === 'function' ? subscriptionCardMarkup() : ''}</div>`; }
 ;
 /* asset-os source: isa-summary.js */
 'use strict';
@@ -1047,11 +1048,12 @@ else {
     body = '<div class="integrated-empty">표시할 상세 정보가 없습니다.</div>';
 } $('#sheetTitle').textContent = title; $('#sheetBody').innerHTML = body; openSheet('#detailSheet'); $$('[data-integrated-module-go]').forEach(b => b.onclick = async () => { const target = b.dataset.integratedModuleGo; closeSheets(); if (target === 'isa')
     return nav('isa', 'summary'); setting().pensionAssetScope = target === 'irp' ? 'irp' : 'pension'; rememberViewPreferences(); nav('pension', 'assets'); }); }
-function integratedSpendingPage() { const month = integratedSelectedMonth(), analysis = integratedSpendingAnalysis(month), budget = Math.max(0, Number(setting().monthlyLivingBudget) || 0), remaining = budget - analysis.total, max = Math.max(1, ...analysis.trend.map((row) => row.amount)), comparison = analysis.previousTotal === 0 ? (analysis.total ? '지난달 기록 없음' : '지난달과 동일') : analysis.change === 0 ? '지난달과 동일' : `${analysis.change > 0 ? '▲' : '▼'} ${won(Math.abs(analysis.change))} · ${Math.abs(analysis.changeRate || 0).toFixed(1)}%`; return `<section class="spending-hero"><div class="spending-hero-head"><span>${escapeHtml(integratedMonthLabel(month))} 총 소비</span><button data-spending-new>＋ 지출</button></div><strong>${won(analysis.total)}</strong><small class="${escapeHtml(analysis.change > 0 ? 'up' : analysis.change < 0 ? 'down' : '')}">지난달 대비 ${comparison}</small></section><button class="card spending-budget-card" data-spending-budget><span>${budget ? '월 생활비 목표' : '생활비 목표 설정'}</span>${budget ? `<strong>${won(budget)}</strong><small>사용 ${won(analysis.total)} · ${remaining >= 0 ? '남음' : '초과'} ${won(Math.abs(remaining))}</small><i><b style="width:${Math.min(100, analysis.total / Math.max(1, budget) * 100)}%"></b></i>` : '<small>원할 때만 한 번 설정합니다. 카테고리별 예산은 만들지 않습니다.</small>'}</button><section class="card spending-split"><button data-spending-detail="fixed"><span>고정비</span><strong>${won(analysis.fixed)}</strong><small>${analysis.fixedRows.length}건</small></button><button data-spending-detail="variable"><span>변동비</span><strong>${won(analysis.variable)}</strong><small>${analysis.variableRows.length}건</small></button></section><section class="card spending-card"><div class="sectionhead"><h2>카테고리별 소비</h2><span>${analysis.categories.length}개</span></div><div class="spending-categories">${analysis.categories.map((row) => `<button data-spending-detail="category" data-spending-key="${escapeHtml(row.key)}"><span>${escapeHtml(row.key)}<small>${row.count}건</small></span><strong>${won(row.amount)}</strong><i>›</i></button>`).join('') || '<div class="integrated-empty">이 달의 소비 기록이 없습니다.</div>'}</div></section><section class="card spending-card"><div class="sectionhead"><h2>최근 6개월 소비</h2><button class="tinybtn" data-spending-detail="all">원장 보기</button></div><div class="spending-trend">${analysis.trend.map((row) => `<button data-spending-month="${escapeHtml(row.month)}" data-spending-detail="month"><span class="spending-bar"><i style="height:${row.amount ? Math.max(8, row.amount / max * 100) : 2}%"></i></span><strong>${row.label}</strong><small>${row.amount ? displayWon(row.amount) : '0원'}</small></button>`).join('')}</div></section>`; }
+function integratedSpendingPage() { const month = integratedSelectedMonth(), analysis = integratedSpendingAnalysis(month), budget = Math.max(0, Number(setting().monthlyLivingBudget) || 0), remaining = budget - analysis.total, max = Math.max(1, ...analysis.trend.map((row) => row.amount)), comparison = analysis.previousTotal === 0 ? (analysis.total ? '지난달 기록 없음' : '지난달과 동일') : analysis.change === 0 ? '지난달과 동일' : `${analysis.change > 0 ? '▲' : '▼'} ${won(Math.abs(analysis.change))} · ${Math.abs(analysis.changeRate || 0).toFixed(1)}%`; return `<button class="diagnostic-action" data-subscription-hub>구독·이용권 관리 ›</button><section class="spending-hero"><div class="spending-hero-head"><span>${escapeHtml(integratedMonthLabel(month))} 총 소비</span><button data-spending-new>＋ 지출</button></div><strong>${won(analysis.total)}</strong><small class="${escapeHtml(analysis.change > 0 ? 'up' : analysis.change < 0 ? 'down' : '')}">지난달 대비 ${comparison}</small></section><button class="card spending-budget-card" data-spending-budget><span>${budget ? '월 생활비 목표' : '생활비 목표 설정'}</span>${budget ? `<strong>${won(budget)}</strong><small>사용 ${won(analysis.total)} · ${remaining >= 0 ? '남음' : '초과'} ${won(Math.abs(remaining))}</small><i><b style="width:${Math.min(100, analysis.total / Math.max(1, budget) * 100)}%"></b></i>` : '<small>원할 때만 한 번 설정합니다. 카테고리별 예산은 만들지 않습니다.</small>'}</button><section class="card spending-split"><button data-spending-detail="fixed"><span>고정비</span><strong>${won(analysis.fixed)}</strong><small>${analysis.fixedRows.length}건</small></button><button data-spending-detail="variable"><span>변동비</span><strong>${won(analysis.variable)}</strong><small>${analysis.variableRows.length}건</small></button></section><section class="card spending-card"><div class="sectionhead"><h2>카테고리별 소비</h2><span>${analysis.categories.length}개</span></div><div class="spending-categories">${analysis.categories.map((row) => `<button data-spending-detail="category" data-spending-key="${escapeHtml(row.key)}"><span>${escapeHtml(row.key)}<small>${row.count}건</small></span><strong>${won(row.amount)}</strong><i>›</i></button>`).join('') || '<div class="integrated-empty">이 달의 소비 기록이 없습니다.</div>'}</div></section><section class="card spending-card"><div class="sectionhead"><h2>최근 6개월 소비</h2><button class="tinybtn" data-spending-detail="all">원장 보기</button></div><div class="spending-trend">${analysis.trend.map((row) => `<button data-spending-month="${escapeHtml(row.month)}" data-spending-detail="month"><span class="spending-bar"><i style="height:${row.amount ? Math.max(8, row.amount / max * 100) : 2}%"></i></span><strong>${row.label}</strong><small>${row.amount ? displayWon(row.amount) : '0원'}</small></button>`).join('')}</div></section>`; }
 function openMonthlyLivingBudgetForm() { $('#formEyebrow').textContent = '통합 · 소비'; $('#formTitle').textContent = '월 생활비 목표'; $('#formBody').innerHTML = `<form id="livingBudgetForm" class="form"><div class="source-note">전체 생활비 목표 하나만 관리합니다. 0원으로 저장하면 목표 표시를 끕니다.</div><div class="field"><label>월 목표금액</label><input name="budget" type="number" inputmode="numeric" min="0" step="10000" value="${escapeHtml(Math.max(0, Number(setting().monthlyLivingBudget) || 0))}" required></div><button class="integrated-form-save" type="submit">저장</button></form>`; openSheet('#formSheet', { mode: 'input' }); $('#livingBudgetForm').onsubmit = async (e) => { e.preventDefault(); setting().monthlyLivingBudget = Math.max(0, Math.round(Number(new FormData(e.currentTarget).get('budget')) || 0)); if (!(await persist()))
     return; sheetDirty = false; closeSheets({ all: true }); nav('integrated', 'spending'); toast(setting().monthlyLivingBudget ? '생활비 목표를 저장했습니다.' : '생활비 목표를 껐습니다.'); }; }
 function openIntegratedSpendingDetail(scope = 'all', key = '', month = integratedSelectedMonth()) { const analysis = integratedSpendingAnalysis(month), rows = scope === 'fixed' ? analysis.fixedRows : scope === 'variable' ? analysis.variableRows : scope === 'other' ? analysis.rows.filter(row => new Set(analysis.categories.slice(5).map(x => x.key)).has(String(row.category || '기타').trim() || '기타')) : scope === 'category' ? analysis.rows.filter(row => (String(row.category || '기타').trim() || '기타') === key) : analysis.rows; $('#sheetEyebrow').textContent = '통합 · 소비 분석'; $('#sheetTitle').textContent = scope === 'category' ? key : `${integratedMonthLabel(month)} 소비`; $('#sheetBody').innerHTML = `<div class="integrated-ledger-list">${[...rows].reverse().map(t => `<button class="integrated-ledger-row is-clickable" data-integrated-tx="${escapeHtml(t.id)}" style="width:100%;border:0;background:transparent;text-align:left;color:inherit"><div><strong>${escapeHtml(t.category || integratedTxLabel(t))}</strong><small>${escapeHtml(t.date)} · ${t.type === 'expense' ? (t.fixed ? '고정비' : '변동비') : '고정비'}</small></div><div class="integrated-ledger-right">${integratedTxAmountMarkup(t)}<span class="integrated-chevron">›</span></div></button>`).join('') || '<div class="integrated-empty">해당 소비 기록이 없습니다.</div>'}</div>`; openSheet('#detailSheet'); $$('[data-integrated-tx]').forEach(button => button.onclick = () => openIntegratedTransactionDetail(button.dataset.integratedTx || '')); }
-function integratedPage(tab = 'summary') { const safe = ['summary', 'ledger', 'spending', 'schedule'].includes(tab) ? tab : 'summary', content = safe === 'ledger' ? integratedLedgerPage() : safe === 'spending' ? integratedSpendingPage() : safe === 'schedule' ? integratedSchedulePage() : integratedSummaryPage(), tabs = integratedTabs(safe).replace('integrated-tabs four', 'integrated-tabs four module-primary-tabs'), month = integratedMonthBar(safe === 'spending'); return `<div class="module-page-shell integrated-module-shell">${tabs}${month}<div class="stack">${content}</div></div>`; }
+function integratedPage(tab = 'summary') { if (tab === 'subscriptions')
+    return `<div class="module-page-shell integrated-module-shell">${integratedTabs('spending')}${subscriptionHubPage()}</div>`; const safe = ['summary', 'ledger', 'spending', 'schedule'].includes(tab) ? tab : 'summary', content = safe === 'ledger' ? integratedLedgerPage() : safe === 'spending' ? integratedSpendingPage() : safe === 'schedule' ? integratedSchedulePage() : integratedSummaryPage(), tabs = integratedTabs(safe).replace('integrated-tabs four', 'integrated-tabs four module-primary-tabs'), month = integratedMonthBar(safe === 'spending'); return `<div class="module-page-shell integrated-module-shell">${tabs}${month}<div class="stack">${content}</div></div>`; }
 function bindScheduleTools() {
     $$('[data-card-all-purchases]').forEach(b => b.onclick = openCardPurchaseArchive);
     $$('[data-card-plan-open]').forEach(b => b.onclick = () => openCardPlanDetail(b.dataset.cardPlanOpen || ''));
@@ -1225,7 +1227,8 @@ function render() { integratedSelectedMonth(); const r = route(); document.body.
     badge.hidden = count === 0;
     badge.textContent = count > 99 ? '99+' : String(count);
     bell.setAttribute('aria-label', count ? `검토·중요 알림 ${count}건` : '검토·중요 알림 없음');
-} applyTheme(); bind(); bindTransactionSearch(); if (typeof refreshOpenCardOverview === 'function')
+} applyTheme(); bind(); if (typeof subscriptionBindUi === 'function')
+    subscriptionBindUi(); bindTransactionSearch(); if (typeof refreshOpenCardOverview === 'function')
     refreshOpenCardOverview(); updateDiagnostics(); }
 function bindTransactionSearch() { const integratedForm = $('[data-integrated-search-form]'); if (integratedForm)
     integratedForm.onsubmit = e => { e.preventDefault(); integratedLedgerSearch = String(new FormData(e.currentTarget).get('query') || '').trim(); integratedSearchDisplayLimit = 50; render(); }; $('[data-integrated-search-clear]')?.addEventListener('click', () => { integratedLedgerSearch = ''; integratedSearchDisplayLimit = 50; render(); }); $('[data-integrated-search-more]')?.addEventListener('click', () => { integratedSearchDisplayLimit += 50; renderKeepingScroll(); }); const pensionForm = $('[data-pension-search-form]'); if (pensionForm)
@@ -1342,6 +1345,7 @@ function bind() {
 }
 ;
 /* asset-os source: integrated-forms.js */
+"use strict";
 'use strict';
 function integratedPolicyLimitIssues(store = integratedStore()) {
     const issues = [];
@@ -1866,8 +1870,10 @@ function openIntegratedTransactionDetail(id) {
     $('#sheetEyebrow').textContent = '통합 · 거래';
     $('#sheetTitle').textContent = display.item;
     const sourceBox = tx.meta?.unallocatedCardPayment ? '<div class="source-note">계좌에서 확인한 카드대금 출금입니다. 개별 청구 배분을 기다리고 있어요.</div><button class="danger" data-integrated-delete-detail="' + escapeHtml(tx.id || '') + '">출금 기록 삭제</button>' : tx.meta?.cardPlanId ? '<div class="source-note">카드 구매·청구·납부에 연결된 기록입니다.</div><button class="diagnostic-action" data-linked-card>카드 구매·납부 보기</button>' : tx.readonly ? `<div class="source-note">${tx.sourceModule === 'isa' ? 'ISA' : '개인연금'}의 실제 기록을 자동으로 읽은 거래입니다. 통합에서 중복 수정하지 않습니다.</div><button class="diagnostic-action" data-linked-source="${escapeHtml(tx.sourceModule)}">원본 화면 열기</button>` : productLinkedManaged ? `<div class="source-note">금융상품과 연결된 거래입니다. 통합에서 따로 수정하면 상품 잔액과 어긋날 수 있어 상품 화면에서 관리합니다.</div><button class="diagnostic-action" data-linked-product="${escapeHtml(tx.productId)}">금융상품 열기</button>` : `<div class="integrated-detail-note">수정·삭제하면 통합 수치가 즉시 다시 계산됩니다.</div><div class="integrated-detail-actions"><button data-integrated-edit="${escapeHtml(tx.id || '')}">수정</button><button class="danger" data-integrated-delete-detail="${escapeHtml(tx.id || '')}">삭제</button></div>`;
-    $('#sheetBody').innerHTML = `<div class="sheetrows"><div class="sheetrow"><span>분류</span><strong data-transaction-category>${escapeHtml(display.category)}</strong></div><div class="sheetrow"><span>날짜</span><strong>${escapeHtml(tx.date)}</strong></div><div class="sheetrow"><span>유형</span><strong>${escapeHtml(integratedTxLabel(tx))}</strong></div><div class="sheetrow"><span>금액</span><strong>${tx.type === 'adjustment' ? signed(Number(tx.delta) || 0) : won(tx.amount)}</strong></div>${integratedTxAccountsText(tx) ? `<div class="sheetrow"><span>계좌</span><strong>${escapeHtml(integratedTxAccountsText(tx))}</strong></div>` : ''}${tx.note ? `<div class="sheetrow"><span>메모</span><strong>${escapeHtml(tx.note)}</strong></div>` : ''}</div>${sourceBox}${classificationSource ? '<button class="diagnostic-action" data-transaction-classify>이름·분류 수정</button>' : ''}${integratedEntryPresetFromRecord(tx) ? '<button class="diagnostic-action" data-entry-copy>이 기록 복사</button>' : ''}${!tx.meta?.cardPlanId && ['expense', 'externalExpense'].includes(tx.type || '') ? `<button class="diagnostic-action" data-refund="${escapeHtml(tx.id || '')}">환불·부분취소</button>` : ''}`;
+    $('#sheetBody').innerHTML = `<div class="sheetrows"><div class="sheetrow"><span>분류</span><strong data-transaction-category>${escapeHtml(display.category)}</strong></div><div class="sheetrow"><span>날짜</span><strong>${escapeHtml(tx.date)}</strong></div><div class="sheetrow"><span>유형</span><strong>${escapeHtml(integratedTxLabel(tx))}</strong></div><div class="sheetrow"><span>금액</span><strong>${tx.type === 'adjustment' ? signed(Number(tx.delta) || 0) : won(tx.amount)}</strong></div>${integratedTxAccountsText(tx) ? `<div class="sheetrow"><span>계좌</span><strong>${escapeHtml(integratedTxAccountsText(tx))}</strong></div>` : ''}${tx.note ? `<div class="sheetrow"><span>메모</span><strong>${escapeHtml(tx.note)}</strong></div>` : ''}</div>${sourceBox}${classificationSource ? `<button class="diagnostic-action" data-subscription-tx-link="${escapeHtml(tx.id || '')}">구독 연결·관리</button>` : ''}${classificationSource ? '<button class="diagnostic-action" data-transaction-classify>이름·분류 수정</button>' : ''}${integratedEntryPresetFromRecord(tx) ? '<button class="diagnostic-action" data-entry-copy>이 기록 복사</button>' : ''}${!tx.meta?.cardPlanId && ['expense', 'externalExpense'].includes(tx.type || '') ? `<button class="diagnostic-action" data-refund="${escapeHtml(tx.id || '')}">환불·부분취소</button>` : ''}`;
     openSheet('#detailSheet');
+    if (typeof subscriptionBindUi === 'function')
+        subscriptionBindUi();
     $('[data-linked-card]')?.addEventListener('click', () => openCardLedgerDetail(String(tx.meta?.cardPlanId)));
     $('[data-transaction-classify]')?.addEventListener('click', () => { if (classificationSource)
         openSpendingClassification([String(classificationSource.id)], String(tx.date).slice(0, 7), String(tx.meta?.cardPlanId || '')); });
@@ -4815,6 +4821,21 @@ const banksaladDuplicateIssue = '파일 안에 같은 거래 후보';
 const banksaladExistingIssue = '기존 원장과 중복 후보';
 function banksaladReview(rows) {
     const keyCounts = new Map(), ledger = integratedStore().ledger;
+    const suppressed = new Set();
+    if (typeof sourceArchiveRecords === 'function')
+        for (const record of sourceArchiveRecords()) {
+            const keys = record.meta?.suppressedBanksaladSourceKeys;
+            if (Array.isArray(keys))
+                for (const key of keys)
+                    if (typeof key === 'string')
+                        suppressed.add(key);
+            const decisions = record.meta?.decisions;
+            if (Array.isArray(decisions))
+                for (const value of decisions) {
+                    if (value && typeof value === 'object' && 'decision' in value && value.decision === 'exclude' && 'sourceKey' in value && typeof value.sourceKey === 'string')
+                        suppressed.add(value.sourceKey);
+                }
+        }
     for (const row of rows) {
         const key = banksaladSourceKey(row);
         keyCounts.set(key, (keyCounts.get(key) || 0) + 1);
@@ -4836,9 +4857,9 @@ function banksaladReview(rows) {
     return rows.map(row => {
         const key = banksaladSourceKey(row), kind = banksaladRowKind(row), prior = primary.get(key);
         const expectedType = kind === 'payment' ? 'externalWithdrawal' : kind === 'refund' ? 'refund' : 'externalExpense';
-        const saved = !!prior && prior.date === row.date && prior.type === expectedType && Number(prior.amount) === Math.abs(row.amount);
+        const saved = suppressed.has(key) || !!prior && prior.date === row.date && (prior.type === expectedType || prior.meta?.historicalLoanPayment === true && ['debtInterest', 'debtInterestExternal'].includes(prior.type)) && Number(prior.amount) === Math.abs(row.amount);
         const issues = [];
-        if ((keyCounts.get(key) || 0) > 1)
+        if (!saved && (keyCounts.get(key) || 0) > 1)
             issues.push(banksaladDuplicateIssue);
         if (prior && !saved)
             issues.push('가져온 뒤 금액이 변경된 기록');
@@ -5229,4 +5250,118 @@ function openBanksaladPreview(preset) {
     });
     if (QA_MODE && preset)
         applyRows(preset.rows, preset.label, preset.drafts);
+}
+;
+/* asset-os source: subscription-ui.js */
+'use strict';
+let subscriptionUiFilter = 'active';
+const subscriptionCycleLabels = { monthly: '매월', annual: '연간', irregular: '비정기', unknown: '주기 확인 필요' };
+const subscriptionStatusLabels = { active: '이용 중', ending: '해지 예정', ended: '종료', unknown: '확인 필요' };
+function subscriptionElement(selector) { return document.querySelector(selector); }
+function subscriptionMoney(s) { return s.amount === null ? '요금 확인 필요' : won(s.amount); }
+function subscriptionCardMarkup() {
+    const t = subscriptionTotals(), items = subscriptionStore().items;
+    if (!items.length)
+        return '';
+    return `<section class="card subscription-home"><div class="sectionhead"><h2>현재 구독·이용권</h2><button class="tinybtn" data-subscription-hub>전체 보기 ›</button></div><div class="subscription-total"><span>매월 결제 · ${t.monthlyCount}개</span><strong>${won(t.monthly)}</strong></div><div class="subscription-total"><span>연간 이용권 · ${t.annualCount}개</span><strong>${won(t.annual)}</strong></div></section>`;
+}
+function subscriptionServiceRow(s) { const status = subscriptionCurrentStatus(s); return `<button class="subscription-service" data-subscription-detail="${escapeHtml(s.id)}"><span class="subscription-logo" aria-hidden="true">${escapeHtml(s.name.slice(0, 1))}</span><span class="subscription-service-copy"><strong>${escapeHtml(s.name)}</strong><small>${escapeHtml(subscriptionStatusLabels[status])}${status === 'ending' && s.endDate ? ' · ' + escapeHtml(s.endDate) + '까지 이용' : s.nextDate ? ' · ' + escapeHtml(s.nextDate) + ' 결제 예정' : ''}</small></span><span class="subscription-service-price"><strong>${escapeHtml(subscriptionMoney(s))}</strong><small>${escapeHtml(subscriptionCycleLabels[s.cycle])}</small></span><span aria-hidden="true">›</span></button>`; }
+function subscriptionHubPage() {
+    const items = subscriptionStore().items, filtered = items.filter(s => { const status = subscriptionCurrentStatus(s); return subscriptionUiFilter === 'active' ? ['active', 'ending'].includes(status) : subscriptionUiFilter === 'unknown' ? status === 'unknown' : status === 'ended'; });
+    const tabs = [['active', '이용 중'], ['unknown', '확인 필요'], ['ended', '종료 이력']].filter(([key]) => key !== 'unknown' || items.some(s => subscriptionCurrentStatus(s) === 'unknown'));
+    return `<section class="stack"><div class="subscription-page-title"><div><small>통합 · 소비</small><h2>구독·이용권</h2></div><button class="tinybtn" data-subscription-new>＋ 등록</button></div><div class="subscription-tabs">${tabs.map(([key, label]) => `<button data-subscription-filter="${escapeHtml(key)}" aria-pressed="${escapeHtml(subscriptionUiFilter === key)}">${label}</button>`).join('')}</div>${filtered.length ? ['monthly', 'annual', 'irregular', 'unknown'].map(cycle => { const group = filtered.filter(s => s.cycle === cycle); return group.length ? `<section class="card subscription-group"><h3>${escapeHtml(subscriptionCycleLabels[cycle])}</h3>${group.map(subscriptionServiceRow).join('')}</section>` : ''; }).join('') : '<div class="card empty-state">이 상태의 구독이 없습니다.</div>'}<button class="diagnostic-action" data-subscription-back>소비 분석으로</button></section>`;
+}
+function subscriptionShowSheet(title, html) { const eyebrow = subscriptionElement('#sheetEyebrow'), heading = subscriptionElement('#sheetTitle'), body = subscriptionElement('#sheetBody'); if (!eyebrow || !heading || !body)
+    return; eyebrow.textContent = '통합 · 구독'; heading.textContent = title; body.innerHTML = html; openSheet('#detailSheet'); subscriptionBindUi(); }
+async function subscriptionUiSave(change, onSuccess) { try {
+    if (await subscriptionCommit(change)) {
+        render();
+        onSuccess();
+    }
+    else
+        toast('저장하지 못했습니다. 기존 상태를 유지했어요.');
+}
+catch (error) {
+    toast(error instanceof Error ? error.message : '구독 정보를 확인해 주세요.');
+} }
+function openSubscriptionDetail(id) {
+    const s = subscriptionFind(id);
+    if (!s)
+        return;
+    const rows = subscriptionRows(id), status = subscriptionCurrentStatus(s), sum = rows.reduce((n, t) => n + (t.type === 'refund' ? -1 : 1) * t.amount, 0);
+    subscriptionShowSheet(s.name, `<div class="subscription-detail-hero"><span>${escapeHtml(subscriptionStatusLabels[status])} · ${escapeHtml(subscriptionCycleLabels[s.cycle])}</span><strong>${escapeHtml(subscriptionMoney(s))}</strong></div><div class="sheetrows"><div class="sheetrow"><span>다음 결제일</span><strong>${escapeHtml(status === 'ended' || status === 'ending' ? '갱신 예정 없음' : s.nextDate || '확인 필요')}</strong></div><div class="sheetrow"><span>이용 종료일</span><strong>${escapeHtml(s.endDate || '확인 필요')}</strong></div><div class="sheetrow"><span>연결된 실제 결제 합계</span><strong>${won(sum)}</strong></div></div><div class="subscription-actions"><button data-subscription-edit="${escapeHtml(id)}">정보 수정</button><button data-subscription-manage="${escapeHtml(id)}">해지·재가입 관리</button><button data-subscription-pick="${escapeHtml(id)}">기존 거래 연결</button></div><h3>결제 이력</h3><div class="subscription-payments">${rows.map(t => `<div class="subscription-payment"><button data-subscription-tx="${escapeHtml(t.id)}"><strong>${escapeHtml(t.date)} · ${t.type === 'refund' ? '환불 ' : ''}${won(t.amount)}</strong><small>${escapeHtml(String(t.meta.banksaladMethod || t.category || ''))}</small></button>${t.type !== 'refund' ? `<button class="tinybtn" aria-label="${escapeHtml(t.date)} 거래 연결 해제" data-subscription-unlink="${escapeHtml(t.id)}" data-subscription-id="${escapeHtml(id)}">연결 해제</button>` : ''}</div>`).join('') || '<p class="source-note">연결된 결제내역이 없습니다.</p>'}</div>${s.events.length ? `<h3>이용 상태 이력</h3><div class="source-note">${s.events.map(e => `${escapeHtml(e.date || '날짜 미확인')} · ${escapeHtml(subscriptionStatusLabels[e.action] || (e.action === 'rejoin' ? '재가입' : e.action))}`).join('<br>')}</div>` : ''}`);
+}
+function openSubscriptionForm(id = '') {
+    const s = subscriptionFind(id), value = (key) => s?.[key] ?? '';
+    subscriptionShowSheet(s ? '구독 정보 수정' : '구독·이용권 등록', `<form id="subscriptionForm" class="form"><div class="field"><label for="subName">서비스명</label><input id="subName" name="name" required maxlength="100" value="${escapeHtml(value('name'))}"></div><div class="field"><label for="subAmount">결제 요금 · 원</label><input id="subAmount" name="amount" type="number" min="1" step="1" inputmode="numeric" placeholder="모르면 비워두기" value="${escapeHtml(value('amount'))}"></div><div class="field"><label for="subCycle">결제 주기</label><select id="subCycle" name="cycle">${Object.entries(subscriptionCycleLabels).map(([k, v]) => `<option value="${escapeHtml(k)}" ${s?.cycle === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div><div class="field"><label for="subStatus">이용 상태</label><select id="subStatus" name="status">${Object.entries(subscriptionStatusLabels).map(([k, v]) => `<option value="${escapeHtml(k)}" ${(s?.status || 'unknown') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div><div class="field"><label for="subNext">다음 결제일 · 선택</label><input id="subNext" name="nextDate" type="date" value="${escapeHtml(value('nextDate'))}"></div><div class="field"><label for="subEnd">이용 종료일 · 선택</label><input id="subEnd" name="endDate" type="date" value="${escapeHtml(value('endDate'))}"></div><div class="field"><label for="subUrl">서비스 구독 관리 주소 · 선택</label><input id="subUrl" name="manageUrl" type="url" placeholder="https://" value="${escapeHtml(value('manageUrl'))}"></div><button type="submit" class="primary">저장</button></form>`);
+    const form = document.querySelector('#subscriptionForm');
+    if (form)
+        form.onsubmit = async (e) => { e.preventDefault(); const d = new FormData(form); let saved = ''; await subscriptionUiSave(() => { saved = subscriptionSaveItem({ id: id || undefined, name: String(d.get('name') || ''), amount: d.get('amount') ? Number(d.get('amount')) : null, cycle: String(d.get('cycle')), status: String(d.get('status')), nextDate: String(d.get('nextDate') || ''), endDate: String(d.get('endDate') || ''), manageUrl: String(d.get('manageUrl') || '') }); }, () => openSubscriptionDetail(saved)); };
+}
+function openSubscriptionManage(id) {
+    const s = subscriptionFind(id);
+    if (!s)
+        return;
+    subscriptionShowSheet(s.name + ' · 해지 관리', `${s.manageUrl ? `<a class="diagnostic-action" href="${escapeHtml(s.manageUrl)}" target="_blank" rel="noopener noreferrer">서비스 구독 관리 페이지 열기 ↗</a>` : '<p class="source-note">서비스에서 실제 해지한 뒤 상태를 기록해 주세요. 관리 주소는 정보 수정에서 등록할 수 있어요.</p>'}<form id="subscriptionStatusForm" class="form"><div class="field"><label for="subAction">처리</label><select id="subAction" name="status"><option value="ending">자동갱신 껐어요 · 남은 기간 이용</option><option value="ended">이미 이용 종료됐어요</option><option value="active">다시 가입했어요</option></select></div><div class="field"><label for="subChanged">변경일</label><input id="subChanged" name="date" required type="date" max="${escapeHtml(localYmd())}" value="${escapeHtml(localYmd())}"></div><div class="field"><label for="subUntil">이용 가능한 마지막 날 · 선택</label><input id="subUntil" name="endDate" type="date" value="${escapeHtml(s.endDate)}"></div><button class="primary" type="submit">상태 기록</button></form><p class="source-note">과거 결제는 유지되고, 갱신 중단 상태에서는 다음 결제를 예정하지 않아요.</p>`);
+    const form = document.querySelector('#subscriptionStatusForm');
+    if (form)
+        form.onsubmit = async (e) => { e.preventDefault(); const d = new FormData(form); await subscriptionUiSave(() => subscriptionChangeStatus(id, String(d.get('status')), String(d.get('date')), String(d.get('endDate') || '')), () => openSubscriptionDetail(id)); };
+}
+function openSubscriptionPicker(id) {
+    const s = subscriptionFind(id);
+    if (!s)
+        return;
+    subscriptionShowSheet('기존 거래 연결', `<form id="subscriptionLinkForm" class="form"><div class="field"><label for="subSearch">날짜·사용처·금액 검색</label><input id="subSearch" type="search" placeholder="전체 기간에서 검색"></div><div id="subscriptionPickRows"></div><label class="subscription-check"><input type="checkbox" name="learn">같은 사용처·금액·결제수단은 다음에도 자동 연결</label><p class="source-note">구글·결제대행사처럼 여러 서비스를 섞어 표시하는 이름은 자동 규칙으로 사용하지 않아요.</p><button type="submit" class="primary">선택한 거래 연결</button></form>`);
+    const form = document.querySelector('#subscriptionLinkForm'), search = document.querySelector('#subSearch'), host = subscriptionElement('#subscriptionPickRows'), picked = new Set();
+    const draw = () => { if (!host)
+        return; const q = (search?.value || '').trim().toLowerCase(), rows = integratedStore().ledger.filter(t => ['expense', 'externalExpense'].includes(t.type) && !t.meta.cardHistoricalPurchase && !t.meta.subscriptionId && (!q || [t.date, subscriptionMerchant(t), String(t.amount)].join(' ').toLowerCase().includes(q))).sort((a, b) => b.date.localeCompare(a.date)); host.innerHTML = `<p class="source-note">${rows.length}건 · 최대 30건 표시${rows.length > 30 ? ' · 검색해서 범위를 좁혀주세요.' : ''}</p>` + rows.slice(0, 30).map(t => `<label class="subscription-check"><input type="checkbox" data-subscription-pick-tx="${escapeHtml(t.id)}" ${picked.has(t.id) ? 'checked' : ''}><span>${escapeHtml(t.date)} · ${escapeHtml(subscriptionMerchant(t) || t.category || '지출')}<strong>${won(t.amount)}</strong></span></label>`).join(''); host.querySelectorAll('[data-subscription-pick-tx]').forEach(input => input.onchange = () => { if (input.checked)
+        picked.add(input.dataset.subscriptionPickTx || '');
+    else
+        picked.delete(input.dataset.subscriptionPickTx || ''); }); };
+    if (search)
+        search.oninput = draw;
+    draw();
+    if (form)
+        form.onsubmit = async (e) => { e.preventDefault(); await subscriptionUiSave(() => subscriptionLink(id, [...picked], new FormData(form).get('learn') === 'on'), () => openSubscriptionDetail(id)); };
+}
+function openSubscriptionTransactionLink(txId) {
+    const tx = integratedStore().ledger.find(t => t.id === txId);
+    if (!tx)
+        return;
+    const linked = String(tx.meta.subscriptionId || '');
+    if (linked) {
+        openSubscriptionDetail(linked);
+        return;
+    }
+    subscriptionShowSheet('이 거래를 구독에 연결', `<form id="subscriptionSingleForm" class="form"><p>${escapeHtml(tx.date)} · ${won(tx.amount)}</p><div class="field"><label for="subSelect">서비스 선택</label><select name="id" id="subSelect">${subscriptionStore().items.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`).join('')}</select></div><button type="submit" class="primary">연결</button></form><button class="diagnostic-action" data-subscription-new>새 구독 등록</button>`);
+    const form = document.querySelector('#subscriptionSingleForm');
+    if (form)
+        form.onsubmit = async (e) => { e.preventDefault(); const id = String(new FormData(form).get('id') || ''); await subscriptionUiSave(() => subscriptionLink(id, [txId]), () => openSubscriptionDetail(id)); };
+}
+function subscriptionNotifications() { return subscriptionPendingNotices().map(n => { const s = subscriptionFind(n.subscriptionId), tx = integratedStore().ledger.find(t => t.id === n.transactionId); return { title: (s?.name || '구독') + (n.kind === 'after-end' ? ' · 해지 후 결제 확인' : n.kind === 'price-change' ? ' · 요금 변경 확인' : ' · 거래 연결 확인'), detail: (tx?.date || '') + ' · ' + won(tx?.amount || 0), kind: 'subscription', subscriptionNoticeId: n.id }; }); }
+function openSubscriptionNotice(id) {
+    const n = subscriptionPendingNotices().find(n => n.id === id);
+    if (!n)
+        return;
+    const s = subscriptionFind(n.subscriptionId), tx = integratedStore().ledger.find(t => t.id === n.transactionId);
+    if (!s || !tx)
+        return;
+    subscriptionShowSheet(s.name + ' · 결제 확인', `<p>${escapeHtml(tx.date)} · ${won(tx.amount)}</p><p class="source-note">확인 전에는 구독 상태를 자동으로 바꾸지 않아요.</p><div class="subscription-actions">${n.kind === 'after-end' ? `<button data-subscription-resolve="rejoin" data-subscription-notice-id="${escapeHtml(id)}">재가입한 결제예요</button><button data-subscription-resolve="charged" data-subscription-notice-id="${escapeHtml(id)}">해지 후 청구예요</button>` : `<button data-subscription-resolve="price-confirmed" data-subscription-notice-id="${escapeHtml(id)}">이 구독의 결제예요 · 요금 반영</button>`}<button data-subscription-resolve="other" data-subscription-notice-id="${escapeHtml(id)}">다른 결제예요</button></div>`);
+}
+function subscriptionBindUi() {
+    const bind = (selector, fn) => document.querySelectorAll(selector).forEach(b => b.onclick = () => fn(b));
+    bind('[data-subscription-hub]', () => { closeSheets({ all: true }); nav('integrated', 'subscriptions'); });
+    bind('[data-subscription-back]', () => nav('integrated', 'spending'));
+    bind('[data-subscription-filter]', b => { subscriptionUiFilter = b.dataset.subscriptionFilter || 'active'; render(); });
+    bind('[data-subscription-new]', () => openSubscriptionForm());
+    bind('[data-subscription-detail]', b => openSubscriptionDetail(b.dataset.subscriptionDetail || ''));
+    bind('[data-subscription-edit]', b => openSubscriptionForm(b.dataset.subscriptionEdit || ''));
+    bind('[data-subscription-manage]', b => openSubscriptionManage(b.dataset.subscriptionManage || ''));
+    bind('[data-subscription-pick]', b => openSubscriptionPicker(b.dataset.subscriptionPick || ''));
+    bind('[data-subscription-tx]', b => openIntegratedTransactionDetail(b.dataset.subscriptionTx || ''));
+    bind('[data-subscription-tx-link]', b => openSubscriptionTransactionLink(b.dataset.subscriptionTxLink || ''));
+    bind('[data-subscription-unlink]', b => { const id = b.dataset.subscriptionId || ''; void subscriptionUiSave(() => subscriptionUnlink(id, b.dataset.subscriptionUnlink || ''), () => openSubscriptionDetail(id)); });
+    bind('[data-subscription-notice]', b => openSubscriptionNotice(b.dataset.subscriptionNotice || ''));
+    bind('[data-subscription-resolve]', b => { const id = b.dataset.subscriptionNoticeId || '', n = subscriptionPendingNotices().find(n => n.id === id); void subscriptionUiSave(() => subscriptionResolveNotice(id, b.dataset.subscriptionResolve), () => { if (n)
+        openSubscriptionDetail(n.subscriptionId); }); });
 }

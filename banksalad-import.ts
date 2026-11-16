@@ -1,3 +1,4 @@
+declare function sourceArchiveRecords():Array<{meta?:Record<string,unknown>}>;
 declare function crc32(bytes:Uint8Array):number;
 type BanksaladRow={
  date:string;time:string;sourceType:string;group:string;category:string;name:string;amount:number;method:string;memo:string;origin?:'screenshot';
@@ -166,6 +167,7 @@ const banksaladExistingIssue='기존 원장과 중복 후보';
 
 function banksaladReview(rows:BanksaladRow[]):BanksaladReviewedRow[]{
  const keyCounts=new Map<string,number>(),ledger=integratedStore().ledger;
+ const suppressed=new Set<string>();if(typeof sourceArchiveRecords==='function')for(const record of sourceArchiveRecords()){const keys=record.meta?.suppressedBanksaladSourceKeys;if(Array.isArray(keys))for(const key of keys)if(typeof key==='string')suppressed.add(key);const decisions=record.meta?.decisions;if(Array.isArray(decisions))for(const value of decisions){if(value&&typeof value==='object'&&'decision' in value&&value.decision==='exclude'&&'sourceKey' in value&&typeof value.sourceKey==='string')suppressed.add(value.sourceKey);}}
  for(const row of rows){const key=banksaladSourceKey(row);keyCounts.set(key,(keyCounts.get(key)||0)+1)}
  const primary=new Map<string,BanksaladLedgerRow>();
  const payments=new Map<string,{date:string;cardId:string;amount:number}>();
@@ -181,9 +183,9 @@ function banksaladReview(rows:BanksaladRow[]):BanksaladReviewedRow[]{
  return rows.map(row=>{
   const key=banksaladSourceKey(row),kind=banksaladRowKind(row),prior=primary.get(key);
   const expectedType=kind==='payment'?'externalWithdrawal':kind==='refund'?'refund':'externalExpense';
-  const saved=!!prior&&prior.date===row.date&&prior.type===expectedType&&Number(prior.amount)===Math.abs(row.amount);
+  const saved=suppressed.has(key)||!!prior&&prior.date===row.date&&(prior.type===expectedType||prior.meta?.historicalLoanPayment===true&&['debtInterest','debtInterestExternal'].includes(prior.type))&&Number(prior.amount)===Math.abs(row.amount);
   const issues:string[]=[];
-  if((keyCounts.get(key)||0)>1)issues.push(banksaladDuplicateIssue);
+  if(!saved&&(keyCounts.get(key)||0)>1)issues.push(banksaladDuplicateIssue);
   if(prior&&!saved)issues.push('가져온 뒤 금액이 변경된 기록');
   if(!saved&&kind==='purchase'&&ledger.some(entry=>!entry.meta?.qaFixture&&entry.date===row.date&&
     ['expense','externalExpense'].includes(entry.type)&&entry.amount===-row.amount&&

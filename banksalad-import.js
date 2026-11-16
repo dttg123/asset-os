@@ -175,6 +175,21 @@ const banksaladDuplicateIssue = '파일 안에 같은 거래 후보';
 const banksaladExistingIssue = '기존 원장과 중복 후보';
 function banksaladReview(rows) {
     const keyCounts = new Map(), ledger = integratedStore().ledger;
+    const suppressed = new Set();
+    if (typeof sourceArchiveRecords === 'function')
+        for (const record of sourceArchiveRecords()) {
+            const keys = record.meta?.suppressedBanksaladSourceKeys;
+            if (Array.isArray(keys))
+                for (const key of keys)
+                    if (typeof key === 'string')
+                        suppressed.add(key);
+            const decisions = record.meta?.decisions;
+            if (Array.isArray(decisions))
+                for (const value of decisions) {
+                    if (value && typeof value === 'object' && 'decision' in value && value.decision === 'exclude' && 'sourceKey' in value && typeof value.sourceKey === 'string')
+                        suppressed.add(value.sourceKey);
+                }
+        }
     for (const row of rows) {
         const key = banksaladSourceKey(row);
         keyCounts.set(key, (keyCounts.get(key) || 0) + 1);
@@ -196,9 +211,9 @@ function banksaladReview(rows) {
     return rows.map(row => {
         const key = banksaladSourceKey(row), kind = banksaladRowKind(row), prior = primary.get(key);
         const expectedType = kind === 'payment' ? 'externalWithdrawal' : kind === 'refund' ? 'refund' : 'externalExpense';
-        const saved = !!prior && prior.date === row.date && prior.type === expectedType && Number(prior.amount) === Math.abs(row.amount);
+        const saved = suppressed.has(key) || !!prior && prior.date === row.date && (prior.type === expectedType || prior.meta?.historicalLoanPayment === true && ['debtInterest', 'debtInterestExternal'].includes(prior.type)) && Number(prior.amount) === Math.abs(row.amount);
         const issues = [];
-        if ((keyCounts.get(key) || 0) > 1)
+        if (!saved && (keyCounts.get(key) || 0) > 1)
             issues.push(banksaladDuplicateIssue);
         if (prior && !saved)
             issues.push('가져온 뒤 금액이 변경된 기록');
