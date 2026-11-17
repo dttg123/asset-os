@@ -19,7 +19,8 @@ function integratedMonthBar(spending = false) {
 }
 function integratedTabs(tab) { return `<div class="integrated-tabs four"><button class="${escapeHtml(tab === 'summary' ? 'active' : '')}" data-integrated-tab="summary">전체</button><button class="${escapeHtml(tab === 'ledger' ? 'active' : '')}" data-integrated-tab="ledger">거래</button><button class="${escapeHtml(tab === 'spending' ? 'active' : '')}" data-integrated-tab="spending">소비</button><button class="${escapeHtml(tab === 'schedule' ? 'active' : '')}" data-integrated-tab="schedule">일정</button></div>`; }
 function integratedAccountName(id) { return integratedStore().accounts.find(a => a.id === id)?.name || integratedStore().liabilities.find(x => x.id === id)?.name || id || '-'; }
-function integratedTxLabel(t) { if (t.meta?.unallocatedCardPayment)
+function integratedTxLabel(t) { if (t.type === 'externalIncome' && t.meta?.balanceReconciliationPending === true)
+    return '수입 · 잔액 대조 전'; if (t.meta?.unallocatedCardPayment)
     return '카드대금 출금 · 배분 대기'; if (t.meta?.cardPlanId) {
     if (t.meta.cardInterestRefund)
         return '카드 이자 환불';
@@ -74,7 +75,7 @@ function integratedTransactionDisplay(t) {
         return { category: '카드 이자 환불', item: integratedCardIdentity(String(t.meta.cardPlanId)).item };
     if (['expense', 'externalExpense', 'refund'].includes(t.type || '') && typeof spendingClassification === 'function')
         return spendingClassification(original);
-    const label = String(integratedTxLabel(t) || '기타'), schedule = financeSchedules().find(x => x.id === t.meta?.scheduleId), item = t.meta?.cardPlanId ? integratedCardIdentity(String(t.meta.cardPlanId)).item : schedule?.name || t.category || label;
+    const label = String(integratedTxLabel(t) || '기타'), schedule = financeSchedules().find(x => x.id === t.meta?.scheduleId), item = t.type === 'externalIncome' && t.meta?.payer ? String(t.meta.payer) : t.meta?.cardPlanId ? integratedCardIdentity(String(t.meta.cardPlanId)).item : schedule?.name || t.category || label;
     return { category: label, item: String(item) };
 }
 function integratedTransactionSubtitle(t) {
@@ -82,6 +83,34 @@ function integratedTransactionSubtitle(t) {
     return [display.category, integratedTxLabel(t), integratedTxAccountsText(t)].filter((x, i, list) => !!x && list.indexOf(x) === i).join(' · ');
 }
 function integratedTransactionSearchText(t) { const display = integratedTransactionDisplay(t); return transactionSearchKey([t.date, t.category, t.note, integratedTxLabel(t), integratedTxAccountsText(t), t.amount, t.delta, display.item, display.category]); }
+function integratedLedgerMerchantBlocks(rows) {
+    const blocks = [], named = new Map();
+    for (const t of rows) {
+        const display = integratedTransactionDisplay(t), original = t.type === 'refund' ? integratedLedger().find(x => x.id === t.meta?.refundOf) || t : t, groupable = ['expense', 'externalExpense', 'refund'].includes(t.type || '') && !!String(original.meta?.merchant || original.meta?.spendingItem || '').trim(), key = JSON.stringify([display.category, display.item]), amount = (t.type === 'refund' ? -1 : 1) * (Number(t.amount) || 0), existing = groupable ? named.get(key) : undefined;
+        if (existing) {
+            existing.rows.push(t);
+            existing.net += amount;
+        }
+        else {
+            const block = { category: display.category, item: display.item, rows: [t], net: amount };
+            blocks.push(block);
+            if (groupable)
+                named.set(key, block);
+        }
+    }
+    return blocks;
+}
+function integratedLedgerRowMarkup(t) { return `<button class="integrated-ledger-row is-clickable" data-integrated-tx="${escapeHtml(t.id)}" style="width:100%;border:0;background:transparent;text-align:left;color:inherit"><div><strong>${escapeHtml(integratedTransactionDisplay(t).item)}${t.readonly ? '<span class="integrated-readonly">자동 연결</span>' : ''}</strong><small>${escapeHtml(t.date)} · ${escapeHtml(integratedTransactionSubtitle(t))}</small></div><div class="integrated-ledger-right">${integratedTxAmountMarkup(t)}<span class="integrated-chevron">›</span></div></button>`; }
+function integratedLedgerBlockMarkup(block) {
+    if (block.rows.length === 1)
+        return integratedLedgerRowMarkup(block.rows[0]);
+    const dates = new Map();
+    for (const t of block.rows) {
+        const date = String(t.date || '');
+        dates.set(date, [...(dates.get(date) || []), t]);
+    }
+    return `<details class="ledger-merchant-group"><summary class="ledger-merchant-summary" data-ledger-merchant="${escapeHtml(block.item)}"><span><strong>${escapeHtml(block.item)}</strong><small>${block.rows.length}건</small></span><span class="integrated-ledger-right"><span class="integrated-ledger-amount ${block.net < 0 ? 'plus' : 'minus'}">${block.net < 0 ? '+' : '-'}${won(Math.abs(block.net))}</span><span class="integrated-chevron">›</span></span></summary><div class="ledger-merchant-dates">${[...dates].map(([date, list]) => `<section><h4>${escapeHtml(date)}</h4>${list.map(integratedLedgerRowMarkup).join('')}</section>`).join('')}</div></details>`;
+}
 function integratedLedgerPage() {
     const month = integratedSelectedMonth(), filter = setting().integratedLedgerFilter || 'all', query = String(integratedLedgerSearch || '').trim(), needle = transactionSearchKey([query]), searching = !!needle, systemTypes = new Set(['openingAsset', 'openingLiability', 'adjustment']), source = (searching ? integratedLedger() : integratedRowsForMonth(month)).filter(t => !systemTypes.has(t.type || '')), candidates = [...source].sort((a, b) => String(b.date).localeCompare(String(a.date))).filter(t => (filter === 'all' || integratedTxFilterKey(t) === filter) && (!searching || integratedTransactionSearchText(t).includes(needle))), categories = [...new Set(candidates.map(t => integratedTransactionDisplay(t).category))];
     let category = String(setting().integratedLedgerCategory || '');
@@ -89,12 +118,11 @@ function integratedLedgerPage() {
         category = '';
         setting().integratedLedgerCategory = '';
     }
-    const matched = candidates.filter(t => !category || integratedTransactionDisplay(t).category === category), rows = matched.slice(0, integratedSearchDisplayLimit), filters = [['all', '전체'], ['income', '수입'], ['expense', '생활지출'], ['saving', '저축·투자'], ['debt', '대출']], title = searching ? '전체 기간 검색' : `${integratedMonthLabel(month)} 거래`, count = matched.length > rows.length ? `${rows.length}/${matched.length}건` : `${rows.length}건`, groups = new Map();
-    for (const row of rows) {
-        const key = integratedTransactionDisplay(row).category;
-        groups.set(key, [...(groups.get(key) || []), row]);
+    const matched = candidates.filter(t => !category || integratedTransactionDisplay(t).category === category), blocks = integratedLedgerMerchantBlocks(matched), rows = blocks.slice(0, integratedSearchDisplayLimit), filters = [['all', '전체'], ['income', '수입'], ['expense', '생활지출'], ['saving', '저축·투자'], ['debt', '대출']], title = searching ? '전체 기간 검색' : `${integratedMonthLabel(month)} 거래`, count = `${matched.length}건`, groups = new Map();
+    for (const block of rows) {
+        groups.set(block.category, [...(groups.get(block.category) || []), block]);
     }
-    return `<section class="card integrated-ledger-card"><div class="integrated-ledger-top"><div><h2>${escapeHtml(title)}</h2><span>${count}</span></div><button class="integrated-add-small" data-integrated-new>＋ 거래</button></div><form class="transaction-search" data-integrated-search-form><input name="query" type="search" inputmode="search" autocomplete="off" value="${escapeHtml(query)}" placeholder="전체 기간 날짜·금액·분류·메모 검색" aria-label="통합 거래 검색"><button type="submit">검색</button>${searching ? '<button type="button" class="clear" data-integrated-search-clear>지우기</button>' : ''}</form>${searching ? '<div class="transaction-search-note">검색 중에는 선택한 달과 관계없이 전체 기간에서 찾습니다.</div>' : ''}<div class="ledger-filter-strip"><div class="integrated-filters">${filters.map(([k, l]) => `<button class="integrated-filter ${filter === k ? 'active' : ''}" data-integrated-filter="${escapeHtml(k)}">${l}</button>`).join('')}</div><div class="cardv2-filters ledger-category-filters" aria-label="거래 카테고리"><button data-integrated-category="" class="${escapeHtml(!category ? 'active' : '')}">모든 분류</button>${categories.map(key => `<button data-integrated-category="${escapeHtml(key)}" class="${escapeHtml(category === key ? 'active' : '')}">${escapeHtml(key)}</button>`).join('')}</div></div><div class="ledger-active-filters">${escapeHtml((filters.find(([k]) => k === filter)?.[1] || '전체') + ' · ' + (category || '모든 분류'))} · ${matched.length}건${filter !== 'all' || category ? '<button data-integrated-filter-reset>필터 초기화</button>' : ''}</div><div class="integrated-ledger-list">${rows.length ? [...groups].map(([key, list]) => `<section class="ledger-category-group"><h3>${escapeHtml(key)} <small>${list.length}건</small></h3>${list.map(t => `<button class="integrated-ledger-row is-clickable" data-integrated-tx="${escapeHtml(t.id)}" style="width:100%;border:0;background:transparent;text-align:left;color:inherit"><div><strong>${escapeHtml(integratedTransactionDisplay(t).item)}${t.readonly ? '<span class="integrated-readonly">자동 연결</span>' : ''}</strong><small>${escapeHtml(t.date)} · ${escapeHtml(integratedTransactionSubtitle(t))}</small></div><div class="integrated-ledger-right">${integratedTxAmountMarkup(t)}<span class="integrated-chevron">›</span></div></button>`).join('')}</section>`).join('') : `<div class="integrated-empty">${searching ? '검색 결과가 없습니다.' : '이 달의 거래가 없습니다.'}</div>`}</div>${matched.length > rows.length ? `<button class="diagnostic-action" data-integrated-search-more>다음 ${Math.min(50, matched.length - rows.length)}건 보기 · 남은 ${matched.length - rows.length}건</button>` : ''}</section>`;
+    return `<section class="card integrated-ledger-card"><div class="integrated-ledger-top"><div><h2>${escapeHtml(title)}</h2><span>${count}</span></div><button class="integrated-add-small" data-integrated-new>＋ 거래</button></div><form class="transaction-search" data-integrated-search-form><input name="query" type="search" inputmode="search" autocomplete="off" value="${escapeHtml(query)}" placeholder="전체 기간 날짜·금액·분류·메모 검색" aria-label="통합 거래 검색"><button type="submit">검색</button>${searching ? '<button type="button" class="clear" data-integrated-search-clear>지우기</button>' : ''}</form>${searching ? '<div class="transaction-search-note">검색 중에는 선택한 달과 관계없이 전체 기간에서 찾습니다.</div>' : ''}<div class="ledger-filter-strip"><div class="integrated-filters">${filters.map(([k, l]) => `<button class="integrated-filter ${filter === k ? 'active' : ''}" data-integrated-filter="${escapeHtml(k)}">${l}</button>`).join('')}</div><div class="cardv2-filters ledger-category-filters" aria-label="거래 카테고리"><button data-integrated-category="" class="${escapeHtml(!category ? 'active' : '')}">모든 분류</button>${categories.map(key => `<button data-integrated-category="${escapeHtml(key)}" class="${escapeHtml(category === key ? 'active' : '')}">${escapeHtml(key)}</button>`).join('')}</div></div><div class="ledger-active-filters">${escapeHtml((filters.find(([k]) => k === filter)?.[1] || '전체') + ' · ' + (category || '모든 분류'))} · ${matched.length}건${filter !== 'all' || category ? '<button data-integrated-filter-reset>필터 초기화</button>' : ''}</div><div class="integrated-ledger-list">${rows.length ? [...groups].map(([key, list]) => `<section class="ledger-category-group"><h3>${escapeHtml(key)} <small>${list.reduce((sum, block) => sum + block.rows.length, 0)}건</small></h3>${list.map(integratedLedgerBlockMarkup).join('')}</section>`).join('') : `<div class="integrated-empty">${searching ? '검색 결과가 없습니다.' : '이 달의 거래가 없습니다.'}</div>`}</div>${blocks.length > rows.length ? `<button class="diagnostic-action" data-integrated-search-more>다음 ${Math.min(50, blocks.length - rows.length)}항목 보기 · 남은 ${blocks.length - rows.length}항목</button>` : ''}</section>`;
 }
 function integratedScheduleMonth() { return integratedSelectedMonth(); }
 function scheduleKindLabel(kind) { return { income: '수입', investment: '저축·투자', saving: '저축·투자', loan: '대출 납부', insurance: '보험료', expense: '고정지출' }[kind] || '금융 일정'; }
