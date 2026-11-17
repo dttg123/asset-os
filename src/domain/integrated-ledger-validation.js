@@ -65,6 +65,8 @@ function integratedIssues(store = validationIntegratedStore()) {
             issues.push(`보정계좌 없음: ${transaction.id}`);
         if (transaction.liabilityId && !liabilityIds.has(transaction.liabilityId))
             issues.push(`부채 없음: ${transaction.id}`);
+        if (transaction.meta?.balanceReconciliationPending === true && (transaction.type !== 'externalIncome' || transaction.toAccountId || transaction.fromAccountId))
+            issues.push(`과거 수입 잔액 대조 전 계좌 연결 오류: ${transaction.id}`);
         if (transaction.type === 'internalTransfer' && transaction.fromAccountId === transaction.toAccountId)
             issues.push(`동일계좌 이체: ${transaction.id}`);
         const targetKind = (store.accounts || []).find(account => account.id === transaction.toAccountId)?.kind || '';

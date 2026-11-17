@@ -19,7 +19,8 @@ function integratedMonthBar(spending = false) {
 }
 function integratedTabs(tab) { return `<div class="integrated-tabs four"><button class="${escapeHtml(tab === 'summary' ? 'active' : '')}" data-integrated-tab="summary">전체</button><button class="${escapeHtml(tab === 'ledger' ? 'active' : '')}" data-integrated-tab="ledger">거래</button><button class="${escapeHtml(tab === 'spending' ? 'active' : '')}" data-integrated-tab="spending">소비</button><button class="${escapeHtml(tab === 'schedule' ? 'active' : '')}" data-integrated-tab="schedule">일정</button></div>`; }
 function integratedAccountName(id) { return integratedStore().accounts.find(a => a.id === id)?.name || integratedStore().liabilities.find(x => x.id === id)?.name || id || '-'; }
-function integratedTxLabel(t) { if (t.meta?.unallocatedCardPayment)
+function integratedTxLabel(t) { if (t.type === 'externalIncome' && t.meta?.balanceReconciliationPending === true)
+    return '수입 · 잔액 대조 전'; if (t.meta?.unallocatedCardPayment)
     return '카드대금 출금 · 배분 대기'; if (t.meta?.cardPlanId) {
     if (t.meta.cardInterestRefund)
         return '카드 이자 환불';
@@ -74,7 +75,7 @@ function integratedTransactionDisplay(t) {
         return { category: '카드 이자 환불', item: integratedCardIdentity(String(t.meta.cardPlanId)).item };
     if (['expense', 'externalExpense', 'refund'].includes(t.type || '') && typeof spendingClassification === 'function')
         return spendingClassification(original);
-    const label = String(integratedTxLabel(t) || '기타'), schedule = financeSchedules().find(x => x.id === t.meta?.scheduleId), item = t.meta?.cardPlanId ? integratedCardIdentity(String(t.meta.cardPlanId)).item : schedule?.name || t.category || label;
+    const label = String(integratedTxLabel(t) || '기타'), schedule = financeSchedules().find(x => x.id === t.meta?.scheduleId), item = t.type === 'externalIncome' && t.meta?.payer ? String(t.meta.payer) : t.meta?.cardPlanId ? integratedCardIdentity(String(t.meta.cardPlanId)).item : schedule?.name || t.category || label;
     return { category: label, item: String(item) };
 }
 function integratedTransactionSubtitle(t) {

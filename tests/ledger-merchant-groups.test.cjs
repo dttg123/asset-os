@@ -9,3 +9,10 @@ test('ledger totals use every merchant payment before pagination and preserve se
  const blocks=r.plain(r.run('integratedLedgerMerchantBlocks(integratedLedger())')),coffee=blocks.find(x=>x.category==='식비');
  assert.equal(blocks.length,3);assert.equal(coffee.rows.length,66);assert.equal(coffee.net,115200);assert.equal(new Set(coffee.rows.map(x=>x.id)).size,66);assert.equal(r.run('JSON.stringify(state.integrated.ledger)'),before);
 });
+test('pending historical income counts in the month while leaving current balances unchanged',()=>{
+ const r=financialRuntime({qa:false});r.run('state.integrated.accounts=[{id:"cash-main",kind:"cash"}];state.integrated.ledger=[{id:"opening",date:"2026-01-01",type:"openingAsset",amount:100,toAccountId:"cash-main"}]');
+ const before=r.plain(r.run('integratedReplay()'));
+ r.run('state.integrated.ledger.push({id:"past-salary",date:"2026-02-25",type:"externalIncome",amount:3000,toAccountId:"",meta:{balanceReconciliationPending:true,payer:"한전급여"}})');
+ assert.deepEqual(r.plain(r.run('integratedReplay()')),before);assert.equal(r.run('integratedSummary("2026-02").income'),3000);assert.equal(r.run('integratedSummary("2026-02").operatingCashDelta'),0);assert.deepEqual(r.plain(r.run('integratedIssues()')),[]);
+ r.run('state.integrated.ledger[1].toAccountId="cash-main"');assert.ok(r.plain(r.run('integratedIssues()')).some(x=>x.includes('잔액 대조 전 계좌 연결 오류')));
+});
